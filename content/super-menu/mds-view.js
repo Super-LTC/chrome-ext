@@ -1591,6 +1591,7 @@ const PDPMAnalyzerLauncher = {
 
     this._context = context;
     const initialMode = opts?.mode || 'modal';
+    const fromCommandCenter = opts?.fromCommandCenter === true;
 
     // Remove edge tab if it exists (panel is opening)
     this._removeEdgeTab();
@@ -1613,7 +1614,8 @@ const PDPMAnalyzerLauncher = {
         h(PDPMAnalyzer, {
           context: context,
           onClose: () => this.close(),
-          initialMode: initialMode
+          initialMode: initialMode,
+          fromCommandCenter: fromCommandCenter,
         }),
         overlayEl
       );

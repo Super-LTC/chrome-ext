@@ -555,12 +555,26 @@ function buildCapturedFromCalculation(calc) {
 
   // NTA: contributingConditions → { mdsItem, itemName, helpText, pointsAdded }
   if (calc.nta?.contributingConditions) {
-    result.nta = calc.nta.contributingConditions.map(c => ({
-      mdsItem: c.mdsItem,
-      itemName: c.categoryName,
-      helpText: `+${c.points} pts (${c.categoryName})`,
-      pointsAdded: c.points,
-    }));
+    console.log('[buildCapturedFromCalculation] nta.contributingConditions raw:', calc.nta.contributingConditions);
+    result.nta = calc.nta.contributingConditions.map(c => {
+      // Try every plausible source for the per-condition disambiguator the
+      // backend wants in `categoryKey` (e.g. "NTA:18" for I8000 sub-items).
+      const categoryKey =
+        c.categoryKey ||
+        c.mdsColumn ||
+        c.column ||
+        (c.categoryNumber != null ? `NTA:${c.categoryNumber}` : null) ||
+        (c.comorbidityNumber != null ? `NTA:${c.comorbidityNumber}` : null) ||
+        null;
+      return {
+        mdsItem: c.mdsItem,
+        categoryKey,
+        itemName: c.categoryName,
+        helpText: `+${c.points} pts (${c.categoryName})`,
+        pointsAdded: c.points,
+        _raw: c, // for debugging — drop once stable
+      };
+    });
   }
 
   // SLP: comorbidities where isPresent + tier2 flags
@@ -626,6 +640,13 @@ function ComponentBreakdown({ data, payment, onItemClick, collapsed, onToggleCol
   const potentialDecoded = data?.potentialHippsDecoded || {};
   const allDetections = data?.enhancedDetections || [];
   const captured = buildCapturedFromCalculation(data?.calculation);
+  // Surface the I8000 / NTA detections so we can see what disambiguator
+  // (categoryKey / mdsColumn / categoryNumber) the backend exposes per row.
+  if (typeof window !== 'undefined' && !window.__loggedDetections) {
+    const i8000s = allDetections.filter(d => d?.mdsItem === 'I8000');
+    if (i8000s.length) console.log('[PDPMAnalyzer] I8000 detections:', i8000s);
+    window.__loggedDetections = true;
+  }
 
   const components = [
     {
@@ -704,30 +725,32 @@ function ComponentBreakdown({ data, payment, onItemClick, collapsed, onToggleCol
               class={`pdpm-an__comp-row${improved ? ' pdpm-an__comp-row--improved' : ''}${isExpanded ? ' pdpm-an__comp-row--expanded' : ''}`}
             >
               <div
-                class={`pdpm-an__comp-header${isClickable ? ' pdpm-an__comp-header--clickable' : ''}`}
+                class={`pdpm-an__comp-clickwrap${isClickable ? ' pdpm-an__comp-clickwrap--clickable' : ''}`}
                 onClick={isClickable ? toggleExpand : undefined}
                 role={isClickable ? 'button' : undefined}
                 tabIndex={isClickable ? 0 : undefined}
                 onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(); } } : undefined}
               >
-                <span class="pdpm-an__comp-label">{comp.label}</span>
-                <span class="pdpm-an__comp-name">{comp.name || '\u2014'}</span>
-                {comp.currentCode && (
-                  <span class="pdpm-an__comp-code">{comp.currentCode}</span>
-                )}
-                {improved && (
-                  <span class="pdpm-an__comp-change">
-                    {'\u2192'} {comp.potential}
-                  </span>
-                )}
-                {isClickable && (
-                  <svg class={`pdpm-an__comp-chevron${isExpanded ? ' pdpm-an__comp-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M4 5.5L7 8.5L10 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                )}
-              </div>
+                <div class={`pdpm-an__comp-header${isClickable ? ' pdpm-an__comp-header--clickable' : ''}`}>
+                  <span class="pdpm-an__comp-label">{comp.label}</span>
+                  <span class="pdpm-an__comp-name">{comp.name || '\u2014'}</span>
+                  {comp.currentCode && (
+                    <span class="pdpm-an__comp-code">{comp.currentCode}</span>
+                  )}
+                  {improved && (
+                    <span class="pdpm-an__comp-change">
+                      {'\u2192'} {comp.potential}
+                    </span>
+                  )}
+                  {isClickable && (
+                    <svg class={`pdpm-an__comp-chevron${isExpanded ? ' pdpm-an__comp-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M4 5.5L7 8.5L10 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  )}
+                </div>
 
-              {comp.ntaProgress && <NtaLevelTrack nta={comp.ntaProgress} potentialLevel={comp.potential} payment={payment} />}
+                {comp.ntaProgress && <NtaLevelTrack nta={comp.ntaProgress} potentialLevel={comp.potential} payment={payment} />}
+              </div>
 
               {isExpanded && (
                 <div class="pdpm-an__comp-detail">
@@ -777,8 +800,24 @@ function ComponentBreakdown({ data, payment, onItemClick, collapsed, onToggleCol
                           const handleClick = (e) => {
                             e.stopPropagation();
                             if (!onItemClick) return;
-                            const match = allDetections.find(ed => ed.mdsItem === d.mdsItem);
-                            if (match) onItemClick(match);
+                            console.log('[ComponentBreakdown] captured click:', d);
+                            // Prefer match by both mdsItem AND categoryKey when available,
+                            // so multiple I8000 rows resolve to their own detection.
+                            let match = null;
+                            if (d.categoryKey) {
+                              match = allDetections.find(
+                                ed => ed.mdsItem === d.mdsItem &&
+                                  (ed.categoryKey === d.categoryKey ||
+                                   ed.mdsColumn === d.categoryKey)
+                              );
+                            }
+                            if (!match) match = allDetections.find(ed => ed.mdsItem === d.mdsItem);
+                            // Forward categoryKey onto whatever we end up with.
+                            const enriched = match
+                              ? { ...match, categoryKey: d.categoryKey || match.categoryKey || match.mdsColumn || null }
+                              : { ...d };
+                            console.log('[ComponentBreakdown] captured click → forwarding:', enriched);
+                            onItemClick(enriched);
                           };
                           return (
                             <div
@@ -1199,7 +1238,7 @@ function ModeToggleButton({ mode, onToggle }) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export function PDPMAnalyzer({ context, onClose, initialMode = 'modal' }) {
+export function PDPMAnalyzer({ context, onClose, initialMode = 'modal', fromCommandCenter = false }) {
   const [selectedAssessmentId, setSelectedAssessmentId] = useState(null);
   const [detailItem, setDetailItem] = useState(null);
   const [mode, setMode] = useState(initialMode);
@@ -1264,10 +1303,12 @@ export function PDPMAnalyzer({ context, onClose, initialMode = 'modal' }) {
         {/* Header */}
         <div class="pdpm-an__header">
           <div class="pdpm-an__header-left">
-            {/* NO_TRACK: navigates to MDS Command Center which fires its own mds_command_center_opened */}
-            <button class="pdpm-an__back-btn" onClick={openCommandCenter}>
-              {'\u2190'} Command Center
-            </button>
+            {fromCommandCenter && (
+              /* NO_TRACK: navigates to MDS Command Center which fires its own mds_command_center_opened */
+              <button class="pdpm-an__back-btn" onClick={openCommandCenter}>
+                {'\u2190'} Command Center
+              </button>
+            )}
             <div class="pdpm-an__patient-info">
               {patientName && <span class="pdpm-an__patient-name">{patientName}</span>}
               {assessmentLabel && <span class="pdpm-an__assessment-label">{assessmentLabel}</span>}

@@ -23,9 +23,23 @@ export function useItemDetail(mdsItem, categoryKey, context) {
           throw new Error('Could not determine organization or facility');
         }
 
-        const apiCode = mdsItem.includes(':') ? mdsItem.split(':')[0] : mdsItem;
+        const colonIdx = mdsItem.indexOf(':');
+        const apiCode = colonIdx >= 0 ? mdsItem.slice(0, colonIdx) : mdsItem;
+        // I8000:NTA:18 → categoryKey "NTA:18" when caller didn't pass one explicitly
+        const derivedCategoryKey = colonIdx >= 0 ? mdsItem.slice(colonIdx + 1) : null;
+        const finalCategoryKey = categoryKey || derivedCategoryKey;
+
         let endpoint = `/api/extension/mds/items/${encodeURIComponent(apiCode)}?externalAssessmentId=${context.assessmentId}&facilityName=${encodeURIComponent(facilityName)}&orgSlug=${encodeURIComponent(orgSlug)}`;
-        if (categoryKey) endpoint += `&categoryKey=${encodeURIComponent(categoryKey)}`;
+        if (finalCategoryKey) endpoint += `&categoryKey=${encodeURIComponent(finalCategoryKey)}`;
+
+        console.log('[useItemDetail] fetch', {
+          mdsItem,
+          apiCode,
+          passedCategoryKey: categoryKey,
+          derivedCategoryKey,
+          finalCategoryKey,
+          endpoint,
+        });
 
         chrome.runtime.sendMessage({ type: 'API_REQUEST', endpoint }, (resp) => {
           if (cancelled) return;

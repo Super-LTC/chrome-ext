@@ -526,12 +526,12 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
   function handleOpenAnalyzer(assessment) {
     const assessmentId = assessment.externalAssessmentId || assessment.assessmentId || assessment.id;
     onClose({ hide: true });
-    window.PDPMAnalyzerLauncher?.open({ scope: 'mds', assessmentId });
+    window.PDPMAnalyzerLauncher?.open({ scope: 'mds', assessmentId }, { fromCommandCenter: true });
   }
 
   function handleOpenAssessmentById(assessmentId) {
     onClose({ hide: true });
-    window.PDPMAnalyzerLauncher?.open({ scope: 'mds', assessmentId });
+    window.PDPMAnalyzerLauncher?.open({ scope: 'mds', assessmentId }, { fromCommandCenter: true });
   }
 
   function handleBackdropClick(e) {

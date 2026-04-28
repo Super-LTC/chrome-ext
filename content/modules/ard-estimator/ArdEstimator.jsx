@@ -242,8 +242,9 @@ export function ArdEstimator({
     const enrichedItems = [];
     for (const item of selectedItems) {
       try {
-        const itemCode = item.mdsItem + (item.mdsColumn || '');
-        const detail = await fetchItemDetail(itemCode, resolvedAssessmentId, facilityName, orgSlug);
+        const itemCode = item.mdsItem;
+        const categoryKey = item.mdsColumn || item.categoryKey || null;
+        const detail = await fetchItemDetail(itemCode, resolvedAssessmentId, facilityName, orgSlug, categoryKey);
         // API returns { item: { answer, status, evidence, ... }, diagnosisSummary, ... }
         const itemData = detail?.item || detail;
         enrichedItems.push({
@@ -395,9 +396,10 @@ export function ArdEstimator({
       <div className="ard-est ard-est--detail-view">
         <ItemDetailView
           item={{
-            mdsItem: viewingItem.item.mdsItem + (viewingItem.item.mdsColumn || ''),
+            mdsItem: viewingItem.item.mdsItem,
             itemName: viewingItem.item.description,
             column: viewingItem.item.mdsColumn || '',
+            categoryKey: viewingItem.item.mdsColumn || viewingItem.item.categoryKey || null,
           }}
           context={detailContext}
           onBack={() => { setViewingItem(null); setActiveItemKey(null); }}
