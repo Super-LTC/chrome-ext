@@ -8,7 +8,7 @@
 //   PHI-shaped string values drop and emit a phi_guardrail_tripped event
 //   without the offending value.
 
-import posthog from 'posthog-js';
+import posthog from 'posthog-js/dist/module.full.no-external';
 import {
   EVENT_SCHEMA,
   FORBIDDEN_PROP_SUFFIXES,
@@ -56,19 +56,41 @@ if (ENABLED) {
     autocapture: false,
     capture_pageview: false,
     capture_pageleave: false,
-    disable_session_recording: true,
+    disable_session_recording: false,
     capture_performance: false,
-    mask_all_text: true,
-    mask_all_element_attributes: true,
+    mask_all_text: false,
+    mask_all_element_attributes: false,
     property_blacklist: ['$current_url', '$pathname', '$referrer', '$host'],
     sanitize_properties: sanitizeProperties,
     persistence: 'localStorage',
-    advanced_disable_decide: true,
+    advanced_disable_decide: false,
+    session_recording: {
+      maskAllInputs: false,
+      maskTextSelector: undefined,
+      recordCrossOriginIframes: false,
+      inlineStylesheet: true,
+      inlineImages: true,
+      collectFonts: true,
+    },
   });
   posthog.register({
     surface: 'extension',
     ext_version: chrome?.runtime?.getManifest?.().version || 'unknown',
   });
+
+  if (__DEV_MODE__) {
+    posthog.onFeatureFlags(() => {
+      const sessionId = posthog.sessionRecording?.sessionId || posthog.get_session_id?.();
+      const replayUrl = sessionId
+        ? `https://us.posthog.com/project/247257/replay/${sessionId}`
+        : '(pending)';
+      console.log('[PostHog] session replay active', {
+        sessionId,
+        replayUrl,
+        isRecording: !!posthog.sessionRecording?.started,
+      });
+    });
+  }
 }
 
 // Map a thrown error to a SHORT TOKEN for `error_code` props. NEVER returns
