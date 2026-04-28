@@ -755,6 +755,23 @@
   background: #f9fafb;
 }
 
+/* Wrapper that makes the NTA progress bar share the click target with
+   the component header, so clicking anywhere on the row+bar expands. */
+.pdpm-an__comp-clickwrap--clickable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.pdpm-an__comp-clickwrap--clickable:hover {
+  background: #f9fafb;
+}
+
+/* Avoid double-highlight: the inner header already covers its own area
+   with hover styling — turn it off when wrapped. */
+.pdpm-an__comp-clickwrap--clickable .pdpm-an__comp-header--clickable:hover {
+  background: transparent;
+}
+
 .pdpm-an__comp-label {
   font-size: 11px;
   font-weight: 600;

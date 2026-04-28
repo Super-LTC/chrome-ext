@@ -281,10 +281,10 @@
   opacity: 0; transform: scale(0.7) translateY(10px); pointer-events: none;
   transition: opacity 0.18s, transform 0.18s, box-shadow 0.15s;
 }
-.super-dial__action--mds  { background: #6366f1; color: #fff; }
-.super-dial__action--qm   { background: #f59e0b; color: #fff; }
+.super-dial__action--mds  { background: #6366f1; color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; font-family: inherit; }
+.super-dial__action--qm   { background: #f59e0b; color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; font-family: inherit; }
 .super-dial__action--chat { background: #fff; color: #6366f1; border: 1.5px solid #e5e7eb; }
-.super-dial__action--coverage { background: #06b6d4; color: #fff; }
+.super-dial__action--coverage { background: #06b6d4; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.02em; font-family: inherit; }
 #super-bubbles-container.super-dial--open .super-dial__action {
   opacity: 1; transform: scale(1) translateY(0); pointer-events: auto;
 }
