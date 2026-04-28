@@ -23,6 +23,7 @@ const ICD10EvidencePanel = {
   selectedCode: null,
   selectedDescription: null,
   codeDropdownOpen: false,
+  codeSearchQuery: '',
   summaryText: null,
   summaryLoading: false,
   summaryError: false,
@@ -48,6 +49,7 @@ const ICD10EvidencePanel = {
     this.selectedCode = null;
     this.selectedDescription = null;
     this.codeDropdownOpen = false;
+    this.codeSearchQuery = '';
     this.render();
   },
 
@@ -68,6 +70,7 @@ const ICD10EvidencePanel = {
     this.approveLoading = false;
     this.isApproved = false;
     this.codeDropdownOpen = false;
+    this.codeSearchQuery = '';
     this.clearSummary();
 
     // Set initial selected code from groupContext or first item
@@ -115,7 +118,8 @@ const ICD10EvidencePanel = {
                  item.snippet || item.excerpt || '',
       // Normalize document name
       documentName: item.documentName || item.docName || item.documentTitle ||
-                    item.sourceName || item.document?.name || item.document?.title || 'Document',
+                    item.sourceName || item.document?.name || item.document?.title ||
+                    item.document?.documentTitle || 'Document',
       // Normalize page number
       pageNumber: item.pageNumber || item.page || item.pageNum ||
                   item.document?.page || item.location?.page || 1,
@@ -129,7 +133,9 @@ const ICD10EvidencePanel = {
       // Preserve evidenceStrength as-is
       evidenceStrength: item.evidenceStrength || null,
       // Normalize document date
-      documentDate: item.documentDate || item.date || item.createdAt || ''
+      documentDate: item.documentDate || item.documentEffectiveDate || item.effectiveDate ||
+                    item.document?.effectiveDate || item.document?.documentEffectiveDate ||
+                    item.date || item.createdAt || ''
     };
     console.log('[ICD10EvidencePanel] Normalized item:', normalized.id, 'wordBlockIndices:', normalized.wordBlockIndices?.length, 'wordBlocks:', normalized.wordBlocks?.length);
     return normalized;
@@ -348,17 +354,35 @@ const ICD10EvidencePanel = {
             </div>
             <span class="icd10-evidence-panel__diagnosis-desc">${this._escapeHtml(description)}</span>
           </div>
-          ${this.codeDropdownOpen ? `
+          ${this.codeDropdownOpen ? (() => {
+            const filtered = this._filterCodes(availableCodes, this.codeSearchQuery).slice(0, 10);
+            const totalMatches = this._filterCodes(availableCodes, this.codeSearchQuery).length;
+            return `
             <div class="icd10-evidence-panel__code-dropdown">
-              ${availableCodes.map(opt => `
+              <input type="text" class="icd10-evidence-panel__code-search"
+                     data-action="code-search"
+                     placeholder="Search by code or name..."
+                     value="${this._escapeHtml(this.codeSearchQuery)}"
+                     autocomplete="off" />
+              ${filtered.length === 0 ? `
+                <div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
+                  <span class="icd10-evidence-panel__code-option-desc">No matches</span>
+                </div>
+              ` : filtered.map(opt => `
                 <div class="icd10-evidence-panel__code-option ${opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : ''}"
                      data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
                   <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
                   <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
                 </div>
               `).join('')}
+              ${totalMatches > 10 ? `
+                <div class="icd10-evidence-panel__code-option-hint">
+                  Showing 10 of ${totalMatches} — refine search to narrow
+                </div>
+              ` : ''}
             </div>
-          ` : ''}
+            `;
+          })() : ''}
           <div class="icd10-evidence-panel__diagnosis-actions">
             ${approveHtml}
           </div>
@@ -554,10 +578,28 @@ const ICD10EvidencePanel = {
       });
     });
 
+    // Code search input: filter without losing focus
+    const searchInput = this.container.querySelector('[data-action="code-search"]');
+    if (searchInput) {
+      searchInput.addEventListener('click', (e) => e.stopPropagation());
+      searchInput.addEventListener('input', (e) => {
+        this.codeSearchQuery = e.target.value;
+        this._renderCodeDropdownList();
+      });
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          this.codeDropdownOpen = false;
+          this.codeSearchQuery = '';
+          this.render();
+        }
+      });
+    }
+
     // Close code dropdown when clicking outside
     this.container.addEventListener('click', (e) => {
       if (this.codeDropdownOpen && !e.target.closest('[data-action="toggle-codes"]') && !e.target.closest('.icd10-evidence-panel__code-dropdown')) {
         this.codeDropdownOpen = false;
+        this.codeSearchQuery = '';
         this.render();
       }
     });
@@ -595,6 +637,12 @@ const ICD10EvidencePanel = {
       this.expandedDocuments.add(item.documentId);
     }
 
+    // Top code follows the selected annotation
+    if (item && item.icd10Code) {
+      this.selectedCode = item.icd10Code;
+      this.selectedDescription = item.description || this._getDescriptionForCode(item.icd10Code);
+    }
+
     this.render();
 
     // Notify to load PDF
@@ -612,7 +660,76 @@ const ICD10EvidencePanel = {
     const availableCodes = this._getAvailableCodes();
     if (availableCodes.length <= 1) return;
     this.codeDropdownOpen = !this.codeDropdownOpen;
+    if (!this.codeDropdownOpen) this.codeSearchQuery = '';
     this.render();
+    if (this.codeDropdownOpen) {
+      const input = this.container.querySelector('[data-action="code-search"]');
+      if (input) input.focus();
+    }
+  },
+
+  /**
+   * Fuzzy-ish filter: matches against code prefix or substrings of code/description.
+   * Empty query returns the full list unchanged.
+   */
+  /**
+   * Re-render only the dropdown's option rows (preserves search input focus).
+   */
+  _renderCodeDropdownList() {
+    const dropdown = this.container.querySelector('.icd10-evidence-panel__code-dropdown');
+    if (!dropdown) return;
+    const input = dropdown.querySelector('[data-action="code-search"]');
+    const availableCodes = this._getAvailableCodes();
+    const matches = this._filterCodes(availableCodes, this.codeSearchQuery);
+    const filtered = matches.slice(0, 10);
+
+    // Remove all children except the search input
+    Array.from(dropdown.children).forEach(child => {
+      if (child !== input) child.remove();
+    });
+
+    const append = (html) => {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      while (tmp.firstChild) dropdown.appendChild(tmp.firstChild);
+    };
+
+    if (filtered.length === 0) {
+      append(`<div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
+        <span class="icd10-evidence-panel__code-option-desc">No matches</span>
+      </div>`);
+    } else {
+      filtered.forEach(opt => {
+        append(`<div class="icd10-evidence-panel__code-option ${opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : ''}"
+             data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
+          <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
+          <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
+        </div>`);
+      });
+      if (matches.length > 10) {
+        append(`<div class="icd10-evidence-panel__code-option-hint">
+          Showing 10 of ${matches.length} — refine search to narrow
+        </div>`);
+      }
+    }
+
+    // Re-bind option click handlers
+    dropdown.querySelectorAll('[data-select-code]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._selectCode(el.dataset.selectCode, el.dataset.selectDesc);
+      });
+    });
+  },
+
+  _filterCodes(codes, query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return codes;
+    return codes.filter(opt => {
+      const code = (opt.code || '').toLowerCase();
+      const desc = (opt.description || '').toLowerCase();
+      return code.includes(q) || desc.includes(q);
+    });
   },
 
   /**

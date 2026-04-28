@@ -477,6 +477,44 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   margin-bottom: 12px;
   overflow: hidden;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.icd10-evidence-panel__code-search {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-bottom: 1px solid var(--super-gray-200);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  background: var(--super-gray-50);
+}
+
+.icd10-evidence-panel__code-search:focus {
+  background: white;
+  border-bottom-color: var(--super-primary, #6366f1);
+}
+
+.icd10-evidence-panel__code-option--empty {
+  cursor: default;
+  color: var(--super-gray-500);
+  font-style: italic;
+}
+
+.icd10-evidence-panel__code-option--empty:hover {
+  background: transparent;
+}
+
+.icd10-evidence-panel__code-option-hint {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--super-gray-500);
+  background: var(--super-gray-50);
+  border-top: 1px solid var(--super-gray-100);
+  text-align: center;
 }
 
 .icd10-evidence-panel__code-option {

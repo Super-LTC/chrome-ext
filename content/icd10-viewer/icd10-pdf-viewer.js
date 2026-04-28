@@ -195,8 +195,8 @@ const ICD10PDFViewer = {
    * 3. Manual rotate button for edge cases
    * Results cached per page.
    */
-  async _getPageRotation(page) {
-    const pageNum = this.currentPage;
+  async _getPageRotation(page, explicitPageNum = null) {
+    const pageNum = explicitPageNum != null ? explicitPageNum : this.currentPage;
     if (this._contentRotationCache && this._contentRotationCache[pageNum] !== undefined) {
       return (this._contentRotationCache[pageNum] + this.manualRotation) % 360;
     }
@@ -314,6 +314,12 @@ const ICD10PDFViewer = {
     const validPageNum = Math.max(1, Math.min(pageNum, this.totalPages));
     this.currentPage = validPageNum;
 
+    // Sequence guard: when multiple _renderPage calls overlap (rapid clicks),
+    // only the latest one is allowed to write to the canvas / scroll.
+    this._renderSeq = (this._renderSeq || 0) + 1;
+    const seq = this._renderSeq;
+    const isStale = () => seq !== this._renderSeq;
+
     // Update page indicator
     const pageCurrentEl = this.container.querySelector('.icd10-pdf-viewer__page-current');
     if (pageCurrentEl) pageCurrentEl.textContent = this.currentPage;
@@ -324,8 +330,10 @@ const ICD10PDFViewer = {
     if (nextBtn) nextBtn.disabled = this.currentPage === this.totalPages;
 
     try {
-      const page = await this.pdfDoc.getPage(this.currentPage);
-      const rotation = await this._getPageRotation(page);
+      const page = await this.pdfDoc.getPage(validPageNum);
+      if (isStale()) return;
+      const rotation = await this._getPageRotation(page, validPageNum);
+      if (isStale()) return;
 
       const container = this.container.querySelector('.icd10-pdf-viewer__canvas-container');
       if (!container) return;
@@ -353,10 +361,11 @@ const ICD10PDFViewer = {
       highlightCtx.clearRect(0, 0, highlightCanvas.width, highlightCanvas.height);
 
       await page.render({ canvasContext: ctx, viewport }).promise;
+      if (isStale()) return;
 
       // Draw highlights
       let highlightRects = [];
-      const pageHighlights = this.highlights.filter(h => h.p === this.currentPage);
+      const pageHighlights = this.highlights.filter(h => h.p === validPageNum);
 
       if (pageHighlights.length > 0) {
         highlightRects = this._drawHighlights(highlightCtx, pageHighlights, viewport, rotation, page);

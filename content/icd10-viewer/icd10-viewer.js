@@ -450,6 +450,13 @@ const ICD10Viewer = {
   async _handleEvidenceSelect(item) {
     console.log('[ICD10Viewer] _handleEvidenceSelect called with item:', item?.id, item?.documentId);
 
+    // Guard against out-of-order async resolutions when the user clicks
+    // multiple evidence items in quick succession. Only the latest selection
+    // is allowed to update the PDF viewer.
+    this._evidenceSelectSeq = (this._evidenceSelectSeq || 0) + 1;
+    const seq = this._evidenceSelectSeq;
+    const isStale = () => seq !== this._evidenceSelectSeq;
+
     // Note / order / UDA evidence has no documentId — dispatch to SuperDocViewer
     // so practitioner notes, orders, labs, etc. open in their native viewer
     // instead of the PDF panel's empty state.
@@ -490,6 +497,11 @@ const ICD10Viewer = {
         ICD10API.getWordBlocks(item.documentId, this.facilityName, this.orgSlug)
       ]);
 
+      if (isStale()) {
+        console.log('[ICD10Viewer] Stale evidence selection, skipping PDF update for:', item.id);
+        return;
+      }
+
       console.log('[ICD10Viewer] Document fetched:', document?.id);
       console.log('[ICD10Viewer] Word blocks fetched:', allWordBlocks?.length, 'blocks');
       console.log('[ICD10Viewer] Item wordBlockIndices:', item.wordBlockIndices);
@@ -526,9 +538,14 @@ const ICD10Viewer = {
 
       // Load document in PDF viewer
       await ICD10PDFViewer.loadDocument(document, wordBlocks, targetPage, searchText);
+      if (isStale()) {
+        console.log('[ICD10Viewer] Stale after loadDocument, skipping further updates for:', item.id);
+        return;
+      }
       console.log('[ICD10Viewer] PDF loaded successfully');
 
     } catch (error) {
+      if (isStale()) return;
       console.error('[ICD10Viewer] Failed to load document:', error);
       window.SuperAnalytics?.track?.('error_shown', {
         surface: 'icd10_pdf_viewer',
