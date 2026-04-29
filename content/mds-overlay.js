@@ -653,7 +653,7 @@ function injectBadge(questionEl, result) {
       break;
     case 'review':
       badge.classList.add('super-badge--review');
-      badge.innerHTML = `<span class="super-badge__icon">&#9888;</span> Super: ${answerText}?`;
+      badge.innerHTML = `<span class="super-badge__icon">&#9888;</span> Super: ${answerText}`;
       break;
     case 'dismissed':
       if (result.userDecision?.decision === 'disagree') {
