@@ -8,6 +8,14 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Force TLS 1.2 — PowerShell 5.1 (Win10/11 default) defaults to SSL3/TLS1.0,
+# which us.i.posthog.com rejects. GitHub has historically tolerated whatever
+# the .NET defaults negotiate, but PostHog does not.
+try {
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch {}
+
 # --- Paths ----------------------------------------------------------------
 $desktop    = [Environment]::GetFolderPath('Desktop')
 $installDir = Join-Path $desktop 'super-ltc-extension'
@@ -70,13 +78,14 @@ function Send-Telemetry {
             distinct_id = (Get-DistinctId)
             properties  = $Props
         } | ConvertTo-Json -Depth 5 -Compress
+        # NOTE: Invoke-RestMethod does NOT accept -UseBasicParsing on
+        # PowerShell 5.1. Including it throws and the ping silently fails.
         Invoke-RestMethod `
             -Uri "$PosthogHost/capture/" `
             -Method Post `
             -ContentType 'application/json' `
             -Body $payload `
-            -TimeoutSec 5 `
-            -UseBasicParsing | Out-Null
+            -TimeoutSec 5 | Out-Null
     } catch {
         Write-Log "Telemetry send failed (non-fatal): $_"
     }
