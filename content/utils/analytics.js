@@ -169,9 +169,29 @@ export function identify(user) {
   posthog.identify(user.id, {
     email: user.email,
     role: user.role,
+    ext_version: chrome?.runtime?.getManifest?.().version || 'unknown',
   });
   if (user.facilityId) {
     posthog.group('facility', user.facilityId, { name: user.facilityName });
+  }
+}
+
+// Update the person's version-related props. Called from UpdateChecker after
+// it reads the disk manifest, so PostHog person profiles show:
+//   ext_version          — what's currently loaded in this Chrome process
+//   ext_disk_version     — what's on disk (may be ahead if updater swapped files)
+//   ext_disk_drift       — true when disk > running (user hasn't reloaded)
+export function setVersionProperties({ runningVersion, diskVersion, driftDetected }) {
+  if (!ENABLED) return;
+  const props = {
+    ext_version: String(runningVersion || 'unknown'),
+  };
+  if (diskVersion) props.ext_disk_version = String(diskVersion);
+  if (typeof driftDetected === 'boolean') props.ext_disk_drift = driftDetected;
+  try {
+    posthog.setPersonProperties(props);
+  } catch (e) {
+    if (__DEV_MODE__) console.warn('[analytics] setPersonProperties failed', e);
   }
 }
 

@@ -20,7 +20,7 @@ const ICD10Sidebar = {
 
   // Internal
   _container: null,
-  _data: { topRanked: [], approved: [], annotations: [], approvedDiagnoses: [] },
+  _data: { topRanked: [], approved: [], annotations: [], approvedDiagnoses: [], flatGroups: null },
   _onSelectionChange: null,
   _preact: null,
   _Sidebar: null,
@@ -34,6 +34,7 @@ const ICD10Sidebar = {
       approved: data.approved || [],
       annotations: data.annotations || [],
       approvedDiagnoses: data.approvedDiagnoses || [],
+      flatGroups: data.flatGroups || null,
     };
     this._onSelectionChange = onSelectionChange;
     this.selectedCategory = null;
@@ -48,6 +49,7 @@ const ICD10Sidebar = {
     if (data.approved !== undefined) this._data.approved = data.approved;
     if (data.annotations !== undefined) this._data.annotations = data.annotations;
     if (data.approvedDiagnoses !== undefined) this._data.approvedDiagnoses = data.approvedDiagnoses;
+    if (data.flatGroups !== undefined) this._data.flatGroups = data.flatGroups;
 
     if (this._ready) {
       this._render();
@@ -106,6 +108,7 @@ const ICD10Sidebar = {
         approved: this._data.approved,
         annotations: this._data.annotations,
         approvedDiagnoses: this._data.approvedDiagnoses,
+        flatGroups: this._data.flatGroups,
         onSelect: (selection) => this._handleSelect(selection),
       }),
       this._container

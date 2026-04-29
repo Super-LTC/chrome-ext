@@ -8,7 +8,7 @@ echo.
 echo This will set up automatic background updates for the
 echo Super LTC Chrome extension. After this runs once:
 echo.
-echo   - Every 4 hours, Windows will check for a new version
+echo   - Every 30 minutes, Windows will check for a new version
 echo   - If found, new files are downloaded silently
 echo   - A banner in PCC will prompt you to click Reload
 echo.
@@ -51,7 +51,7 @@ echo Registering scheduled task...
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File \"%UPDATER_DST%\"';" ^
-  "$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Hours 4) -RepetitionDuration ([TimeSpan]::FromDays(3650));" ^
+  "$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration ([TimeSpan]::FromDays(3650));" ^
   "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 15);" ^
   "Register-ScheduledTask -TaskName '%TASK_NAME%' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null"
 
@@ -62,7 +62,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- 4. Run once immediately so they don't wait 4 hours -----------------
+REM --- 4. Run once immediately so they don't wait 30 minutes --------------
 echo Running first update check now...
 powershell -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "%UPDATER_DST%"
 

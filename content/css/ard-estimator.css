@@ -557,6 +557,14 @@
   background: #ecfdf5;
 }
 
+.ard-est__status--to-code {
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  /* outline style — distinct from filled query blue */
+  padding: 2px 9px;
+}
+
 .ard-est__status--review {
   color: #d97706;
   background: #fffbeb;

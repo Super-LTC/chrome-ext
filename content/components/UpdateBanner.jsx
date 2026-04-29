@@ -57,7 +57,11 @@ export function UpdateBanner() {
       <div className="super-update-banner super-update-banner--instructions" role="status">
         <TrackedButton
           track="update_banner_clicked"
-          trackProps={{ action: 'dismiss' }}
+          trackProps={{
+            action: 'dismiss',
+            current_version: String(status.runningVersion || ''),
+            latest_version: String(status.diskVersion || status.latestVersion || ''),
+          }}
           type="button"
           className="super-update-banner__dismiss super-update-banner__dismiss--top"
           onClick={handleDismiss}
@@ -127,7 +131,11 @@ export function UpdateBanner() {
         {step === 'instructions' ? (
           <TrackedButton
             track="update_banner_clicked"
-            trackProps={{ action: 'reload' }}
+            trackProps={{
+            action: 'reload',
+            current_version: String(status.runningVersion || ''),
+            latest_version: String(status.diskVersion || status.latestVersion || ''),
+          }}
             type="button"
             className="super-update-banner__reload super-update-banner__reload--full"
             onClick={handleOpenExtensions}
@@ -142,7 +150,11 @@ export function UpdateBanner() {
             </div>
             <TrackedButton
               track="update_banner_clicked"
-              trackProps={{ action: 'reload' }}
+              trackProps={{
+            action: 'reload',
+            current_version: String(status.runningVersion || ''),
+            latest_version: String(status.diskVersion || status.latestVersion || ''),
+          }}
               type="button"
               className="super-update-banner__reload super-update-banner__reload--full"
               onClick={() => {

@@ -91,6 +91,14 @@ export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss
         detail: { mdsItem: apiCode, column: mdsColumn, decision: 'disagree' },
       }));
 
+      window.SuperAnalytics?.track?.('mds_item_decision', {
+        item_code: String(apiCode || ''),
+        column: String(mdsColumn || ''),
+        decision: 'disagree',
+        has_reason: !!(reason && reason.length > 0),
+        surface: 'pdpm_sidebar',
+      });
+
       window.SuperToast?.success?.('Item dismissed');
       onDismissComplete?.();
     } catch (err) {

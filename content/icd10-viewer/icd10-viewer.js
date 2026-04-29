@@ -21,13 +21,16 @@ const ICD10Viewer = {
   annotations: [],
   topRanked: [],
   approved: [],
+  flatGroups: null,
   counts: {},
   approvedDiagnoses: [],
+  _v2: false,
   stagedCodes: [],          // Codes staged for PCC submission
   admitDate: null,          // Patient admit date (from backend)
   _currentView: 'icd10', // 'icd10' or 'queryItems'
   _preactUnmount: null,  // cleanup function for Preact component
   _confirmationUnmount: null, // cleanup function for confirmation dialog
+  _queryFlowUnmount: null, // cleanup function for the single-query Preact flow
   _assessmentId: null,   // external assessment ID for query items
 
   // DOM elements
@@ -89,6 +92,11 @@ const ICD10Viewer = {
       this._confirmationUnmount();
       this._confirmationUnmount = null;
     }
+    // Clean up the single-query Preact sheet if showing
+    if (this._queryFlowUnmount) {
+      this._queryFlowUnmount();
+      this._queryFlowUnmount = null;
+    }
     this._currentView = 'icd10';
     this.stagedCodes = [];
 
@@ -115,6 +123,9 @@ const ICD10Viewer = {
       ICD10Sidebar.selectedGroupId = null;
       ICD10EvidencePanel.clear();
       ICD10PDFViewer.clear();
+      // Drop the v2 detail cache; word-blocks/URL caches are document-scoped
+      // and stay warm across viewer opens, so we don't blanket-clear all caches.
+      ICD10API.detailCache?.clear?.();
     }, 200);
   },
 
@@ -357,13 +368,15 @@ const ICD10Viewer = {
     try {
       // Fetch data in parallel
       const [annotationData, approvedDiagnoses] = await Promise.all([
-        ICD10API.getAnnotations(this.patientId, this.facilityName, this.orgSlug),
+        ICD10API.getAnnotations(this.patientId, this.facilityName, this.orgSlug, this._assessmentId),
         ICD10API.getApprovedDiagnoses(this.patientId, this.facilityName, this.orgSlug)
       ]);
 
+      this._v2 = annotationData._v2 === true;
       this.topRanked = annotationData.topRanked || [];
       this.approved = annotationData.approved || [];
       this.annotations = annotationData.flatAnnotations || [];
+      this.flatGroups = annotationData.flatGroups || null;
       this.counts = annotationData.counts || {};
       this.admitDate = annotationData.admitDate || null;
       this.approvedDiagnoses = approvedDiagnoses || [];
@@ -393,7 +406,8 @@ const ICD10Viewer = {
     ICD10EvidencePanel.init(
       this.evidencePanel,
       (item) => this._handleEvidenceSelect(item),
-      (item) => this._handleApprove(item)
+      (item) => this._handleApprove(item),
+      (payload) => this._handleQuerySingle(payload)
     );
 
     // Initialize PDF viewer
@@ -408,6 +422,7 @@ const ICD10Viewer = {
         topRanked: this.topRanked,
         approved: this.approved,
         annotations: this.annotations,
+        flatGroups: this.flatGroups,
         approvedDiagnoses: this.approvedDiagnoses,
         counts: this.counts
       },
@@ -421,25 +436,66 @@ const ICD10Viewer = {
    * Handle sidebar selection change
    * @param {Object} selection - { category, baseCode, items }
    */
-  _handleSidebarSelection(selection) {
-    console.log('[ICD10Viewer] _handleSidebarSelection:', selection.category, selection.baseCode || selection.groupId, selection.items?.length, 'items');
+  async _handleSidebarSelection(selection) {
+    console.log('[ICD10Viewer] _handleSidebarSelection:', selection.category, selection.baseCode || selection.groupId, 'items=', selection.items?.length, 'v2=', this._v2);
 
-    // Pass group context along with items
+    const baseCode = selection.baseCode || selection.groupCode;
     const groupContext = {
-      groupCode: selection.baseCode,
+      groupCode: baseCode,
       groupName: selection.groupName || null,
       evidenceStrength: selection.evidenceStrength || null,
-      rationale: selection.rationale || null
+      rationale: selection.rationale || null,
+      pdpmCategory: selection.pdpmCategory || null,
+      pdpmCategoryName: selection.pdpmCategoryName || null,
+      pdpmPoints: selection.pdpmPoints,
+      mdsItemCode: selection.mdsItemCode || null,
     };
-    ICD10EvidencePanel.updateItems(selection.items, true, groupContext);
 
-    // Fire-and-forget summary fetch for the selected base code
-    const baseCode = selection.baseCode || selection.groupCode;
+    // Sequence guard so a slow earlier fetch can't clobber the latest selection.
+    this._selectionSeq = (this._selectionSeq || 0) + 1;
+    const seq = this._selectionSeq;
+    const isStale = () => seq !== this._selectionSeq;
+
+    // Fire-and-forget summary fetch for the selected base code (independent
+    // of the detail fetch — runs in parallel).
     if (baseCode) {
       ICD10EvidencePanel.showSummaryLoading();
-      ICD10API.getEvidenceSummary(this.patientId, baseCode, this.facilityName, this.orgSlug)
-        .then(data => ICD10EvidencePanel.showSummary(data.summary))
-        .catch(() => ICD10EvidencePanel.clearSummary());
+      ICD10API.getEvidenceSummary(this.patientId, baseCode, this.facilityName, this.orgSlug, this._assessmentId)
+        .then(data => { if (!isStale()) ICD10EvidencePanel.showSummary(data.summary); })
+        .catch(() => { if (!isStale()) ICD10EvidencePanel.clearSummary(); });
+    }
+
+    // v1 path: items came pre-loaded with the list response.
+    if (!this._v2 || (selection.items && selection.items.length > 0)) {
+      ICD10EvidencePanel.updateItems(selection.items || [], true, groupContext);
+      return;
+    }
+
+    // v2 path: fetch the per-base-code detail on demand.
+    if (!baseCode) {
+      ICD10EvidencePanel.updateItems([], true, groupContext);
+      return;
+    }
+
+    ICD10EvidencePanel.showItemsLoading(groupContext);
+    const t0 = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    try {
+      const annotations = await ICD10API.getAnnotationsByBaseCode(
+        this.patientId, baseCode, this.facilityName, this.orgSlug, this._assessmentId
+      );
+      if (isStale()) return;
+      const dt = Math.round(((typeof performance !== 'undefined') ? performance.now() : Date.now()) - t0);
+      console.log(`[ICD10Viewer] v2 detail fetched: code=${baseCode} count=${annotations.length} ${dt}ms`);
+      ICD10EvidencePanel.updateItems(annotations, true, groupContext);
+    } catch (err) {
+      if (isStale()) return;
+      console.error('[ICD10Viewer] Detail fetch failed:', err);
+      window.SuperAnalytics?.track?.('error_shown', {
+        surface: 'icd10_evidence_detail',
+        error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+        error_type: 'api_error',
+      });
+      ICD10EvidencePanel.showItemsError(groupContext, () => this._handleSidebarSelection(selection));
     }
   },
 
@@ -613,6 +669,96 @@ const ICD10Viewer = {
     } catch (error) {
       console.error('ICD10Viewer: Failed to stage:', error);
       throw error;
+    }
+  },
+
+  /**
+   * Handle "Query" click from the evidence panel header. Mounts a Preact
+   * sheet that wraps useBatchQuery + BatchReviewPage with a single-item
+   * batch built from the v2 detail annotations the panel already loaded.
+   * @param {Object} payload - { baseCode, description, groupContext, items }
+   */
+  async _handleQuerySingle(payload) {
+    if (!payload || !payload.baseCode) return;
+    if (!payload.items || payload.items.length === 0) {
+      window.SuperToast?.show?.({ message: 'No evidence to attach yet — wait for mentions to load.', type: 'info' });
+      return;
+    }
+    // Block when there's no PDPM signal at all — backend requires an mdsItem
+    // and the I8000 fallback is only meaningful with an NTA/SLP category.
+    const ctx = payload.groupContext || {};
+    if (!ctx.mdsItemCode && !ctx.pdpmCategory) {
+      window.SuperToast?.show?.({
+        message: `No MDS item slot for ${payload.baseCode} — can't attach a query.`,
+        type: 'warning',
+      });
+      return;
+    }
+
+    if (this._queryFlowUnmount) {
+      this._queryFlowUnmount();
+      this._queryFlowUnmount = null;
+    }
+
+    const mountEl = document.createElement('div');
+    mountEl.className = 'icd10-query-flow-mount';
+    this.modal.querySelector('.icd10-viewer-modal__container').appendChild(mountEl);
+
+    try {
+      let render, h, Icd10QueryFlow;
+      if (window.__preact && window.__Icd10QueryFlow) {
+        ({ render, h } = window.__preact);
+        Icd10QueryFlow = window.__Icd10QueryFlow;
+      } else {
+        const [preactMod, flowMod] = await Promise.all([
+          import('preact'),
+          import('../modules/icd10-query-flow/Icd10QueryFlow.jsx'),
+        ]);
+        ({ render, h } = preactMod);
+        ({ Icd10QueryFlow } = flowMod);
+        if (!window.__preact) window.__preact = preactMod;
+        if (!window.__Icd10QueryFlow) window.__Icd10QueryFlow = Icd10QueryFlow;
+      }
+
+      const cleanup = () => {
+        try { render(null, mountEl); } catch (_) { /* noop */ }
+        mountEl.remove();
+        this._queryFlowUnmount = null;
+      };
+      this._queryFlowUnmount = cleanup;
+
+      render(
+        h(Icd10QueryFlow, {
+          baseCode: payload.baseCode,
+          description: payload.description,
+          groupContext: payload.groupContext,
+          items: payload.items,
+          patientId: this.patientId,
+          facilityName: this.facilityName,
+          orgSlug: this.orgSlug,
+          assessmentId: this._assessmentId,
+          onClose: () => cleanup(),
+          onComplete: (sentQueries, practitionerName) => {
+            const n = (sentQueries || []).length;
+            if (n > 0) {
+              window.SuperToast?.show?.({
+                message: `Query sent to ${practitionerName || 'practitioner'}.`,
+                type: 'success',
+              });
+            }
+          },
+        }),
+        mountEl
+      );
+    } catch (err) {
+      console.error('[ICD10Viewer] Failed to load query flow:', err);
+      window.SuperAnalytics?.track?.('error_shown', {
+        surface: 'icd10_query_flow_load',
+        error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+        error_type: 'api_error',
+      });
+      mountEl.remove();
+      window.SuperToast?.show?.({ message: `Failed to start query flow: ${err.message}`, type: 'error' });
     }
   },
 

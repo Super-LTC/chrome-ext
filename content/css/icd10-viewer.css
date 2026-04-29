@@ -402,6 +402,60 @@
   line-height: 1.5;
 }
 
+/* v2 detail-fetch loading + error states */
+.icd10-evidence-panel__items-loading {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.icd10-evidence-panel__skeleton-row {
+  height: 56px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--super-gray-100) 0%, var(--super-gray-50) 50%, var(--super-gray-100) 100%);
+  background-size: 200% 100%;
+  animation: icd10-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes icd10-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.icd10-evidence-panel__skeleton-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--super-gray-500);
+  margin-top: 4px;
+}
+
+.icd10-evidence-panel__items-error {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--super-gray-700);
+}
+
+.icd10-evidence-panel__items-error-text {
+  font-size: 13px;
+  margin: 0 0 12px 0;
+}
+
+.icd10-evidence-panel__items-error-retry {
+  background: var(--super-primary, #6366f1);
+  color: #fff;
+  border: 0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.icd10-evidence-panel__items-error-retry:hover {
+  filter: brightness(1.05);
+}
+
 .icd10-evidence-panel__header {
   padding: 0;
   border-bottom: 1px solid var(--super-gray-200);
@@ -559,6 +613,143 @@
 .icd10-evidence-panel__diagnosis-actions {
   display: flex;
   justify-content: flex-start;
+  gap: 8px;
+}
+
+.icd10-evidence-panel__query {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: white;
+  color: var(--super-primary, #6366f1);
+  border: 1px solid var(--super-primary, #6366f1);
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.icd10-evidence-panel__query:hover:not(:disabled) {
+  background: #eef2ff;
+}
+
+.icd10-evidence-panel__query:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ---- Single-query flow overlay (Icd10QueryFlow) ---- */
+
+.icd10-query-flow__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Must beat the ICD-10 viewer container (z-index: 100011) */
+  z-index: 100020;
+  padding: 24px;
+}
+
+.icd10-query-flow__sheet {
+  background: #fff;
+  border-radius: 12px;
+  width: min(960px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+.icd10-query-flow__sheet--loading {
+  width: min(440px, 100%);
+  align-items: center;
+  padding: 32px;
+  gap: 14px;
+}
+
+.icd10-query-flow__sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--super-gray-200);
+}
+
+.icd10-query-flow__sheet-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--super-gray-900, #111827);
+}
+
+.icd10-query-flow__sheet-close {
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  color: var(--super-gray-500);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.icd10-query-flow__sheet-close:hover {
+  background: var(--super-gray-100);
+  color: var(--super-gray-800);
+}
+
+.icd10-query-flow__sheet-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.icd10-query-flow__spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--super-gray-200);
+  border-top-color: var(--super-primary, #6366f1);
+  border-radius: 50%;
+  animation: icd10-spin 0.8s linear infinite;
+}
+
+.icd10-query-flow__loading-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--super-gray-900, #111827);
+}
+
+.icd10-query-flow__loading-sub {
+  font-size: 13px;
+  color: var(--super-gray-600);
+}
+
+.icd10-query-flow__error {
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.icd10-query-flow__cancel {
+  background: transparent;
+  border: 1px solid var(--super-gray-300);
+  color: var(--super-gray-700);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.icd10-query-flow__cancel:hover {
+  background: var(--super-gray-50);
 }
 
 .icd10-evidence-panel__approve {
@@ -2445,5 +2636,17 @@
   color: #0f766e;
   border-color: #14b8a6;
   background: #ccfbf1;
+}
+
+.icd10-sb__badge--nursing {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.icd10-sb__badge--sectioni {
+  color: #7c2d12;
+  border-color: #b45309;
+  background: #fef3c7;
 }
 

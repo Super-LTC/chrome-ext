@@ -45,36 +45,112 @@ function resolveBaseCodeDescription(baseCode, fallback) {
 function badgesFromItems(items) {
   let nta = false;
   let slp = false;
+  let nursing = false;
+  let sectionI = false;
   for (const i of items || []) {
     if (i.category === 'nta') nta = true;
     if (i.category === 'slp') slp = true;
-    if (nta && slp) break;
+    if (i.pdpmCategory === 'NURSING') nursing = true;
+    if (i.pdpmCategory === 'SECTION-I') sectionI = true;
   }
-  return { nta, slp };
+  return { nta, slp, nursing, sectionI };
 }
 
-function buildSections({ topRanked, approved, annotations }) {
-  const topPicks = (topRanked || []).map(g => ({
+/**
+ * v2: derive badges directly from a group's pdpmCategory.
+ * Server dropped hasNTA/hasSLP — pdpmCategory is the source of truth.
+ */
+function badgesFromGroup(g) {
+  const cat = g?.pdpmCategory || null;
+  return {
+    nta: cat === 'NTA',
+    slp: cat === 'SLP',
+    nursing: cat === 'NURSING',
+    sectionI: cat === 'SECTION-I',
+  };
+}
+
+function buildSections({ topRanked, approved, annotations, flatGroups }) {
+  // v2: ranked groups have no annotations[]. Source of truth is pdpmCategory.
+  // v1 fallback: derive from annotations.
+  const rankedBadges = (g) => {
+    if (g.pdpmCategory != null || g.annotations == null) {
+      return badgesFromGroup(g);
+    }
+    return badgesFromItems(g.annotations || []);
+  };
+
+  const enrichRanked = (g, prefix, origin) => ({
     kind: 'group',
-    key: `t:${g.groupId}`,
-    origin: 'topRanked',
+    // v2 has no groupId; key off origin + base code, which backend confirmed
+    // is unique within topRanked / approved respectively.
+    key: `${prefix}:${g.groupId || g.groupCode || g.group}`,
+    origin,
     rank: g.rank,
-    code: g.groupCode,
-    description: g.groupName,
-    badges: badgesFromItems(g.annotations || []),
+    code: g.groupCode || g.group,
+    description: g.groupName || g.displayName,
+    badges: rankedBadges(g),
+    pdpmCategory: g.pdpmCategory || null,
+    pdpmCategoryName: g.pdpmCategoryName || null,
+    pdpmPoints: g.pdpmPoints,
+    mdsItemCode: g.mdsItemCode || null,
     group: g,
-  }));
+  });
 
-  const approvedRows = (approved || []).map(g => ({
-    kind: 'group',
-    key: `a:${g.groupId}`,
-    origin: 'approved',
-    code: g.groupCode,
-    description: g.groupName,
-    badges: badgesFromItems(g.annotations || []),
-    group: g,
-  }));
+  const topPicks = (topRanked || []).map(g => enrichRanked(g, 't', 'topRanked'));
+  const approvedRows = (approved || []).map(g => enrichRanked(g, 'a', 'approved'));
 
+  // v2 pre-grouped path: render buckets directly, skip per-mention regrouping.
+  if (flatGroups) {
+    const flatToRow = (g, origin, prefix) => ({
+      kind: 'baseCode',
+      key: `${prefix}:${g.groupCode || g.group}`,
+      origin,
+      code: g.groupCode || g.group,
+      description: resolveBaseCodeDescription(g.groupCode || g.group, g.groupName || g.displayName),
+      badges: badgesFromGroup(g),
+      count: g.mentionCount ?? g.annotationCount ?? 0,
+      baseCode: g.groupCode || g.group,
+      // pdpmCategoryName / mdsItemCode are passed through for downstream
+      // (query attach uses mdsItemCode; tooltips use pdpmCategoryName).
+      pdpmCategory: g.pdpmCategory || null,
+      pdpmCategoryName: g.pdpmCategoryName || null,
+      mdsItemCode: g.mdsItemCode || null,
+      // No items[] in v2 — viewer fetches detail on click.
+      items: null,
+      flatGroup: g,
+    });
+
+    // "Other" rolls up nta + slp + other in v2 since the sidebar already shows
+    // NTA/SLP membership via badges; mirror v1's UX of one "Other suggestions"
+    // section. Speculative stays distinct.
+    const otherCombined = [
+      ...(flatGroups.nta || []).map(g => flatToRow(g, 'other', 'o')),
+      ...(flatGroups.slp || []).map(g => flatToRow(g, 'other', 'o')),
+      ...(flatGroups.other || []).map(g => flatToRow(g, 'other', 'o')),
+    ];
+    // Dedup by base code (a code can appear in nta/slp/other simultaneously).
+    const seen = new Set();
+    const otherDeduped = otherCombined.filter(r => {
+      if (seen.has(r.code)) return false;
+      seen.add(r.code);
+      return true;
+    });
+    otherDeduped.sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+
+    const speculative = (flatGroups.speculative || [])
+      .map(g => flatToRow(g, 'speculative', 's'))
+      .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+
+    return {
+      topPicks,
+      approved: approvedRows,
+      other: otherDeduped,
+      speculative,
+    };
+  }
+
+  // v1 path: re-group flat annotations by 3-char base code.
   const buckets = { other: {}, speculative: {} };
   for (const ann of annotations || []) {
     const baseCode = (ann.icd10Code || '').substring(0, 3);
@@ -133,20 +209,30 @@ function buildSelectionPayload(row) {
   if (!row) return null;
   if (row.kind === 'group') {
     const g = row.group;
+    const baseCode = g.groupCode || g.group;
     return {
       category: row.origin,
       groupId: g.groupId,
-      baseCode: g.groupCode,
-      groupName: g.groupName,
+      baseCode,
+      groupName: g.groupName || g.displayName,
       evidenceStrength: g.evidenceStrength || null,
       rationale: g.rationale || null,
-      items: g.annotations || [],
+      pdpmCategory: g.pdpmCategory || null,
+      pdpmCategoryName: g.pdpmCategoryName || null,
+      pdpmPoints: g.pdpmPoints,
+      mdsItemCode: g.mdsItemCode || null,
+      // v2 ranked groups carry no annotations[] — viewer fetches by base code.
+      items: g.annotations || null,
     };
   }
   return {
     category: row.origin,
     baseCode: row.baseCode,
-    items: row.items,
+    pdpmCategory: row.pdpmCategory || null,
+    pdpmCategoryName: row.pdpmCategoryName || null,
+    mdsItemCode: row.mdsItemCode || null,
+    // v2 flat groups carry no items either. v1 paths still pass them.
+    items: row.items || null,
   };
 }
 
@@ -176,6 +262,12 @@ function Row({ row, selected, onClick }) {
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
   if (row.rank != null) cls.push('icd10-sb__row--ranked');
+  const b = row.badges || {};
+  const hasAnyBadge = b.nta || b.slp || b.nursing || b.sectionI;
+  // Tooltip: prefer pdpmCategoryName ("Diabetes Mellitus") over the description
+  // when we have it — it's the canonical PDPM label.
+  const ptsLabel = (row.pdpmPoints != null) ? ` +${row.pdpmPoints}` : '';
+  const tooltip = row.pdpmCategoryName ? `${row.pdpmCategoryName}${ptsLabel}` : null;
   return h('div', {
     class: cls.join(' '),
     onClick: () => onClick(row.key),
@@ -183,9 +275,13 @@ function Row({ row, selected, onClick }) {
     row.rank != null && h('span', { class: 'icd10-sb__rank' }, `#${row.rank}`),
     h('span', { class: 'icd10-sb__code' }, row.code),
     h('span', { class: 'icd10-sb__desc', title: row.description }, row.description),
-    (row.badges.nta || row.badges.slp) && h('span', { class: 'icd10-sb__badges' },
-      row.badges.nta && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nta' }, 'NTA'),
-      row.badges.slp && h('span', { class: 'icd10-sb__badge icd10-sb__badge--slp' }, 'SLP')
+    hasAnyBadge && h('span', { class: 'icd10-sb__badges', title: tooltip || undefined },
+      b.nta && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nta' },
+        row.pdpmPoints != null ? `NTA +${row.pdpmPoints}` : 'NTA'
+      ),
+      b.slp && h('span', { class: 'icd10-sb__badge icd10-sb__badge--slp' }, 'SLP'),
+      b.nursing && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nursing' }, 'NURS'),
+      b.sectionI && h('span', { class: 'icd10-sb__badge icd10-sb__badge--sectioni' }, 'I')
     )
   );
 }
@@ -215,15 +311,15 @@ function StaticHeader({ label, icon }) {
   );
 }
 
-export function Sidebar({ topRanked = [], approved = [], annotations = [], onSelect }) {
+export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect }) {
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [speculativeOpen, setSpeculativeOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
   const autoSelectedForRef = useRef(null);
 
   const sections = useMemo(
-    () => buildSections({ topRanked, approved, annotations }),
-    [topRanked, approved, annotations]
+    () => buildSections({ topRanked, approved, annotations, flatGroups }),
+    [topRanked, approved, annotations, flatGroups]
   );
 
   const validKeys = useMemo(() => {

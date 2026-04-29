@@ -28,6 +28,13 @@ function copyStaticAssets(outDir) {
       copyFileSync('lib/pdf.worker.min.js', `${outDir}/lib/pdf.worker.min.js`);
       // Copy privacy policy (accessible from popup)
       copyFileSync('privacy-policy.html', `${outDir}/privacy-policy.html`);
+      // Copy Windows auto-updater scripts so they ship in the release zip.
+      // The PS1 also lives at $installDir at runtime so the updater can
+      // self-update its own copy in %LOCALAPPDATA%\SuperLTC.
+      copyFileSync('update-super-ltc-silent.ps1', `${outDir}/update-super-ltc-silent.ps1`);
+      copyFileSync('install-auto-updater.bat', `${outDir}/install-auto-updater.bat`);
+      copyFileSync('uninstall-auto-updater.bat', `${outDir}/uninstall-auto-updater.bat`);
+      copyFileSync('update-super-ltc.bat', `${outDir}/update-super-ltc.bat`);
     }
   };
 }

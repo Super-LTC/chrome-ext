@@ -17,8 +17,12 @@ export const EVENT_SCHEMA = {
   user_logged_out: [],
   auth_failed: ['reason'],
   update_banner_shown: ['current_version', 'latest_version'],
-  update_banner_clicked: ['action'],
+  update_banner_clicked: ['action', 'current_version', 'latest_version'],
   update_check_failed: ['error_code'],
+  // Fires once per session when disk version is ahead of running version —
+  // i.e. the Windows updater swapped files but the user hasn't reloaded yet.
+  // Lets us see who is sitting on stale runtimes.
+  update_disk_drift: ['running_version', 'disk_version'],
 
   // === Super menu (FAB + panel) ===
   fab_clicked: ['fab'],
@@ -47,6 +51,16 @@ export const EVENT_SCHEMA = {
   // === Drill-ins & engagement ===
   mds_section_expanded: ['section_code'],
   mds_item_clicked: ['item_code'],
+
+  // Inline AI-verdict badge on the PCC MDS page (the "Super: Yes/No" pill next
+  // to each question). Click opens the popover. Pair with `pdpm_item_drilled_in`
+  // to compare inline-vs-sidebar entry paths.
+  mds_badge_clicked: ['item_code', 'column', 'status'],
+  // User accepted/rejected the AI suggestion. `surface` tells you which UI:
+  //   'mds_overlay_popover' — inline badge popover on the PCC MDS page
+  //   'pdpm_sidebar'        — PDPM Analyzer item detail view
+  // `has_reason` only applies to disagree.
+  mds_item_decision: ['item_code', 'column', 'decision', 'has_reason', 'surface'],
 
   facility_dashboard_tab_switched: ['from_tab', 'to_tab'],
   facility_dashboard_resident_clicked: [],

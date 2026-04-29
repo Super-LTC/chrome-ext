@@ -25,8 +25,33 @@ const ICD10API = {
   // Cache for presigned URLs with expiry tracking
   urlCache: new Map(),
 
+  // Cache for v2 click-to-load annotation detail.
+  // Key: `${patientId}|${mdsAssessmentId || ''}|${baseCode}` → annotations[]
+  // Cleared on viewer close + when assessment changes.
+  detailCache: new Map(),
+
   // Minimum time before URL expiry to trigger refresh (2 minutes)
   URL_REFRESH_THRESHOLD: 2 * 60 * 1000,
+
+  /**
+   * v2 mode toggle. ON by default during cutover.
+   * Explicit opt-out: window.__ICD10_V2 = false  (falls back to v1).
+   * (Also accepts an explicit `true` for symmetry / future tooling.)
+   * @returns {boolean}
+   */
+  _useV2() {
+    if (typeof window === 'undefined') return true;
+    if (window.__ICD10_V2 === false) return false;
+    return true;
+  },
+
+  /**
+   * Build a cache key for v2 detail lookups so an assessment swap busts
+   * the per-base-code cache without affecting other patients.
+   */
+  _detailCacheKey(patientId, baseCode, mdsAssessmentId) {
+    return `${patientId}|${mdsAssessmentId || ''}|${baseCode}`;
+  },
 
   /**
    * Get ICD-10 annotations for a patient
@@ -35,17 +60,26 @@ const ICD10API = {
    * @param {string} orgSlug - Organization slug
    * @returns {Promise<Object>} - { topRanked, flatAnnotations, counts }
    */
-  async getAnnotations(patientId, facilityName, orgSlug) {
+  async getAnnotations(patientId, facilityName, orgSlug, mdsAssessmentId) {
+    const v2 = this._useV2();
+
     // Use mock data in development
     if (this._useMockData()) {
       await this._simulateDelay();
+      if (v2) {
+        return this._processV2ListResponse(this._adaptV1MockToV2(ICD10MockData.apiResponse));
+      }
       return this._processAnnotationResponse(ICD10MockData.apiResponse);
     }
 
-    const endpoint = `/api/extension/icd10-annotations?` +
-      `patientId=${encodeURIComponent(patientId)}` +
-      `&facilityName=${encodeURIComponent(facilityName)}` +
-      `&orgSlug=${encodeURIComponent(orgSlug)}`;
+    const path = v2 ? '/api/extension/icd10-annotations/v2' : '/api/extension/icd10-annotations';
+    const params = new URLSearchParams({
+      patientId,
+      facilityName,
+      orgSlug,
+    });
+    if (v2 && mdsAssessmentId) params.set('mdsAssessmentId', mdsAssessmentId);
+    const endpoint = `${path}?${params}`;
 
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
@@ -53,12 +87,193 @@ const ICD10API = {
     });
 
     if (!response.success) {
-      _trackIcd10ApiFail('/api/extension/icd10-annotations', response);
+      _trackIcd10ApiFail(path, response);
       throw new Error(response.error || 'Failed to fetch annotations');
     }
 
     const data = response.data || response;
-    return this._processAnnotationResponse(data);
+    return v2 ? this._processV2ListResponse(data) : this._processAnnotationResponse(data);
+  },
+
+  /**
+   * Fetch full per-mention detail for one base code. v2-only.
+   * Caches by (patientId, mdsAssessmentId, baseCode) for the viewer's lifetime.
+   * Errors propagate so the caller can show an inline retry state.
+   */
+  async getAnnotationsByBaseCode(patientId, baseCode, facilityName, orgSlug, mdsAssessmentId) {
+    const cacheKey = this._detailCacheKey(patientId, baseCode, mdsAssessmentId);
+    if (this.detailCache.has(cacheKey)) return this.detailCache.get(cacheKey);
+
+    if (this._useMockData()) {
+      await this._simulateDelay(120);
+      const annotations = this._extractMockAnnotationsByBaseCode(baseCode);
+      this.detailCache.set(cacheKey, annotations);
+      return annotations;
+    }
+
+    const params = new URLSearchParams({ patientId, facilityName, orgSlug });
+    if (mdsAssessmentId) params.set('mdsAssessmentId', mdsAssessmentId);
+    const endpoint = `/api/extension/icd10-annotations/v2/by-code/${encodeURIComponent(baseCode)}?${params}`;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint,
+    });
+
+    if (!response.success) {
+      _trackIcd10ApiFail('/api/extension/icd10-annotations/v2/by-code/:baseCode', response);
+      throw new Error(response.error || 'Failed to fetch annotations for code');
+    }
+
+    const data = response.data || response;
+    const annotations = data.annotations || [];
+    this.detailCache.set(cacheKey, annotations);
+    return annotations;
+  },
+
+  /**
+   * Process v2 list response. Buckets are pre-grouped server-side; we just
+   * normalize names so the existing sidebar component continues to work.
+   * Output marker: `_v2: true` so downstream code can branch.
+   */
+  _processV2ListResponse(data) {
+    const annotations = data.annotations || {};
+
+    const normalizeRanked = (g) => ({
+      // Preserve every server field; alias to the names existing code reads.
+      ...g,
+      groupCode: g.groupCode || g.group,
+      groupName: g.groupName || g.displayName,
+      // PDPM fields straight through (server-side truth).
+      pdpmCategory: g.pdpmCategory || null,
+      pdpmCategoryName: g.pdpmCategoryName || null,
+      pdpmPoints: g.pdpmPoints,
+      mdsItemCode: g.mdsItemCode || null,
+      // v2 ranked groups intentionally have no annotations[]
+      annotationCount: g.annotationCount ?? 0,
+      documentCount: g.documentCount ?? 0,
+    });
+
+    const normalizeFlat = (g) => ({
+      ...g,
+      groupCode: g.groupCode || g.group,
+      groupName: g.groupName || g.displayName,
+      pdpmCategory: g.pdpmCategory || null,
+      pdpmCategoryName: g.pdpmCategoryName || null,
+      pdpmPoints: g.pdpmPoints,
+      mdsItemCode: g.mdsItemCode || null,
+      annotationCount: g.mentionCount ?? g.annotationCount ?? 0,
+      mentionCount: g.mentionCount ?? g.annotationCount ?? 0,
+    });
+
+    const flatGroups = {
+      nta: (annotations.nta || []).map(normalizeFlat),
+      slp: (annotations.slp || []).map(normalizeFlat),
+      other: (annotations.other || []).map(normalizeFlat),
+      speculative: (annotations.speculative || []).map(normalizeFlat),
+    };
+
+    // One-time speculative-collision warning (cheap, won't spam): if a base code
+    // appears in both `other` and `speculative`, log it so we can spot it later.
+    try {
+      const otherSet = new Set(flatGroups.other.map(g => g.groupCode));
+      flatGroups.speculative.forEach(g => {
+        if (otherSet.has(g.groupCode)) {
+          console.warn('[ICD10] base code in both other and speculative:', g.groupCode);
+        }
+      });
+    } catch (_) { /* never break the viewer for telemetry */ }
+
+    return {
+      _v2: true,
+      topRanked: (annotations.topRanked || []).map(normalizeRanked),
+      approved: (annotations.approved || []).map(normalizeRanked),
+      flatAnnotations: [], // v2 ships no flat annotations on the list call
+      flatGroups,
+      counts: data.counts || {},
+      admitDate: data.admitDate || null,
+    };
+  },
+
+  /**
+   * Adapt the v1 mock response into the v2 list shape so demos keep working
+   * without re-recording fixtures. Strips heavy fields and groups flat
+   * categories by base ICD-10 code.
+   */
+  _adaptV1MockToV2(v1) {
+    const v1Annotations = v1?.annotations || {};
+
+    const stripRanked = (g) => {
+      // v2: server provides pdpmCategory directly. Mock fixtures are v1, so
+      // synthesize from the first matching child annotation if absent.
+      let pdpmCategory = g.pdpmCategory || null;
+      if (!pdpmCategory) {
+        const nta = (g.annotations || []).find(a => a.category === 'nta');
+        const slp = (g.annotations || []).find(a => a.category === 'slp');
+        if (nta) pdpmCategory = 'NTA';
+        else if (slp) pdpmCategory = 'SLP';
+      }
+      return {
+        group: g.groupCode || g.group || g.groupId,
+        displayName: g.groupName || g.displayName || '',
+        rank: g.rank,
+        rationale: g.rationale || '',
+        confidence: g.confidence ?? 0,
+        evidenceStrength: g.evidenceStrength || null,
+        pdpmCategory,
+        pdpmCategoryName: g.pdpmCategoryName || null,
+        pdpmPoints: g.pdpmPoints,
+        mdsItemCode: g.mdsItemCode || null,
+        annotationCount: g.annotationCount ?? g.annotations?.length ?? 0,
+        documentCount: g.documentCount ?? 0,
+        latestDocumentDate: g.latestDocumentDate,
+      };
+    };
+
+    const groupFlat = (arr, defaultCategory) => {
+      const map = new Map();
+      (arr || []).forEach(ann => {
+        const base = (ann.icd10Code || '').substring(0, 3);
+        if (!base) return;
+        if (!map.has(base)) {
+          map.set(base, {
+            group: base,
+            displayName: ann.description || base,
+            mentionCount: 0,
+            pdpmCategory: ann.pdpmCategory || defaultCategory || null,
+            pdpmCategoryName: ann.pdpmCategoryName || null,
+            pdpmPoints: ann.pdpmPoints,
+            mdsItemCode: ann.mdsItemCode || null,
+          });
+        }
+        map.get(base).mentionCount += 1;
+      });
+      return Array.from(map.values());
+    };
+
+    return {
+      success: true,
+      version: 'v2',
+      admitDate: v1?.admitDate || null,
+      annotations: {
+        topRanked: (v1Annotations.topRanked || []).map(stripRanked),
+        approved: (v1Annotations.approved || []).map(stripRanked),
+        nta: groupFlat(v1Annotations.nta, 'NTA'),
+        slp: groupFlat(v1Annotations.slp, 'SLP'),
+        other: groupFlat(v1Annotations.other, null),
+        speculative: groupFlat(v1Annotations.speculative, null),
+        existingDiagnosisBaseCodes: [],
+      },
+      counts: v1?.counts || {},
+    };
+  },
+
+  /**
+   * Pull mock annotations matching a base code, mimicking the v2 detail call.
+   */
+  _extractMockAnnotationsByBaseCode(baseCode) {
+    const all = this._getAllMockAnnotations();
+    return all.filter(a => (a.icd10Code || '').startsWith(baseCode));
   },
 
   /**
@@ -458,6 +673,7 @@ const ICD10API = {
     this.wordBlocksCache.clear();
     this.urlCache.clear();
     this.summaryCache.clear();
+    this.detailCache.clear();
   }
 };
 

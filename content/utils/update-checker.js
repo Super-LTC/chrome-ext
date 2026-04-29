@@ -10,7 +10,7 @@
 // The Windows scheduled-task updater is responsible for pulling files from
 // GitHub → disk. The extension never downloads files itself.
 
-import { track } from './analytics.js';
+import { track, setVersionProperties } from './analytics.js';
 
 const GITHUB_API = 'https://api.github.com/repos/Superjonathan123/chrome-ext/releases/latest';
 const DISK_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 min — cheap, local read
@@ -29,6 +29,7 @@ function compareVersions(a, b) {
 
 export const UpdateChecker = {
   _listeners: [],
+  _driftReported: false, // fire update_disk_drift at most once per session
 
   onUpdateAvailable(cb) {
     this._listeners.push(cb);
@@ -120,9 +121,27 @@ export const UpdateChecker = {
 
     await chrome.storage.local.set({ [STORAGE_KEY]: status });
 
+    // Push version state onto the PostHog person record so we can filter people
+    // by who is on which version. Runs every disk-check (cheap, idempotent).
+    setVersionProperties({
+      runningVersion: running,
+      diskVersion: disk,
+      driftDetected: diskNewerThanRunning,
+    });
+
     if (status.updateAvailable && status.diskVersion !== status.dismissedVersion) {
       this._listeners.forEach(cb => {
         try { cb(status); } catch (e) { console.warn('[UpdateChecker] listener error:', e); }
+      });
+    }
+
+    // Stale-reload tracking: fire once if disk is ahead of running, regardless
+    // of dismissal. Tells us who is sitting on outdated runtimes in PostHog.
+    if (status.updateAvailable && !this._driftReported) {
+      this._driftReported = true;
+      track('update_disk_drift', {
+        running_version: String(status.runningVersion || ''),
+        disk_version: String(status.diskVersion || ''),
       });
     }
     return status;

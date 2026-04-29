@@ -24,6 +24,9 @@ const ICD10EvidencePanel = {
   selectedDescription: null,
   codeDropdownOpen: false,
   codeSearchQuery: '',
+  itemsLoading: false,
+  itemsError: null,
+  itemsRetry: null,
   summaryText: null,
   summaryLoading: false,
   summaryError: false,
@@ -34,11 +37,12 @@ const ICD10EvidencePanel = {
    * @param {Function} onCardSelect - Callback when an evidence item is selected
    * @param {Function} onApprove - Callback when approve is clicked
    */
-  init(container, onCardSelect, onApprove) {
-    console.log('[ICD10EvidencePanel] init called, has callbacks:', !!onCardSelect, !!onApprove);
+  init(container, onCardSelect, onApprove, onQuery) {
+    console.log('[ICD10EvidencePanel] init called, has callbacks:', !!onCardSelect, !!onApprove, !!onQuery);
     this.container = container;
     this.onCardSelect = onCardSelect;
     this.onApprove = onApprove;
+    this.onQuery = onQuery;
     // Reset all state from any previous opening
     this.selectedItemId = null;
     this.items = [];
@@ -71,7 +75,12 @@ const ICD10EvidencePanel = {
     this.isApproved = false;
     this.codeDropdownOpen = false;
     this.codeSearchQuery = '';
-    this.clearSummary();
+    this.itemsLoading = false;
+    this.itemsError = null;
+    this.itemsRetry = null;
+    // Don't clear the summary section here — it's fetched in parallel and may
+    // already be in flight or rendered. Loading/error state for summary is
+    // managed by showSummaryLoading / showSummary / clearSummary independently.
 
     // Set initial selected code from groupContext or first item
     if (groupContext && groupContext.groupCode) {
@@ -263,6 +272,40 @@ const ICD10EvidencePanel = {
   render() {
     if (!this.container) return;
 
+    // v2: detail-fetch in flight. Show diagnosis header + skeleton rows.
+    if (this.itemsLoading) {
+      const summaryHtml = this._buildSummaryHtml() || '';
+      this.container.innerHTML = `
+        ${this._renderDiagnosisHeader()}
+        ${summaryHtml}
+        <div class="icd10-evidence-panel__items-loading">
+          <div class="icd10-evidence-panel__skeleton-row"></div>
+          <div class="icd10-evidence-panel__skeleton-row"></div>
+          <div class="icd10-evidence-panel__skeleton-row"></div>
+          <div class="icd10-evidence-panel__skeleton-hint">Loading mentions…</div>
+        </div>
+      `;
+      this._attachEventListeners();
+      return;
+    }
+
+    // v2: detail-fetch failed. Show retry inline rather than blanking the panel.
+    if (this.itemsError) {
+      const summaryHtml = this._buildSummaryHtml() || '';
+      this.container.innerHTML = `
+        ${this._renderDiagnosisHeader()}
+        ${summaryHtml}
+        <div class="icd10-evidence-panel__items-error">
+          <p class="icd10-evidence-panel__items-error-text">Couldn't load mentions for ${this._escapeHtml(this.selectedCode || '')}.</p>
+          <!-- NO_TRACK: error-recovery retry, fires the same selection flow which already tracks -->
+          <button class="icd10-evidence-panel__items-error-retry" data-action="retry-items">Retry</button>
+        </div>
+      `;
+      const retry = this.container.querySelector('[data-action="retry-items"]');
+      if (retry && this.itemsRetry) retry.addEventListener('click', () => this.itemsRetry());
+      return;
+    }
+
     if (this.items.length === 0) {
       this.container.innerHTML = `
         <div class="icd10-evidence-panel__empty">
@@ -340,6 +383,19 @@ const ICD10EvidencePanel = {
       `;
     }
 
+    // Query button: only shown when we have items (i.e. detail has loaded) and
+    // a query handle (onQuery) is wired in.
+    const canQuery = !!this.onQuery && this.items && this.items.length > 0;
+    const queryHtml = canQuery ? `
+      <!-- NO_TRACK: query create flow tracks dx_query_created at submit time -->
+      <button class="icd10-evidence-panel__query" data-action="query" title="Generate a physician query for this code">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        Query
+      </button>
+    ` : '';
+
     return `
       <div class="icd10-evidence-panel__header">
         <div class="icd10-evidence-panel__diagnosis-header">
@@ -385,6 +441,7 @@ const ICD10EvidencePanel = {
           })() : ''}
           <div class="icd10-evidence-panel__diagnosis-actions">
             ${approveHtml}
+            ${queryHtml}
           </div>
         </div>
       </div>
@@ -561,6 +618,23 @@ const ICD10EvidencePanel = {
       approveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._handleApprove();
+      });
+    }
+
+    // Query button click — hands off to the viewer's onQuery callback
+    // with everything needed to build a single-item solverResult.
+    const queryBtn = this.container.querySelector('[data-action="query"]');
+    if (queryBtn) {
+      queryBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof this.onQuery === 'function') {
+          this.onQuery({
+            baseCode: this.selectedCode,
+            description: this.selectedDescription,
+            groupContext: this.groupContext,
+            items: this.items,
+          });
+        }
       });
     }
 
@@ -869,6 +943,43 @@ const ICD10EvidencePanel = {
       `;
     }
     return null;
+  },
+
+  /**
+   * v2: show a skeleton in the evidence panel while detail is fetched.
+   * @param {Object} groupContext - same shape updateItems takes
+   */
+  showItemsLoading(groupContext) {
+    this.items = [];
+    this.selectedItemId = null;
+    this.groupContext = groupContext || null;
+    if (groupContext?.groupCode) {
+      this.selectedCode = groupContext.groupCode;
+      this.selectedDescription = groupContext.groupName || '';
+    }
+    this.itemsLoading = true;
+    this.itemsError = null;
+    this.itemsRetry = null;
+    this.render();
+  },
+
+  /**
+   * v2: show an inline error with a retry hook in the evidence panel.
+   * @param {Object} groupContext
+   * @param {Function} retryFn - called when user clicks Retry
+   */
+  showItemsError(groupContext, retryFn) {
+    this.items = [];
+    this.selectedItemId = null;
+    this.groupContext = groupContext || null;
+    if (groupContext?.groupCode) {
+      this.selectedCode = groupContext.groupCode;
+      this.selectedDescription = groupContext.groupName || '';
+    }
+    this.itemsLoading = false;
+    this.itemsError = true;
+    this.itemsRetry = typeof retryFn === 'function' ? retryFn : null;
+    this.render();
   },
 
   /**

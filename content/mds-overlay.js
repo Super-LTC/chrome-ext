@@ -669,6 +669,11 @@ function injectBadge(questionEl, result) {
   // Add click handler
   badge.addEventListener('click', (e) => {
     e.stopPropagation();
+    window.SuperAnalytics?.track?.('mds_badge_clicked', {
+      item_code: String(result.mdsItem || ''),
+      column: String(result.column || ''),
+      status: String(result.status || ''),
+    });
     showPopover(badge, result);
   });
 
@@ -4180,6 +4185,14 @@ async function handleAction(action, result) {
       createSummaryPanel();
       closePopover();
 
+      window.SuperAnalytics?.track?.('mds_item_decision', {
+        item_code: String(result.mdsItem || ''),
+        column: String(result.column || ''),
+        decision: 'agree',
+        has_reason: false,
+        surface: 'mds_overlay_popover',
+      });
+
       // Notify PDPM Analyzer to re-fetch
       window.dispatchEvent(new CustomEvent('super:item-decision', {
         detail: { mdsItem: result.mdsItem, column: result.column, decision: 'agree' }
@@ -4344,6 +4357,14 @@ async function submitDisagreeFeedback(result, reason) {
     injectBadge(result.element, result);
     createSummaryPanel();
     closePopover();
+
+    window.SuperAnalytics?.track?.('mds_item_decision', {
+      item_code: String(result.mdsItem || ''),
+      column: String(result.column || ''),
+      decision: 'disagree',
+      has_reason: !!(reason && reason.length > 0),
+      surface: 'mds_overlay_popover',
+    });
 
     // Notify PDPM Analyzer to re-fetch
     window.dispatchEvent(new CustomEvent('super:item-decision', {

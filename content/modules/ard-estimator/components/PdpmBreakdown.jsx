@@ -58,7 +58,10 @@ function ItemRow({ item, componentLabel, isActive, onSelect, onAddQuery, isQueue
   const isReview = item.solverAnswer === 'needs_review' || item.classification === 'needs_review';
   const isQuery = item.classification === 'item_to_query' && !item.queryStatus;
   const hasQuery = !!item.queryStatus;
-  const isCoded = !isReview && !isQuery && !hasQuery;
+  // `onForm` is new on the API. Strict check: only show "coded" when truly on form.
+  // Undefined (older backend) falls through to "to code" without crashing.
+  const isCoded = !isReview && !isQuery && !hasQuery && item.onForm === true;
+  const isToCode = !isReview && !isQuery && !hasQuery && item.onForm !== true;
 
   return (
     <div
@@ -102,6 +105,9 @@ function ItemRow({ item, componentLabel, isActive, onSelect, onAddQuery, isQueue
       )}
       {!isDismissed && isCoded && (
         <span className="ard-est__status ard-est__status--coded">coded</span>
+      )}
+      {!isDismissed && isToCode && (
+        <span className="ard-est__status ard-est__status--to-code">to code</span>
       )}
 
       {/* Arrow indicator */}
