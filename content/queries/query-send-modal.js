@@ -27,7 +27,8 @@ const QuerySendModal = {
     noteData: null,
     practitioners: [],
     selectedPractitionerId: null,
-    noteText: ''
+    noteText: '',
+    urgent: false
   },
 
   /**
@@ -54,7 +55,8 @@ const QuerySendModal = {
       noteData: null,
       practitioners: [],
       selectedPractitionerId: null,
-      noteText: ''
+      noteText: '',
+      urgent: false
     };
 
     // Track open + track dismissed-via-X/ESC/backdrop close path. _suppressClose
@@ -207,9 +209,37 @@ const QuerySendModal = {
           searchPlaceholder: 'Search practitioners...',
           onSelect: (item) => {
             this._state.selectedPractitionerId = item.id;
-            // Enable send button
-            const sendBtn = SuperModal.getButton('Send Query');
+            // Enable send button (use current label since urgent toggle may have renamed it)
+            const label = this._state.urgent ? 'Send Urgently' : 'Send Query';
+            const sendBtn = SuperModal.getButton(label);
             if (sendBtn) sendBtn.disabled = false;
+          }
+        });
+      }
+
+      // Wire urgent toggle
+      const urgentInput = document.querySelector('#super-query-urgent-toggle');
+      const hintEl = document.querySelector('#super-query-send-hint');
+      if (urgentInput) {
+        urgentInput.addEventListener('change', (e) => {
+          const on = !!e.target.checked;
+          this._state.urgent = on;
+
+          // Update hint copy
+          if (hintEl) {
+            hintEl.textContent = on
+              ? 'Doctor will be texted right now'
+              : 'Doctor will see this in their daily text';
+          }
+
+          // Find current send button (label may already have switched) and morph it
+          const oldLabel = on ? 'Send Query' : 'Send Urgently';
+          const newLabel = on ? 'Send Urgently' : 'Send Query';
+          const btn = SuperModal.getButton(oldLabel) || SuperModal.getButton(newLabel);
+          if (btn) {
+            btn.textContent = newLabel;
+            btn.classList.toggle('super-modal__btn--danger', on);
+            btn.classList.toggle('super-modal__btn--primary', !on);
           }
         });
       }
@@ -235,9 +265,11 @@ const QuerySendModal = {
     const selectedPractitioner = this._state.practitioners.find(
       p => p.id === this._state.selectedPractitionerId
     );
+    const urgent = !!this._state.urgent;
     track('query_send_started', {
       item_code: this._state.result?.mdsItem || this._state.existingQuery?.mdsItem || '',
       recipient_role: deriveRecipientRole(selectedPractitioner),
+      urgent,
     });
 
     try {
@@ -270,20 +302,41 @@ const QuerySendModal = {
         QueryState.addQuery(query);
       }
 
-      // Send the query
+      // Send the query (queues into physician's normal digest)
       await QueryAPI.sendQuery(
         queryId,
         [this._state.selectedPractitionerId],
         this._state.noteText
       );
 
-      track('query_send_succeeded', { duration_ms: Date.now() - sendStart });
+      // If urgent, immediately fire resend so the physician is texted now
+      // rather than waiting for their scheduled digest. We treat resend
+      // failure as non-fatal for the create+send — the query exists and is
+      // queued; we just couldn't trigger the immediate notification.
+      let urgentNotifyFailed = false;
+      if (urgent) {
+        try {
+          await QueryAPI.resendQuery(queryId, [this._state.selectedPractitionerId]);
+        } catch (resendErr) {
+          urgentNotifyFailed = true;
+          track('query_urgent_notify_failed', { error_code: toErrorCode(resendErr) });
+          console.error('Super LTC: Urgent resend failed', resendErr);
+        }
+      }
+
+      track('query_send_succeeded', { duration_ms: Date.now() - sendStart, urgent });
 
       // Close modal and show success
       this._closeFired = true;
       track('query_modal_closed', { reason: 'submit' });
       SuperModal.close();
       this._showSuccessAnimation();
+
+      if (urgentNotifyFailed) {
+        SuperToast.warning('Query sent, but the urgent text could not be delivered. Try resending from the query list.');
+      } else if (urgent) {
+        SuperToast.success('Query sent — doctor texted now');
+      }
 
       // Re-fetch queries from API to get full data (patientName, locationName, etc.)
       const ctx = this._state.context;
@@ -439,8 +492,18 @@ const QuerySendModal = {
         <div class="super-query-send__field">
           <label class="super-query-send__label">Send to Physician</label>
           <div id="super-practitioner-dropdown" class="super-query-send__dropdown-container"></div>
-          <div class="super-query-send__hint">They will be notified via SMS</div>
+          <div class="super-query-send__hint" id="super-query-send-hint">Doctor will see this in their daily text</div>
         </div>
+
+        <!-- Urgent toggle -->
+        <label class="super-query-send__urgent" for="super-query-urgent-toggle">
+          <input type="checkbox" id="super-query-urgent-toggle" class="super-query-send__urgent-input" />
+          <span class="super-query-send__urgent-track"><span class="super-query-send__urgent-thumb"></span></span>
+          <span class="super-query-send__urgent-text">
+            <span class="super-query-send__urgent-title">Send urgently</span>
+            <span class="super-query-send__urgent-sub">Don't wait for their daily text</span>
+          </span>
+        </label>
       </div>
     `;
   },

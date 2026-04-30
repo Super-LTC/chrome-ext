@@ -184,6 +184,16 @@
   background: var(--super-gray-50);
 }
 
+.super-modal__btn--danger {
+  background: #dc2626;
+  color: white;
+}
+
+.super-modal__btn--danger:hover:not(:disabled) {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
 .super-modal__loading {
   display: flex;
   flex-direction: column;
