@@ -781,8 +781,23 @@
 
 .icd10-evidence-panel__approve--approved {
   background: var(--super-match);
-  opacity: 0.7;
+  opacity: 0.85;
+  cursor: pointer;
+  position: relative;
 }
+.icd10-evidence-panel__approve--approved:hover {
+  background: #dc2626;
+  opacity: 1;
+}
+.icd10-evidence-panel__approve-default,
+.icd10-evidence-panel__approve-hover {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.icd10-evidence-panel__approve-hover { display: none; }
+.icd10-evidence-panel__approve--approved:hover .icd10-evidence-panel__approve-default { display: none; }
+.icd10-evidence-panel__approve--approved:hover .icd10-evidence-panel__approve-hover { display: inline-flex; }
 
 .icd10-evidence-panel__approve-spinner {
   width: 14px;
@@ -1873,20 +1888,34 @@
 .icd10-viewer__push-btn {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 6px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 700;
   color: #fff;
   background: #16a34a;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35), 0 0 0 0 rgba(22, 163, 74, 0.4);
+  animation: icd10-push-pulse 2s ease-in-out infinite;
 }
 
 .icd10-viewer__push-btn:hover {
   background: #15803d;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.45);
+}
+
+.icd10-viewer__push-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes icd10-push-pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35), 0 0 0 0 rgba(22, 163, 74, 0.4); }
+  50% { box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35), 0 0 0 6px rgba(22, 163, 74, 0); }
 }
 
 /* ============================================
@@ -2519,6 +2548,19 @@
   background: #fef3c7;
 }
 
+.icd10-sb__section-hdr--approved {
+  background: #dcfce7;
+  color: #15803d;
+}
+.icd10-sb__section-hdr--approved:hover {
+  background: #bbf7d0;
+  color: #166534;
+}
+.icd10-sb__section-hdr--approved .icd10-sb__section-count {
+  color: #15803d;
+  background: #bbf7d0;
+}
+
 .icd10-sb__section-chevron {
   display: inline-flex;
   color: var(--super-gray-400);
@@ -2574,6 +2616,28 @@
   width: 3px;
   border-radius: 2px;
   background: var(--super-primary);
+}
+
+/* Staged (added locally, not yet pushed to PCC): light green */
+.icd10-sb__row--staged {
+  background: #dcfce7;
+}
+.icd10-sb__row--staged:hover {
+  background: #bbf7d0;
+}
+.icd10-sb__row--staged.icd10-sb__row--selected {
+  background: #bbf7d0;
+}
+
+/* Approved (already coded in PCC): same light green as staged */
+.icd10-sb__row--approved {
+  background: #dcfce7;
+}
+.icd10-sb__row--approved:hover {
+  background: #bbf7d0;
+}
+.icd10-sb__row--approved.icd10-sb__row--selected {
+  background: #bbf7d0;
 }
 
 .icd10-sb__rank {

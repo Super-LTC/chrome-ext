@@ -258,10 +258,13 @@ function Icon({ name }) {
   return null;
 }
 
-function Row({ row, selected, onClick }) {
+function Row({ row, selected, onClick, staged, approved }) {
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
   if (row.rank != null) cls.push('icd10-sb__row--ranked');
+  // Staged takes precedence over approved visually (it's the active in-flight state).
+  if (staged) cls.push('icd10-sb__row--staged');
+  else if (approved) cls.push('icd10-sb__row--approved');
   const b = row.badges || {};
   const hasAnyBadge = b.nta || b.slp || b.nursing || b.sectionI;
   // Tooltip: prefer pdpmCategoryName ("Diabetes Mellitus") over the description
@@ -311,7 +314,11 @@ function StaticHeader({ label, icon }) {
   );
 }
 
-export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect }) {
+export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null }) {
+  const stagedSet = stagedBaseCodes instanceof Set ? stagedBaseCodes : new Set(stagedBaseCodes || []);
+  const approvedSet = approvedBaseCodes instanceof Set ? approvedBaseCodes : new Set(approvedBaseCodes || []);
+  const isStaged = (row) => stagedSet.has(row.code) || stagedSet.has(row.baseCode);
+  const isApproved = (row) => approvedSet.has(row.code) || approvedSet.has(row.baseCode);
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [speculativeOpen, setSpeculativeOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
@@ -363,10 +370,11 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         icon: 'check',
         open: approvedOpen,
         onToggle: () => setApprovedOpen(v => !v),
+        variant: 'approved',
       }),
       approvedOpen && h('div', { class: 'icd10-sb__section-body' },
         sections.approved.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick })
+          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
         )
       )
     ),
@@ -376,7 +384,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       h('div', { class: 'icd10-sb__section-body' },
         sections.topPicks.length > 0
           ? sections.topPicks.map(row =>
-              h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick })
+              h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
             )
           : h('div', { class: 'icd10-sb__empty' }, 'No suggestions yet')
       )
@@ -386,7 +394,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       h(StaticHeader, { label: 'Other suggestions' }),
       h('div', { class: 'icd10-sb__section-body' },
         sections.other.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick })
+          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
         )
       )
     ),
@@ -402,7 +410,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       }),
       speculativeOpen && h('div', { class: 'icd10-sb__section-body' },
         sections.speculative.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick })
+          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
         )
       )
     )

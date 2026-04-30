@@ -37,12 +37,12 @@ const ICD10EvidencePanel = {
    * @param {Function} onCardSelect - Callback when an evidence item is selected
    * @param {Function} onApprove - Callback when approve is clicked
    */
-  init(container, onCardSelect, onApprove, onQuery) {
-    console.log('[ICD10EvidencePanel] init called, has callbacks:', !!onCardSelect, !!onApprove, !!onQuery);
+  init(container, onCardSelect, onApprove, onQuery, onUnapprove) {
     this.container = container;
     this.onCardSelect = onCardSelect;
     this.onApprove = onApprove;
     this.onQuery = onQuery;
+    this.onUnapprove = onUnapprove;
     // Reset all state from any previous opening
     this.selectedItemId = null;
     this.items = [];
@@ -355,12 +355,21 @@ const ICD10EvidencePanel = {
     let approveHtml = '';
     if (this.isApproved) {
       approveHtml = `
-        <!-- NO_TRACK: disabled state — no click handler, post-add display only -->
-        <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--approved" disabled>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          Added
+        <!-- NO_TRACK: undo button — local state flip, no API call -->
+        <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--approved" data-action="unapprove" title="Click to remove (undo)">
+          <span class="icd10-evidence-panel__approve-default">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Added
+          </span>
+          <span class="icd10-evidence-panel__approve-hover">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Remove
+          </span>
         </button>
       `;
     } else if (this.approveLoading) {
@@ -621,6 +630,15 @@ const ICD10EvidencePanel = {
       });
     }
 
+    // Unapprove (undo) click on the "Added" pill
+    const unapproveBtn = this.container.querySelector('[data-action="unapprove"]');
+    if (unapproveBtn) {
+      unapproveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._handleUnapprove();
+      });
+    }
+
     // Query button click — hands off to the viewer's onQuery callback
     // with everything needed to build a single-item solverResult.
     const queryBtn = this.container.querySelector('[data-action="query"]');
@@ -857,6 +875,24 @@ const ICD10EvidencePanel = {
   markApproved(itemId) {
     this.isApproved = true;
     this.render();
+  },
+
+  markUnapproved(itemId) {
+    this.isApproved = false;
+    this.render();
+  },
+
+  _handleUnapprove() {
+    if (!this.isApproved) return;
+    const baseItem = this.items[0] || {};
+    const item = {
+      ...baseItem,
+      icd10Code: this.selectedCode,
+      description: this.selectedDescription,
+    };
+    this.isApproved = false;
+    this.render();
+    if (this.onUnapprove) this.onUnapprove(item);
   },
 
   /**

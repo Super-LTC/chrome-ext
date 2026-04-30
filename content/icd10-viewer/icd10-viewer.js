@@ -250,14 +250,6 @@ const ICD10Viewer = {
               </svg>
               PDPM Estimate
             </button>
-            <!-- NO_TRACK: navigates to Query Items which fires query_items_opened on mount -->
-            <button class="icd10-viewer__next-btn" title="Review Query Items">
-              Next
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-                <polyline points="12 5 19 12 12 19"></polyline>
-              </svg>
-            </button>
             <!-- NO_TRACK: pure UI close-X -->
             <button class="icd10-viewer__close-btn" title="Close">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -312,11 +304,6 @@ const ICD10Viewer = {
       } else {
         this._handleExitAttempt(() => this.close());
       }
-    });
-
-    // Next button - go to Query Items
-    this.modal.querySelector('.icd10-viewer__next-btn').addEventListener('click', () => {
-      this._handleExitAttempt(() => this.showQueryItems());
     });
 
     // PDPM Estimate button - go to ARD Estimator
@@ -407,7 +394,8 @@ const ICD10Viewer = {
       this.evidencePanel,
       (item) => this._handleEvidenceSelect(item),
       (item) => this._handleApprove(item),
-      (payload) => this._handleQuerySingle(payload)
+      (payload) => this._handleQuerySingle(payload),
+      (item) => this._handleUnstage(item)
     );
 
     // Initialize PDF viewer
@@ -424,7 +412,9 @@ const ICD10Viewer = {
         annotations: this.annotations,
         flatGroups: this.flatGroups,
         approvedDiagnoses: this.approvedDiagnoses,
-        counts: this.counts
+        counts: this.counts,
+        stagedBaseCodes: this._computeStagedBaseCodes(),
+        approvedBaseCodes: this._computeApprovedBaseCodes(),
       },
       (selection) => this._handleSidebarSelection(selection)
     );
@@ -620,8 +610,9 @@ const ICD10Viewer = {
     try {
       // Dedup check
       if (this.stagedCodes.some(c => c.icd10Code === item.icd10Code)) {
-        console.log('ICD10Viewer: Code already staged:', item.icd10Code);
         ICD10EvidencePanel.markApproved(item.id);
+        this._updateStagedBadge();
+        this._refreshSidebarStaged();
         return;
       }
 
@@ -635,18 +626,23 @@ const ICD10Viewer = {
       });
 
       // Remove from flat annotations
-      const index = this.annotations.findIndex(a => a.id === item.id);
-      if (index > -1) {
-        this.annotations.splice(index, 1);
+      if (Array.isArray(this.annotations)) {
+        const index = this.annotations.findIndex(a => a.id === item.id);
+        if (index > -1) {
+          this.annotations.splice(index, 1);
+        }
       }
 
       // Also remove from topRanked groups
-      for (const group of this.topRanked) {
-        const annIdx = group.annotations.findIndex(a => a.id === item.id);
-        if (annIdx > -1) {
-          group.annotations.splice(annIdx, 1);
-          group.annotationCount = group.annotations.length;
-          break;
+      if (Array.isArray(this.topRanked)) {
+        for (const group of this.topRanked) {
+          if (!Array.isArray(group?.annotations)) continue;
+          const annIdx = group.annotations.findIndex(a => a.id === item.id);
+          if (annIdx > -1) {
+            group.annotations.splice(annIdx, 1);
+            group.annotationCount = group.annotations.length;
+            break;
+          }
         }
       }
 
@@ -655,7 +651,9 @@ const ICD10Viewer = {
         topRanked: this.topRanked,
         approved: this.approved,
         annotations: this.annotations,
-        approvedDiagnoses: this.approvedDiagnoses
+        approvedDiagnoses: this.approvedDiagnoses,
+        stagedBaseCodes: this._computeStagedBaseCodes(),
+        approvedBaseCodes: this._computeApprovedBaseCodes(),
       });
 
       // Mark as added in evidence panel
@@ -663,13 +661,49 @@ const ICD10Viewer = {
 
       // Update staged count badge
       this._updateStagedBadge();
-
-      console.log('ICD10Viewer: Staged diagnosis:', item.icd10Code, `(${this.stagedCodes.length} total staged)`);
-
     } catch (error) {
       console.error('ICD10Viewer: Failed to stage:', error);
       throw error;
     }
+  },
+
+  /**
+   * Undo a staged code — removes from local stagedCodes, refreshes sidebar +
+   * push button, and flips the evidence panel back to "Add" state.
+   */
+  _handleUnstage(item) {
+    if (!item || !item.icd10Code) return;
+    const before = this.stagedCodes.length;
+    this.stagedCodes = this.stagedCodes.filter(c => c.icd10Code !== item.icd10Code);
+    if (this.stagedCodes.length === before) return; // wasn't staged
+    ICD10EvidencePanel.markUnapproved?.(item.id);
+    this._updateStagedBadge();
+    this._refreshSidebarStaged();
+  },
+
+  _computeStagedBaseCodes() {
+    const set = new Set();
+    for (const c of this.stagedCodes || []) {
+      const code = c.icd10Code || '';
+      if (code.length >= 3) set.add(code.substring(0, 3));
+    }
+    return set;
+  },
+
+  _computeApprovedBaseCodes() {
+    const set = new Set();
+    for (const d of this.approvedDiagnoses || []) {
+      const code = d.icd10Code || '';
+      if (code.length >= 3) set.add(code.substring(0, 3));
+    }
+    return set;
+  },
+
+  _refreshSidebarStaged() {
+    ICD10Sidebar.updateData({
+      stagedBaseCodes: this._computeStagedBaseCodes(),
+      approvedBaseCodes: this._computeApprovedBaseCodes(),
+    });
   },
 
   /**
@@ -906,13 +940,18 @@ const ICD10Viewer = {
           // After push completes, stay in the viewer
         });
       });
-      // Insert before the close button in header actions
       const headerActions = this.modal.querySelector('.icd10-viewer__header-actions');
       if (headerActions) {
         headerActions.insertBefore(pushBtn, headerActions.firstChild);
       }
     }
-    pushBtn.textContent = `Push ${this.stagedCodes.length} Code${this.stagedCodes.length !== 1 ? 's' : ''}`;
+    const codeWord = this.stagedCodes.length !== 1 ? 'Codes' : 'Code';
+    pushBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      Push ${this.stagedCodes.length} ${codeWord} to PCC
+    `;
   },
 
   /**
@@ -993,10 +1032,6 @@ const ICD10Viewer = {
     const titleText = this.modal.querySelector('.icd10-viewer__title-text');
     if (titleText) titleText.textContent = 'Query Items';
 
-    // Hide Next button, it's not needed in query view
-    const nextBtn = this.modal.querySelector('.icd10-viewer__next-btn');
-    if (nextBtn) nextBtn.style.display = 'none';
-
     // Get the body element and switch to single-panel layout
     const body = this.modal.querySelector('.icd10-viewer__body');
     body.classList.add('icd10-viewer__body--single-panel');
@@ -1072,9 +1107,7 @@ const ICD10Viewer = {
     const titleText = this.modal.querySelector('.icd10-viewer__title-text');
     if (titleText) titleText.textContent = 'PDPM Estimate & ARD';
 
-    // Hide Next + Estimate buttons
-    const nextBtn = this.modal.querySelector('.icd10-viewer__next-btn');
-    if (nextBtn) nextBtn.style.display = 'none';
+    // Hide Estimate button
     const estimateBtn = this.modal.querySelector('.icd10-viewer__estimate-btn');
     if (estimateBtn) estimateBtn.style.display = 'none';
 
@@ -1156,9 +1189,7 @@ const ICD10Viewer = {
     const titleText = this.modal.querySelector('.icd10-viewer__title-text');
     if (titleText) titleText.textContent = 'ICD-10 Viewer';
 
-    // Show Next + Estimate buttons again
-    const nextBtn = this.modal.querySelector('.icd10-viewer__next-btn');
-    if (nextBtn) nextBtn.style.display = '';
+    // Show Estimate button again
     const estimateBtn = this.modal.querySelector('.icd10-viewer__estimate-btn');
     if (estimateBtn) estimateBtn.style.display = '';
 
