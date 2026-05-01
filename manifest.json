@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super LTC for Point Click Care",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "AI-powered clinical tools for PointClickCare: MDS analysis, ICD-10 lookup, documentation, and query tools.",
   "permissions": [
     "storage",
@@ -27,27 +27,6 @@
     {
       "matches": ["*://*.pointclickcare.com/*"],
       "js": ["content/content.js"],
-      "css": [
-        "content/css/variables.css",
-        "content/css/base.css",
-        "content/css/popover.css",
-        "content/css/panel.css",
-        "content/css/sections.css",
-        "content/css/evidence-viewer.css",
-        "content/css/admin-modal.css",
-        "content/css/clinical-notes-modal.css",
-        "content/css/therapy-modal.css",
-        "content/css/pdf-modal.css",
-        "content/css/diagnosis-query-modal.css",
-        "content/css/super-components.css",
-        "content/css/selector.css",
-        "content/css/query.css",
-        "content/css/icd10-viewer.css",
-        "content/css/query-items.css",
-        "content/css/feedback.css",
-        "content/chatbot.css",
-        "content/styles.css"
-      ],
       "run_at": "document_idle"
     },
     {

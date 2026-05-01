@@ -2,23 +2,13 @@
 // This file imports all vanilla JS modules in the correct order
 // and will eventually mount the Preact app for modern components
 
-// 1. Import global config
+// 1. Import global config + CSS bootstrap
+//    css-bootstrap.js inlines every stylesheet into a single <style> tag
+//    so rrweb (PostHog session recording) can render our UI in playback.
+//    Must come BEFORE any UI module that creates DOM, otherwise FOUC.
 import '../config.js';
+import './css-bootstrap.js';
 import './utils/analytics.js'; // initializes PostHog, sets super-properties, bootstraps auth
-import './css/selector.css';
-import './css/mds-command-center.css';
-import './css/pdpm-analyzer.css';
-import './css/item-detail.css';
-import './css/pdf-viewer.css';
-import './css/ai-chat.css';
-import './css/certifications.css';
-import './css/care-plan-coverage.css';
-import './css/ard-estimator.css';
-import './css/mds-planner.css';
-import './css/uda-modal.css';
-import './css/qm-board.css';
-import './css/24hr-report.css';
-import './css/update-banner.css';
 
 // 2. Import vanilla utilities (order matters - matches current manifest.json order)
 import './mockData.js';
