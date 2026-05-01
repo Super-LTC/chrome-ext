@@ -529,6 +529,60 @@ const ICD10API = {
   },
 
   /**
+   * Dismiss a group for the patient's current admission. Server scopes the
+   * record to (patientId, groupKey, admissionDate); calling twice is a no-op.
+   * @returns {Promise<Object>} server response { success, dismissal }
+   */
+  async dismissGroup({ patientId, facilityName, orgSlug, groupKey, reason }) {
+    if (this._useMockData()) {
+      await this._simulateDelay(150);
+      return { success: true, dismissal: { groupKey, mock: true } };
+    }
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: '/api/extension/icd10-annotations/dismiss',
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ patientId, facilityName, orgSlug, groupKey, reason: reason || null }),
+      },
+    });
+    if (!response.success) {
+      _trackIcd10ApiFail('/api/extension/icd10-annotations/dismiss', response);
+      const err = new Error(response.error || 'Failed to dismiss code');
+      err.status = response.status || null;
+      err.serverMessage = response.error || null;
+      throw err;
+    }
+    return response.data || response;
+  },
+
+  /**
+   * Undismiss a previously-dismissed group (current-admission scope).
+   */
+  async undismissGroup({ patientId, facilityName, orgSlug, groupKey }) {
+    if (this._useMockData()) {
+      await this._simulateDelay(150);
+      return { success: true };
+    }
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: '/api/extension/icd10-annotations/undismiss',
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ patientId, facilityName, orgSlug, groupKey }),
+      },
+    });
+    if (!response.success) {
+      _trackIcd10ApiFail('/api/extension/icd10-annotations/undismiss', response);
+      const err = new Error(response.error || 'Failed to undismiss code');
+      err.status = response.status || null;
+      err.serverMessage = response.error || null;
+      throw err;
+    }
+    return response.data || response;
+  },
+
+  /**
    * Check if a cached URL is still valid (has at least 2 minutes remaining)
    * @param {Object} doc - Document object with expiresAt
    * @returns {boolean}

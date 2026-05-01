@@ -86,6 +86,10 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
     // is unique within topRanked / approved respectively.
     key: `${prefix}:${g.groupId || g.groupCode || g.group}`,
     origin,
+    originLabel: origin === 'topRanked' ? 'Top picks' : 'Approved',
+    // groupKey is the server-side dismiss key — passed verbatim, never transformed.
+    groupKey: g.group ?? g.groupCode,
+    dismissed: !!g.dismissed,
     rank: g.rank,
     code: g.groupCode || g.group,
     description: g.groupName || g.displayName,
@@ -106,6 +110,9 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
       kind: 'baseCode',
       key: `${prefix}:${g.groupCode || g.group}`,
       origin,
+      originLabel: origin === 'speculative' ? 'Speculative' : 'Other',
+      groupKey: g.group ?? g.groupCode,
+      dismissed: !!g.dismissed,
       code: g.groupCode || g.group,
       description: resolveBaseCodeDescription(g.groupCode || g.group, g.groupName || g.displayName),
       badges: badgesFromGroup(g),
@@ -171,6 +178,9 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
         kind: 'baseCode',
         key: `${prefix}:${g.baseCode}`,
         origin: prefix === 's' ? 'speculative' : 'other',
+        originLabel: prefix === 's' ? 'Speculative' : 'Other',
+        groupKey: g.baseCode,
+        dismissed: false,
         code: g.baseCode,
         description: resolveBaseCodeDescription(g.baseCode, g.description),
         badges: badgesFromItems(g.items),
@@ -189,6 +199,8 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
 }
 
 function allRows(sections) {
+  // Visible rows only — used for auto-select/keyboard nav. Hidden rows are
+  // intentionally excluded so dismissing doesn't auto-select the just-hidden code.
   return [
     ...sections.topPicks,
     ...sections.other,
@@ -213,6 +225,8 @@ function buildSelectionPayload(row) {
     return {
       category: row.origin,
       groupId: g.groupId,
+      groupKey: row.groupKey,
+      dismissed: !!row.dismissed,
       baseCode,
       groupName: g.groupName || g.displayName,
       evidenceStrength: g.evidenceStrength || null,
@@ -227,6 +241,8 @@ function buildSelectionPayload(row) {
   }
   return {
     category: row.origin,
+    groupKey: row.groupKey,
+    dismissed: !!row.dismissed,
     baseCode: row.baseCode,
     pdpmCategory: row.pdpmCategory || null,
     pdpmCategoryName: row.pdpmCategoryName || null,
@@ -251,6 +267,11 @@ function Icon({ name }) {
     return h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 },
       h('polygon', { points: '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2' }));
   }
+  if (name === 'eye-off') {
+    return h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+      h('path', { d: 'M17.94 17.94A10.06 10.06 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24' }),
+      h('line', { x1: 1, y1: 1, x2: 23, y2: 23 }));
+  }
   if (name === 'chevron') {
     return h('svg', { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 },
       h('polyline', { points: '6 9 12 15 18 9' }));
@@ -258,34 +279,72 @@ function Icon({ name }) {
   return null;
 }
 
-function Row({ row, selected, onClick, staged, approved }) {
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled }) {
+  const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
   if (row.rank != null) cls.push('icd10-sb__row--ranked');
+  if (hidden) cls.push('icd10-sb__row--hidden');
   // Staged takes precedence over approved visually (it's the active in-flight state).
   if (staged) cls.push('icd10-sb__row--staged');
   else if (approved) cls.push('icd10-sb__row--approved');
   const b = row.badges || {};
   const hasAnyBadge = b.nta || b.slp || b.nursing || b.sectionI;
-  // Tooltip: prefer pdpmCategoryName ("Diabetes Mellitus") over the description
-  // when we have it — it's the canonical PDPM label.
   const ptsLabel = (row.pdpmPoints != null) ? ` +${row.pdpmPoints}` : '';
   const tooltip = row.pdpmCategoryName ? `${row.pdpmCategoryName}${ptsLabel}` : null;
+
+  const showDismiss = !hidden && !!onDismiss && !dismissDisabled && !!row.groupKey;
+  const showUndo = hidden && !!onUndismiss && !!row.groupKey;
+
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    Promise.resolve(onDismiss(row.groupKey, row)).finally(() => {
+      setTimeout(() => setBusy(false), 500);
+    });
+  };
+  const handleUndo = (e) => {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    Promise.resolve(onUndismiss(row.groupKey, row)).finally(() => {
+      setTimeout(() => setBusy(false), 500);
+    });
+  };
+
   return h('div', {
     class: cls.join(' '),
     onClick: () => onClick(row.key),
   },
-    row.rank != null && h('span', { class: 'icd10-sb__rank' }, `#${row.rank}`),
+    row.rank != null && !hidden && h('span', { class: 'icd10-sb__rank' }, `#${row.rank}`),
     h('span', { class: 'icd10-sb__code' }, row.code),
     h('span', { class: 'icd10-sb__desc', title: row.description }, row.description),
-    hasAnyBadge && h('span', { class: 'icd10-sb__badges', title: tooltip || undefined },
+    hidden && row.originLabel && h('span', { class: 'icd10-sb__origin-chip', title: `Hidden from ${row.originLabel}` }, row.originLabel),
+    hasAnyBadge && !hidden && h('span', { class: 'icd10-sb__badges', title: tooltip || undefined },
       b.nta && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nta' },
         row.pdpmPoints != null ? `NTA +${row.pdpmPoints}` : 'NTA'
       ),
       b.slp && h('span', { class: 'icd10-sb__badge icd10-sb__badge--slp' }, 'SLP'),
       b.nursing && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nursing' }, 'NURS'),
       b.sectionI && h('span', { class: 'icd10-sb__badge icd10-sb__badge--sectioni' }, 'I')
-    )
+    ),
+    showDismiss && h('button', {
+      type: 'button',
+      class: 'icd10-sb__dismiss',
+      title: 'Hide for this stay. Will return on readmission.',
+      'aria-label': `Hide ${row.code}`,
+      disabled: busy,
+      onClick: handleDismiss,
+    }, '×'),
+    showUndo && h('button', {
+      type: 'button',
+      class: 'icd10-sb__undo',
+      title: 'Bring this code back to the list',
+      'aria-label': `Undo hide ${row.code}`,
+      disabled: busy,
+      onClick: handleUndo,
+    }, 'Undo')
   );
 }
 
@@ -314,26 +373,108 @@ function StaticHeader({ label, icon }) {
   );
 }
 
-export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null }) {
+export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false }) {
   const stagedSet = stagedBaseCodes instanceof Set ? stagedBaseCodes : new Set(stagedBaseCodes || []);
   const approvedSet = approvedBaseCodes instanceof Set ? approvedBaseCodes : new Set(approvedBaseCodes || []);
   const isStaged = (row) => stagedSet.has(row.code) || stagedSet.has(row.baseCode);
   const isApproved = (row) => approvedSet.has(row.code) || approvedSet.has(row.baseCode);
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [speculativeOpen, setSpeculativeOpen] = useState(false);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
   const autoSelectedForRef = useRef(null);
 
-  const sections = useMemo(
+  // Optimistic overrides: { [groupKey]: { dismissed: true|false } }.
+  // Applied on top of server `dismissed` until the next refetch reconciles.
+  const [optimisticOverrides, setOptimisticOverrides] = useState({});
+
+  const rawSections = useMemo(
     () => buildSections({ topRanked, approved, annotations, flatGroups }),
     [topRanked, approved, annotations, flatGroups]
   );
+
+  // Reconcile: clear optimistic entries that now match server state.
+  useEffect(() => {
+    setOptimisticOverrides(prev => {
+      if (!prev || Object.keys(prev).length === 0) return prev;
+      const allRowsList = [
+        ...rawSections.topPicks,
+        ...rawSections.approved,
+        ...rawSections.other,
+        ...rawSections.speculative,
+      ];
+      const byKey = new Map();
+      for (const r of allRowsList) if (r.groupKey) byKey.set(r.groupKey, !!r.dismissed);
+      let changed = false;
+      const next = { ...prev };
+      for (const k of Object.keys(prev)) {
+        if (byKey.has(k) && byKey.get(k) === prev[k].dismissed) {
+          delete next[k];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [rawSections]);
+
+  // Partition each bucket into visible vs hidden using merged dismissed state.
+  const sections = useMemo(() => {
+    const isDismissed = (row) => {
+      const ovr = row.groupKey != null ? optimisticOverrides[row.groupKey] : null;
+      return ovr ? ovr.dismissed : !!row.dismissed;
+    };
+    const split = (rows) => {
+      const visible = [], hidden = [];
+      for (const r of rows) (isDismissed(r) ? hidden : visible).push(r);
+      return { visible, hidden };
+    };
+    const tp = split(rawSections.topPicks);
+    const ap = split(rawSections.approved);
+    const ot = split(rawSections.other);
+    const sp = split(rawSections.speculative);
+    return {
+      topPicks: tp.visible,
+      approved: ap.visible,
+      other: ot.visible,
+      speculative: sp.visible,
+      hidden: [...tp.hidden, ...ap.hidden, ...ot.hidden, ...sp.hidden],
+    };
+  }, [rawSections, optimisticOverrides]);
 
   const validKeys = useMemo(() => {
     const set = new Set();
     for (const r of allRows(sections)) set.add(r.key);
     return set;
   }, [sections]);
+
+  const handleDismiss = (groupKey, row) => {
+    if (!groupKey) return;
+    setOptimisticOverrides(prev => ({ ...prev, [groupKey]: { dismissed: true } }));
+    // Open the Hidden collapse so the user can see where the code went.
+    setHiddenOpen(true);
+    if (!onDismiss) return;
+    Promise.resolve(onDismiss(groupKey, row)).catch(() => {
+      // Rollback on failure. Viewer is responsible for surfacing the toast.
+      setOptimisticOverrides(prev => {
+        const next = { ...prev };
+        delete next[groupKey];
+        return next;
+      });
+    });
+  };
+
+  const handleUndismiss = (groupKey, row) => {
+    if (!groupKey) return;
+    setOptimisticOverrides(prev => ({ ...prev, [groupKey]: { dismissed: false } }));
+    if (!onUndismiss) return;
+    Promise.resolve(onUndismiss(groupKey, row)).catch(() => {
+      setOptimisticOverrides(prev => {
+        const next = { ...prev };
+        delete next[groupKey];
+        return next;
+      });
+    });
+  };
 
   useEffect(() => {
     const current = selectedKey && validKeys.has(selectedKey) ? selectedKey : null;
@@ -350,11 +491,16 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
 
   const handleClick = (key) => {
     setSelectedKey(key);
-    const row = allRows(sections).find(r => r.key === key);
+    const row = allRows(sections).find(r => r.key === key)
+             || sections.hidden.find(r => r.key === key);
     if (row) {
+      // Apply the optimistic override so the panel sees the user-perceived
+      // dismissed state, not just what the server last returned.
+      const ovr = row.groupKey != null ? optimisticOverrides[row.groupKey] : null;
+      const merged = ovr ? { ...row, dismissed: ovr.dismissed } : row;
       // ICD-10 code is reference data — safe categorical value, never PHI.
       track('icd10_code_clicked', { code: row.code, source: 'sidebar' });
-      if (onSelect) onSelect(buildSelectionPayload(row));
+      if (onSelect) onSelect(buildSelectionPayload(merged));
     }
   };
 
@@ -374,7 +520,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       }),
       approvedOpen && h('div', { class: 'icd10-sb__section-body' },
         sections.approved.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
+          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
         )
       )
     ),
@@ -384,7 +530,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       h('div', { class: 'icd10-sb__section-body' },
         sections.topPicks.length > 0
           ? sections.topPicks.map(row =>
-              h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
+              h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
             )
           : h('div', { class: 'icd10-sb__empty' }, 'No suggestions yet')
       )
@@ -394,7 +540,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       h(StaticHeader, { label: 'Other suggestions' }),
       h('div', { class: 'icd10-sb__section-body' },
         sections.other.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
+          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
         )
       )
     ),
@@ -410,7 +556,23 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       }),
       speculativeOpen && h('div', { class: 'icd10-sb__section-body' },
         sections.speculative.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row) })
+          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
+        )
+      )
+    ),
+
+    sections.hidden.length > 0 && h('section', { class: 'icd10-sb__section icd10-sb__section--hidden' },
+      h(CollapsibleHeader, {
+        label: 'Hidden',
+        count: sections.hidden.length,
+        icon: 'eye-off',
+        open: hiddenOpen,
+        onToggle: () => setHiddenOpen(v => !v),
+        variant: 'hidden',
+      }),
+      hiddenOpen && h('div', { class: 'icd10-sb__section-body' },
+        sections.hidden.map(row =>
+          h(Row, { key: row.key, row, selected: false, onClick: handleClick, staged: false, approved: false, hidden: true, onUndismiss: handleUndismiss })
         )
       )
     )

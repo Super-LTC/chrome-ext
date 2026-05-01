@@ -27,7 +27,7 @@ const ICD10Sidebar = {
   _ready: false,
   _pendingRender: false,
 
-  init(container, data, onSelectionChange) {
+  init(container, data, onSelectionChange, callbacks) {
     this._container = container;
     this._data = {
       topRanked: data.topRanked || [],
@@ -37,6 +37,9 @@ const ICD10Sidebar = {
       flatGroups: data.flatGroups || null,
     };
     this._onSelectionChange = onSelectionChange;
+    this._onDismiss = callbacks?.onDismiss || null;
+    this._onUndismiss = callbacks?.onUndismiss || null;
+    this._dismissDisabled = !!callbacks?.dismissDisabled;
     this.selectedCategory = null;
     this.selectedBaseCode = null;
     this.selectedGroupId = null;
@@ -58,6 +61,11 @@ const ICD10Sidebar = {
     } else {
       this._pendingRender = true;
     }
+  },
+
+  setDismissDisabled(disabled) {
+    this._dismissDisabled = !!disabled;
+    if (this._ready) this._render();
   },
 
   getSelection() {
@@ -114,6 +122,13 @@ const ICD10Sidebar = {
         stagedBaseCodes: this._data.stagedBaseCodes,
         approvedBaseCodes: this._data.approvedBaseCodes,
         onSelect: (selection) => this._handleSelect(selection),
+        onDismiss: this._onDismiss
+          ? (groupKey, row) => this._onDismiss(groupKey, row)
+          : null,
+        onUndismiss: this._onUndismiss
+          ? (groupKey, row) => this._onUndismiss(groupKey, row)
+          : null,
+        dismissDisabled: this._dismissDisabled,
       }),
       this._container
     );

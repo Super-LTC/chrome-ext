@@ -395,7 +395,9 @@ const ICD10Viewer = {
       (item) => this._handleEvidenceSelect(item),
       (item) => this._handleApprove(item),
       (payload) => this._handleQuerySingle(payload),
-      (item) => this._handleUnstage(item)
+      (item) => this._handleUnstage(item),
+      (groupKey, row) => this._handleDismiss(groupKey, row),
+      (groupKey, row) => this._handleUndismiss(groupKey, row)
     );
 
     // Initialize PDF viewer
@@ -416,7 +418,12 @@ const ICD10Viewer = {
         stagedBaseCodes: this._computeStagedBaseCodes(),
         approvedBaseCodes: this._computeApprovedBaseCodes(),
       },
-      (selection) => this._handleSidebarSelection(selection)
+      (selection) => this._handleSidebarSelection(selection),
+      {
+        onDismiss: (groupKey, row) => this._handleDismiss(groupKey, row),
+        onUndismiss: (groupKey, row) => this._handleUndismiss(groupKey, row),
+        dismissDisabled: this._dismissDisabled === true,
+      }
     );
 
     console.log('[ICD10Viewer] All components initialized');
@@ -432,6 +439,8 @@ const ICD10Viewer = {
     const baseCode = selection.baseCode || selection.groupCode;
     const groupContext = {
       groupCode: baseCode,
+      groupKey: selection.groupKey || baseCode || null,
+      dismissed: !!selection.dismissed,
       groupName: selection.groupName || null,
       evidenceStrength: selection.evidenceStrength || null,
       rationale: selection.rationale || null,
@@ -1251,6 +1260,107 @@ const ICD10Viewer = {
     const body = this.modal.querySelector('.icd10-viewer__body');
     if (body) {
       body.innerHTML = errorHTML;
+    }
+  },
+
+  /**
+   * Dismiss handler — called from sidebar × and the evidence panel button.
+   * Sidebar already applied an optimistic override; we hit the API and refetch.
+   */
+  async _handleDismiss(groupKey, row) {
+    if (!groupKey || this._dismissDisabled) return;
+    try {
+      window.SuperAnalytics?.track?.('icd10_code_dismissed', {
+        code: row?.code || null,
+        origin: row?.origin || null,
+      });
+    } catch (_) { /* never break on telemetry */ }
+    try {
+      await ICD10API.dismissGroup({
+        patientId: this.patientId,
+        facilityName: this.facilityName,
+        orgSlug: this.orgSlug,
+        groupKey,
+      });
+      // Refetch v2 summary so server-side `dismissed` flips and the sidebar's
+      // optimistic override clears on reconciliation.
+      this._refreshAnnotations();
+    } catch (err) {
+      const noAdmit = (err?.serverMessage || err?.message || '').includes('admissionDate');
+      if (noAdmit) {
+        this._dismissDisabled = true;
+        try { ICD10Sidebar.setDismissDisabled(true); } catch (_) {}
+        window.SuperToast?.show?.({
+          message: "Can't hide — patient has no admission on file.",
+          type: 'warning',
+        });
+      } else if (err?.status === 403) {
+        window.SuperToast?.show?.({
+          message: "You don't have access to hide codes for this patient.",
+          type: 'error',
+        });
+      } else {
+        window.SuperToast?.show?.({
+          message: "Couldn't hide that code — try again.",
+          type: 'error',
+        });
+      }
+      // Re-throw so the sidebar rolls back its optimistic override.
+      throw err;
+    }
+  },
+
+  async _handleUndismiss(groupKey, row) {
+    if (!groupKey) return;
+    try {
+      window.SuperAnalytics?.track?.('icd10_code_undismissed', {
+        code: row?.code || null,
+        origin: row?.origin || null,
+      });
+    } catch (_) {}
+    try {
+      await ICD10API.undismissGroup({
+        patientId: this.patientId,
+        facilityName: this.facilityName,
+        orgSlug: this.orgSlug,
+        groupKey,
+      });
+      this._refreshAnnotations();
+    } catch (err) {
+      window.SuperToast?.show?.({
+        message: "Couldn't bring that code back — try again.",
+        type: 'error',
+      });
+      throw err;
+    }
+  },
+
+  /**
+   * Background refetch after dismiss/undismiss. Updates sidebar in place;
+   * does not touch the evidence panel or PDF viewer.
+   */
+  async _refreshAnnotations() {
+    try {
+      const data = await ICD10API.getAnnotations(
+        this.patientId, this.facilityName, this.orgSlug, this._assessmentId
+      );
+      this.topRanked = data.topRanked || [];
+      this.approved = data.approved || [];
+      this.annotations = data.flatAnnotations || [];
+      this.flatGroups = data.flatGroups || null;
+      this.counts = data.counts || {};
+      ICD10Sidebar.updateData({
+        topRanked: this.topRanked,
+        approved: this.approved,
+        annotations: this.annotations,
+        flatGroups: this.flatGroups,
+        stagedBaseCodes: this._computeStagedBaseCodes(),
+        approvedBaseCodes: this._computeApprovedBaseCodes(),
+      });
+    } catch (err) {
+      // Silent: dismiss already succeeded; the next natural reload will
+      // reconcile. Avoid yanking the user with an error toast.
+      console.warn('[ICD10Viewer] refresh after dismiss failed:', err);
     }
   },
 

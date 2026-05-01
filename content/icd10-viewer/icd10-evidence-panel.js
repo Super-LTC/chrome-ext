@@ -11,6 +11,14 @@ function _track(event, props) {
   } catch (e) { /* swallow */ }
 }
 
+/**
+ * Evidence list render mode. Flip this to A/B between the two layouts:
+ *   'chips' — wrap-flow rounded chips, one row of pages per document (dense)
+ *   'full'  — stacked rows with the source excerpt under each page (verbose)
+ * No runtime UI for switching; change here and rebuild.
+ */
+const EVIDENCE_VIEW_MODE = 'full';
+
 const ICD10EvidencePanel = {
   // State
   selectedItemId: null,
@@ -37,12 +45,16 @@ const ICD10EvidencePanel = {
    * @param {Function} onCardSelect - Callback when an evidence item is selected
    * @param {Function} onApprove - Callback when approve is clicked
    */
-  init(container, onCardSelect, onApprove, onQuery, onUnapprove) {
+  init(container, onCardSelect, onApprove, onQuery, onUnapprove, onDismiss, onUndismiss) {
     this.container = container;
     this.onCardSelect = onCardSelect;
     this.onApprove = onApprove;
     this.onQuery = onQuery;
     this.onUnapprove = onUnapprove;
+    this.onDismiss = onDismiss || null;
+    this.onUndismiss = onUndismiss || null;
+    this.dismissBusy = false;
+    this.isDismissed = false;
     // Reset all state from any previous opening
     this.selectedItemId = null;
     this.items = [];
@@ -73,6 +85,8 @@ const ICD10EvidencePanel = {
     this.expandedDocItems.clear();
     this.approveLoading = false;
     this.isApproved = false;
+    this.isDismissed = !!groupContext?.dismissed;
+    this.dismissBusy = false;
     this.codeDropdownOpen = false;
     this.codeSearchQuery = '';
     this.itemsLoading = false;
@@ -222,7 +236,9 @@ const ICD10EvidencePanel = {
     if (this.groupContext?.groupCode) {
       codeMap.set(this.groupContext.groupCode, {
         code: this.groupContext.groupCode,
-        description: this.groupContext.groupName || this._getDescriptionForCode(this.groupContext.groupCode)
+        description: this.groupContext.groupName || this._getDescriptionForCode(this.groupContext.groupCode),
+        pdpmCategory: null,
+        pdpmPoints: null
       });
     }
 
@@ -233,7 +249,9 @@ const ICD10EvidencePanel = {
           if (!codeMap.has(opt.code)) {
             codeMap.set(opt.code, {
               code: opt.code,
-              description: opt.description || ''
+              description: opt.description || '',
+              pdpmCategory: opt.pdpmCategory ?? null,
+              pdpmPoints: opt.pdpmPoints
             });
           }
         });
@@ -242,7 +260,9 @@ const ICD10EvidencePanel = {
       if (item.icd10Code && !codeMap.has(item.icd10Code)) {
         codeMap.set(item.icd10Code, {
           code: item.icd10Code,
-          description: item.description || ''
+          description: item.description || '',
+          pdpmCategory: item.pdpmCategory ?? null,
+          pdpmPoints: item.pdpmPoints
         });
       }
     });
@@ -394,6 +414,51 @@ const ICD10EvidencePanel = {
 
     // Query button: only shown when we have items (i.e. detail has loaded) and
     // a query handle (onQuery) is wired in.
+    const canDismiss = !!this.groupContext?.groupKey && !this.isApproved;
+    const dismissBusy = this.dismissBusy;
+    const dismissed = this.isDismissed;
+    let dismissHtml = '';
+    if (canDismiss) {
+      const eyeOff = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.06 10.06 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+      const eyeOn = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+      const spinner = `<span class="icd10-evidence-panel__dismiss-spinner"></span>`;
+      if (dismissBusy && dismissed) {
+        // Just clicked Unhide — transitioning back.
+        dismissHtml = `
+          <!-- NO_TRACK: disabled loading state — no click handler -->
+          <button class="icd10-evidence-panel__dismiss icd10-evidence-panel__dismiss--loading" disabled>
+            ${spinner}Unhiding…
+          </button>
+        `;
+      } else if (dismissBusy && !dismissed) {
+        // Just clicked Hide — transitioning to hidden.
+        dismissHtml = `
+          <!-- NO_TRACK: disabled loading state — no click handler -->
+          <button class="icd10-evidence-panel__dismiss icd10-evidence-panel__dismiss--loading" disabled>
+            ${spinner}Hiding…
+          </button>
+        `;
+      } else if (dismissed) {
+        dismissHtml = `
+          <!-- NO_TRACK: undismiss tracks icd10_code_undismissed via viewer handler -->
+          <button class="icd10-evidence-panel__dismiss icd10-evidence-panel__dismiss--hidden" data-action="undismiss"
+                  title="Bring this code back to the list">
+            ${eyeOn}
+            Unhide
+          </button>
+        `;
+      } else {
+        dismissHtml = `
+          <!-- NO_TRACK: dismiss tracks icd10_code_dismissed via viewer handler -->
+          <button class="icd10-evidence-panel__dismiss" data-action="dismiss"
+                  title="Hide for this stay. Will return on readmission.">
+            ${eyeOff}
+            Hide
+          </button>
+        `;
+      }
+    }
+
     const canQuery = !!this.onQuery && this.items && this.items.length > 0;
     const queryHtml = canQuery ? `
       <!-- NO_TRACK: query create flow tracks dx_query_created at submit time -->
@@ -433,13 +498,27 @@ const ICD10EvidencePanel = {
                 <div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
                   <span class="icd10-evidence-panel__code-option-desc">No matches</span>
                 </div>
-              ` : filtered.map(opt => `
+              ` : filtered.map(opt => {
+                const cat = opt.pdpmCategory;
+                let badgeHtml = '';
+                if (cat) {
+                  const lower = cat.toLowerCase();
+                  const label = cat === 'NTA' && opt.pdpmPoints != null
+                    ? `NTA +${opt.pdpmPoints}`
+                    : cat === 'NURSING'
+                      ? 'NURS'
+                      : cat;
+                  badgeHtml = `<span class="icd10-evidence-panel__code-option-badge icd10-evidence-panel__code-option-badge--${lower}">${label}</span>`;
+                }
+                return `
                 <div class="icd10-evidence-panel__code-option ${opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : ''}"
                      data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
                   <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
                   <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
+                  ${badgeHtml}
                 </div>
-              `).join('')}
+              `;
+              }).join('')}
               ${totalMatches > 10 ? `
                 <div class="icd10-evidence-panel__code-option-hint">
                   Showing 10 of ${totalMatches} — refine search to narrow
@@ -451,6 +530,7 @@ const ICD10EvidencePanel = {
           <div class="icd10-evidence-panel__diagnosis-actions">
             ${approveHtml}
             ${queryHtml}
+            ${dismissHtml}
           </div>
         </div>
       </div>
@@ -484,17 +564,17 @@ const ICD10EvidencePanel = {
           </svg>
         </div>
         ${isExpanded ? (() => {
-          const maxItems = 3;
+          const maxItems = 8;
           const showAll = this.expandedDocItems.has(docGroup.documentId);
           const visibleItems = showAll ? docGroup.items : docGroup.items.slice(0, maxItems);
           const hiddenCount = docGroup.items.length - maxItems;
           return `
-            <div class="icd10-evidence-panel__doc-items">
+            <div class="icd10-evidence-panel__doc-items icd10-evidence-panel__doc-items--${EVIDENCE_VIEW_MODE}">
               ${visibleItems.map((item, index) => this._renderEvidenceItem(item, index + 1)).join('')}
               ${!showAll && hiddenCount > 0 ? `
                 <!-- NO_TRACK: pure UI expand/collapse, no engagement event needed -->
                 <button class="icd10-evidence-panel__show-more-items" data-action="show-more-items" data-doc-id="${docGroup.documentId}">
-                  + ${hiddenCount} more
+                  +${hiddenCount} more
                 </button>
               ` : ''}
               ${showAll && hiddenCount > 0 ? `
@@ -517,13 +597,35 @@ const ICD10EvidencePanel = {
    * @returns {string} - HTML string
    */
   _renderEvidenceItem(item, index) {
+    return EVIDENCE_VIEW_MODE === 'full'
+      ? this._renderEvidenceItemFull(item, index)
+      : this._renderEvidenceItemChip(item, index);
+  },
+
+  _renderEvidenceItemChip(item, index) {
+    const isSelected = this.selectedItemId === item.id;
+    const code = item.icd10Code || '';
+    const matchesSelected = this.selectedCode && code === this.selectedCode;
+
+    return `
+      <!-- NO_TRACK: navigates the PDF viewer to the selected mention; engagement is captured by icd10_code_clicked / icd10_evidence_opened -->
+      <button type="button"
+              class="icd10-evidence-panel__chip ${isSelected ? 'icd10-evidence-panel__chip--selected' : ''}"
+              data-item-id="${item.id}"
+              title="${this._escapeHtml(code)} · Page ${item.pageNumber}">
+        ${code ? `<span class="icd10-evidence-panel__chip-code ${matchesSelected ? 'icd10-evidence-panel__chip-code--match' : ''}">${this._escapeHtml(code)}</span>` : ''}
+        <span class="icd10-evidence-panel__chip-page">Page ${item.pageNumber}</span>
+      </button>
+    `;
+  },
+
+  _renderEvidenceItemFull(item, index) {
     const isSelected = this.selectedItemId === item.id;
     const quote = item.quoteText || '';
-    const maxQuoteLength = 120;
+    const maxQuoteLength = 160;
     const truncatedQuote = quote.length > maxQuoteLength
-      ? quote.substring(0, maxQuoteLength) + '...'
+      ? quote.substring(0, maxQuoteLength) + '…'
       : quote;
-
     const showCodeInline = this.selectedCode && item.icd10Code !== this.selectedCode;
 
     return `
@@ -531,12 +633,13 @@ const ICD10EvidencePanel = {
            data-item-id="${item.id}">
         <span class="icd10-evidence-panel__evidence-num">${index}</span>
         <div class="icd10-evidence-panel__evidence-content">
-          ${showCodeInline ? `<span class="icd10-evidence-panel__evidence-inline-code">${this._escapeHtml(item.icd10Code)}</span>` : ''}
+          <div class="icd10-evidence-panel__evidence-line">
+            ${showCodeInline ? `<span class="icd10-evidence-panel__evidence-inline-code">${this._escapeHtml(item.icd10Code)}</span>` : ''}
+            <span class="icd10-evidence-panel__evidence-page">Page ${item.pageNumber}</span>
+          </div>
           ${truncatedQuote
             ? `<div class="icd10-evidence-panel__evidence-quote">"${this._escapeHtml(truncatedQuote)}"</div>`
-            : `<div class="icd10-evidence-panel__evidence-quote icd10-evidence-panel__evidence-quote--fallback">Evidence on page ${item.pageNumber}</div>`
-          }
-          <div class="icd10-evidence-panel__evidence-page">Page ${item.pageNumber}</div>
+            : ''}
         </div>
       </div>
     `;
@@ -587,7 +690,7 @@ const ICD10EvidencePanel = {
    */
   _attachEventListeners() {
     // Evidence item click -> select and navigate PDF
-    this.container.querySelectorAll('.icd10-evidence-panel__evidence-item').forEach(el => {
+    this.container.querySelectorAll('.icd10-evidence-panel__chip, .icd10-evidence-panel__evidence-item').forEach(el => {
       el.addEventListener('click', () => {
         const itemId = el.dataset.itemId;
         this._selectItem(itemId);
@@ -653,6 +756,50 @@ const ICD10EvidencePanel = {
             items: this.items,
           });
         }
+      });
+    }
+
+    const dismissBtn = this.container.querySelector('[data-action="dismiss"]');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.dismissBusy) return;
+        const groupKey = this.groupContext?.groupKey;
+        if (!groupKey || typeof this.onDismiss !== 'function') return;
+        this.dismissBusy = true;
+        this.render();
+        Promise.resolve(this.onDismiss(groupKey, {
+          code: this.selectedCode,
+          origin: 'evidence-panel',
+        })).then(() => {
+          this.isDismissed = true;
+          if (this.groupContext) this.groupContext.dismissed = true;
+        }).finally(() => {
+          this.dismissBusy = false;
+          this.render();
+        });
+      });
+    }
+
+    const undismissBtn = this.container.querySelector('[data-action="undismiss"]');
+    if (undismissBtn) {
+      undismissBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.dismissBusy) return;
+        const groupKey = this.groupContext?.groupKey;
+        if (!groupKey || typeof this.onUndismiss !== 'function') return;
+        this.dismissBusy = true;
+        this.render();
+        Promise.resolve(this.onUndismiss(groupKey, {
+          code: this.selectedCode,
+          origin: 'evidence-panel',
+        })).then(() => {
+          this.isDismissed = false;
+          if (this.groupContext) this.groupContext.dismissed = false;
+        }).finally(() => {
+          this.dismissBusy = false;
+          this.render();
+        });
       });
     }
 
