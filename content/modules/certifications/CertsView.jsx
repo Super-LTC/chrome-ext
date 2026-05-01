@@ -7,6 +7,7 @@ import { EditClinicalReasonModal } from './components/EditClinicalReasonModal.js
 import { DelayCertModal } from './components/DelayCertModal.jsx';
 import { PractitionerWorkloadView } from './components/PractitionerWorkloadView.jsx';
 import { track } from '../../utils/analytics.js';
+import { getCertUrgency as resolveCertUrgency, isOverdueUrgency } from './cert-urgency.js';
 
 /**
  * CertsView — main tab content for the Certs tab in MDS Command Center.
@@ -23,21 +24,11 @@ const SUB_TABS = [
   { id: 'signed', label: 'Signed' },
 ];
 
-function getDaysUntil(dateStr) {
-  if (!dateStr) return null;
-  const due = new Date(dateStr);
-  const now = new Date();
-  due.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-  return Math.floor((due - now) / 86400000);
-}
-
 /** Lower score = more urgent. Used to sort stay groups. */
-function getCertUrgency(cert) {
-  const days = getDaysUntil(cert.dueDate);
-  if (days !== null && days < 0) return days; // negative = overdue
-  if (cert.isDelayed) return -0.5;
-  return days ?? Infinity;
+function getCertSortKey(cert) {
+  const { urgency, daysUntilDue } = resolveCertUrgency(cert);
+  if (isOverdueUrgency(urgency)) return Math.min(daysUntilDue, -0.5);
+  return daysUntilDue ?? Infinity;
 }
 
 const STAY_TYPES = [
@@ -106,15 +97,14 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
     return { all, medicare, managed };
   }, [activeCerts, signedCerts]);
 
-  // Sub-tab counts (per-cert, not per-group)
+  // Sub-tab counts (per-cert, not per-group) — driven by backend-computed urgency
   const counts = useMemo(() => {
     let overdue = 0, dueSoon = 0, awaiting = 0;
     for (const cert of filteredActive) {
-      const daysUntil = getDaysUntil(cert.dueDate);
-      if (daysUntil !== null && daysUntil < 0) overdue++;
-      else if (cert.isDelayed) overdue++;
-      else if (daysUntil !== null && daysUntil >= 0 && daysUntil <= 3) dueSoon++;
-      if (cert.status === 'sent') awaiting++;
+      const { urgency } = resolveCertUrgency(cert);
+      if (isOverdueUrgency(urgency)) overdue++;
+      else if (urgency === 'due_soon') dueSoon++;
+      if (urgency === 'awaiting_signature' || urgency === 'awaiting_signature_overdue') awaiting++;
     }
     return {
       action: filteredActive.length,
@@ -133,13 +123,10 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       displaySource = filteredSigned;
     } else {
       displaySource = filteredActive.filter(cert => {
-        const daysUntil = getDaysUntil(cert.dueDate);
-        const isOverdue = daysUntil !== null && daysUntil < 0;
-        const isDueSoon = daysUntil !== null && daysUntil >= 0 && daysUntil <= 3;
-
+        const { urgency } = resolveCertUrgency(cert);
         if (activeSubTab === 'awaiting') return cert.status === 'sent';
-        if (activeSubTab === 'overdue') return isOverdue || cert.isDelayed;
-        if (activeSubTab === 'dueSoon') return isDueSoon && !isOverdue;
+        if (activeSubTab === 'overdue') return isOverdueUrgency(urgency);
+        if (activeSubTab === 'dueSoon') return urgency === 'due_soon';
         return true; // 'action'
       });
     }
@@ -182,8 +169,8 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
 
     // 5. Sort groups by most urgent cert
     groups.sort((a, b) => {
-      const aMin = Math.min(...a.displayCerts.map(getCertUrgency));
-      const bMin = Math.min(...b.displayCerts.map(getCertUrgency));
+      const aMin = Math.min(...a.displayCerts.map(getCertSortKey));
+      const bMin = Math.min(...b.displayCerts.map(getCertSortKey));
       return aMin - bMin;
     });
 

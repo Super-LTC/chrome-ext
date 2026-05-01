@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { CertListRow } from './CertListRow.jsx';
 import { StayTypeBadge } from './StayTypeBadge.jsx';
+import { formatShortDate, getCertUrgency, isOverdueUrgency } from '../cert-urgency.js';
 
 /**
  * StayGroupCard — groups all certs for one Part A stay into a single card.
@@ -11,34 +12,17 @@ import { StayTypeBadge } from './StayTypeBadge.jsx';
  * Signed certs collapsed under "▶ X previous" toggle
  */
 
-function formatShortDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return dateStr;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function getDaysUntil(dateStr) {
-  if (!dateStr) return null;
-  const due = new Date(dateStr);
-  const now = new Date();
-  due.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-  return Math.floor((due - now) / 86400000);
-}
-
 const CHAIN_TYPES = ['initial', 'day_14_recert', 'day_30_recert'];
 const CHAIN_LABELS = { initial: 'I', day_14_recert: '14', day_30_recert: '30' };
 
 function getChainDotVariant(cert) {
   if (!cert) return 'empty';
-  const days = getDaysUntil(cert.dueDate);
-  const isOverdue = days !== null && days < 0;
-  if (cert.status === 'signed') return 'signed';
-  if (cert.status === 'skipped') return 'skipped';
-  if (isOverdue || cert.isDelayed) return 'overdue';
-  if (cert.status === 'sent') return 'sent';
-  if (days !== null && days >= 0 && days <= 3) return 'due-soon';
+  const { urgency } = getCertUrgency(cert);
+  if (urgency === 'signed') return 'signed';
+  if (urgency === 'skipped') return 'skipped';
+  if (isOverdueUrgency(urgency)) return 'overdue';
+  if (urgency === 'awaiting_signature') return 'sent';
+  if (urgency === 'due_soon') return 'due-soon';
   return 'pending';
 }
 
@@ -88,15 +72,9 @@ export function StayGroupCard({
   const currentMedicareDay = first.currentMedicareDay;
   const partAStartDate = first.partAStartDate;
 
-  // Compute card urgency for accent styling
-  const hasOverdue = displayCerts.some(cert => {
-    const days = getDaysUntil(cert.dueDate);
-    return (days !== null && days < 0) || cert.isDelayed;
-  });
-  const hasDueSoon = !hasOverdue && displayCerts.some(cert => {
-    const days = getDaysUntil(cert.dueDate);
-    return days !== null && days >= 0 && days <= 3;
-  });
+  // Compute card urgency for accent styling — driven by backend-computed urgency
+  const hasOverdue = displayCerts.some(cert => isOverdueUrgency(getCertUrgency(cert).urgency));
+  const hasDueSoon = !hasOverdue && displayCerts.some(cert => getCertUrgency(cert).urgency === 'due_soon');
   let cardUrgency = '';
   if (hasOverdue) cardUrgency = ' cert__stay-card--overdue';
   else if (hasDueSoon) cardUrgency = ' cert__stay-card--due-soon';

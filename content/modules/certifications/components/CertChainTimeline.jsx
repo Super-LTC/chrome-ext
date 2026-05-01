@@ -1,4 +1,5 @@
 import { useMemo } from 'preact/hooks';
+import { formatShortDate, getCertUrgency, isOverdueUrgency } from '../cert-urgency.js';
 
 /**
  * CertChainTimeline — renders a patient's cert chain as a compact timeline.
@@ -16,29 +17,14 @@ const SLOT_LABELS = {
   day_30_recert: 'Day 30',
 };
 
-function getDaysUntil(dateStr) {
-  if (!dateStr) return null;
-  const due = new Date(dateStr);
-  const now = new Date();
-  due.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-  return Math.floor((due - now) / 86400000);
-}
 
-function formatShortDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return dateStr;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 function getSlotState(cert) {
   if (!cert) return { variant: 'empty', label: '\u2014' };
 
-  const daysUntil = getDaysUntil(cert.dueDate);
-  const isOverdue = daysUntil !== null && daysUntil < 0;
+  const { urgency, daysUntilDue } = getCertUrgency(cert);
 
-  if (cert.status === 'signed') {
+  if (urgency === 'signed') {
     return {
       variant: 'signed',
       label: 'Signed',
@@ -47,12 +33,12 @@ function getSlotState(cert) {
     };
   }
 
-  if (cert.status === 'skipped') {
+  if (urgency === 'skipped') {
     return { variant: 'skipped', label: 'Skipped', showUnskip: true };
   }
 
-  if ((cert.isDelayed || cert.status === 'delayed') && isOverdue) {
-    const daysOver = Math.abs(daysUntil);
+  if (isOverdueUrgency(urgency)) {
+    const daysOver = Math.abs(daysUntilDue);
     return {
       variant: 'overdue',
       label: `${daysOver}d overdue`,
@@ -60,16 +46,7 @@ function getSlotState(cert) {
     };
   }
 
-  if (isOverdue) {
-    const daysOver = Math.abs(daysUntil);
-    return {
-      variant: 'overdue',
-      label: `${daysOver}d overdue`,
-      showSend: true,
-    };
-  }
-
-  if (cert.status === 'sent') {
+  if (urgency === 'awaiting_signature') {
     return {
       variant: 'sent',
       label: 'Awaiting',
@@ -77,10 +54,10 @@ function getSlotState(cert) {
     };
   }
 
-  // pending
+  // pending / due_soon
   return {
-    variant: 'pending',
-    label: 'Pending',
+    variant: urgency === 'due_soon' ? 'due-soon' : 'pending',
+    label: urgency === 'due_soon' ? 'Due soon' : 'Pending',
     detail: cert.dueDate ? `Due ${formatShortDate(cert.dueDate)}` : '',
     showSend: true,
   };

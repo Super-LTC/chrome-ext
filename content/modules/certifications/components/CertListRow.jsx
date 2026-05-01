@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'preact/hooks';
 import { CertTypeBadge } from './CertTypeBadge.jsx';
 import { CertStatusBadge } from './CertStatusBadge.jsx';
 import { MAPayerBadge } from './MAPayerBadge.jsx';
+import { formatShortDate, getCertUrgency, isOverdueUrgency } from '../cert-urgency.js';
 
 /**
  * CertListRow — two-line card for a single certification.
@@ -11,13 +12,6 @@ import { MAPayerBadge } from './MAPayerBadge.jsx';
  * Overflow menu: Skip, Edit Clinical Reason, Mark as Delayed (contextual)
  */
 
-function formatShortDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return dateStr;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 function formatDateTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -25,30 +19,17 @@ function formatDateTime(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-function getDaysUntil(dateStr) {
-  if (!dateStr) return null;
-  const due = new Date(dateStr);
-  const now = new Date();
-  due.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-  return Math.floor((due - now) / 86400000);
-}
-
 function getPrimaryAction(cert) {
-  const daysUntil = getDaysUntil(cert.dueDate);
-  const isOverdue = daysUntil !== null && daysUntil < 0;
+  const { urgency } = getCertUrgency(cert);
   const hasSends = cert.sends?.length > 0;
 
-  if (cert.status === 'skipped') {
+  if (urgency === 'skipped') {
     return { label: 'Unskip', variant: 'ghost', action: 'unskip' };
   }
-  if (cert.status === 'signed') {
+  if (urgency === 'signed') {
     return null;
   }
-  if (isOverdue) {
-    return { label: hasSends ? 'Resend' : 'Send', variant: 'destructive', action: 'send' };
-  }
-  if (cert.status === 'delayed') {
+  if (isOverdueUrgency(urgency)) {
     return { label: hasSends ? 'Resend' : 'Send', variant: 'destructive', action: 'send' };
   }
   if (hasSends) {
@@ -109,15 +90,13 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
   const showEditReason = isRecert && cert.status !== 'signed';
   const hasSends = cert.sends?.length > 0;
 
-  // Urgency class for row accent styling
-  const daysUntil = getDaysUntil(cert.dueDate);
-  const isOverdue = daysUntil !== null && daysUntil < 0;
-  const isDueSoon = daysUntil !== null && daysUntil >= 0 && daysUntil <= 3;
+  // Urgency class for row accent styling — driven by backend-computed urgency
+  const { urgency } = getCertUrgency(cert);
   let urgencyClass = '';
-  if (cert.status === 'signed') urgencyClass = ' cert__row--signed';
-  else if (cert.status === 'skipped') urgencyClass = ' cert__row--skipped';
-  else if (isOverdue || cert.isDelayed) urgencyClass = ' cert__row--overdue';
-  else if (isDueSoon) urgencyClass = ' cert__row--due-soon';
+  if (urgency === 'signed') urgencyClass = ' cert__row--signed';
+  else if (urgency === 'skipped') urgencyClass = ' cert__row--skipped';
+  else if (isOverdueUrgency(urgency)) urgencyClass = ' cert__row--overdue';
+  else if (urgency === 'due_soon') urgencyClass = ' cert__row--due-soon';
 
   function handlePrimaryClick(e) {
     e.stopPropagation();
@@ -147,6 +126,8 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
             isDelayed={cert.isDelayed}
             dueDate={cert.dueDate}
             signedAt={cert.signedAt}
+            urgency={cert.urgency}
+            daysUntilDue={cert.daysUntilDue}
           />
           {primaryAction && (
             <button
