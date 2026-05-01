@@ -23,6 +23,8 @@ set "APP_DIR=%LOCALAPPDATA%\SuperLTC"
 set "SCRIPT_DIR=%~dp0"
 set "UPDATER_SRC=%SCRIPT_DIR%update-super-ltc-silent.ps1"
 set "UPDATER_DST=%APP_DIR%\update-super-ltc-silent.ps1"
+set "LAUNCHER_SRC=%SCRIPT_DIR%update-super-ltc-launcher.vbs"
+set "LAUNCHER_DST=%APP_DIR%\update-super-ltc-launcher.vbs"
 set "TASK_NAME=Super LTC Auto-Update"
 
 REM --- 1. Ensure app dir ---------------------------------------------------
@@ -43,14 +45,18 @@ if not exist "%UPDATER_DST%" (
     pause
     exit /b 1
 )
+if exist "%LAUNCHER_SRC%" copy /Y "%LAUNCHER_SRC%" "%LAUNCHER_DST%" >nul
 
 REM --- 3. Remove any existing task, then register fresh -------------------
 schtasks /delete /tn "%TASK_NAME%" /f >nul 2>&1
 
 echo Registering scheduled task...
 
+REM Use the VBS launcher (via wscript.exe) to run the .ps1 truly hidden.
+REM Running powershell.exe directly from Task Scheduler flashes a console
+REM window in interactive sessions even with -WindowStyle Hidden.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File \"%UPDATER_DST%\"';" ^
+  "$action   = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument '\"%LAUNCHER_DST%\"';" ^
   "$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration ([TimeSpan]::FromDays(3650));" ^
   "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 15);" ^
   "Register-ScheduledTask -TaskName '%TASK_NAME%' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null"
@@ -64,7 +70,7 @@ if errorlevel 1 (
 
 REM --- 4. Run once immediately so they don't wait 30 minutes --------------
 echo Running first update check now...
-powershell -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "%UPDATER_DST%"
+wscript.exe "%LAUNCHER_DST%"
 
 echo.
 echo ============================================

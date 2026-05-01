@@ -13,6 +13,8 @@ set ZIP_FILE=%TEMP%\super-ltc-extension.zip
 set APP_DIR=%LOCALAPPDATA%\SuperLTC
 set UPDATER_SRC=%INSTALL_DIR%\update-super-ltc-silent.ps1
 set UPDATER_DST=%APP_DIR%\update-super-ltc-silent.ps1
+set LAUNCHER_SRC=%INSTALL_DIR%\update-super-ltc-launcher.vbs
+set LAUNCHER_DST=%APP_DIR%\update-super-ltc-launcher.vbs
 set TASK_NAME=Super LTC Auto-Update
 
 REM --- 1. Download and extract latest release -----------------------------
@@ -52,11 +54,15 @@ if not exist "%UPDATER_SRC%" (
 )
 
 copy /Y "%UPDATER_SRC%" "%UPDATER_DST%" >nul
+if exist "%LAUNCHER_SRC%" copy /Y "%LAUNCHER_SRC%" "%LAUNCHER_DST%" >nul
 
 schtasks /delete /tn "%TASK_NAME%" /f >nul 2>&1
 
+REM Use the VBS launcher (via wscript.exe) to run the .ps1 truly hidden.
+REM Running powershell.exe directly from Task Scheduler flashes a console
+REM window in interactive sessions even with -WindowStyle Hidden.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File \"%UPDATER_DST%\"';" ^
+  "$action   = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument '\"%LAUNCHER_DST%\"';" ^
   "$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(3) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration ([TimeSpan]::FromDays(3650));" ^
   "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 15);" ^
   "Register-ScheduledTask -TaskName '%TASK_NAME%' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null"
@@ -68,9 +74,10 @@ if errorlevel 1 (
     goto :skip_autoupdater
 )
 
-REM Run once immediately so the first telemetry ping fires and the task
-REM doesn't have to wait the full 3 minutes before its first run.
-powershell -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "%UPDATER_DST%"
+REM Run once immediately via the launcher so the first telemetry ping
+REM fires without showing a window, and the task doesn't have to wait
+REM the full 3 minutes before its first run.
+wscript.exe "%LAUNCHER_DST%"
 echo Auto-update task registered: "%TASK_NAME%"
 
 :skip_autoupdater

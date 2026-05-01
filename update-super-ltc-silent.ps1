@@ -253,20 +253,35 @@ try {
         to_version   = $latestVersion
     }
 
-    # --- 9. Self-update: if the new release ships an updated PS1, copy it
-    # over the running copy at $appDir so future runs use the latest logic.
+    # --- 9. Self-update: if the new release ships an updated PS1 or VBS,
+    # copy them over the running copies at $appDir so future runs use the
+    # latest logic / launcher.
     try {
         $newPs1 = Join-Path $installDir 'update-super-ltc-silent.ps1'
         $myPs1  = Join-Path $appDir     'update-super-ltc-silent.ps1'
+        $newVbs = Join-Path $installDir 'update-super-ltc-launcher.vbs'
+        $myVbs  = Join-Path $appDir     'update-super-ltc-launcher.vbs'
+        $copied = $false
         if ((Test-Path $newPs1) -and (Test-Path $myPs1)) {
             $newHash = (Get-FileHash $newPs1 -Algorithm SHA256).Hash
             $myHash  = (Get-FileHash $myPs1  -Algorithm SHA256).Hash
             if ($newHash -ne $myHash) {
                 Copy-Item -Path $newPs1 -Destination $myPs1 -Force
-                Write-Log "Self-updated updater script in $appDir"
-                Send-Telemetry -Event 'updater_self_updated' -Props @{
-                    to_version = $latestVersion
-                }
+                Write-Log "Self-updated updater PS1 in $appDir"
+                $copied = $true
+            }
+        }
+        if (Test-Path $newVbs) {
+            if (-not (Test-Path $myVbs) -or
+                ((Get-FileHash $newVbs -Algorithm SHA256).Hash -ne (Get-FileHash $myVbs -Algorithm SHA256).Hash)) {
+                Copy-Item -Path $newVbs -Destination $myVbs -Force
+                Write-Log "Self-updated launcher VBS in $appDir"
+                $copied = $true
+            }
+        }
+        if ($copied) {
+            Send-Telemetry -Event 'updater_self_updated' -Props @{
+                to_version = $latestVersion
             }
         }
     } catch {

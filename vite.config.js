@@ -32,6 +32,7 @@ function copyStaticAssets(outDir) {
       // The PS1 also lives at $installDir at runtime so the updater can
       // self-update its own copy in %LOCALAPPDATA%\SuperLTC.
       copyFileSync('update-super-ltc-silent.ps1', `${outDir}/update-super-ltc-silent.ps1`);
+      copyFileSync('update-super-ltc-launcher.vbs', `${outDir}/update-super-ltc-launcher.vbs`);
       copyFileSync('install-auto-updater.bat', `${outDir}/install-auto-updater.bat`);
       copyFileSync('uninstall-auto-updater.bat', `${outDir}/uninstall-auto-updater.bat`);
       copyFileSync('update-super-ltc.bat', `${outDir}/update-super-ltc.bat`);
