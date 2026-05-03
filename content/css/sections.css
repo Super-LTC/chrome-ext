@@ -195,6 +195,19 @@
   background: #8b5cf6;
 }
 
+.super-med-active {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-radius: var(--super-radius-sm);
+  background: var(--super-primary-light);
+  color: white;
+}
+
 .super-med-admin {
   color: var(--super-gray-600);
   font-weight: 500;

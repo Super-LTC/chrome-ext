@@ -1434,6 +1434,9 @@ function renderMedications(medications, label = 'Medications') {
       : '';
     const routeInfo = med.route ? `<span class="super-med-route">${med.route}</span>` : '';
     const typeInfo = med.insulinType ? `<span class="super-med-type">${med.insulinType}</span>` : '';
+    const activeRange = (med.firstAdministered && med.lastAdministered)
+      ? `<span class="super-med-active">active ${med.firstAdministered} – ${med.lastAdministered}</span>`
+      : '';
 
     const clickableClass = isClickable ? 'super-med-item--clickable' : '';
     const orderDataAttr = isClickable ? `data-order-id="${orderId}"` : '';
@@ -1442,7 +1445,7 @@ function renderMedications(medications, label = 'Medications') {
       <div class="super-med-item ${clickableClass}" ${orderDataAttr}>
         <div class="super-med-item__name">${med.medicationName}</div>
         <div class="super-med-item__details">
-          ${routeInfo}${typeInfo}${adminInfo}
+          ${routeInfo}${typeInfo}${activeRange}${adminInfo}
           ${isClickable ? '<span class="super-med-view">View →</span>' : ''}
         </div>
       </div>
