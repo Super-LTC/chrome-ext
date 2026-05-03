@@ -2671,7 +2671,7 @@ async function renderSplitAdministrations(viewerEl, orderId, customDateRange, ov
       </div>
       <div class="super-admin-modal__body">
         ${adminRecords && adminRecords.length > 0
-          ? renderAdminGrid(gridData)
+          ? renderAdminGrid(gridData, order)
           : '<div class="super-admin-empty">No events found in this date range</div>'
         }
       </div>
@@ -3062,7 +3062,7 @@ function buildAdminModalHTML(order, dateRange, adminRecords, reportType) {
 
     <div class="super-admin-modal__body">
       ${adminRecords.length > 0
-        ? renderAdminGrid(gridData)
+        ? renderAdminGrid(gridData, order)
         : '<div class="super-admin-empty">No events found in this date range</div>'
       }
     </div>
@@ -3143,11 +3143,16 @@ function countEvents(gridData) {
 }
 
 // Render the grid with times as rows, dates as columns
-function renderAdminGrid(gridData) {
+function renderAdminGrid(gridData, order) {
   const { times, dates, grid } = gridData;
 
   if (times.length === 0 || dates.length === 0) {
     return '<div class="super-admin-empty">No events found in this date range</div>';
+  }
+
+  const dateOutsideOrder = {};
+  for (const date of dates) {
+    dateOutsideOrder[date] = isDateOutsideOrderRange(date, order);
   }
 
   // Build date headers with day name and date
@@ -3163,7 +3168,7 @@ function renderAdminGrid(gridData) {
   const rows = times.map(time => {
     const cells = dates.map(date => {
       const cell = grid[time]?.[date];
-      return renderGridCell(cell);
+      return renderGridCell(cell, dateOutsideOrder[date]);
     }).join('');
 
     return `
@@ -3191,9 +3196,12 @@ function renderAdminGrid(gridData) {
   `;
 }
 
-function renderGridCell(cell) {
+function renderGridCell(cell, isOutsideOrder) {
   if (!cell) {
-    return '<td class="super-admin-grid__cell super-admin-grid__cell--empty">-</td>';
+    if (isOutsideOrder) {
+      return '<td class="super-admin-grid__cell super-admin-grid__cell--no-order" title="No order active">·</td>';
+    }
+    return '<td class="super-admin-grid__cell super-admin-grid__cell--empty" title="No event recorded">-</td>';
   }
 
   const { status, staffInitials, value, chartCode } = cell;
@@ -3318,6 +3326,18 @@ function normalizeDateKey(dateStr) {
   const date = parseDate(dateStr);
   if (isNaN(date.getTime())) return dateStr;
   return formatDateForAPI(date);
+}
+
+function isDateOutsideOrderRange(dateStr, order) {
+  if (!order || !order.startDate) return false;
+  const date = parseDate(dateStr);
+  const start = parseDate(order.startDate);
+  if (date < start) return true;
+  if (order.endDate) {
+    const end = parseDate(order.endDate);
+    if (date > end) return true;
+  }
+  return false;
 }
 
 // Returns YYYY-MM-DD strings for every day in [start, end] inclusive.
