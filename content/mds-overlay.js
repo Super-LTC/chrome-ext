@@ -2634,7 +2634,7 @@ async function renderSplitAdministrations(viewerEl, orderId, customDateRange, ov
   const typeIcon = isMar ? '💊' : '⚡';
   const typeBadge = isMar ? 'MAR' : 'TAR';
   const typeBadgeClass = isMar ? 'super-admin-badge--mar' : 'super-admin-badge--tar';
-  const gridData = buildAdminGridData(adminRecords || []);
+  const gridData = buildAdminGridData(adminRecords || [], dateRange);
   const eventCount = countEvents(gridData);
   const formattedDateRange = formatDateRangeDisplay(dateRange.startDate, dateRange.endDate);
 
@@ -3020,7 +3020,7 @@ function buildAdminModalHTML(order, dateRange, adminRecords, reportType) {
   const typeBadgeClass = isMar ? 'super-admin-badge--mar' : 'super-admin-badge--tar';
 
   // Build the grid data
-  const gridData = buildAdminGridData(adminRecords);
+  const gridData = buildAdminGridData(adminRecords, dateRange);
   const eventCount = countEvents(gridData);
 
   return `
@@ -3080,19 +3080,14 @@ function buildAdminModalHTML(order, dateRange, adminRecords, reportType) {
 }
 
 // Build grid data structure: times as rows, dates as columns
-function buildAdminGridData(adminRecords) {
+function buildAdminGridData(adminRecords, dateRange) {
   const allTimes = new Set();
-  const allDates = new Set();
 
-  // Collect all unique times and dates from events
+  // Collect time slots from events (unchanged)
   for (const record of adminRecords) {
     if (!record.events) continue;
     for (const event of record.events) {
       if (event.time) allTimes.add(event.time);
-      if (event.date) {
-        // Normalize date to YYYY-MM-DD for consistent keys
-        allDates.add(normalizeDateKey(event.date));
-      }
     }
   }
 
@@ -3106,8 +3101,8 @@ function buildAdminGridData(adminRecords) {
     return a.localeCompare(b);
   });
 
-  // Sort dates
-  const dates = [...allDates].sort();
+  // Generate dates from the lookback window, not from events.
+  const dates = enumerateDateRange(dateRange.startDate, dateRange.endDate);
 
   // Build lookup: { time: { date: GridCell } }
   const grid = {};
@@ -3323,6 +3318,19 @@ function normalizeDateKey(dateStr) {
   const date = parseDate(dateStr);
   if (isNaN(date.getTime())) return dateStr;
   return formatDateForAPI(date);
+}
+
+// Returns YYYY-MM-DD strings for every day in [start, end] inclusive.
+function enumerateDateRange(startDate, endDate) {
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  const out = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    out.push(formatDateForAPI(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
 }
 
 function shiftDateRange(dateRange, days) {
