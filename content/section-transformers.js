@@ -613,6 +613,7 @@ function transformSectionN(results) {
           evidenceCount: sectionData.n0300.evidenceCount || 0,
           distinctDays: sectionData.n0300.distinctDays,
           injections: sectionData.n0300.injections,
+          lookbackWindow: sectionData.n0300.lookbackWindow,
           isNumeric: true
         }
       }
@@ -632,6 +633,7 @@ function transformSectionN(results) {
           evidenceCount: sectionData.n0350a.evidenceCount || 0,
           distinctDays: sectionData.n0350a.distinctDays,
           insulinInjections: sectionData.n0350a.insulinInjections,
+          lookbackWindow: sectionData.n0350a.lookbackWindow,
           isNumeric: true
         }
       }
@@ -651,6 +653,7 @@ function transformSectionN(results) {
           evidenceCount: sectionData.n0350b.evidenceCount || 0,
           distinctDays: sectionData.n0350b.distinctDays,
           orderChanges: sectionData.n0350b.orderChanges,
+          lookbackWindow: sectionData.n0350b.lookbackWindow,
           isNumeric: true
         }
       }

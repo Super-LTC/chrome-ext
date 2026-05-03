@@ -997,6 +997,9 @@ function buildPopoverHTML(result) {
   // Section H: Incontinence episode dates
   const incontinenceEpisodeDatesHTML = renderIncontinenceEpisodeDates(ai.incontinenceEpisodeDates, ai.lookbackWindow);
 
+  // Section N: Lookback context line for numeric items (N0300, N0350A, N0350B)
+  const sectionNLookbackHTML = renderSectionNLookback(result.mdsItem, ai.lookbackWindow);
+
   // Section N: Medications
   const injectionsHTML = renderMedications(ai.injections, 'Injections');
   const insulinHTML = renderMedications(ai.insulinInjections, 'Insulin Injections');
@@ -1032,6 +1035,7 @@ function buildPopoverHTML(result) {
           <div class="super-confidence__dots">${confidenceDots}</div>
         </div>
       </div>
+      ${sectionNLookbackHTML}
 
       ${result.pccAnswer ? `
       <div class="super-answer-row" style="padding-top: 0; border: none; margin-bottom: 8px;">
@@ -1388,6 +1392,13 @@ function renderDistinctDates(distinctDates) {
       </div>
     </div>
   `;
+}
+
+// Helper: Render lookback context line for Section N numeric items
+function renderSectionNLookback(mdsItem, lookbackWindow) {
+  const isNumericN = mdsItem === 'N0300' || mdsItem === 'N0350A' || mdsItem === 'N0350B';
+  if (!isNumericN || !lookbackWindow) return '';
+  return `<div class="super-lookback-info">Lookback: ${lookbackWindow.startDate} – ${lookbackWindow.endDate} (${lookbackWindow.daysCovered} days)</div>`;
 }
 
 // Helper: Render incontinence episode dates for Section H
