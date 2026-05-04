@@ -430,11 +430,14 @@ const ICD10Viewer = {
       }
     );
 
-    // Push initial approved-leaf set into the panel so the very first
-    // group focus already knows which codes are on PCC. Staged set starts
-    // empty so the staged push is harmless.
+    // Push initial approved-leaf set + queryHistory meta into the panel so
+    // the very first group focus already knows which codes are on PCC and
+    // which have outstanding queries. Staged set starts empty.
     if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
       ICD10EvidencePanel.setApprovedLeafCodes(this._computeApprovedLeafCodes());
+    }
+    if (typeof ICD10EvidencePanel?.setApprovedDiagnosisMeta === 'function') {
+      ICD10EvidencePanel.setApprovedDiagnosisMeta(this._computeApprovedDiagnosisMeta());
     }
 
     console.log('[ICD10Viewer] All components initialized');
@@ -733,6 +736,54 @@ const ICD10Viewer = {
     return set;
   },
 
+  /**
+   * Refetch approvedDiagnoses (with evidences + queryHistory) and push the
+   * new state into the sidebar + panel. Called after a query submit so the
+   * queryHistory chip flips immediately, without requiring a viewer reload.
+   */
+  async _refreshApprovedDiagnoses() {
+    try {
+      const fresh = await ICD10API.getApprovedDiagnoses(
+        this.patientId, this.facilityName, this.orgSlug
+      );
+      this.approvedDiagnoses = fresh || [];
+      ICD10Sidebar.updateData({
+        approvedDiagnoses: this.approvedDiagnoses,
+        approvedBaseCodes: this._computeApprovedBaseCodes(),
+      });
+      if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
+        ICD10EvidencePanel.setApprovedLeafCodes(this._computeApprovedLeafCodes());
+      }
+      if (typeof ICD10EvidencePanel?.setApprovedDiagnosisMeta === 'function') {
+        ICD10EvidencePanel.setApprovedDiagnosisMeta(this._computeApprovedDiagnosisMeta());
+      }
+    } catch (err) {
+      console.warn('[ICD10Viewer] Failed to refresh approved diagnoses post-query:', err);
+    }
+  },
+
+  /**
+   * Map of leaf icd10 code → { queryHistory, queryable, ... } pulled from
+   * approvedDiagnoses. Pushed to the panel so it can render the query-state
+   * chip / mute the Query button when the focused leaf has an outstanding
+   * query.
+   */
+  _computeApprovedDiagnosisMeta() {
+    const map = new Map();
+    for (const d of this.approvedDiagnoses || []) {
+      if (!d?.icd10Code) continue;
+      map.set(d.icd10Code, {
+        queryHistory: d.queryHistory || null,
+        queryable: d.queryable === true,
+        pdpmCategory: d.pdpmCategory || null,
+        pdpmCategoryName: d.pdpmCategoryName || null,
+        pdpmCategoryNumber: d.pdpmCategoryNumber ?? null,
+        mdsItemCode: d.mdsItemCode || null,
+      });
+    }
+    return map;
+  },
+
   /** Set of leaf icd10 codes already on PCC. Drives the panel's "On PCC"
    * pill and prevents double-billing via the Add button. */
   _computeApprovedLeafCodes() {
@@ -940,10 +991,16 @@ const ICD10Viewer = {
           onComplete: (sentQueries, practitionerName) => {
             const n = (sentQueries || []).length;
             if (n > 0) {
+              const codeHint = sentQueries[0]?.icd10Code || sentQueries[0]?.diagnosisCode || payload.baseCode || '';
               window.SuperToast?.show?.({
-                message: `Query sent to ${practitionerName || 'practitioner'}.`,
+                message: n === 1
+                  ? `Query for ${codeHint} sent to ${practitionerName || 'practitioner'}.`
+                  : `${n} queries sent to ${practitionerName || 'practitioner'}.`,
                 type: 'success',
               });
+              // Refetch diagnoses so the queryHistory chip flips from "no
+              // chip" to "Query outstanding" without requiring a reload.
+              this._refreshApprovedDiagnoses();
             }
           },
         }),

@@ -56,6 +56,10 @@ const ICD10EvidencePanel = {
   // the focused leaf is in here, the panel shows a disabled "On PCC" pill
   // instead of an Add button — the code is already billed.
   approvedLeafCodes: null,
+  // Map<icd10Code, { queryHistory, queryable, pdpmCategory, ... }> for
+  // approved diagnoses — used to mute the Query button + render
+  // outstanding-query chip when the focused leaf has open queries.
+  approvedDxMeta: null,
   selectedCode: null,
   selectedDescription: null,
   codeDropdownOpen: false,
@@ -658,27 +662,58 @@ const ICD10EvidencePanel = {
     // backend may accept via fallback paths). null/undefined → fall back
     // to pdpm-presence as a heuristic.
     const canQuery = !!this.onQuery;
+    const approvedMeta = this._focusedApprovedMeta();
+    const queryHistory = approvedMeta?.queryHistory || null;
     const focusedQueryable = (() => {
-      // Prefer leaf-level explicit signal if present.
+      // PCC dx with explicit queryable wins (most authoritative).
+      if (approvedMeta && typeof approvedMeta.queryable === 'boolean') {
+        return approvedMeta.queryable;
+      }
       if (focusedMeta && typeof focusedMeta.queryable === 'boolean') {
         return focusedMeta.queryable;
       }
-      // Group-level explicit signal next (PCC rows propagate it).
       const ctx = this.groupContext || {};
       if (typeof ctx.queryable === 'boolean') return ctx.queryable;
-      // Heuristic: if any pdpm signal exists on the leaf or group,
-      // probably queryable. Backend rejects authoritatively.
       return !!(focusedMeta?.pdpmCategory || ctx.pdpmCategory);
     })();
+    // Resolve days-since-signed as integer. Backend ships
+    // daysSinceLastSigned as a number; treat it defensively.
+    const daysSinceSigned = (() => {
+      const d = queryHistory?.daysSinceLastSigned;
+      return typeof d === 'number' && isFinite(d) ? Math.floor(d) : null;
+    })();
+    const hasOutstanding = !!queryHistory?.hasOutstanding;
+    const recentlySigned = daysSinceSigned != null && daysSinceSigned < 60;
+    // Query button states (in priority order):
+    //   1. hasOutstanding → muted "Query outstanding" with day count
+    //   2. recentlySigned (<60d) → muted "Signed Nd ago"
+    //   3. !focusedQueryable → muted, generic "may not be queryable" tooltip
+    //   4. default → full-color "Query"
+    let queryLabel = 'Query';
+    let queryTitle = 'Generate a physician query for this code';
+    let queryMuted = false;
+    if (hasOutstanding) {
+      const out = (queryHistory.pendingCount || 0) + (queryHistory.sentCount || 0);
+      queryLabel = `Query outstanding${out > 1 ? ` (${out})` : ''}`;
+      queryTitle = 'A query is already pending or awaiting physician sign-off for this code.';
+      queryMuted = true;
+    } else if (recentlySigned) {
+      queryLabel = `Signed ${daysSinceSigned}d ago`;
+      queryTitle = `Last signed ${daysSinceSigned} days ago. Re-querying within 60 days is usually unnecessary — click anyway to override.`;
+      queryMuted = true;
+    } else if (!focusedQueryable) {
+      queryTitle = 'Backend may not be able to attach a query for this code — click anyway to try.';
+      queryMuted = true;
+    }
     const queryHtml = canQuery ? `
       <!-- NO_TRACK: query create flow tracks dx_query_created at submit time -->
-      <button class="icd10-evidence-panel__query ${focusedQueryable ? '' : 'icd10-evidence-panel__query--muted'}"
+      <button class="icd10-evidence-panel__query ${queryMuted ? 'icd10-evidence-panel__query--muted' : ''}"
               data-action="query"
-              title="${focusedQueryable ? 'Generate a physician query for this code' : 'Backend may not be able to attach a query for this code — click anyway to try'}">
+              title="${this._escapeHtml(queryTitle)}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>
-        Query
+        ${this._escapeHtml(queryLabel)}
       </button>
     ` : '';
 
@@ -1399,6 +1434,23 @@ const ICD10EvidencePanel = {
   setApprovedLeafCodes(codes) {
     this.approvedLeafCodes = new Set(codes || []);
     this.render();
+  },
+
+  /**
+   * Push the approved-diagnosis metadata map (keyed by leaf icd10 code).
+   * Each entry carries queryHistory + pdpm enrichment used to mute the
+   * Query button and render the outstanding-query chip.
+   */
+  setApprovedDiagnosisMeta(byCode) {
+    this.approvedDxMeta = (byCode instanceof Map) ? byCode : new Map();
+    this.render();
+  },
+
+  /** Returns the focused leaf's approved-diagnosis meta, or null. */
+  _focusedApprovedMeta() {
+    if (!this.selectedCode) return null;
+    if (!(this.approvedDxMeta instanceof Map)) return null;
+    return this.approvedDxMeta.get(this.selectedCode) || null;
   },
 
   /** True iff the focused leaf is already on PCC (in approvedDiagnoses). */

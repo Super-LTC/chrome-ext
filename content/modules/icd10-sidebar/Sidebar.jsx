@@ -130,6 +130,9 @@ function approvedRowsFromPccDiagnoses(approvedDiagnoses) {
       // mdsItemCode resolves. Used by the panel to mute (not block) the
       // Query button when false. Backend still has final say at submit.
       queryable: dx.queryable === true,
+      // Per-diagnosis query history — pending/sent counts, last-signed
+      // recency. Drives the sidebar chip + Query button gating.
+      queryHistory: dx.queryHistory || null,
       // Inline per-row evidence chip data (chip rendering checks hasData).
       evidence: hasEvData ? { exact: exactCount, sibling: siblingCount, hasData: true } : null,
       // Stash the original diagnosis so click-through can read its leaves
@@ -451,7 +454,7 @@ function LeafList({ baseCode, leaves, focusedLeafCode, stagedLeafSet, onSelectLe
   );
 }
 
-function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, evidenceChip, isPcc }) {
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, evidenceChip, queryHistory, isPcc }) {
   const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
@@ -502,6 +505,7 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
       b.nursing && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nursing' }, 'NURS'),
       b.sectionI && h('span', { class: 'icd10-sb__badge icd10-sb__badge--sectioni' }, 'I')
     ),
+    queryHistory && h(QueryHistoryChip, { history: queryHistory }),
     evidenceChip && h(EvidenceChip, evidenceChip),
     showDismiss && h('button', {
       type: 'button',
@@ -532,6 +536,35 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
  * Approved layer (different leaf in the same family looking like
  * confirmation of the approved code).
  */
+/**
+ * Query-history chip rendered on PCC-diagnosis rows. Surfaces:
+ *   hasOutstanding → amber "Query out" chip (most urgent)
+ *   recently signed (<60d) → muted "Signed Nd" chip (informational)
+ *   older signed (≥60d) → omitted entirely (visual noise; re-query is fine)
+ *   no query history → omitted entirely
+ */
+function QueryHistoryChip({ history }) {
+  if (!history) return null;
+  const out = (history.pendingCount || 0) + (history.sentCount || 0);
+  if (history.hasOutstanding && out > 0) {
+    return h('span', {
+      class: 'icd10-sb__qh-chip icd10-sb__qh-chip--out',
+      title: `${out} query${out === 1 ? '' : 'ies'} pending or awaiting physician sign-off.`,
+    }, out > 1 ? `Query out (${out})` : 'Query out');
+  }
+  if (history.lastSignedAt) {
+    const days = typeof history.daysSinceLastSigned === 'number'
+      ? Math.floor(history.daysSinceLastSigned) : null;
+    if (days != null && days < 60) {
+      return h('span', {
+        class: 'icd10-sb__qh-chip icd10-sb__qh-chip--signed',
+        title: `Last signed ${days} day${days === 1 ? '' : 's'} ago. Re-querying within 60 days is usually unnecessary.`,
+      }, `Signed ${days}d`);
+    }
+  }
+  return null;
+}
+
 function EvidenceChip({ exact, sibling }) {
   if (!exact && !sibling) {
     return h('span', {
@@ -831,6 +864,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       onUndismiss: opts.hidden ? handleUndismiss : undefined,
       dismissDisabled,
       evidenceChip,
+      queryHistory: isPcc ? row.queryHistory : null,
       isPcc,
     };
     const out = [h(Row, rowProps)];

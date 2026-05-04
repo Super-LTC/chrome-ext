@@ -3490,3 +3490,34 @@
   opacity: 0.8;
   background: var(--super-gray-50, #fafafa);
 }
+
+/* Query-history chips on PCC-diagnosis rows. Outstanding takes priority
+   visually (amber); recently-signed is muted slate. Older signed history
+   gets no chip — keeps the rows clean for codes where re-querying is
+   appropriate. */
+.icd10-sb__qh-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.icd10-sb__qh-chip--out {
+  color: #92400e;
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
+.icd10-sb__qh-chip--signed {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
