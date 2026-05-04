@@ -125,6 +125,10 @@ function approvedRowsFromPccDiagnoses(approvedDiagnoses) {
       pdpmCategoryName: dx.pdpmCategoryName || null,
       pdpmPoints: dx.pdpmPoints,
       mdsItemCode: dx.mdsItemCode || null,
+      // Backend's authoritative "is this queryable?" signal — true when
+      // mdsItemCode resolves. Used by the panel to mute (not block) the
+      // Query button when false. Backend still has final say at submit.
+      queryable: dx.queryable === true,
       // Inline per-row evidence chip data (chip rendering checks hasData).
       evidence: hasEvData ? { exact: exactCount, sibling: siblingCount, hasData: true } : null,
       // Stash the original diagnosis so click-through can read its leaves

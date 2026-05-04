@@ -459,6 +459,8 @@ const ICD10Viewer = {
       pdpmCategoryName: selection.pdpmCategoryName || null,
       pdpmPoints: selection.pdpmPoints,
       mdsItemCode: selection.mdsItemCode || null,
+      // queryable flows through from PCC rows. undefined when unknown.
+      queryable: selection.queryable,
     };
 
     // Sequence guard so a slow earlier fetch can't clobber the latest selection.
@@ -857,6 +859,9 @@ const ICD10Viewer = {
       pdpmCategory: row?.pdpmCategory || null,
       pdpmCategoryName: row?.pdpmCategoryName || null,
       mdsItemCode: row?.mdsItemCode || null,
+      // Authoritative queryable signal from backend (PCC rows only).
+      // null/undefined for non-PCC rows; panel falls back to pdpm-presence.
+      queryable: row?.queryable,
       items: null,
     };
     await this._handleSidebarSelection(selection);
@@ -875,33 +880,16 @@ const ICD10Viewer = {
    * @param {Object} payload - { baseCode, description, groupContext, items }
    */
   async _handleQuerySingle(payload) {
-    console.log('[ICD10Viewer] _handleQuerySingle called:', {
-      hasPayload: !!payload,
-      baseCode: payload?.baseCode,
-      itemCount: payload?.items?.length,
-      ctxPdpm: payload?.groupContext?.pdpmCategory,
-      ctxMdsItem: payload?.groupContext?.mdsItemCode,
-    });
-    if (!payload || !payload.baseCode) {
-      console.warn('[ICD10Viewer] Query bailed: missing baseCode');
-      return;
-    }
+    if (!payload || !payload.baseCode) return;
     if (!payload.items || payload.items.length === 0) {
       window.SuperToast?.show?.({ message: 'No evidence to attach yet — wait for mentions to load.', type: 'info' });
-      console.warn('[ICD10Viewer] Query bailed: empty items');
       return;
     }
-    // Block when there's no PDPM signal at all — backend requires an mdsItem
-    // and the I8000 fallback is only meaningful with an NTA/SLP category.
-    const ctx = payload.groupContext || {};
-    if (!ctx.mdsItemCode && !ctx.pdpmCategory) {
-      window.SuperToast?.show?.({
-        message: `No MDS item slot for ${payload.baseCode} — can't attach a query.`,
-        type: 'warning',
-      });
-      console.warn('[ICD10Viewer] Query bailed: no mdsItem and no pdpmCategory in groupContext', ctx);
-      return;
-    }
+    // No more frontend gating on pdpmCategory / mdsItemCode. Backend is the
+    // authority on queryable-or-not (POST /diagnosis-queries returns 400 on
+    // uncodable inputs); the FE optimizes UX via the `queryable` flag on
+    // the button styling but never silently swallows a click. If backend
+    // rejects, the query flow component surfaces the error.
 
     if (this._queryFlowUnmount) {
       this._queryFlowUnmount();

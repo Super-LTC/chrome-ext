@@ -652,14 +652,29 @@ const ICD10EvidencePanel = {
       }
     }
 
-    // Query is always available when the handler's wired. Coders may want
-    // to write a clarifying query even on codes with no Comprehend evidence
-    // (the most common reason: doc says "diabetes" but the chart didn't
-    // specify with/without complications — query the provider to clarify).
+    // Query is always available when the handler's wired. Backend's
+    // `queryable` field on the focused leaf / groupContext is a soft
+    // signal — true → active button, false → muted (still clickable;
+    // backend may accept via fallback paths). null/undefined → fall back
+    // to pdpm-presence as a heuristic.
     const canQuery = !!this.onQuery;
+    const focusedQueryable = (() => {
+      // Prefer leaf-level explicit signal if present.
+      if (focusedMeta && typeof focusedMeta.queryable === 'boolean') {
+        return focusedMeta.queryable;
+      }
+      // Group-level explicit signal next (PCC rows propagate it).
+      const ctx = this.groupContext || {};
+      if (typeof ctx.queryable === 'boolean') return ctx.queryable;
+      // Heuristic: if any pdpm signal exists on the leaf or group,
+      // probably queryable. Backend rejects authoritatively.
+      return !!(focusedMeta?.pdpmCategory || ctx.pdpmCategory);
+    })();
     const queryHtml = canQuery ? `
       <!-- NO_TRACK: query create flow tracks dx_query_created at submit time -->
-      <button class="icd10-evidence-panel__query" data-action="query" title="Generate a physician query for this code">
+      <button class="icd10-evidence-panel__query ${focusedQueryable ? '' : 'icd10-evidence-panel__query--muted'}"
+              data-action="query"
+              title="${focusedQueryable ? 'Generate a physician query for this code' : 'Backend may not be able to attach a query for this code — click anyway to try'}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>

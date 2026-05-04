@@ -3477,3 +3477,16 @@
 .icd10-evidence-panel__similar-banner-text strong {
   font-weight: 700;
 }
+
+/* Muted Query button — backend's `queryable: false` signal. Still clickable
+   so a coder can ask anyway; backend has the final say at submit. */
+.icd10-evidence-panel__query--muted {
+  opacity: 0.55;
+  border-color: var(--super-gray-300, #d4d4d4) !important;
+  color: var(--super-gray-600, #525252) !important;
+}
+
+.icd10-evidence-panel__query--muted:hover:not(:disabled) {
+  opacity: 0.8;
+  background: var(--super-gray-50, #fafafa);
+}
