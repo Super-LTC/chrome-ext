@@ -1008,17 +1008,36 @@ const ICD10EvidencePanel = {
     if (queryBtn) {
       queryBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        // Resolve focused leaf metadata so the Query payload carries the
+        // LEAF's pdpm signal (one base can split across categories — E11.40
+        // vs E11.621 — and the group-level pdpmCategory is often null for
+        // approved/PCC rows where we only had partial data at sidebar build
+        // time). Header badge already proves the leaf has these fields.
+        const code = this.selectedCode;
+        const focusedMeta =
+          (this.items || []).find(it => it.icd10Code === code)
+          || (this._getAvailableCodes ? this._getAvailableCodes().find(c => c.code === code) : null)
+          || null;
+        const ctx = this.groupContext || {};
         const payload = {
-          baseCode: this.selectedCode,
+          baseCode: code,
           description: this.selectedDescription,
-          groupContext: this.groupContext,
+          groupContext: {
+            ...ctx,
+            pdpmCategory: focusedMeta?.pdpmCategory || ctx.pdpmCategory || null,
+            pdpmCategoryName: focusedMeta?.pdpmCategoryName || ctx.pdpmCategoryName || null,
+            pdpmPoints: focusedMeta?.pdpmPoints ?? ctx.pdpmPoints,
+            mdsItemCode: focusedMeta?.mdsItemCode || ctx.mdsItemCode || null,
+          },
           items: this.items,
         };
         console.log('[ICD10EvidencePanel] Query click → onQuery payload:', {
           hasHandler: typeof this.onQuery === 'function',
           baseCode: payload.baseCode,
           itemCount: payload.items?.length,
-          groupContext: payload.groupContext,
+          focusedMetaPdpm: focusedMeta?.pdpmCategory,
+          ctxPdpmFinal: payload.groupContext.pdpmCategory,
+          ctxMdsItemFinal: payload.groupContext.mdsItemCode,
         });
         if (typeof this.onQuery === 'function') {
           this.onQuery(payload);
