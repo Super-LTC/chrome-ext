@@ -80,7 +80,10 @@ const MedDiagAugment = {
       this._data = data;
       this._byCode = new Map();
       for (const dx of data.diagnoses || []) {
-        if (dx?.icd10Code) this._byCode.set(dx.icd10Code, dx);
+        // Endpoint returns the code as `code` (not `icd10Code` like the
+        // /diagnoses endpoint); accept either to stay forgiving.
+        const k = dx?.code || dx?.icd10Code;
+        if (k) this._byCode.set(k, dx);
       }
       this._injectColumns();
       this._renderRows();
