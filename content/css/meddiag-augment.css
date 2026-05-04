@@ -187,3 +187,143 @@
 @keyframes super-meddiag-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ---- Loading skeleton (per cell during initial fetch) ------------------- */
+
+.super-meddiag-skel {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid rgba(99, 102, 241, 0.25);
+  border-top-color: rgba(99, 102, 241, 0.85);
+  border-radius: 50%;
+  animation: super-meddiag-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+/* ---- Query timeline panel ---------------------------------------------- */
+
+.super-meddiag-q-panel {
+  padding: 0;
+}
+
+.super-meddiag-q-panel__head {
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.super-meddiag-q-panel__title {
+  font-size: 13px;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.super-meddiag-q-panel__sub {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.02em;
+}
+
+.super-meddiag-q-panel__list {
+  padding: 6px 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.super-meddiag-q-panel__empty {
+  padding: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.super-meddiag-q-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.1s, border-left-color 0.1s;
+}
+
+.super-meddiag-q-entry:hover {
+  background: #f8fafc;
+  border-left-color: #cbd5e1;
+}
+
+.super-meddiag-q-entry__dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.super-meddiag-q-entry__date {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: #475569;
+  width: 60px;
+}
+
+.super-meddiag-q-entry__detail {
+  color: #334155;
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
+.super-meddiag-q-mismatch {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.super-meddiag-q-panel__footer {
+  border-top: 1px solid #e5e7eb;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.super-meddiag-q-panel__overdue {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.super-meddiag-q-panel__recent {
+  color: #475569;
+}
+
+.super-meddiag-q-panel__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.super-meddiag-q-panel__cta:hover {
+  background: #4f46e5;
+}

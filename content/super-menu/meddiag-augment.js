@@ -74,22 +74,73 @@ const MedDiagAugment = {
   },
 
   async _fetchAndRender() {
+    // Inject columns + skeleton cells immediately so the user sees the
+    // augmented layout instantly; replace skeletons once the fetch lands.
+    this._injectColumns();
+    if (!this._data) this._renderRowsLoading();
+
     try {
       const data = await this._fetchStatusOverview();
-      if (!data) return;
+      if (!data) {
+        // Fetch failed silently — clear skeletons so cells aren't stuck.
+        this._renderRowsEmpty();
+        return;
+      }
       this._data = data;
       this._byCode = new Map();
       for (const dx of data.diagnoses || []) {
-        // Endpoint returns the code as `code` (not `icd10Code` like the
-        // /diagnoses endpoint); accept either to stay forgiving.
         const k = dx?.code || dx?.icd10Code;
         if (k) this._byCode.set(k, dx);
       }
-      this._injectColumns();
       this._renderRows();
     } catch (err) {
       console.warn('[MedDiagAugment] fetch/render failed:', err);
+      this._renderRowsEmpty();
     }
+  },
+
+  /**
+   * Render small skeleton spinners in every CP/Query cell while we wait
+   * for the status-overview fetch — the table feels alive instead of
+   * showing 4-12 empty cells for 200-500ms.
+   */
+  _renderRowsLoading() {
+    const rows = document.querySelectorAll('#meddiaglisting tbody tr');
+    rows.forEach(row => {
+      const { cpCell, qCell } = this._ensureCells(row);
+      cpCell.innerHTML = `<span class="super-meddiag-skel" aria-label="Loading"></span>`;
+      qCell.innerHTML = `<span class="super-meddiag-skel" aria-label="Loading"></span>`;
+    });
+  },
+
+  _renderRowsEmpty() {
+    const rows = document.querySelectorAll('#meddiaglisting tbody tr');
+    rows.forEach(row => {
+      const { cpCell, qCell } = this._ensureCells(row);
+      cpCell.innerHTML = '';
+      qCell.innerHTML = '';
+    });
+  },
+
+  _ensureCells(row) {
+    let cpCell = row.querySelector('.super-meddiag-cell--cp');
+    let qCell = row.querySelector('.super-meddiag-cell--q');
+    if (!cpCell) {
+      cpCell = document.createElement('td');
+      cpCell.className = 'super-meddiag-cell super-meddiag-cell--cp';
+      qCell = document.createElement('td');
+      qCell.className = 'super-meddiag-cell super-meddiag-cell--q';
+      const tds = row.querySelectorAll('td');
+      const insertBefore = tds[Math.max(0, tds.length - 2)] || null;
+      if (insertBefore) {
+        row.insertBefore(cpCell, insertBefore);
+        row.insertBefore(qCell, insertBefore);
+      } else {
+        row.appendChild(cpCell);
+        row.appendChild(qCell);
+      }
+    }
+    return { cpCell, qCell };
   },
 
   async _fetchStatusOverview() {
@@ -145,35 +196,10 @@ const MedDiagAugment = {
   _renderRow(row) {
     const code = this._extractCodeFromRow(row);
     const dx = code ? this._byCode.get(code) : null;
-
-    // Find or create our two cells. We always add cells (even when there's
-    // no data) so the table stays a clean rectangle.
-    let cpCell = row.querySelector('.super-meddiag-cell--cp');
-    let qCell = row.querySelector('.super-meddiag-cell--q');
-    if (!cpCell) {
-      cpCell = document.createElement('td');
-      cpCell.className = 'super-meddiag-cell super-meddiag-cell--cp';
-      qCell = document.createElement('td');
-      qCell.className = 'super-meddiag-cell super-meddiag-cell--q';
-      const tds = row.querySelectorAll('td');
-      const insertBefore = tds[Math.max(0, tds.length - 2)] || null;
-      if (insertBefore) {
-        row.insertBefore(cpCell, insertBefore);
-        row.insertBefore(qCell, insertBefore);
-      } else {
-        row.appendChild(cpCell);
-        row.appendChild(qCell);
-      }
-    }
-
+    const { cpCell, qCell } = this._ensureCells(row);
     cpCell.innerHTML = '';
     qCell.innerHTML = '';
-
-    if (!dx) {
-      // No data for this code — leave empty.
-      return;
-    }
-
+    if (!dx) return;
     cpCell.appendChild(this._buildCarePlanChip(dx));
     qCell.appendChild(this._buildQueryChip(dx));
   },
@@ -246,14 +272,14 @@ const MedDiagAugment = {
       const out = (qh.pendingCount || 0) + (qh.sentCount || 0);
       wrap.classList.add('super-meddiag-chip--q-pending');
       wrap.title = out === 1
-        ? 'Query awaiting physician sign-off. Click to view.'
-        : `${out} queries awaiting physician sign-off. Click to view.`;
+        ? 'Query awaiting physician sign-off. Click for history.'
+        : `${out} queries awaiting physician sign-off. Click for history.`;
       wrap.innerHTML = this._paperPlaneSvg('#92400e') +
         `<span class="super-meddiag-chip__label">Pending${out > 1 ? ` (${out})` : ''}</span>`;
       wrap.style.cursor = 'pointer';
       wrap.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._showQueryDetails(qh.outstandingQueryId, wrap);
+        this._showQueryTimeline(dx, wrap);
       });
       return wrap;
     }
@@ -264,16 +290,17 @@ const MedDiagAugment = {
       const overdue = days >= 60;
       wrap.classList.add(overdue ? 'super-meddiag-chip--q-overdue' : 'super-meddiag-chip--q-signed');
       wrap.title = overdue
-        ? `Last signed ${days} days ago — re-query recommended (>60d).`
-        : `Last signed ${days} day${days === 1 ? '' : 's'} ago.`;
+        ? `Last signed ${days} days ago — re-query recommended (>60d). Click for history.`
+        : `Last signed ${days} day${days === 1 ? '' : 's'} ago. Click for history.`;
       const color = overdue ? '#ef4444' : '#475569';
       wrap.innerHTML = this._checkCircleSvg(color) +
         `<span class="super-meddiag-chip__label">${overdue ? `Re-query (${days}d)` : `Signed ${days}d`}</span>`;
-      // Re-query overdue or recently signed: launch new query flow inline.
+      // History exists → open timeline panel. From there the user can
+      // open any past query's detail or trigger a re-query.
       wrap.style.cursor = 'pointer';
       wrap.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._launchQueryFor(dx, wrap);
+        this._showQueryTimeline(dx, wrap);
       });
       return wrap;
     }
@@ -400,6 +427,158 @@ const MedDiagAugment = {
       this._activeCpBackdrop.remove();
       this._activeCpBackdrop = null;
     }
+  },
+
+  /**
+   * Anchored query-history timeline. Same visual frame as the CP panel.
+   * Renders up to 10 most-recent queries (recentQueries[]), each clickable
+   * to open its full detail in QueryDetailModal. Highlights entries where
+   * the doctor signed with a different code than the query subject — that
+   * mismatch is real coding intel ("doc preferred E44.1 over E44.0").
+   * Bottom CTA launches a new query when re-querying is appropriate.
+   */
+  _showQueryTimeline(dx, anchorEl) {
+    this._closeAnchoredPanels();
+    const qh = dx.queryHistory || {};
+    const recent = Array.isArray(qh.recentQueries) ? qh.recentQueries : [];
+    const total = qh.totalCount ?? recent.length;
+    const days = typeof qh.daysSinceLastSigned === 'number'
+      ? Math.floor(qh.daysSinceLastSigned) : null;
+    const overdue = days != null && days >= 60;
+    const codeOnRow = dx.code || dx.icd10Code || '';
+
+    const panel = document.createElement('div');
+    panel.className = 'super-meddiag-cp-panel super-meddiag-q-panel';
+
+    const head = `
+      <div class="super-meddiag-q-panel__head">
+        <div class="super-meddiag-q-panel__title">
+          <strong>${this._esc(codeOnRow)}</strong>
+          ${dx.description ? ` — ${this._esc(dx.description)}` : ''}
+        </div>
+        <div class="super-meddiag-q-panel__sub">Query history${total > recent.length ? ` (showing ${recent.length} of ${total})` : ''}</div>
+      </div>
+    `;
+
+    const entriesHtml = recent.length === 0
+      ? `<div class="super-meddiag-q-panel__empty">No prior queries.</div>`
+      : recent.map((q, i) => this._renderTimelineEntry(q, codeOnRow, i)).join('');
+
+    const footerLines = [];
+    if (qh.lastSignedAt) {
+      footerLines.push(overdue
+        ? `<span class="super-meddiag-q-panel__overdue">Last signed ${days} days ago — past 60d, re-query OK.</span>`
+        : `<span class="super-meddiag-q-panel__recent">Last signed ${days} day${days === 1 ? '' : 's'} ago.</span>`);
+    }
+    const reQueryBtn = `
+      <!-- NO_TRACK: launches Icd10QueryFlow which emits dx_query_created on submit -->
+      <button type="button" class="super-meddiag-q-panel__cta" data-action="re-query">
+        ${this._chatSvg('#fff')}
+        ${qh.hasOutstanding ? 'Send another query' : (qh.lastSignedAt ? 'Re-query' : 'Send a query')}
+      </button>
+    `;
+
+    panel.innerHTML = `
+      ${head}
+      <div class="super-meddiag-q-panel__list">${entriesHtml}</div>
+      <div class="super-meddiag-q-panel__footer">
+        ${footerLines.join('')}
+        ${reQueryBtn}
+      </div>
+    `;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'super-meddiag-cp-backdrop';
+    backdrop.addEventListener('click', () => this._closeAnchoredPanels());
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(panel);
+    this._activeCpPanel = panel;
+    this._activeCpBackdrop = backdrop;
+    this._positionPanel(panel, anchorEl);
+
+    // Wire entry clicks
+    panel.querySelectorAll('[data-query-id]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = el.dataset.queryId;
+        this._closeAnchoredPanels();
+        this._showQueryDetails(id, null);
+      });
+    });
+    // Wire CTA
+    const cta = panel.querySelector('[data-action="re-query"]');
+    if (cta) {
+      cta.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._closeAnchoredPanels();
+        this._launchQueryFor(dx, anchorEl);
+      });
+    }
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        this._closeAnchoredPanels();
+        document.removeEventListener('keydown', onKey);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    panel._onKey = onKey;
+  },
+
+  _renderTimelineEntry(q, rowCode, index) {
+    const status = q.status || 'pending';
+    const date = q.signedAt || q.rejectedAt || q.sentAt || q.createdAt;
+    const dateLabel = date ? this._formatShortDate(date) : '—';
+    const statusColor = {
+      pending: '#475569',
+      sent: '#92400e',
+      signed: '#16a34a',
+      rejected: '#dc2626',
+    }[status] || '#64748b';
+
+    let detailLine = '';
+    if (status === 'signed') {
+      const sel = q.selectedIcd10Code;
+      const mismatch = sel && rowCode && sel !== rowCode;
+      detailLine = sel
+        ? `Signed → <strong>${this._esc(sel)}</strong>${mismatch ? ` <span class="super-meddiag-q-mismatch" title="Doctor signed with a different specificity than the query subject (${this._esc(rowCode)}).">⚠ different code</span>` : ''}`
+        : 'Signed';
+    } else if (status === 'rejected') {
+      detailLine = q.rejectionReason
+        ? `Rejected — <em>${this._esc(q.rejectionReason)}</em>`
+        : 'Rejected';
+    } else if (status === 'sent') {
+      detailLine = 'Sent — awaiting physician sign-off';
+    } else {
+      detailLine = 'Pending';
+    }
+
+    return `
+      <div class="super-meddiag-q-entry super-meddiag-q-entry--${status}"
+           data-query-id="${this._esc(q.id || '')}"
+           role="button" tabindex="0">
+        <span class="super-meddiag-q-entry__dot" style="background:${statusColor};"></span>
+        <span class="super-meddiag-q-entry__date">${this._esc(dateLabel)}</span>
+        <span class="super-meddiag-q-entry__detail">${detailLine}</span>
+      </div>
+    `;
+  },
+
+  _formatShortDate(iso) {
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const yr = d.getFullYear();
+      const now = new Date();
+      const sameYear = yr === now.getFullYear();
+      return `${months[d.getMonth()]} ${d.getDate()}${sameYear ? '' : ', ' + yr}`;
+    } catch { return ''; }
+  },
+
+  _closeAnchoredPanels() {
+    this._closeCarePlanPanel();
   },
 
   _positionPanel(panel, anchorEl) {
