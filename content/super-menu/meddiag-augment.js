@@ -405,19 +405,41 @@ const MedDiagAugment = {
   _positionPanel(panel, anchorEl) {
     const r = anchorEl.getBoundingClientRect();
     const margin = 8;
+    const panelW = 320;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
     panel.style.position = 'fixed';
     panel.style.zIndex = '2147483640';
-    // Default: below the chip, left-aligned
-    let top = r.bottom + margin;
-    let left = r.left;
-    // Constrain to viewport
-    const panelW = 380;
-    if (left + panelW > window.innerWidth - 12) {
-      left = Math.max(12, window.innerWidth - panelW - 12);
+    panel.style.width = `${panelW}px`;
+    panel.style.maxHeight = `${Math.min(420, vh - 24)}px`;
+    panel.style.overflowY = 'auto';
+
+    // Horizontal: right-align with chip when chip is past midpoint, else
+    // left-align. Then clamp inside the viewport with a 12px gutter.
+    const pastMidpoint = r.left > vw / 2;
+    let left = pastMidpoint
+      ? r.right - panelW
+      : r.left;
+    left = Math.max(12, Math.min(left, vw - panelW - 12));
+    panel.style.left = `${left}px`;
+
+    // Vertical: prefer below; flip above if it would clip. Measure after
+    // setting width so wrap-induced height is real.
+    panel.style.top = '0px';
+    panel.style.visibility = 'hidden';
+    document.body.appendChild(panel.parentNode === document.body ? panel : panel);
+    const ph = panel.offsetHeight || 200;
+    panel.style.visibility = '';
+    let top;
+    if (r.bottom + margin + ph <= vh - 12) {
+      top = r.bottom + margin;
+    } else if (r.top - margin - ph >= 12) {
+      top = r.top - margin - ph;
+    } else {
+      // Neither fits cleanly — center vertically with margins.
+      top = Math.max(12, Math.min(r.bottom + margin, vh - ph - 12));
     }
     panel.style.top = `${top}px`;
-    panel.style.left = `${left}px`;
-    panel.style.width = `${panelW}px`;
   },
 
   /**
