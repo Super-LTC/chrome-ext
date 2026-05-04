@@ -3431,3 +3431,49 @@
 .icd10-evidence-panel__approve--on-pcc svg {
   color: #16a34a;
 }
+
+/* Approved-section PCC-diagnosis rows — faint green tint to signal
+   "this is on PCC, already billed" at a glance. Stays subtle so the
+   evidence chips still pop. */
+.icd10-sb__row--pcc {
+  background: #f0fdf4;
+}
+
+.icd10-sb__row--pcc:hover {
+  background: #dcfce7;
+}
+
+.icd10-sb__row--pcc.icd10-sb__row--selected {
+  background: #bbf7d0;
+}
+
+.icd10-sb__row--pcc.icd10-sb__row--selected::before {
+  background: #16a34a;
+}
+
+/* "Showing similar code X" banner shown when the focused leaf has zero
+   direct mentions but a sibling under the same base does — auto-swap
+   evidence with this banner explaining the swap. */
+.icd10-evidence-panel__similar-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 0 0 12px 0;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  color: #78350f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.icd10-evidence-panel__similar-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #f59e0b;
+}
+
+.icd10-evidence-panel__similar-banner-text strong {
+  font-weight: 700;
+}

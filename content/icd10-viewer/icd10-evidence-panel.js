@@ -416,32 +416,57 @@ const ICD10EvidencePanel = {
 
     const summaryHtml = this._buildSummaryHtml() || '';
 
-    // Filter to mentions for the focused leaf when one is set. The base group
-    // load returns annotations across all leaves under the base; rendering
-    // them all under a header that says "B96.89" misleads coders into thinking
-    // there's evidence for B96.89 when only B96.20 is documented.
+    // Filter to mentions for the focused leaf. When the focused leaf has
+    // zero direct mentions but a sibling under the same base does, auto-
+    // swap the evidence list to that sibling — surfaced via a banner so
+    // the user knows the evidence shown is for a similar code, not the
+    // one they clicked.
     const focused = this.selectedCode || '';
-    const focusedItems = focused
+    let effectiveCode = focused;
+    let autoSwap = null;
+    let focusedItems = focused
       ? this.items.filter(it => it.icd10Code === focused)
       : this.items;
+
+    if (focused && focusedItems.length === 0 && this.items.length > 0) {
+      const sibling = this._suggestDocumentedSibling(focused);
+      if (sibling) {
+        effectiveCode = sibling.code;
+        autoSwap = { from: focused, to: sibling.code, toDescription: sibling.description };
+        focusedItems = this.items.filter(it => it.icd10Code === sibling.code);
+      }
+    }
+
     const docGroups = this._groupByDocument(focusedItems);
     const uniqueDocCount = docGroups.length;
     const mentionCount = focusedItems.length;
 
-    let countHtml;
-    if (mentionCount === 0 && this.items.length > 0) {
-      // Focused leaf has no mentions, but the base group does — likely an
-      // alternate or an unmentioned specificity. Suggest a documented sibling
-      // (highest-confidence primary) so the coder can switch with one click.
-      const sibling = this._suggestDocumentedSibling(focused);
-      countHtml = `
-        <div class="icd10-evidence-panel__doc-count icd10-evidence-panel__doc-count--empty">
-          No direct mentions of <strong>${this._escapeHtml(focused)}</strong>.
-          ${sibling ? `Did you mean <!-- NO_TRACK: navigation; _selectCode emits its own icd10_code_clicked -->
-            <button type="button" class="icd10-evidence-panel__suggest-sibling" data-suggest-code="${this._escapeHtml(sibling.code)}" data-suggest-desc="${this._escapeHtml(sibling.description)}">${this._escapeHtml(sibling.code)}</button>?` : ''}
+    let bannerHtml = '';
+    if (autoSwap) {
+      bannerHtml = `
+        <div class="icd10-evidence-panel__similar-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <span class="icd10-evidence-panel__similar-banner-text">
+            Showing similar code <strong>${this._escapeHtml(autoSwap.to)}</strong> — no direct mentions of <strong>${this._escapeHtml(autoSwap.from)}</strong>.
+          </span>
         </div>
       `;
-    } else {
+    }
+
+    let countHtml = '';
+    if (mentionCount === 0 && this.items.length > 0 && !autoSwap) {
+      // Rare: focused has 0 mentions AND no sibling to auto-swap to.
+      // Show the honest "no evidence found" state with no suggestion.
+      countHtml = `
+        <div class="icd10-evidence-panel__doc-count icd10-evidence-panel__doc-count--empty">
+          No evidence found for <strong>${this._escapeHtml(focused)}</strong>.
+        </div>
+      `;
+    } else if (mentionCount > 0) {
       countHtml = `
         <div class="icd10-evidence-panel__doc-count">
           ${mentionCount} mention${mentionCount !== 1 ? 's' : ''} across ${uniqueDocCount} document${uniqueDocCount !== 1 ? 's' : ''}
@@ -452,6 +477,7 @@ const ICD10EvidencePanel = {
     const html = `
       ${this._renderDiagnosisHeader()}
       ${summaryHtml}
+      ${bannerHtml}
       ${countHtml}
       <div class="icd10-evidence-panel__list">
         ${docGroups.map(docGroup => this._renderDocumentGroup(docGroup)).join('')}
@@ -626,7 +652,11 @@ const ICD10EvidencePanel = {
       }
     }
 
-    const canQuery = !!this.onQuery && this.items && this.items.length > 0;
+    // Query is always available when the handler's wired. Coders may want
+    // to write a clarifying query even on codes with no Comprehend evidence
+    // (the most common reason: doc says "diabetes" but the chart didn't
+    // specify with/without complications — query the provider to clarify).
+    const canQuery = !!this.onQuery;
     const queryHtml = canQuery ? `
       <!-- NO_TRACK: query create flow tracks dx_query_created at submit time -->
       <button class="icd10-evidence-panel__query" data-action="query" title="Generate a physician query for this code">
@@ -978,13 +1008,20 @@ const ICD10EvidencePanel = {
     if (queryBtn) {
       queryBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        const payload = {
+          baseCode: this.selectedCode,
+          description: this.selectedDescription,
+          groupContext: this.groupContext,
+          items: this.items,
+        };
+        console.log('[ICD10EvidencePanel] Query click → onQuery payload:', {
+          hasHandler: typeof this.onQuery === 'function',
+          baseCode: payload.baseCode,
+          itemCount: payload.items?.length,
+          groupContext: payload.groupContext,
+        });
         if (typeof this.onQuery === 'function') {
-          this.onQuery({
-            baseCode: this.selectedCode,
-            description: this.selectedDescription,
-            groupContext: this.groupContext,
-            items: this.items,
-          });
+          this.onQuery(payload);
         }
       });
     }

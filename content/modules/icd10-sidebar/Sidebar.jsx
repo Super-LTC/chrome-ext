@@ -446,12 +446,13 @@ function LeafList({ baseCode, leaves, focusedLeafCode, stagedLeafSet, onSelectLe
   );
 }
 
-function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, evidenceChip }) {
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, evidenceChip, isPcc }) {
   const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
   if (row.rank != null) cls.push('icd10-sb__row--ranked');
   if (hidden) cls.push('icd10-sb__row--hidden');
+  if (isPcc) cls.push('icd10-sb__row--pcc');
   // Staged takes precedence over approved visually (it's the active in-flight state).
   if (staged) cls.push('icd10-sb__row--staged');
   else if (approved) cls.push('icd10-sb__row--approved');
@@ -531,7 +532,7 @@ function EvidenceChip({ exact, sibling }) {
     return h('span', {
       class: 'icd10-sb__ev-chip icd10-sb__ev-chip--empty',
       title: 'This approved code has no chart evidence in our extraction. Recheck after re-extraction or review documentation.',
-    }, 'no chart evidence');
+    }, 'no evidence found');
   }
   return h('span', { class: 'icd10-sb__ev-chips' },
     exact > 0 && h('span', {
@@ -711,6 +712,8 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
     const row = allRows(sections).find(r => r.key === selectedKey);
     const code = row?.code;
     if (!code) return;
+    // PCC-diagnosis rows are leaves themselves — never fire a leaf fetch.
+    if (row.kind === 'pccDiagnosis') return;
     if (leavesByCode.has(code)) return; // cached
     if (inFlightRef.current.has(code)) return; // in flight
     let cancelled = false;
@@ -810,6 +813,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         if (agg?.hasData) evidenceChip = { exact: agg.exact, sibling: agg.sibling };
       }
     }
+    const isPcc = row.kind === 'pccDiagnosis';
     const rowProps = {
       key: row.key,
       row,
@@ -822,14 +826,15 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       onUndismiss: opts.hidden ? handleUndismiss : undefined,
       dismissDisabled,
       evidenceChip,
+      isPcc,
     };
     const out = [h(Row, rowProps)];
 
     const leaves = leavesByCode.get(row.code);
     const isLoading = loadingCodes.has(row.code);
-    const shouldShowLeaves = leafExpandable && isSelected && !isHidden && (
-      // While loading, render the loading shell so the user sees something
-      // happen without flicker. Once loaded, only render if >1 leaf.
+    // PCC-diagnosis rows are leaves themselves — no nested leaf list to
+    // expand. Skip both the loading shell and any future leaves render.
+    const shouldShowLeaves = !isPcc && leafExpandable && isSelected && !isHidden && (
       (leaves == null && isLoading) || (leaves != null && leaves.length > 1)
     );
     if (shouldShowLeaves) {

@@ -875,9 +875,20 @@ const ICD10Viewer = {
    * @param {Object} payload - { baseCode, description, groupContext, items }
    */
   async _handleQuerySingle(payload) {
-    if (!payload || !payload.baseCode) return;
+    console.log('[ICD10Viewer] _handleQuerySingle called:', {
+      hasPayload: !!payload,
+      baseCode: payload?.baseCode,
+      itemCount: payload?.items?.length,
+      ctxPdpm: payload?.groupContext?.pdpmCategory,
+      ctxMdsItem: payload?.groupContext?.mdsItemCode,
+    });
+    if (!payload || !payload.baseCode) {
+      console.warn('[ICD10Viewer] Query bailed: missing baseCode');
+      return;
+    }
     if (!payload.items || payload.items.length === 0) {
       window.SuperToast?.show?.({ message: 'No evidence to attach yet — wait for mentions to load.', type: 'info' });
+      console.warn('[ICD10Viewer] Query bailed: empty items');
       return;
     }
     // Block when there's no PDPM signal at all — backend requires an mdsItem
@@ -888,6 +899,7 @@ const ICD10Viewer = {
         message: `No MDS item slot for ${payload.baseCode} — can't attach a query.`,
         type: 'warning',
       });
+      console.warn('[ICD10Viewer] Query bailed: no mdsItem and no pdpmCategory in groupContext', ctx);
       return;
     }
 
