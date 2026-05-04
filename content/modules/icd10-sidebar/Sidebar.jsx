@@ -123,6 +123,7 @@ function approvedRowsFromPccDiagnoses(approvedDiagnoses) {
       },
       pdpmCategory: dx.pdpmCategory || null,
       pdpmCategoryName: dx.pdpmCategoryName || null,
+      pdpmCategoryNumber: dx.pdpmCategoryNumber ?? null,
       pdpmPoints: dx.pdpmPoints,
       mdsItemCode: dx.mdsItemCode || null,
       // Backend's authoritative "is this queryable?" signal — true when

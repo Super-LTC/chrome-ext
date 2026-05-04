@@ -12,27 +12,35 @@ import { BatchReviewPage } from '../query-items/components/BatchReviewModal.jsx'
 
 /**
  * Build a solverResult-shaped item the backend understands.
- * - mdsItem: real Section-I slot (e.g. "I2900") when present, otherwise
- *   the I8000 composite convention used elsewhere in the codebase
- *   (e.g. "I8000:NTA:15"). For groups with no PDPM signal at all, the
- *   caller is expected to block the click before reaching here.
+ *
+ * mdsItem precedence (matches backend's POST /diagnosis-queries logic):
+ *   1. dx.mdsItemCode (real Section-I slot, e.g. "I2900")
+ *   2. `I8000:${pdpmCategory}:${pdpmCategoryNumber}` when both present
+ *      (e.g. "I8000:NTA:6") — the canonical I8000 fallback shape
+ *   3. legacy `I8000:${pdpmCategory}:${baseCode}` (e.g. "I8000:NTA:E11")
+ *      kept only as a final back-compat fallback for older API responses
+ *      that pre-date the pdpmCategoryNumber field. Backend may reject
+ *      this shape; caller is expected to send anyway and let backend
+ *      respond authoritatively (no FE pre-bail).
  */
 function buildSolverItem({ baseCode, description, groupContext, items }) {
   const mdsItemCode = groupContext?.mdsItemCode || null;
   const pdpmCategory = groupContext?.pdpmCategory || null;
   const pdpmCategoryName = groupContext?.pdpmCategoryName || null;
+  const pdpmCategoryNumber = groupContext?.pdpmCategoryNumber ?? null;
   const pdpmPoints = groupContext?.pdpmPoints;
 
-  // Resolve the MDS item handle backend requires.
   let mdsItem = mdsItemCode;
   if (!mdsItem) {
-    // I8000 fallback per backend convention. We don't have a numeric
-    // category index from v2 today; use the base code as the suffix so
-    // it's unique-per-attempt and human-readable in dx tables.
-    if (pdpmCategory === 'NTA' || pdpmCategory === 'SLP') {
+    if (pdpmCategory && pdpmCategoryNumber != null) {
+      // Canonical I8000 fallback — matches backend convention exactly.
+      mdsItem = `I8000:${pdpmCategory}:${pdpmCategoryNumber}`;
+    } else if (pdpmCategory === 'NTA' || pdpmCategory === 'SLP') {
+      // Legacy back-compat: older API responses without pdpmCategoryNumber.
       mdsItem = `I8000:${pdpmCategory}:${baseCode}`;
     } else {
-      // No MDS handle, no PDPM signal — caller should have blocked.
+      // No MDS handle, no PDPM signal — backend will likely 400, but FE
+      // sends anyway. Surfaces backend's authoritative rejection in the UI.
       mdsItem = `I8000:${baseCode}`;
     }
   }

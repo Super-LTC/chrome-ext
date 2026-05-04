@@ -457,6 +457,7 @@ const ICD10Viewer = {
       rationale: selection.rationale || null,
       pdpmCategory: selection.pdpmCategory || null,
       pdpmCategoryName: selection.pdpmCategoryName || null,
+      pdpmCategoryNumber: selection.pdpmCategoryNumber ?? null,
       pdpmPoints: selection.pdpmPoints,
       mdsItemCode: selection.mdsItemCode || null,
       // queryable flows through from PCC rows. undefined when unknown.
@@ -858,6 +859,8 @@ const ICD10Viewer = {
       groupName: row?.description || null,
       pdpmCategory: row?.pdpmCategory || null,
       pdpmCategoryName: row?.pdpmCategoryName || null,
+      pdpmCategoryNumber: row?.pdpmCategoryNumber ?? null,
+      pdpmPoints: row?.pdpmPoints,
       mdsItemCode: row?.mdsItemCode || null,
       // Authoritative queryable signal from backend (PCC rows only).
       // null/undefined for non-PCC rows; panel falls back to pdpm-presence.
