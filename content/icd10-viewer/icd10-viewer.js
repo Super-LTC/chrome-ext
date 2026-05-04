@@ -619,7 +619,7 @@ const ICD10Viewer = {
     try {
       // Dedup check
       if (this.stagedCodes.some(c => c.icd10Code === item.icd10Code)) {
-        this._syncEvidencePanelStaged();
+        ICD10EvidencePanel.markApproved(item.id);
         this._updateStagedBadge();
         this._refreshSidebarStaged();
         return;
@@ -665,9 +665,8 @@ const ICD10Viewer = {
         approvedBaseCodes: this._computeApprovedBaseCodes(),
       });
 
-      // Sync per-leaf staged set into the evidence panel so the [+ Add] →
-      // ✓ Added flip happens on the right row.
-      this._syncEvidencePanelStaged();
+      // Mark as added in evidence panel
+      ICD10EvidencePanel.markApproved(item.id);
 
       // Update staged count badge
       this._updateStagedBadge();
@@ -679,26 +678,16 @@ const ICD10Viewer = {
 
   /**
    * Undo a staged code — removes from local stagedCodes, refreshes sidebar +
-   * push button, and flips the evidence panel's per-leaf state back to [+ Add].
+   * push button, and flips the evidence panel back to "Add" state.
    */
   _handleUnstage(item) {
     if (!item || !item.icd10Code) return;
     const before = this.stagedCodes.length;
     this.stagedCodes = this.stagedCodes.filter(c => c.icd10Code !== item.icd10Code);
     if (this.stagedCodes.length === before) return; // wasn't staged
-    this._syncEvidencePanelStaged();
+    ICD10EvidencePanel.markUnapproved?.(item.id);
     this._updateStagedBadge();
     this._refreshSidebarStaged();
-  },
-
-  /**
-   * Push the current set of staged leaf codes into the evidence panel so its
-   * per-leaf [+ Add] / ✓ Added buttons reflect viewer state.
-   */
-  _syncEvidencePanelStaged() {
-    if (typeof ICD10EvidencePanel?.setStagedLeafCodes !== 'function') return;
-    const codes = (this.stagedCodes || []).map(c => c.icd10Code).filter(Boolean);
-    ICD10EvidencePanel.setStagedLeafCodes(codes);
   },
 
   _computeStagedBaseCodes() {
