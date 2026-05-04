@@ -792,10 +792,16 @@ const ICD10Viewer = {
   },
 
   /**
-   * Map of leaf icd10 code → { queryHistory, queryable, ... } pulled from
-   * approvedDiagnoses. Pushed to the panel so it can render the query-state
-   * chip / mute the Query button when the focused leaf has an outstanding
-   * query.
+   * Map of leaf icd10 code → { queryHistory, queryable, pdpm*, onPcc, ... }.
+   *
+   * Merges two sources so the panel sees query history regardless of whether
+   * the focused leaf is on PCC or not:
+   *   1. approvedDiagnoses — authoritative for PCC codes (carries queryable)
+   *   2. inline leaves[] across topRanked / approved / flatGroups — covers
+   *      every base group's leaves, including ones not on PCC (e.g. R47.01
+   *      with an outstanding query but not yet billed).
+   *
+   * PCC entries take precedence; inline-leaf data only fills gaps.
    */
   _computeApprovedDiagnosisMeta() {
     const map = new Map();
@@ -808,7 +814,45 @@ const ICD10Viewer = {
         pdpmCategoryName: d.pdpmCategoryName || null,
         pdpmCategoryNumber: d.pdpmCategoryNumber ?? null,
         mdsItemCode: d.mdsItemCode || null,
+        onPcc: true,
       });
+    }
+
+    // Walk every group's inline leaves[] and fold in queryHistory + pdpm
+    // metadata for any leaf the PCC pass didn't already cover.
+    const groupBuckets = [
+      ...(this.topRanked || []),
+      ...(this.approved || []),
+    ];
+    if (this.flatGroups && typeof this.flatGroups === 'object') {
+      for (const bucket of Object.values(this.flatGroups)) {
+        if (Array.isArray(bucket)) groupBuckets.push(...bucket);
+      }
+    }
+    for (const g of groupBuckets) {
+      for (const leaf of g?.leaves || []) {
+        if (!leaf?.code) continue;
+        const existing = map.get(leaf.code);
+        if (existing) {
+          // Don't overwrite PCC's authoritative fields; just fill missing
+          // queryHistory if the PCC entry lacked it (rare but possible).
+          if (!existing.queryHistory && leaf.queryHistory) {
+            existing.queryHistory = leaf.queryHistory;
+          }
+        } else {
+          map.set(leaf.code, {
+            queryHistory: leaf.queryHistory || null,
+            // queryable for non-PCC leaves: derive from mdsItemCode presence
+            // (matches backend's own definition). Falls back to pdpm presence.
+            queryable: !!leaf.mdsItemCode || !!leaf.pdpmCategory,
+            pdpmCategory: leaf.pdpmCategory || null,
+            pdpmCategoryName: leaf.pdpmCategoryName || null,
+            pdpmCategoryNumber: leaf.pdpmCategoryNumber ?? null,
+            mdsItemCode: leaf.mdsItemCode || null,
+            onPcc: false,
+          });
+        }
+      }
     }
     return map;
   },
