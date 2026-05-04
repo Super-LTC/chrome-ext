@@ -28,6 +28,12 @@ const ICD10EvidencePanel = {
   expandedDocItems: new Set(),
   approveLoading: false,
   isApproved: false,
+  // Per-leaf staged set, mirrored from the viewer's stagedCodes by leaf code.
+  // Used to render the per-leaf [+ Add] / ✓ Added (×) state in the leaf list.
+  stagedLeafCodes: null,
+  // Per-leaf in-flight set (leaf code → true). Lets the row show a spinner
+  // without blocking other leaves' buttons.
+  busyLeafCodes: null,
   selectedCode: null,
   selectedDescription: null,
   codeDropdownOpen: false,
@@ -62,6 +68,8 @@ const ICD10EvidencePanel = {
     this.expandedDocuments.clear();
     this.approveLoading = false;
     this.isApproved = false;
+    this.stagedLeafCodes = new Set();
+    this.busyLeafCodes = new Set();
     this.selectedCode = null;
     this.selectedDescription = null;
     this.codeDropdownOpen = false;
@@ -85,6 +93,10 @@ const ICD10EvidencePanel = {
     this.expandedDocItems.clear();
     this.approveLoading = false;
     this.isApproved = false;
+    // Preserve staged set across group switches — viewer owns staging, panel
+    // just mirrors. busyLeafCodes is per-render and cleared.
+    if (!(this.stagedLeafCodes instanceof Set)) this.stagedLeafCodes = new Set();
+    this.busyLeafCodes = new Set();
     this.isDismissed = !!groupContext?.dismissed;
     this.dismissBusy = false;
     this.codeDropdownOpen = false;
@@ -370,51 +382,14 @@ const ICD10EvidencePanel = {
     const code = this.selectedCode || '';
     const description = this.selectedDescription || '';
     const availableCodes = this._getAvailableCodes();
-    const hasMultipleCodes = availableCodes.length > 1;
+    const leafRows = this._buildLeafRows(availableCodes);
+    const stagedCount = leafRows.filter(r => r.staged).length;
+    const totalLeaves = leafRows.length;
 
-    let approveHtml = '';
-    if (this.isApproved) {
-      approveHtml = `
-        <!-- NO_TRACK: undo button — local state flip, no API call -->
-        <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--approved" data-action="unapprove" title="Click to remove (undo)">
-          <span class="icd10-evidence-panel__approve-default">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-            Added
-          </span>
-          <span class="icd10-evidence-panel__approve-hover">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-            Remove
-          </span>
-        </button>
-      `;
-    } else if (this.approveLoading) {
-      approveHtml = `
-        <!-- NO_TRACK: disabled loading state — no click handler -->
-        <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--loading" disabled>
-          <span class="icd10-evidence-panel__approve-spinner"></span>
-          Adding...
-        </button>
-      `;
-    } else {
-      approveHtml = `
-        <!-- NO_TRACK: dx_confirmed event fires from the confirmation flow on commit -->
-        <button class="icd10-evidence-panel__approve" data-action="approve">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          Add
-        </button>
-      `;
-    }
-
-    // Query button: only shown when we have items (i.e. detail has loaded) and
-    // a query handle (onQuery) is wired in.
-    const canDismiss = !!this.groupContext?.groupKey && !this.isApproved;
+    // Top-level Add button is gone — per-leaf [+ Add] in the leaf list owns it.
+    // Keep dismiss eligibility decoupled from per-leaf staging: a base group
+    // can be hidden whether or not any leaf was added.
+    const canDismiss = !!this.groupContext?.groupKey;
     const dismissBusy = this.dismissBusy;
     const dismissed = this.isDismissed;
     let dismissHtml = '';
@@ -470,69 +445,137 @@ const ICD10EvidencePanel = {
       </button>
     ` : '';
 
+    const counterHtml = totalLeaves > 0
+      ? `<span class="icd10-evidence-panel__leaf-counter" title="${stagedCount} of ${totalLeaves} leaves added this session">${stagedCount}/${totalLeaves} added</span>`
+      : '';
+
+    const leafListHtml = totalLeaves > 0
+      ? `<div class="icd10-evidence-panel__leaf-list" role="list">
+          ${leafRows.map(r => this._renderLeafRow(r)).join('')}
+        </div>`
+      : '';
+
     return `
       <div class="icd10-evidence-panel__header">
         <div class="icd10-evidence-panel__diagnosis-header">
           <div class="icd10-evidence-panel__diagnosis-top">
-            <div class="icd10-evidence-panel__code-selector ${hasMultipleCodes ? 'icd10-evidence-panel__code-selector--has-options' : ''}" data-action="toggle-codes">
-              <span class="icd10-evidence-panel__diagnosis-code">${this._escapeHtml(code)}</span>
-              ${hasMultipleCodes ? `
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="icd10-evidence-panel__code-chevron ${this.codeDropdownOpen ? 'icd10-evidence-panel__code-chevron--open' : ''}">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              ` : ''}
-            </div>
+            <span class="icd10-evidence-panel__diagnosis-code">${this._escapeHtml(code)}</span>
             <span class="icd10-evidence-panel__diagnosis-desc">${this._escapeHtml(description)}</span>
+            ${counterHtml}
           </div>
-          ${this.codeDropdownOpen ? (() => {
-            const filtered = this._filterCodes(availableCodes, this.codeSearchQuery).slice(0, 10);
-            const totalMatches = this._filterCodes(availableCodes, this.codeSearchQuery).length;
-            return `
-            <div class="icd10-evidence-panel__code-dropdown">
-              <input type="text" class="icd10-evidence-panel__code-search"
-                     data-action="code-search"
-                     placeholder="Search by code or name..."
-                     value="${this._escapeHtml(this.codeSearchQuery)}"
-                     autocomplete="off" />
-              ${filtered.length === 0 ? `
-                <div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
-                  <span class="icd10-evidence-panel__code-option-desc">No matches</span>
-                </div>
-              ` : filtered.map(opt => {
-                const cat = opt.pdpmCategory;
-                let badgeHtml = '';
-                if (cat) {
-                  const lower = cat.toLowerCase();
-                  const label = cat === 'NTA' && opt.pdpmPoints != null
-                    ? `NTA +${opt.pdpmPoints}`
-                    : cat === 'NURSING'
-                      ? 'NURS'
-                      : cat;
-                  badgeHtml = `<span class="icd10-evidence-panel__code-option-badge icd10-evidence-panel__code-option-badge--${lower}">${label}</span>`;
-                }
-                return `
-                <div class="icd10-evidence-panel__code-option ${opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : ''}"
-                     data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
-                  <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
-                  <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
-                  ${badgeHtml}
-                </div>
-              `;
-              }).join('')}
-              ${totalMatches > 10 ? `
-                <div class="icd10-evidence-panel__code-option-hint">
-                  Showing 10 of ${totalMatches} — refine search to narrow
-                </div>
-              ` : ''}
-            </div>
-            `;
-          })() : ''}
           <div class="icd10-evidence-panel__diagnosis-actions">
-            ${approveHtml}
             ${queryHtml}
             ${dismissHtml}
           </div>
+          ${leafListHtml}
         </div>
+      </div>
+    `;
+  },
+
+  /**
+   * Build leaf rows for the current group from _getAvailableCodes().
+   * Each row carries everything the per-row UI needs (badge label, staged
+   * state, busy state, focus state). Leaves with mentions in this.items sort
+   * first, then alphabetic.
+   */
+  _buildLeafRows(availableCodes) {
+    const staged = this.stagedLeafCodes instanceof Set ? this.stagedLeafCodes : new Set();
+    const busy = this.busyLeafCodes instanceof Set ? this.busyLeafCodes : new Set();
+    const evidenceCodes = new Set();
+    for (const it of this.items || []) if (it.icd10Code) evidenceCodes.add(it.icd10Code);
+
+    const rows = (availableCodes || []).map(opt => {
+      const code = opt.code;
+      const cat = opt.pdpmCategory || null;
+      let badgeLabel = null;
+      let badgeClass = null;
+      if (cat) {
+        badgeClass = cat.toLowerCase();
+        badgeLabel = cat === 'NTA' && opt.pdpmPoints != null
+          ? `NTA +${opt.pdpmPoints}`
+          : cat === 'NURSING' ? 'NURS' : cat;
+      }
+      return {
+        code,
+        description: opt.description || '',
+        badgeLabel,
+        badgeClass,
+        hasEvidence: evidenceCodes.has(code),
+        staged: staged.has(code),
+        busy: busy.has(code),
+        focused: code === this.selectedCode,
+      };
+    });
+
+    rows.sort((a, b) => {
+      if (a.hasEvidence !== b.hasEvidence) return a.hasEvidence ? -1 : 1;
+      return a.code.localeCompare(b.code);
+    });
+    return rows;
+  },
+
+  /**
+   * Render one leaf row. Click row body → focus (sets selectedCode for the
+   * evidence list highlight). Click button → stage/unstage that specific leaf.
+   */
+  _renderLeafRow(row) {
+    const cls = ['icd10-evidence-panel__leaf-row'];
+    if (row.focused) cls.push('icd10-evidence-panel__leaf-row--focused');
+    if (row.staged) cls.push('icd10-evidence-panel__leaf-row--staged');
+    if (!row.hasEvidence) cls.push('icd10-evidence-panel__leaf-row--no-evidence');
+
+    const badgeHtml = row.badgeLabel
+      ? `<span class="icd10-evidence-panel__leaf-badge icd10-evidence-panel__leaf-badge--${row.badgeClass}">${this._escapeHtml(row.badgeLabel)}</span>`
+      : '';
+
+    let btnHtml;
+    if (row.busy) {
+      btnHtml = `
+        <!-- NO_TRACK: disabled loading state — no click handler -->
+        <button class="icd10-evidence-panel__leaf-btn icd10-evidence-panel__leaf-btn--busy" disabled>
+          <span class="icd10-evidence-panel__approve-spinner"></span>
+        </button>`;
+    } else if (row.staged) {
+      btnHtml = `
+        <!-- NO_TRACK: per-leaf undo — local state flip, push button is the API surface -->
+        <button class="icd10-evidence-panel__leaf-btn icd10-evidence-panel__leaf-btn--staged"
+                data-leaf-undo="${this._escapeHtml(row.code)}"
+                data-leaf-desc="${this._escapeHtml(row.description)}"
+                title="Click to remove (undo)">
+          <span class="icd10-evidence-panel__leaf-btn-default">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Added
+          </span>
+          <span class="icd10-evidence-panel__leaf-btn-hover">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Remove
+          </span>
+        </button>`;
+    } else {
+      btnHtml = `
+        <!-- NO_TRACK: dx_confirmed event fires from the confirmation flow on commit -->
+        <button class="icd10-evidence-panel__leaf-btn icd10-evidence-panel__leaf-btn--add"
+                data-leaf-add="${this._escapeHtml(row.code)}"
+                data-leaf-desc="${this._escapeHtml(row.description)}"
+                title="Stage ${this._escapeHtml(row.code)} for push to PCC">
+          + Add
+        </button>`;
+    }
+
+    return `
+      <div class="${cls.join(' ')}" role="listitem"
+           data-leaf-focus="${this._escapeHtml(row.code)}"
+           data-leaf-focus-desc="${this._escapeHtml(row.description)}">
+        <span class="icd10-evidence-panel__leaf-code">${this._escapeHtml(row.code)}</span>
+        <span class="icd10-evidence-panel__leaf-desc" title="${this._escapeHtml(row.description)}">${this._escapeHtml(row.description)}</span>
+        ${badgeHtml}
+        ${btnHtml}
       </div>
     `;
   },
@@ -725,22 +768,37 @@ const ICD10EvidencePanel = {
     });
 
     // Approve button click
-    const approveBtn = this.container.querySelector('[data-action="approve"]');
-    if (approveBtn) {
-      approveBtn.addEventListener('click', (e) => {
+    // Per-leaf [+ Add] click — stage that specific leaf.
+    this.container.querySelectorAll('[data-leaf-add]').forEach(el => {
+      el.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._handleApprove();
+        const code = el.dataset.leafAdd;
+        const desc = el.dataset.leafDesc || '';
+        this._handleApprove(code, desc);
       });
-    }
+    });
 
-    // Unapprove (undo) click on the "Added" pill
-    const unapproveBtn = this.container.querySelector('[data-action="unapprove"]');
-    if (unapproveBtn) {
-      unapproveBtn.addEventListener('click', (e) => {
+    // Per-leaf undo (Added pill) — unstage that specific leaf.
+    this.container.querySelectorAll('[data-leaf-undo]').forEach(el => {
+      el.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._handleUnapprove();
+        const code = el.dataset.leafUndo;
+        const desc = el.dataset.leafDesc || '';
+        this._handleUnapprove(code, desc);
       });
-    }
+    });
+
+    // Click leaf row body (not the button) → focus that leaf for the
+    // evidence-list highlight. Mirrors the dropdown's old _selectCode flow.
+    this.container.querySelectorAll('[data-leaf-focus]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        // Don't focus when the click landed on a button inside the row.
+        if (e.target.closest('[data-leaf-add],[data-leaf-undo]')) return;
+        const code = el.dataset.leafFocus;
+        const desc = el.dataset.leafFocusDesc || '';
+        if (code && code !== this.selectedCode) this._selectCode(code, desc);
+      });
+    });
 
     // Query button click — hands off to the viewer's onQuery callback
     // with everything needed to build a single-item solverResult.
@@ -986,61 +1044,80 @@ const ICD10EvidencePanel = {
   },
 
   /**
-   * Handle approve button click - approves whatever code is currently shown
+   * Handle [+ Add] click on a leaf row — stages that specific leaf via the
+   * viewer's onApprove callback. Local busy flag drives the row spinner so
+   * other leaves remain clickable while one is in flight.
+   *
+   * @param {string} leafCode
+   * @param {string} leafDescription
    */
-  async _handleApprove() {
-    if (this.approveLoading || this.isApproved) return;
+  async _handleApprove(leafCode, leafDescription) {
+    if (!leafCode) return;
+    if (this.busyLeafCodes?.has(leafCode)) return;
+    if (this.stagedLeafCodes?.has(leafCode)) return;
 
-    this.approveLoading = true;
+    this.busyLeafCodes.add(leafCode);
     this.render();
 
     try {
-      // Construct an item with the selected code
+      // Borrow items[0] so the staged record carries an annotationId for the
+      // viewer's local list pruning. Viewer matches on icd10Code for dedup,
+      // so the borrowed id only affects which mention gets removed from the
+      // suggestion list — same behavior as the prior single-add flow.
       const baseItem = this.items[0] || {};
       const approveItem = {
         ...baseItem,
-        icd10Code: this.selectedCode,
-        description: this.selectedDescription
+        icd10Code: leafCode,
+        description: leafDescription,
       };
-
-      if (this.onApprove) {
-        await this.onApprove(approveItem);
-        this.isApproved = true;
-      }
+      if (this.onApprove) await this.onApprove(approveItem);
     } catch (error) {
-      console.error('ICD10EvidencePanel: Approve failed:', error);
+      console.error('ICD10EvidencePanel: Add failed:', error);
     } finally {
-      this.approveLoading = false;
+      this.busyLeafCodes?.delete(leafCode);
       this.render();
     }
   },
 
   /**
-   * Mark an item as approved (external call)
-   * @param {string} itemId - Item ID that was approved
+   * Handle undo (×) on a staged leaf — calls onUnapprove for that leaf.
+   * @param {string} leafCode
+   * @param {string} leafDescription
    */
-  markApproved(itemId) {
-    this.isApproved = true;
-    this.render();
-  },
+  _handleUnapprove(leafCode, leafDescription) {
+    if (!leafCode) return;
+    if (!this.stagedLeafCodes?.has(leafCode)) return;
 
-  markUnapproved(itemId) {
-    this.isApproved = false;
-    this.render();
-  },
-
-  _handleUnapprove() {
-    if (!this.isApproved) return;
     const baseItem = this.items[0] || {};
     const item = {
       ...baseItem,
-      icd10Code: this.selectedCode,
-      description: this.selectedDescription,
+      icd10Code: leafCode,
+      description: leafDescription,
     };
-    this.isApproved = false;
-    this.render();
     if (this.onUnapprove) this.onUnapprove(item);
+    // Viewer fires setStagedLeafCodes on its end; we don't optimistically flip
+    // here so a failed unstage doesn't leave the row in an inconsistent state.
   },
+
+  /**
+   * External call from the viewer: replace the staged-leaves Set when the
+   * viewer's stagedCodes array changes. Triggers a re-render so per-leaf
+   * buttons reflect the new state.
+   *
+   * @param {Iterable<string>} codes - leaf icd10 codes currently staged
+   */
+  setStagedLeafCodes(codes) {
+    this.stagedLeafCodes = new Set(codes || []);
+    this.render();
+  },
+
+  /**
+   * Back-compat shims. The old per-base markApproved/markUnapproved called
+   * by the viewer was replaced by setStagedLeafCodes. Keep these as no-ops
+   * so a stale viewer call doesn't crash.
+   */
+  markApproved() { /* no-op — viewer calls setStagedLeafCodes instead */ },
+  markUnapproved() { /* no-op — viewer calls setStagedLeafCodes instead */ },
 
   /**
    * Get currently selected item

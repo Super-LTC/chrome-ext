@@ -3070,3 +3070,178 @@
   }
 }
 
+
+/* ============================================================================
+ * Leaf list — per-leaf [+ Add] / ✓ Added rows. Replaces the old single-select
+ * code dropdown. Sits inside .icd10-evidence-panel__diagnosis-header below the
+ * actions row.
+ * ============================================================================ */
+
+.icd10-evidence-panel__leaf-counter {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--super-gray-600, #525252);
+  background: var(--super-gray-100, #f5f5f5);
+  border: 1px solid var(--super-gray-200, #e5e5e5);
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.icd10-evidence-panel__leaf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  border-top: 1px solid var(--super-gray-100, #f5f5f5);
+  padding-top: 10px;
+}
+
+.icd10-evidence-panel__leaf-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.icd10-evidence-panel__leaf-row:hover {
+  background: var(--super-gray-50, #fafafa);
+}
+
+.icd10-evidence-panel__leaf-row--focused {
+  background: #eef2ff;
+  border-color: var(--super-primary, #6366f1);
+}
+
+.icd10-evidence-panel__leaf-row--staged {
+  background: #f0fdf4;
+}
+
+.icd10-evidence-panel__leaf-row--staged.icd10-evidence-panel__leaf-row--focused {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
+.icd10-evidence-panel__leaf-row--no-evidence {
+  opacity: 0.7;
+}
+
+.icd10-evidence-panel__leaf-code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--super-gray-900, #171717);
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.icd10-evidence-panel__leaf-desc {
+  font-size: 13px;
+  color: var(--super-gray-700, #404040);
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icd10-evidence-panel__leaf-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.icd10-evidence-panel__leaf-badge--nta {
+  color: var(--super-primary-dark, #4338ca);
+  border-color: var(--super-primary, #6366f1);
+  background: #eef2ff;
+}
+
+.icd10-evidence-panel__leaf-badge--slp {
+  color: #0f766e;
+  border-color: #14b8a6;
+  background: #ccfbf1;
+}
+
+.icd10-evidence-panel__leaf-badge--nursing {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.icd10-evidence-panel__leaf-badge--section-i,
+.icd10-evidence-panel__leaf-badge--sectioni {
+  color: #6b21a8;
+  border-color: #a855f7;
+  background: #f3e8ff;
+}
+
+/* ---- Per-leaf action button ---- */
+
+.icd10-evidence-panel__leaf-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 76px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  border: 1px solid transparent;
+}
+
+.icd10-evidence-panel__leaf-btn--add {
+  background: white;
+  color: var(--super-primary, #6366f1);
+  border-color: var(--super-primary, #6366f1);
+}
+
+.icd10-evidence-panel__leaf-btn--add:hover {
+  background: #eef2ff;
+}
+
+.icd10-evidence-panel__leaf-btn--staged {
+  background: #16a34a;
+  color: white;
+  border-color: #16a34a;
+  position: relative;
+}
+
+.icd10-evidence-panel__leaf-btn--staged:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.icd10-evidence-panel__leaf-btn-default,
+.icd10-evidence-panel__leaf-btn-hover {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icd10-evidence-panel__leaf-btn-hover { display: none; }
+
+.icd10-evidence-panel__leaf-btn--staged:hover .icd10-evidence-panel__leaf-btn-default { display: none; }
+.icd10-evidence-panel__leaf-btn--staged:hover .icd10-evidence-panel__leaf-btn-hover { display: inline-flex; }
+
+.icd10-evidence-panel__leaf-btn--busy {
+  background: var(--super-gray-100, #f5f5f5);
+  color: var(--super-gray-500, #737373);
+  border-color: var(--super-gray-200, #e5e5e5);
+  cursor: default;
+}
