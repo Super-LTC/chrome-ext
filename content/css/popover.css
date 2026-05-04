@@ -3,7 +3,10 @@
    ============================================ */
 .super-popover {
   position: fixed;
-  z-index: 100000;
+  /* Higher than every application modal so the support / "?" popover and
+     any other body-level popovers render above. ICD-10 viewer is 100011,
+     qm-board 100000, etc. SuperModal (9999999) still wins. */
+  z-index: 2147483640;
   width: 380px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 100px);
