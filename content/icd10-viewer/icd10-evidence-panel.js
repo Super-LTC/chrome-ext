@@ -1182,10 +1182,16 @@ const ICD10EvidencePanel = {
   },
 
   /**
-   * Render a single dropdown row. Used for both primary and alternate codes;
-   * alternates get an amber `Alternate` chip and are always rendered into
-   * the alternates section of the dropdown so the visual placement does the
-   * other half of the disambiguation.
+   * Render a single dropdown row. Alternate rows live in the alternates
+   * section of the dropdown — the section header + amber background +
+   * full pdpm label tooltip carry the "lower-confidence" signal, so we
+   * don't need a per-row "Alternate" chip too.
+   *
+   * The inline pdpm badge shows the abbreviated form (NTA · 2pt) — the
+   * full category name lands in the title tooltip. This keeps the
+   * rows from blowing up horizontally when every alternate carries the
+   * same pdpmCategoryName (e.g. all 12 diabetes variants saying
+   * "Diabetes Mellitus").
    */
   _renderCodeOption(opt) {
     const isAlternate = opt.evidenceKind === 'alternate';
@@ -1193,13 +1199,14 @@ const ICD10EvidencePanel = {
     let badgeHtml = '';
     if (cat) {
       const lower = String(cat).toLowerCase().replace(/[^a-z]/g, '');
-      const label = _formatPdpmLabel(opt);
-      const tooltip = opt.pdpmCategoryName || cat;
-      badgeHtml = `<span class="icd10-evidence-panel__code-option-badge icd10-evidence-panel__code-option-badge--${lower}" title="${this._escapeHtml(tooltip)}">${this._escapeHtml(label)}</span>`;
+      const shortLabel = [
+        cat,
+        opt.pdpmPoints != null ? `${opt.pdpmPoints}pt` : null,
+      ].filter(Boolean).join(' · ');
+      const fullLabel = _formatPdpmLabel(opt);
+      const tooltip = fullLabel || cat;
+      badgeHtml = `<span class="icd10-evidence-panel__code-option-badge icd10-evidence-panel__code-option-badge--${lower}" title="${this._escapeHtml(tooltip)}">${this._escapeHtml(shortLabel)}</span>`;
     }
-    const altChip = isAlternate
-      ? `<span class="icd10-evidence-panel__code-option-alt-chip" title="Lower-confidence reading. Not directly documented.">Alternate</span>`
-      : '';
     const cls = [
       'icd10-evidence-panel__code-option',
       opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : '',
@@ -1210,7 +1217,6 @@ const ICD10EvidencePanel = {
            data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
         <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
         <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
-        ${altChip}
         ${badgeHtml}
       </div>
     `;

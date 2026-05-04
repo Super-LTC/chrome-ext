@@ -627,7 +627,10 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.4;
-  text-transform: uppercase;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icd10-evidence-panel__code-option-badge--nta {
@@ -3207,10 +3210,15 @@
   border-radius: 12px;
   border: 1px solid transparent;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   line-height: 1.4;
-  text-transform: uppercase;
+  /* Mixed case — pdpmCategory like "NTA" stays uppercase from the data;
+     pdpmCategoryName like "Diabetes Mellitus" stays in title case. */
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icd10-evidence-panel__diagnosis-badge--nta {
