@@ -545,33 +545,50 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
     if (row && onSelect) onSelect(buildSelectionPayload(row));
   }, [sections, selectedKey, validKeys, onSelect]);
 
+  // Track in-flight fetches in a ref so concurrent re-runs of this effect
+  // (driven by sections / staged set updates) don't double-fire requests.
+  // State-based dedupe doesn't work here: changing leavesByCode in deps
+  // re-runs the effect, which cancels the previous run, which means its
+  // `finally` skips clearing loading state — stuck spinner.
+  const inFlightRef = useRef(new Set());
+
   // Auto-fetch leaves for the selected row's base code. Cached after first
-  // fetch so re-selecting the same row is instant. Only fires when the
-  // sidebar has been wired with onExpandRow (otherwise tree mode is off).
+  // fetch so re-selecting the same row is instant. Loading-state clear is
+  // NOT gated on the cancelled flag — leaves updates are. Re-runs of this
+  // effect must always clear their own loading marker.
   useEffect(() => {
     if (!leafExpandable || !selectedKey) return;
     const row = allRows(sections).find(r => r.key === selectedKey);
     const code = row?.code;
     if (!code) return;
-    if (leavesByCode.has(code) || loadingCodes.has(code)) return;
+    if (leavesByCode.has(code)) return; // cached
+    if (inFlightRef.current.has(code)) return; // in flight
     let cancelled = false;
+    inFlightRef.current.add(code);
     setLoadingCodes(prev => new Set([...prev, code]));
     Promise.resolve(onExpandRow(code, row))
       .then(leaves => {
-        if (cancelled) return;
-        setLeavesByCode(prev => new Map(prev).set(code, leaves || []));
+        if (!cancelled) {
+          setLeavesByCode(prev => new Map(prev).set(code, leaves || []));
+        }
       })
       .catch(err => {
-        if (cancelled) return;
-        console.error('[Sidebar] leaf fetch failed:', err);
-        setLeavesByCode(prev => new Map(prev).set(code, []));
+        if (!cancelled) {
+          console.error('[Sidebar] leaf fetch failed:', err);
+          setLeavesByCode(prev => new Map(prev).set(code, []));
+        }
       })
       .finally(() => {
-        if (cancelled) return;
-        setLoadingCodes(prev => { const n = new Set(prev); n.delete(code); return n; });
+        inFlightRef.current.delete(code);
+        // Always clear the loading marker, even if a re-run cancelled us —
+        // the marker belongs to this code, not this closure.
+        setLoadingCodes(prev => {
+          if (!prev.has(code)) return prev;
+          const n = new Set(prev); n.delete(code); return n;
+        });
       });
     return () => { cancelled = true; };
-  }, [selectedKey, sections, leafExpandable, onExpandRow, leavesByCode, loadingCodes]);
+  }, [selectedKey, sections, leafExpandable, onExpandRow, leavesByCode]);
 
   const handleClick = (key) => {
     setSelectedKey(key);
