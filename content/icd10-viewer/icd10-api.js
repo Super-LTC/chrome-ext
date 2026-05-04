@@ -340,7 +340,11 @@ const ICD10API = {
 
     const endpoint = `/api/extension/patients/${encodeURIComponent(patientId)}/diagnoses?` +
       `facilityName=${encodeURIComponent(facilityName)}` +
-      `&orgSlug=${encodeURIComponent(orgSlug)}`;
+      `&orgSlug=${encodeURIComponent(orgSlug)}` +
+      // Backend ships exactEvidences/siblingEvidences per diagnosis when this
+      // flag is set. Older deployments will silently ignore it and return
+      // bare Diagnosis[] — frontend tolerates the absence.
+      `&withEvidences=1`;
 
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',

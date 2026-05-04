@@ -3237,3 +3237,168 @@
   border-color: #a855f7;
   background: #f3e8ff;
 }
+
+/* ============================================================================
+ * Alternate-reading codes — Comprehend's lower-confidence readings of a
+ * single text mention. Visually distinct from primary codes so a coder can
+ * tell at a glance that the code isn't directly documented.
+ * ============================================================================ */
+
+/* Disclosure toggle below the primary section in the dropdown */
+.icd10-evidence-panel__alts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: var(--super-gray-50, #fafafa);
+  border: none;
+  border-top: 1px solid var(--super-gray-200, #e5e5e5);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--super-gray-700, #404040);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.icd10-evidence-panel__alts-toggle:hover {
+  background: var(--super-gray-100, #f5f5f5);
+}
+
+.icd10-evidence-panel__alts-toggle svg {
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+  transition: transform 0.15s;
+  color: var(--super-gray-500, #737373);
+}
+
+.icd10-evidence-panel__alts-toggle--open svg {
+  transform: rotate(0deg);
+}
+
+/* Hint line under the alts toggle when expanded */
+.icd10-evidence-panel__alts-hint {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--super-gray-600, #525252);
+  font-style: italic;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+}
+
+/* Alternate row — amber accent. Distinguishes from primary visually. */
+.icd10-evidence-panel__code-option--alternate {
+  background: #fffbeb;
+}
+
+.icd10-evidence-panel__code-option--alternate:hover {
+  background: #fef3c7;
+}
+
+.icd10-evidence-panel__code-option--alternate.icd10-evidence-panel__code-option--selected {
+  background: #fde68a;
+}
+
+/* The "Alternate" chip rendered inline with each alt row */
+.icd10-evidence-panel__code-option-alt-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* "Add anyway" amber button used when the focused code is an alternate. */
+.icd10-evidence-panel__approve--alternate {
+  background: #f59e0b !important;
+  color: white !important;
+  border-color: #f59e0b !important;
+}
+
+.icd10-evidence-panel__approve--alternate:hover:not(:disabled) {
+  background: #d97706 !important;
+  border-color: #d97706 !important;
+}
+
+/* Empty-state mention count when focused leaf has zero direct mentions. */
+.icd10-evidence-panel__doc-count--empty {
+  color: var(--super-gray-700, #404040);
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-style: normal;
+}
+
+.icd10-evidence-panel__suggest-sibling {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--super-primary, #6366f1);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.icd10-evidence-panel__suggest-sibling:hover {
+  color: var(--super-primary-dark, #4338ca);
+}
+
+/* Approved-row evidence chips. Visual hierarchy is load-bearing — the
+   "direct" chip is prominent; "related" is muted; "no chart evidence" is
+   an amber hint. Lumping these together would let related-but-different
+   leaves look like confirmation of the approved code. */
+.icd10-sb__ev-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.icd10-sb__ev-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.icd10-sb__ev-chip--exact {
+  color: #065f46;
+  border-color: #10b981;
+  background: #d1fae5;
+}
+
+.icd10-sb__ev-chip--sibling {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  font-weight: 600;
+  font-size: 9px;
+}
+
+.icd10-sb__ev-chip--empty {
+  color: #92400e;
+  border-color: #f59e0b;
+  background: #fef3c7;
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+}

@@ -329,22 +329,39 @@ function LeafRow({ leaf, baseCode, focused, staged, onClick }) {
   if (focused) cls.push('icd10-sb__leaf--focused');
   if (staged) cls.push('icd10-sb__leaf--staged');
   const cat = leaf.pdpmCategory || null;
-  let badgeLabel = null, badgeClass = null;
+  let badgeLabel = null, badgeClass = null, badgeTooltip = null;
   if (cat) {
     badgeClass = cat.toLowerCase().replace(/[^a-z]/g, '');
+    // Inline badge stays abbreviated (sidebar is space-constrained); the
+    // full PDPM label including category name lands in the tooltip so a
+    // hover reveals "NURSING · 1pt · Hemiplegia/Hemiparesis."
     badgeLabel = cat === 'NTA' && leaf.pdpmPoints != null
       ? `NTA +${leaf.pdpmPoints}`
       : cat === 'NURSING' ? 'NURS' : cat === 'SECTION-I' ? 'I' : cat;
+    badgeTooltip = [
+      cat,
+      leaf.pdpmPoints != null ? `${leaf.pdpmPoints}pt` : null,
+      leaf.pdpmCategoryName,
+    ].filter(Boolean).join(' · ');
   }
+  // Row-level tooltip: leaf description + full PDPM line if any. Coders can
+  // hover any row in the tree to learn what the category is, no need to
+  // memorize.
+  const rowTooltip = badgeTooltip
+    ? `${leaf.description || ''}\n${badgeTooltip}`
+    : (leaf.description || '');
   return h('div', {
     class: cls.join(' '),
     onClick: () => onClick(baseCode, leaf),
-    title: leaf.description,
+    title: rowTooltip,
   },
     staged && h('span', { class: 'icd10-sb__leaf-check', 'aria-label': 'Staged' }, h(Icon, { name: 'check' })),
     h('span', { class: 'icd10-sb__leaf-code' }, leaf.code),
     h('span', { class: 'icd10-sb__leaf-desc' }, leaf.description || ''),
-    badgeLabel && h('span', { class: `icd10-sb__leaf-badge icd10-sb__leaf-badge--${badgeClass}` }, badgeLabel),
+    badgeLabel && h('span', {
+      class: `icd10-sb__leaf-badge icd10-sb__leaf-badge--${badgeClass}`,
+      title: badgeTooltip || undefined,
+    }, badgeLabel),
   );
 }
 
@@ -371,7 +388,7 @@ function LeafList({ baseCode, leaves, focusedLeafCode, stagedLeafSet, onSelectLe
   );
 }
 
-function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled }) {
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, evidenceChip }) {
   const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
@@ -421,6 +438,7 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
       b.nursing && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nursing' }, 'NURS'),
       b.sectionI && h('span', { class: 'icd10-sb__badge icd10-sb__badge--sectioni' }, 'I')
     ),
+    evidenceChip && h(EvidenceChip, evidenceChip),
     showDismiss && h('button', {
       type: 'button',
       class: 'icd10-sb__dismiss',
@@ -437,6 +455,35 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
       disabled: busy,
       onClick: handleUndo,
     }, 'Undo')
+  );
+}
+
+/**
+ * Per-row evidence chip for the Approved section. Renders the prototype's
+ * load-bearing visual distinction:
+ *   "{N} direct"  — emerald, prominent (exactEvidences from PCC diagnoses)
+ *   "+{M} related" — slate, muted, smaller (siblingEvidences)
+ *   "no chart evidence" — amber hint when both zero
+ * Lumping these together would re-introduce the same audit issue at the
+ * Approved layer (different leaf in the same family looking like
+ * confirmation of the approved code).
+ */
+function EvidenceChip({ exact, sibling }) {
+  if (!exact && !sibling) {
+    return h('span', {
+      class: 'icd10-sb__ev-chip icd10-sb__ev-chip--empty',
+      title: 'This approved code has no chart evidence in our extraction. Recheck after re-extraction or review documentation.',
+    }, 'no chart evidence');
+  }
+  return h('span', { class: 'icd10-sb__ev-chips' },
+    exact > 0 && h('span', {
+      class: 'icd10-sb__ev-chip icd10-sb__ev-chip--exact',
+      title: `${exact} direct mention${exact === 1 ? '' : 's'} of this specific code in the chart`,
+    }, `${exact} direct`),
+    sibling > 0 && h('span', {
+      class: 'icd10-sb__ev-chip icd10-sb__ev-chip--sibling',
+      title: `${sibling} mention${sibling === 1 ? '' : 's'} of a different leaf in the same family — supporting context, not direct`,
+    }, `+${sibling} related`)
   );
 }
 
@@ -465,7 +512,7 @@ function StaticHeader({ label, icon }) {
   );
 }
 
-export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false, onExpandRow = null, onSelectLeaf = null, stagedLeafCodes = null, focusedLeafCode = null }) {
+export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, approvedDiagnoses = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false, onExpandRow = null, onSelectLeaf = null, stagedLeafCodes = null, focusedLeafCode = null }) {
   const stagedSet = stagedBaseCodes instanceof Set ? stagedBaseCodes : new Set(stagedBaseCodes || []);
   const approvedSet = approvedBaseCodes instanceof Set ? approvedBaseCodes : new Set(approvedBaseCodes || []);
   const stagedLeafSet = stagedLeafCodes instanceof Set ? stagedLeafCodes : new Set(stagedLeafCodes || []);
@@ -654,12 +701,43 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const showOther = sections.other.length > 0;
   const showSpeculative = sections.speculative.length > 0;
 
+  // Build a base-code → { exact, sibling } map from approvedDiagnoses so
+  // each approved row in the sidebar can render evidence chips. The backend
+  // returns exactEvidences/siblingEvidences per diagnosis; aggregate across
+  // diagnoses sharing the same 3-char base. Skip when withEvidences was
+  // never fetched (older deployments) — chips just won't render.
+  const evidenceByBase = new Map();
+  if (Array.isArray(approvedDiagnoses)) {
+    for (const dx of approvedDiagnoses) {
+      const code = dx?.icd10Code || '';
+      if (code.length < 3) continue;
+      const base = code.substring(0, 3);
+      const exact = Array.isArray(dx.exactEvidences) ? dx.exactEvidences.length : 0;
+      const sibling = Array.isArray(dx.siblingEvidences) ? dx.siblingEvidences.length : 0;
+      // Only count when the response actually carried evidence arrays;
+      // undefined means "older API, skip chip rendering for this base."
+      const hasEvData = ('exactEvidences' in (dx || {})) || ('siblingEvidences' in (dx || {}));
+      if (!hasEvData) continue;
+      const cur = evidenceByBase.get(base) || { exact: 0, sibling: 0, hasData: false };
+      cur.exact += exact;
+      cur.sibling += sibling;
+      cur.hasData = true;
+      evidenceByBase.set(base, cur);
+    }
+  }
+
   // Helper: render Row + (optional) nested LeafList. Leaves auto-render only
   // for the selected row, and only when there's more than one leaf — a
   // single-leaf base is identical to the row itself, no nesting needed.
   const renderRowAndLeaves = (row, opts = {}) => {
     const isHidden = !!opts.hidden;
     const isSelected = opts.selected ?? (selectedKey === row.key);
+    // Evidence chip only on Approved-section rows (origin === 'approved').
+    // Other sections aren't about PCC state, so evidence counts don't apply.
+    const evidence = (row.origin === 'approved') ? evidenceByBase.get(row.code) : null;
+    const evidenceChip = evidence?.hasData
+      ? { exact: evidence.exact, sibling: evidence.sibling }
+      : null;
     const rowProps = {
       key: row.key,
       row,
@@ -671,6 +749,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       onDismiss: opts.hidden ? undefined : handleDismiss,
       onUndismiss: opts.hidden ? handleUndismiss : undefined,
       dismissDisabled,
+      evidenceChip,
     };
     const out = [h(Row, rowProps)];
 

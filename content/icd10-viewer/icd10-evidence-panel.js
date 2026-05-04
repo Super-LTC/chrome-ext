@@ -12,6 +12,26 @@ function _track(event, props) {
 }
 
 /**
+ * Build the human-readable PDPM label for a code-shaped object that has
+ * pdpmCategory + optional pdpmPoints + optional pdpmCategoryName. Examples:
+ *   { pdpmCategory: 'NTA', pdpmPoints: 1, pdpmCategoryName: 'Cirrhosis of Liver' }
+ *     → "NTA · 1pt · Cirrhosis of Liver"
+ *   { pdpmCategory: 'SLP', pdpmCategoryName: 'Acute Neurologic' }
+ *     → "SLP · Acute Neurologic"
+ *   { pdpmCategory: 'NURSING' }
+ *     → "NURSING"
+ * Returns '' if no category is set.
+ */
+function _formatPdpmLabel(o) {
+  if (!o || !o.pdpmCategory) return '';
+  return [
+    o.pdpmCategory,
+    o.pdpmPoints != null ? `${o.pdpmPoints}pt` : null,
+    o.pdpmCategoryName,
+  ].filter(Boolean).join(' · ');
+}
+
+/**
  * Evidence list render mode. Flip this to A/B between the two layouts:
  *   'chips' — wrap-flow rounded chips, one row of pages per document (dense)
  *   'full'  — stacked rows with the source excerpt under each page (verbose)
@@ -36,6 +56,9 @@ const ICD10EvidencePanel = {
   selectedDescription: null,
   codeDropdownOpen: false,
   codeSearchQuery: '',
+  // Whether the "alternate readings" section in the dropdown is expanded.
+  // Persists across renders within a group; resets on group switch.
+  alternatesExpanded: false,
   itemsLoading: false,
   itemsError: null,
   itemsRetry: null,
@@ -71,6 +94,7 @@ const ICD10EvidencePanel = {
     this.selectedDescription = null;
     this.codeDropdownOpen = false;
     this.codeSearchQuery = '';
+    this.alternatesExpanded = false;
     this.render();
   },
 
@@ -97,6 +121,7 @@ const ICD10EvidencePanel = {
     this.dismissBusy = false;
     this.codeDropdownOpen = false;
     this.codeSearchQuery = '';
+    this.alternatesExpanded = false;
     this.itemsLoading = false;
     this.itemsError = null;
     this.itemsRetry = null;
@@ -246,32 +271,66 @@ const ICD10EvidencePanel = {
         code: this.groupContext.groupCode,
         description: this.groupContext.groupName || this._getDescriptionForCode(this.groupContext.groupCode),
         pdpmCategory: null,
-        pdpmPoints: null
+        pdpmPoints: null,
+        pdpmCategoryName: null,
+        evidenceKind: 'primary',
       });
     }
 
-    // Collect unique codes from all items' options
+    // Collect unique codes from all items' options.
+    // Primary precedence: if a code appears as some annotation's icd10Code, it's
+    // primary even if it also shows up in another annotation's options[]. The
+    // backend's evidenceKind on the option entry encodes this; we still cross-
+    // check against icd10Code so back-compat with older annotations (no
+    // evidenceKind field) lands on the safe answer.
+    const primaryFromIcd10 = new Set(
+      (this.items || []).map(i => i.icd10Code).filter(Boolean)
+    );
+
     this.items.forEach(item => {
       if (item.options && item.options.length > 0) {
         item.options.forEach(opt => {
           if (!codeMap.has(opt.code)) {
+            // Trust evidenceKind when present; otherwise infer from whether
+            // the code shows up as a primary icd10Code anywhere.
+            const evidenceKind = opt.evidenceKind
+              || (primaryFromIcd10.has(opt.code) ? 'primary' : 'alternate');
             codeMap.set(opt.code, {
               code: opt.code,
               description: opt.description || '',
               pdpmCategory: opt.pdpmCategory ?? null,
-              pdpmPoints: opt.pdpmPoints
+              pdpmPoints: opt.pdpmPoints,
+              pdpmCategoryName: opt.pdpmCategoryName ?? null,
+              evidenceKind,
             });
+          } else {
+            // Already in map; if this entry says primary and what we have is
+            // alternate, upgrade. Never downgrade primary → alternate.
+            const existing = codeMap.get(opt.code);
+            if (opt.evidenceKind === 'primary' && existing.evidenceKind !== 'primary') {
+              existing.evidenceKind = 'primary';
+            }
           }
         });
       }
-      // Also add the item's own code
+      // Also add the item's own code (always primary).
       if (item.icd10Code && !codeMap.has(item.icd10Code)) {
         codeMap.set(item.icd10Code, {
           code: item.icd10Code,
           description: item.description || '',
           pdpmCategory: item.pdpmCategory ?? null,
-          pdpmPoints: item.pdpmPoints
+          pdpmPoints: item.pdpmPoints,
+          pdpmCategoryName: item.pdpmCategoryName ?? null,
+          evidenceKind: 'primary',
         });
+      } else if (item.icd10Code && codeMap.has(item.icd10Code)) {
+        // Upgrade to primary if it was first seen as an option somewhere.
+        const existing = codeMap.get(item.icd10Code);
+        if (existing.evidenceKind !== 'primary') existing.evidenceKind = 'primary';
+        // Prefer parent annotation's pdpmCategoryName if missing.
+        if (!existing.pdpmCategoryName && item.pdpmCategoryName) {
+          existing.pdpmCategoryName = item.pdpmCategoryName;
+        }
       }
     });
 
@@ -352,15 +411,44 @@ const ICD10EvidencePanel = {
     }
 
     const summaryHtml = this._buildSummaryHtml() || '';
-    const docGroups = this._groupByDocument(this.items);
+
+    // Filter to mentions for the focused leaf when one is set. The base group
+    // load returns annotations across all leaves under the base; rendering
+    // them all under a header that says "B96.89" misleads coders into thinking
+    // there's evidence for B96.89 when only B96.20 is documented.
+    const focused = this.selectedCode || '';
+    const focusedItems = focused
+      ? this.items.filter(it => it.icd10Code === focused)
+      : this.items;
+    const docGroups = this._groupByDocument(focusedItems);
     const uniqueDocCount = docGroups.length;
+    const mentionCount = focusedItems.length;
+
+    let countHtml;
+    if (mentionCount === 0 && this.items.length > 0) {
+      // Focused leaf has no mentions, but the base group does — likely an
+      // alternate or an unmentioned specificity. Suggest a documented sibling
+      // (highest-confidence primary) so the coder can switch with one click.
+      const sibling = this._suggestDocumentedSibling(focused);
+      countHtml = `
+        <div class="icd10-evidence-panel__doc-count icd10-evidence-panel__doc-count--empty">
+          No direct mentions of <strong>${this._escapeHtml(focused)}</strong>.
+          ${sibling ? `Did you mean <!-- NO_TRACK: navigation; _selectCode emits its own icd10_code_clicked -->
+            <button type="button" class="icd10-evidence-panel__suggest-sibling" data-suggest-code="${this._escapeHtml(sibling.code)}" data-suggest-desc="${this._escapeHtml(sibling.description)}">${this._escapeHtml(sibling.code)}</button>?` : ''}
+        </div>
+      `;
+    } else {
+      countHtml = `
+        <div class="icd10-evidence-panel__doc-count">
+          ${mentionCount} mention${mentionCount !== 1 ? 's' : ''} across ${uniqueDocCount} document${uniqueDocCount !== 1 ? 's' : ''}
+        </div>
+      `;
+    }
 
     const html = `
       ${this._renderDiagnosisHeader()}
       ${summaryHtml}
-      <div class="icd10-evidence-panel__doc-count">
-        ${this.items.length} mention${this.items.length !== 1 ? 's' : ''} across ${uniqueDocCount} document${uniqueDocCount !== 1 ? 's' : ''}
-      </div>
+      ${countHtml}
       <div class="icd10-evidence-panel__list">
         ${docGroups.map(docGroup => this._renderDocumentGroup(docGroup)).join('')}
       </div>
@@ -368,6 +456,29 @@ const ICD10EvidencePanel = {
 
     this.container.innerHTML = html;
     this._attachEventListeners();
+  },
+
+  /**
+   * Pick the highest-confidence primary leaf under the focused leaf's base
+   * code, used as a one-click "Did you mean…?" suggestion when a focused
+   * leaf has zero direct mentions. Returns null if nothing better exists.
+   */
+  _suggestDocumentedSibling(focusedCode) {
+    if (!focusedCode || focusedCode.length < 3) return null;
+    const base = focusedCode.substring(0, 3);
+    const seen = new Map(); // code → {code, description, confidence}
+    for (const it of this.items || []) {
+      const c = it.icd10Code;
+      if (!c || c === focusedCode) continue;
+      if (c.substring(0, 3) !== base) continue;
+      const conf = typeof it.confidence === 'number' ? it.confidence : 0;
+      const existing = seen.get(c);
+      if (!existing || conf > existing.confidence) {
+        seen.set(c, { code: c, description: it.description || '', confidence: conf });
+      }
+    }
+    if (seen.size === 0) return null;
+    return Array.from(seen.values()).sort((a, b) => b.confidence - a.confidence)[0];
   },
 
   /**
@@ -383,6 +494,7 @@ const ICD10EvidencePanel = {
     // Reflect "added" state from the session-wide staged set, so navigating
     // away and back to a leaf still shows ✓ Added correctly.
     const isFocusedStaged = this._isFocusedLeafStaged() || this.isApproved;
+    const isFocusedAlternate = this._isFocusedCodeAlternate(focusedMeta);
 
     let approveHtml = '';
     if (isFocusedStaged) {
@@ -410,6 +522,22 @@ const ICD10EvidencePanel = {
         <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--loading" disabled>
           <span class="icd10-evidence-panel__approve-spinner"></span>
           Adding...
+        </button>
+      `;
+    } else if (isFocusedAlternate) {
+      // Alternate codes (Comprehend's lower-confidence readings) shouldn't be
+      // staged without acknowledgment. Render an amber "Add anyway" instead
+      // of the default green Add — single click stages with a confirm prompt.
+      approveHtml = `
+        <!-- NO_TRACK: confirms first via window.confirm before firing onApprove -->
+        <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--alternate" data-action="approve-alternate"
+                title="This code isn't directly documented in any chart mention. Click to add anyway.">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          Add anyway
         </button>
       `;
     } else {
@@ -494,10 +622,12 @@ const ICD10EvidencePanel = {
     if (focusedMeta && focusedMeta.pdpmCategory) {
       const cat = focusedMeta.pdpmCategory;
       const lower = String(cat).toLowerCase().replace(/[^a-z]/g, '');
-      const label = cat === 'NTA' && focusedMeta.pdpmPoints != null
-        ? `NTA +${focusedMeta.pdpmPoints}`
-        : cat === 'NURSING' ? 'NURS' : cat === 'SECTION-I' ? 'I' : cat;
-      headerBadgeHtml = `<span class="icd10-evidence-panel__diagnosis-badge icd10-evidence-panel__diagnosis-badge--${lower}" title="${this._escapeHtml(focusedMeta.pdpmCategoryName || cat)}">${this._escapeHtml(label)}</span>`;
+      // Full label (e.g. "NTA · 1pt · Cirrhosis of Liver"). The header has
+      // room for the long form; coders shouldn't have to know what NTA-1
+      // category covers.
+      const label = _formatPdpmLabel(focusedMeta);
+      const tooltip = focusedMeta.pdpmCategoryName || cat;
+      headerBadgeHtml = `<span class="icd10-evidence-panel__diagnosis-badge icd10-evidence-panel__diagnosis-badge--${lower}" title="${this._escapeHtml(tooltip)}">${this._escapeHtml(label)}</span>`;
     }
 
     return `
@@ -516,44 +646,56 @@ const ICD10EvidencePanel = {
             <span class="icd10-evidence-panel__diagnosis-desc">${this._escapeHtml(description)}</span>
           </div>
           ${this.codeDropdownOpen ? (() => {
-            const filtered = this._filterCodes(availableCodes, this.codeSearchQuery).slice(0, 10);
-            const totalMatches = this._filterCodes(availableCodes, this.codeSearchQuery).length;
+            const q = this.codeSearchQuery;
+            const primaryAll = availableCodes.filter(c => c.evidenceKind !== 'alternate');
+            const alternateAll = availableCodes.filter(c => c.evidenceKind === 'alternate');
+            const primary = this._filterCodes(primaryAll, q);
+            const alternates = this._filterCodes(alternateAll, q);
+            // Auto-expand alternates when the user is searching and there are
+            // hits there — otherwise the search would feel broken.
+            const altsAutoExpand = q && alternates.length > 0;
+            const altsOpen = this.alternatesExpanded || altsAutoExpand;
+            const primaryShown = primary.slice(0, 10);
+            const altsShown = altsOpen ? alternates.slice(0, 10) : [];
             return `
             <div class="icd10-evidence-panel__code-dropdown">
               <input type="text" class="icd10-evidence-panel__code-search"
                      data-action="code-search"
                      placeholder="Search by code or name..."
-                     value="${this._escapeHtml(this.codeSearchQuery)}"
+                     value="${this._escapeHtml(q)}"
                      autocomplete="off" />
-              ${filtered.length === 0 ? `
+              ${primary.length === 0 && (alternates.length === 0 || !altsOpen) ? `
                 <div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
                   <span class="icd10-evidence-panel__code-option-desc">No matches</span>
                 </div>
-              ` : filtered.map(opt => {
-                const cat = opt.pdpmCategory;
-                let badgeHtml = '';
-                if (cat) {
-                  const lower = cat.toLowerCase();
-                  const label = cat === 'NTA' && opt.pdpmPoints != null
-                    ? `NTA +${opt.pdpmPoints}`
-                    : cat === 'NURSING'
-                      ? 'NURS'
-                      : cat;
-                  badgeHtml = `<span class="icd10-evidence-panel__code-option-badge icd10-evidence-panel__code-option-badge--${lower}">${label}</span>`;
-                }
-                return `
-                <div class="icd10-evidence-panel__code-option ${opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : ''}"
-                     data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
-                  <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
-                  <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
-                  ${badgeHtml}
-                </div>
-              `;
-              }).join('')}
-              ${totalMatches > 10 ? `
+              ` : ''}
+              ${primaryShown.map(opt => this._renderCodeOption(opt)).join('')}
+              ${primary.length > 10 ? `
                 <div class="icd10-evidence-panel__code-option-hint">
-                  Showing 10 of ${totalMatches} — refine search to narrow
+                  Showing 10 of ${primary.length} — refine search to narrow
                 </div>
+              ` : ''}
+              ${alternateAll.length > 0 ? `
+                <!-- NO_TRACK: pure UI disclosure toggle, no API call -->
+                <button type="button" class="icd10-evidence-panel__alts-toggle ${altsOpen ? 'icd10-evidence-panel__alts-toggle--open' : ''}"
+                        data-action="toggle-alternates"
+                        aria-expanded="${altsOpen}">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                  ${altsOpen ? 'Hide' : 'Show'} ${alternateAll.length} alternate reading${alternateAll.length === 1 ? '' : 's'}
+                </button>
+              ` : ''}
+              ${altsOpen && alternateAll.length > 0 ? `
+                <div class="icd10-evidence-panel__alts-hint">
+                  Comprehend's lower-confidence readings of the same text. Primary code is documented elsewhere.
+                </div>
+                ${altsShown.map(opt => this._renderCodeOption(opt)).join('')}
+                ${alternates.length > 10 ? `
+                  <div class="icd10-evidence-panel__code-option-hint">
+                    Showing 10 of ${alternates.length} — refine search to narrow
+                  </div>
+                ` : ''}
               ` : ''}
             </div>
             `;
@@ -755,10 +897,46 @@ const ICD10EvidencePanel = {
       });
     });
 
+    // "Did you mean {sibling}?" click — focuses the suggested documented leaf.
+    const siblingBtn = this.container.querySelector('[data-suggest-code]');
+    if (siblingBtn) {
+      // NO_TRACK: navigation only; _selectCode emits its own icd10_code_clicked
+      siblingBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const code = siblingBtn.dataset.suggestCode;
+        const desc = siblingBtn.dataset.suggestDesc || '';
+        this._selectCode(code, desc);
+      });
+    }
+
+    // Alternates section disclosure toggle
+    const altsToggle = this.container.querySelector('[data-action="toggle-alternates"]');
+    if (altsToggle) {
+      altsToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.alternatesExpanded = !this.alternatesExpanded;
+        this.render();
+        // Re-focus the search input so keyboard flow stays intact.
+        const input = this.container.querySelector('[data-action="code-search"]');
+        if (input) input.focus();
+      });
+    }
+
     // Approve button click
     const approveBtn = this.container.querySelector('[data-action="approve"]');
     if (approveBtn) {
       approveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._handleApprove();
+      });
+    }
+
+    // Alternate-add button click ("Add anyway") — same code path as normal
+    // Add. The amber styling + the "Add anyway" wording on the button is
+    // the warning; we trust the user to read what they clicked.
+    const approveAltBtn = this.container.querySelector('[data-action="approve-alternate"]');
+    if (approveAltBtn) {
+      approveAltBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._handleApprove();
       });
@@ -1003,6 +1181,41 @@ const ICD10EvidencePanel = {
   },
 
   /**
+   * Render a single dropdown row. Used for both primary and alternate codes;
+   * alternates get an amber `Alternate` chip and are always rendered into
+   * the alternates section of the dropdown so the visual placement does the
+   * other half of the disambiguation.
+   */
+  _renderCodeOption(opt) {
+    const isAlternate = opt.evidenceKind === 'alternate';
+    const cat = opt.pdpmCategory;
+    let badgeHtml = '';
+    if (cat) {
+      const lower = String(cat).toLowerCase().replace(/[^a-z]/g, '');
+      const label = _formatPdpmLabel(opt);
+      const tooltip = opt.pdpmCategoryName || cat;
+      badgeHtml = `<span class="icd10-evidence-panel__code-option-badge icd10-evidence-panel__code-option-badge--${lower}" title="${this._escapeHtml(tooltip)}">${this._escapeHtml(label)}</span>`;
+    }
+    const altChip = isAlternate
+      ? `<span class="icd10-evidence-panel__code-option-alt-chip" title="Lower-confidence reading. Not directly documented.">Alternate</span>`
+      : '';
+    const cls = [
+      'icd10-evidence-panel__code-option',
+      opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : '',
+      isAlternate ? 'icd10-evidence-panel__code-option--alternate' : '',
+    ].filter(Boolean).join(' ');
+    return `
+      <div class="${cls}"
+           data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
+        <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
+        <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
+        ${altChip}
+        ${badgeHtml}
+      </div>
+    `;
+  },
+
+  /**
    * Select a code from the dropdown (UI only, doesn't save)
    * @param {string} code - ICD-10 code
    * @param {string} description - Code description
@@ -1072,6 +1285,16 @@ const ICD10EvidencePanel = {
   setStagedLeafCodes(codes) {
     this.stagedLeafCodes = new Set(codes || []);
     this.render();
+  },
+
+  /**
+   * True iff the focused code is an alternate (Comprehend's lower-confidence
+   * reading) — i.e. it appears only in some annotation's options[] array,
+   * never as a primary icd10Code in this group's annotations. Caller passes
+   * the resolved focusedMeta so we don't recompute.
+   */
+  _isFocusedCodeAlternate(focusedMeta) {
+    return !!(focusedMeta && focusedMeta.evidenceKind === 'alternate');
   },
 
   /** True iff the currently focused leaf is in the session-staged set. */
