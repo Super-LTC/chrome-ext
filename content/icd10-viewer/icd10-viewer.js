@@ -430,6 +430,13 @@ const ICD10Viewer = {
       }
     );
 
+    // Push initial approved-leaf set into the panel so the very first
+    // group focus already knows which codes are on PCC. Staged set starts
+    // empty so the staged push is harmless.
+    if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
+      ICD10EvidencePanel.setApprovedLeafCodes(this._computeApprovedLeafCodes());
+    }
+
     console.log('[ICD10Viewer] All components initialized');
   },
 
@@ -723,17 +730,31 @@ const ICD10Viewer = {
     return set;
   },
 
+  /** Set of leaf icd10 codes already on PCC. Drives the panel's "On PCC"
+   * pill and prevents double-billing via the Add button. */
+  _computeApprovedLeafCodes() {
+    const set = new Set();
+    for (const d of this.approvedDiagnoses || []) {
+      if (d.icd10Code) set.add(d.icd10Code);
+    }
+    return set;
+  },
+
   _refreshSidebarStaged() {
     const leafSet = this._computeStagedLeafCodes();
+    const approvedLeafSet = this._computeApprovedLeafCodes();
     ICD10Sidebar.updateData({
       stagedBaseCodes: this._computeStagedBaseCodes(),
       approvedBaseCodes: this._computeApprovedBaseCodes(),
       stagedLeafCodes: leafSet,
     });
-    // Mirror into the evidence panel so the focused-leaf Add/Added state
-    // survives navigating away and back to the same leaf.
+    // Mirror into the evidence panel so the focused-leaf state survives
+    // navigation: staged → ✓ Added pill, on-PCC → "On PCC" disabled pill.
     if (typeof ICD10EvidencePanel?.setStagedLeafCodes === 'function') {
       ICD10EvidencePanel.setStagedLeafCodes(leafSet);
+    }
+    if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
+      ICD10EvidencePanel.setApprovedLeafCodes(approvedLeafSet);
     }
   },
 

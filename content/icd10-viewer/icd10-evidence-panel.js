@@ -52,6 +52,10 @@ const ICD10EvidencePanel = {
   // Add vs ✓ Added per the focused leaf even after the user navigates away
   // and back. Updated by setStagedLeafCodes (called from the viewer).
   stagedLeafCodes: null,
+  // Set of leaf icd10 codes already on PCC (from approvedDiagnoses). When
+  // the focused leaf is in here, the panel shows a disabled "On PCC" pill
+  // instead of an Add button — the code is already billed.
+  approvedLeafCodes: null,
   selectedCode: null,
   selectedDescription: null,
   codeDropdownOpen: false,
@@ -502,9 +506,25 @@ const ICD10EvidencePanel = {
     // away and back to a leaf still shows ✓ Added correctly.
     const isFocusedStaged = this._isFocusedLeafStaged() || this.isApproved;
     const isFocusedAlternate = this._isFocusedCodeAlternate(focusedMeta);
+    const isFocusedOnPcc = this._isFocusedLeafOnPcc();
 
     let approveHtml = '';
-    if (isFocusedStaged) {
+    if (isFocusedOnPcc) {
+      // Code is already on PCC — render a disabled "On PCC" pill so the
+      // user can't accidentally double-bill. Takes precedence over staged
+      // (staged should never coexist with on-PCC, but if it does the
+      // on-PCC truth wins).
+      approveHtml = `
+        <!-- NO_TRACK: read-only PCC indicator, no click handler -->
+        <span class="icd10-evidence-panel__approve icd10-evidence-panel__approve--on-pcc"
+              title="This code is already on PCC for this patient. To remove, edit the diagnosis list in PCC directly.">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          On PCC
+        </span>
+      `;
+    } else if (isFocusedStaged) {
       approveHtml = `
         <!-- NO_TRACK: undo button — local state flip, no API call -->
         <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--approved" data-action="unapprove" title="Click to remove (undo)">
@@ -561,7 +581,7 @@ const ICD10EvidencePanel = {
 
     // Query button: only shown when we have items (i.e. detail has loaded) and
     // a query handle (onQuery) is wired in.
-    const canDismiss = !!this.groupContext?.groupKey && !isFocusedStaged;
+    const canDismiss = !!this.groupContext?.groupKey && !isFocusedStaged && !isFocusedOnPcc;
     const dismissBusy = this.dismissBusy;
     const dismissed = this.isDismissed;
     let dismissHtml = '';
@@ -1241,6 +1261,9 @@ const ICD10EvidencePanel = {
    */
   async _handleApprove() {
     if (this.approveLoading || this._isFocusedLeafStaged() || this.isApproved) return;
+    // Belt-and-suspenders: render path already hides the Add button when
+    // on PCC, but a stale event listener shouldn't be able to double-bill.
+    if (this._isFocusedLeafOnPcc()) return;
 
     this.approveLoading = true;
     this.render();
@@ -1292,6 +1315,26 @@ const ICD10EvidencePanel = {
   setStagedLeafCodes(codes) {
     this.stagedLeafCodes = new Set(codes || []);
     this.render();
+  },
+
+  /**
+   * Push the set of leaf codes already on PCC (from approvedDiagnoses). When
+   * the focused leaf is in this set, the panel hides the Add button and
+   * renders a disabled "On PCC" pill instead — the code is already billed,
+   * staging it again would be a duplicate.
+   *
+   * @param {Iterable<string>} codes
+   */
+  setApprovedLeafCodes(codes) {
+    this.approvedLeafCodes = new Set(codes || []);
+    this.render();
+  },
+
+  /** True iff the focused leaf is already on PCC (in approvedDiagnoses). */
+  _isFocusedLeafOnPcc() {
+    if (!this.selectedCode) return false;
+    if (!(this.approvedLeafCodes instanceof Set)) return false;
+    return this.approvedLeafCodes.has(this.selectedCode);
   },
 
   /**

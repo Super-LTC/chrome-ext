@@ -3410,3 +3410,24 @@
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* "On PCC" disabled pill — replaces the Add button when the focused leaf
+   is already in approvedDiagnoses. Read-only signal; user can't double-bill
+   from the ext. To remove, they edit the diagnosis list in PCC directly. */
+.icd10-evidence-panel__approve--on-pcc {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 7px 14px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: default !important;
+}
+
+.icd10-evidence-panel__approve--on-pcc svg {
+  color: #16a34a;
+}
