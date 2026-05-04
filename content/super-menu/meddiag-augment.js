@@ -497,13 +497,30 @@ const MedDiagAugment = {
     this._activeCpBackdrop = backdrop;
     this._positionPanel(panel, anchorEl);
 
-    // Wire entry clicks
+    // Wire entry clicks. Don't close the timeline until the detail fetch
+    // resolves — replace the entry's content with a spinner during the
+    // fetch so the user gets immediate visual feedback.
     panel.querySelectorAll('[data-query-id]').forEach(el => {
-      el.addEventListener('click', (e) => {
+      el.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id = el.dataset.queryId;
-        this._closeAnchoredPanels();
-        this._showQueryDetails(id, null);
+        if (!id || this._entryFetching) return;
+        this._entryFetching = true;
+        const restore = this._setEntryLoading(el);
+        try {
+          if (typeof window.QueryAPI?.getQuery !== 'function') return;
+          if (typeof window.QueryDetailModal?.show !== 'function') return;
+          const query = await window.QueryAPI.getQuery(id);
+          if (!query) return;
+          this._closeAnchoredPanels();
+          window.QueryDetailModal.show(query, null, { showCodingStatus: false });
+        } catch (err) {
+          console.warn('[MedDiagAugment] failed to open query detail:', err);
+          window.SuperToast?.show?.({ message: 'Could not load query. Try again.', type: 'error' });
+        } finally {
+          this._entryFetching = false;
+          if (restore) restore();
+        }
       });
     });
     // Wire CTA
@@ -754,6 +771,30 @@ const MedDiagAugment = {
     return () => {
       chipEl.innerHTML = original;
       chipEl.style.pointerEvents = '';
+    };
+  },
+
+  /**
+   * Show a loading state on a timeline entry during its detail fetch.
+   * Mutes the row + replaces the dot with a spinner; preserves date/text
+   * so the user keeps context. Returns a restore function.
+   */
+  _setEntryLoading(entryEl) {
+    if (!entryEl) return null;
+    entryEl.classList.add('super-meddiag-q-entry--loading');
+    const dot = entryEl.querySelector('.super-meddiag-q-entry__dot');
+    let originalDot = null;
+    if (dot) {
+      originalDot = dot.cloneNode(true);
+      dot.outerHTML = `<span class="super-meddiag-q-entry__spinner"></span>`;
+    }
+    // Block other entry clicks while one is loading
+    entryEl.parentElement?.classList.add('super-meddiag-q-panel__list--locked');
+    return () => {
+      entryEl.classList.remove('super-meddiag-q-entry--loading');
+      const spinner = entryEl.querySelector('.super-meddiag-q-entry__spinner');
+      if (spinner && originalDot) spinner.replaceWith(originalDot);
+      entryEl.parentElement?.classList.remove('super-meddiag-q-panel__list--locked');
     };
   },
 

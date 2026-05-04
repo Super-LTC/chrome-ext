@@ -327,3 +327,26 @@
 .super-meddiag-q-panel__cta:hover {
   background: #4f46e5;
 }
+
+/* Timeline entry loading state — shown while we fetch the query detail
+   after a click, before opening QueryDetailModal. */
+.super-meddiag-q-entry--loading {
+  background: #f1f5f9;
+  cursor: wait;
+}
+
+.super-meddiag-q-entry__spinner {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border: 1.5px solid #cbd5e1;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: super-meddiag-spin 0.6s linear infinite;
+}
+
+.super-meddiag-q-panel__list--locked .super-meddiag-q-entry:not(.super-meddiag-q-entry--loading) {
+  pointer-events: none;
+  opacity: 0.5;
+}
