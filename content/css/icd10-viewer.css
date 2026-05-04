@@ -3198,3 +3198,42 @@
   border-color: #a855f7;
   background: #f3e8ff;
 }
+
+/* Header pdpm badge for the focused code — sits between the code pill and
+   the description so coders see the category without opening the dropdown. */
+.icd10-evidence-panel__diagnosis-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.icd10-evidence-panel__diagnosis-badge--nta {
+  color: var(--super-primary-dark, #4338ca);
+  border-color: var(--super-primary, #6366f1);
+  background: #eef2ff;
+}
+
+.icd10-evidence-panel__diagnosis-badge--slp {
+  color: #0f766e;
+  border-color: #14b8a6;
+  background: #ccfbf1;
+}
+
+.icd10-evidence-panel__diagnosis-badge--nursing {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.icd10-evidence-panel__diagnosis-badge--sectioni,
+.icd10-evidence-panel__diagnosis-badge--i {
+  color: #6b21a8;
+  border-color: #a855f7;
+  background: #f3e8ff;
+}

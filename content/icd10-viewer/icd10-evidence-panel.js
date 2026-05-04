@@ -470,6 +470,24 @@ const ICD10EvidencePanel = {
       </button>
     ` : '';
 
+    // Resolve the focused code's pdpm badge so it renders next to the code
+    // pill at the top — same info as the dropdown rows, but visible without
+    // opening the dropdown. Pull from items (the loaded mentions for this
+    // group) or fall back to the matching availableCodes entry.
+    const focusedMeta =
+      (this.items || []).find(it => it.icd10Code === code)
+      || availableCodes.find(c => c.code === code)
+      || null;
+    let headerBadgeHtml = '';
+    if (focusedMeta && focusedMeta.pdpmCategory) {
+      const cat = focusedMeta.pdpmCategory;
+      const lower = String(cat).toLowerCase().replace(/[^a-z]/g, '');
+      const label = cat === 'NTA' && focusedMeta.pdpmPoints != null
+        ? `NTA +${focusedMeta.pdpmPoints}`
+        : cat === 'NURSING' ? 'NURS' : cat === 'SECTION-I' ? 'I' : cat;
+      headerBadgeHtml = `<span class="icd10-evidence-panel__diagnosis-badge icd10-evidence-panel__diagnosis-badge--${lower}" title="${this._escapeHtml(focusedMeta.pdpmCategoryName || cat)}">${this._escapeHtml(label)}</span>`;
+    }
+
     return `
       <div class="icd10-evidence-panel__header">
         <div class="icd10-evidence-panel__diagnosis-header">
@@ -482,6 +500,7 @@ const ICD10EvidencePanel = {
                 </svg>
               ` : ''}
             </div>
+            ${headerBadgeHtml}
             <span class="icd10-evidence-panel__diagnosis-desc">${this._escapeHtml(description)}</span>
           </div>
           ${this.codeDropdownOpen ? (() => {

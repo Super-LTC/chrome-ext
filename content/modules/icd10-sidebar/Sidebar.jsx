@@ -70,6 +70,25 @@ function badgesFromGroup(g) {
   };
 }
 
+/**
+ * Category-priority for sidebar sorting. NTA first (Ricky's request),
+ * then SLP, then Nursing, then Section-I, then plain. Used as the primary
+ * sort key in Top Picks and Other so PDPM-relevant codes always cluster
+ * at the top of each section regardless of model rank.
+ */
+function categoryPriority(row) {
+  const cat = row?.pdpmCategory
+    || (row?.badges?.nta ? 'NTA' : null)
+    || (row?.badges?.slp ? 'SLP' : null)
+    || (row?.badges?.nursing ? 'NURSING' : null)
+    || (row?.badges?.sectionI ? 'SECTION-I' : null);
+  if (cat === 'NTA') return 0;
+  if (cat === 'SLP') return 1;
+  if (cat === 'NURSING') return 2;
+  if (cat === 'SECTION-I') return 3;
+  return 4;
+}
+
 function buildSections({ topRanked, approved, annotations, flatGroups }) {
   // v2: ranked groups have no annotations[]. Source of truth is pdpmCategory.
   // v1 fallback: derive from annotations.
@@ -101,7 +120,21 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
     group: g,
   });
 
-  const topPicks = (topRanked || []).map(g => enrichRanked(g, 't', 'topRanked'));
+  // Stable-sort within Top Picks by category priority, with rank as tiebreak.
+  // The ranker's order within a category is preserved, but NTA/SLP/Nursing
+  // codes float above plain rows. Resolves Ricky's "NTA at the top" ask.
+  const topPicks = (topRanked || [])
+    .map(g => enrichRanked(g, 't', 'topRanked'))
+    .map((r, idx) => ({ r, idx }))
+    .sort((a, b) => {
+      const pd = categoryPriority(a.r) - categoryPriority(b.r);
+      if (pd !== 0) return pd;
+      const ar = a.r.rank ?? 9999;
+      const br = b.r.rank ?? 9999;
+      if (ar !== br) return ar - br;
+      return a.idx - b.idx;
+    })
+    .map(x => x.r);
   const approvedRows = (approved || []).map(g => enrichRanked(g, 'a', 'approved'));
 
   // v2 pre-grouped path: render buckets directly, skip per-mention regrouping.
@@ -143,7 +176,14 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
       seen.add(r.code);
       return true;
     });
-    otherDeduped.sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+    // NTA/SLP/Nursing first inside Other (mirrors Top Picks priority sort);
+    // then most-mentioned, then alphabetic for stability.
+    otherDeduped.sort((a, b) => {
+      const pd = categoryPriority(a) - categoryPriority(b);
+      if (pd !== 0) return pd;
+      if (b.count !== a.count) return b.count - a.count;
+      return a.code.localeCompare(b.code);
+    });
 
     const speculative = (flatGroups.speculative || [])
       .map(g => flatToRow(g, 'speculative', 's'))
@@ -188,7 +228,12 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
         baseCode: g.baseCode,
         items: g.items,
       }))
-      .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+      .sort((a, b) => {
+        const pd = categoryPriority(a) - categoryPriority(b);
+        if (pd !== 0) return pd;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.code.localeCompare(b.code);
+      });
 
   return {
     topPicks,
