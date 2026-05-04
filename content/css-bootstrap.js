@@ -56,6 +56,7 @@ import udaModal from './css/uda-modal.css?inline';
 import qmBoard from './css/qm-board.css?inline';
 import twentyFourHourReport from './css/24hr-report.css?inline';
 import updateBanner from './css/update-banner.css?inline';
+import meddiagAugment from './css/meddiag-augment.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -90,6 +91,7 @@ const CSS_BUNDLE = [
   qmBoard,
   twentyFourHourReport,
   updateBanner,
+  meddiagAugment,
 ].join('\n\n');
 
 function injectCss() {

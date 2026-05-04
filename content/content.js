@@ -58,6 +58,7 @@ import './super-menu/facility-dashboard-view.js';
 import './super-menu/mds-view.js';
 import './super-menu/chat-view.js';
 import './super-menu/streaming.js';
+import './super-menu/meddiag-augment.js';
 import './super-menu/init.js';
 
 // 6.5. Load PDF.js library into content script scope

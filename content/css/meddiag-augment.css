@@ -1,0 +1,110 @@
+/* ============================================================================
+ * Med-Diag list page augmentation.
+ * Adds CP and Query columns to PCC's #meddiaglisting table.
+ * ============================================================================ */
+
+.super-meddiag-th {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  padding: 4px 6px !important;
+  background: inherit;
+}
+
+.super-meddiag-cell {
+  text-align: center;
+  vertical-align: middle;
+  padding: 4px 6px;
+}
+
+.super-meddiag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: #fafafa;
+  color: #404040;
+}
+
+.super-meddiag-chip__label {
+  letter-spacing: 0.01em;
+}
+
+/* ---- Care plan variants -------------------------------------------------- */
+
+.super-meddiag-chip--cp {
+  padding: 3px;
+  border: none;
+  background: transparent;
+}
+
+.super-meddiag-chip--cp-covered {
+  /* shield color carries the signal — no chip background needed */
+}
+
+.super-meddiag-chip--cp-partial {
+  /* same */
+}
+
+.super-meddiag-chip--cp-missing {
+  /* same */
+}
+
+.super-meddiag-chip--cp-none {
+  opacity: 0.55;
+}
+
+/* ---- Query variants ------------------------------------------------------ */
+
+.super-meddiag-chip--q-pending {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.super-meddiag-chip--q-pending:hover {
+  background: #fde68a;
+}
+
+.super-meddiag-chip--q-signed {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.super-meddiag-chip--q-signed:hover {
+  background: #e2e8f0;
+}
+
+.super-meddiag-chip--q-overdue {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.super-meddiag-chip--q-overdue:hover {
+  background: #fecaca;
+}
+
+.super-meddiag-chip--q-ready {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #4338ca;
+}
+
+.super-meddiag-chip--q-ready:hover {
+  background: #e0e7ff;
+}
+
+.super-meddiag-chip--q-none {
+  background: transparent;
+  border-color: transparent;
+  color: #a3a3a3;
+  font-weight: 400;
+}

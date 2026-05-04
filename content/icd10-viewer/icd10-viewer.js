@@ -1074,6 +1074,11 @@ const ICD10Viewer = {
               // Refetch diagnoses so the queryHistory chip flips from "no
               // chip" to "Query outstanding" without requiring a reload.
               this._refreshApprovedDiagnoses();
+              // Also refresh the underlying meddiag-listing page if it's
+              // augmented — its CP/Query columns share state with us.
+              if (typeof window.MedDiagAugment?.refreshNow === 'function') {
+                window.MedDiagAugment.refreshNow();
+              }
             }
           },
         }),
