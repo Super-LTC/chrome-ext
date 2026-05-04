@@ -2891,7 +2891,10 @@
    ============================================ */
 .super-popover {
   position: fixed;
-  z-index: 100000;
+  /* Higher than every application modal so support / "?" popovers and any
+     other body-level popovers render above. See super-components.css for
+     full z-stack rationale. */
+  z-index: 2147483640;
   width: 380px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 100px);
@@ -3276,7 +3279,10 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 100000;
+  /* Sits above every application modal (icd10-viewer 100011, qm-board
+     100000, care-plan 2147483646). See super-components.css for full
+     z-stack rationale. */
+  z-index: 2147483645;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3593,7 +3599,8 @@
   border: 1px solid var(--super-gray-200);
   border-radius: var(--super-radius);
   box-shadow: var(--super-shadow-lg);
-  z-index: 100000;
+  /* Above every application modal — see super-components.css. */
+  z-index: 2147483640;
   display: none;
   overflow: hidden;
 }
@@ -3724,7 +3731,9 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 100001;
+  /* Toasts must announce above every application modal — see
+     super-components.css for full z-stack rationale. */
+  z-index: 2147483647;
   display: flex;
   flex-direction: column;
   gap: 10px;
