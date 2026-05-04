@@ -627,7 +627,10 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.4;
-  text-transform: uppercase;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icd10-evidence-panel__code-option-badge--nta {
@@ -3070,3 +3073,468 @@
   }
 }
 
+
+/* ============================================================================
+ * Sidebar leaf tree — auto-expanded nested leaves under the selected row.
+ * No chevron, no manual toggle. Only renders when the base has 2+ leaves.
+ * Long leaf descriptions wrap to 2 lines max.
+ * ============================================================================ */
+
+.icd10-sb__leaves {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 6px 4px;
+  margin: 2px 8px 4px 24px;
+  border-left: 2px solid var(--super-primary, #6366f1);
+}
+
+.icd10-sb__leaves--loading,
+.icd10-sb__leaves--empty {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--super-gray-500, #737373);
+  font-style: italic;
+}
+
+.icd10-sb__leaf {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--super-gray-700, #404040);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.icd10-sb__leaf:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.icd10-sb__leaf--focused {
+  background: #e0e7ff;
+  color: var(--super-primary-dark, #4338ca);
+  font-weight: 500;
+}
+
+.icd10-sb__leaf--focused:hover {
+  background: #c7d2fe;
+}
+
+.icd10-sb__leaf--staged {
+  background: #f0fdf4;
+}
+
+.icd10-sb__leaf--staged.icd10-sb__leaf--focused {
+  background: #dcfce7;
+}
+
+.icd10-sb__leaf-check {
+  display: inline-flex;
+  align-items: center;
+  color: #16a34a;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.icd10-sb__leaf-code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--super-gray-900, #171717);
+  flex-shrink: 0;
+  min-width: 52px;
+  margin-top: 1px;
+}
+
+.icd10-sb__leaf--focused .icd10-sb__leaf-code {
+  color: var(--super-primary-dark, #4338ca);
+}
+
+.icd10-sb__leaf-desc {
+  flex: 1 1 auto;
+  /* Wrap up to 2 lines for long official ICD descriptions; clip after. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.icd10-sb__leaf-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.icd10-sb__leaf-badge--nta {
+  color: var(--super-primary-dark, #4338ca);
+  border-color: var(--super-primary, #6366f1);
+  background: #eef2ff;
+}
+
+.icd10-sb__leaf-badge--slp {
+  color: #0f766e;
+  border-color: #14b8a6;
+  background: #ccfbf1;
+}
+
+.icd10-sb__leaf-badge--nursing {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.icd10-sb__leaf-badge--sectioni,
+.icd10-sb__leaf-badge--i {
+  color: #6b21a8;
+  border-color: #a855f7;
+  background: #f3e8ff;
+}
+
+/* Header pdpm badge for the focused code — sits between the code pill and
+   the description so coders see the category without opening the dropdown. */
+.icd10-evidence-panel__diagnosis-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  /* Mixed case — pdpmCategory like "NTA" stays uppercase from the data;
+     pdpmCategoryName like "Diabetes Mellitus" stays in title case. */
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icd10-evidence-panel__diagnosis-badge--nta {
+  color: var(--super-primary-dark, #4338ca);
+  border-color: var(--super-primary, #6366f1);
+  background: #eef2ff;
+}
+
+.icd10-evidence-panel__diagnosis-badge--slp {
+  color: #0f766e;
+  border-color: #14b8a6;
+  background: #ccfbf1;
+}
+
+.icd10-evidence-panel__diagnosis-badge--nursing {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.icd10-evidence-panel__diagnosis-badge--sectioni,
+.icd10-evidence-panel__diagnosis-badge--i {
+  color: #6b21a8;
+  border-color: #a855f7;
+  background: #f3e8ff;
+}
+
+/* ============================================================================
+ * Alternate-reading codes — Comprehend's lower-confidence readings of a
+ * single text mention. Visually distinct from primary codes so a coder can
+ * tell at a glance that the code isn't directly documented.
+ * ============================================================================ */
+
+/* Disclosure toggle below the primary section in the dropdown */
+.icd10-evidence-panel__alts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: var(--super-gray-50, #fafafa);
+  border: none;
+  border-top: 1px solid var(--super-gray-200, #e5e5e5);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--super-gray-700, #404040);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.icd10-evidence-panel__alts-toggle:hover {
+  background: var(--super-gray-100, #f5f5f5);
+}
+
+.icd10-evidence-panel__alts-toggle svg {
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+  transition: transform 0.15s;
+  color: var(--super-gray-500, #737373);
+}
+
+.icd10-evidence-panel__alts-toggle--open svg {
+  transform: rotate(0deg);
+}
+
+/* Hint line under the alts toggle when expanded */
+.icd10-evidence-panel__alts-hint {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--super-gray-600, #525252);
+  font-style: italic;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+}
+
+/* Alternate row — amber accent. Distinguishes from primary visually. */
+.icd10-evidence-panel__code-option--alternate {
+  background: #fffbeb;
+}
+
+.icd10-evidence-panel__code-option--alternate:hover {
+  background: #fef3c7;
+}
+
+.icd10-evidence-panel__code-option--alternate.icd10-evidence-panel__code-option--selected {
+  background: #fde68a;
+}
+
+/* The "Alternate" chip rendered inline with each alt row */
+.icd10-evidence-panel__code-option-alt-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* "Add anyway" amber button used when the focused code is an alternate. */
+.icd10-evidence-panel__approve--alternate {
+  background: #f59e0b !important;
+  color: white !important;
+  border-color: #f59e0b !important;
+}
+
+.icd10-evidence-panel__approve--alternate:hover:not(:disabled) {
+  background: #d97706 !important;
+  border-color: #d97706 !important;
+}
+
+/* Empty-state mention count when focused leaf has zero direct mentions. */
+.icd10-evidence-panel__doc-count--empty {
+  color: var(--super-gray-700, #404040);
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-style: normal;
+}
+
+.icd10-evidence-panel__suggest-sibling {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--super-primary, #6366f1);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.icd10-evidence-panel__suggest-sibling:hover {
+  color: var(--super-primary-dark, #4338ca);
+}
+
+/* Approved-row evidence chips. Visual hierarchy is load-bearing — the
+   "direct" chip is prominent; "related" is muted; "no chart evidence" is
+   an amber hint. Lumping these together would let related-but-different
+   leaves look like confirmation of the approved code. */
+.icd10-sb__ev-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.icd10-sb__ev-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.icd10-sb__ev-chip--exact {
+  color: #065f46;
+  border-color: #10b981;
+  background: #d1fae5;
+}
+
+.icd10-sb__ev-chip--sibling {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  font-weight: 600;
+  font-size: 9px;
+}
+
+.icd10-sb__ev-chip--empty {
+  color: #92400e;
+  border-color: #f59e0b;
+  background: #fef3c7;
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* "On PCC" disabled pill — replaces the Add button when the focused leaf
+   is already in approvedDiagnoses. Read-only signal; user can't double-bill
+   from the ext. To remove, they edit the diagnosis list in PCC directly. */
+.icd10-evidence-panel__approve--on-pcc {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 7px 14px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: default !important;
+}
+
+.icd10-evidence-panel__approve--on-pcc svg {
+  color: #16a34a;
+}
+
+/* Approved-section PCC-diagnosis rows — faint green tint to signal
+   "this is on PCC, already billed" at a glance. Stays subtle so the
+   evidence chips still pop. */
+.icd10-sb__row--pcc {
+  background: #f0fdf4;
+}
+
+.icd10-sb__row--pcc:hover {
+  background: #dcfce7;
+}
+
+.icd10-sb__row--pcc.icd10-sb__row--selected {
+  background: #bbf7d0;
+}
+
+.icd10-sb__row--pcc.icd10-sb__row--selected::before {
+  background: #16a34a;
+}
+
+/* "Showing similar code X" banner shown when the focused leaf has zero
+   direct mentions but a sibling under the same base does — auto-swap
+   evidence with this banner explaining the swap. */
+.icd10-evidence-panel__similar-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 0 0 12px 0;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  color: #78350f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.icd10-evidence-panel__similar-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #f59e0b;
+}
+
+.icd10-evidence-panel__similar-banner-text strong {
+  font-weight: 700;
+}
+
+/* Muted Query button — backend's `queryable: false` signal. Still clickable
+   so a coder can ask anyway; backend has the final say at submit. */
+.icd10-evidence-panel__query--muted {
+  opacity: 0.55;
+  border-color: var(--super-gray-300, #d4d4d4) !important;
+  color: var(--super-gray-600, #525252) !important;
+}
+
+.icd10-evidence-panel__query--muted:hover:not(:disabled) {
+  opacity: 0.8;
+  background: var(--super-gray-50, #fafafa);
+}
+
+/* Query-history chips on PCC-diagnosis rows. Outstanding takes priority
+   visually (amber); recently-signed is muted slate. Older signed history
+   gets no chip — keeps the rows clean for codes where re-querying is
+   appropriate. */
+.icd10-sb__qh-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.icd10-sb__qh-chip-count {
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 1px;
+}
+
+.icd10-sb__qh-chip--out {
+  color: #92400e;
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
+.icd10-sb__qh-chip--signed {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+/* "View existing query" variant of the panel Query button — paper-airplane
+   icon, amber theming so it reads as "look at the query that's already
+   on the way" rather than "start a new one". */
+.icd10-evidence-panel__query--view {
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+  background: #fffbeb !important;
+  opacity: 1 !important;
+}
+
+.icd10-evidence-panel__query--view:hover:not(:disabled) {
+  background: #fef3c7 !important;
+}

@@ -493,6 +493,19 @@ function initSuperChat() {
   // Inject AI Code button on Med Diag pages
   injectAICodeButton();
 
+  // Augment the meddiag listing table with CP + Query columns
+  if (window.MedDiagAugment?.init) {
+    const urlPid = new URLSearchParams(window.location.search).get('ESOLclientid');
+    const ctxPid = (typeof getChatPatientId === 'function') ? getChatPatientId() : null;
+    const facName = (typeof getChatFacilityInfo === 'function') ? getChatFacilityInfo() : '';
+    const orgInfo = (typeof getOrg === 'function') ? getOrg() : null;
+    window.MedDiagAugment.init({
+      patientId: urlPid || ctxPid,
+      facilityName: facName || '',
+      orgSlug: orgInfo?.org || '',
+    });
+  }
+
   // Inject ARD Estimate links on MDS list page
   injectMdsEstimateLinks();
 
@@ -592,6 +605,19 @@ const chatUrlObserver = new MutationObserver(() => {
 
     // Re-inject AI Code button if navigated to Med Diag page
     injectAICodeButton();
+
+    // Re-init meddiag augment if patient or page changed
+    if (window.MedDiagAugment?.init) {
+      const urlPid = new URLSearchParams(window.location.search).get('ESOLclientid');
+      const ctxPid = (typeof getChatPatientId === 'function') ? getChatPatientId() : null;
+      const facName = (typeof getChatFacilityInfo === 'function') ? getChatFacilityInfo() : '';
+      const orgInfo = (typeof getOrg === 'function') ? getOrg() : null;
+      window.MedDiagAugment.init({
+        patientId: urlPid || ctxPid,
+        facilityName: facName || '',
+        orgSlug: orgInfo?.org || '',
+      });
+    }
   }
 });
 

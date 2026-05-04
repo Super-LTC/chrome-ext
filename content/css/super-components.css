@@ -7,7 +7,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999999;
+  /* Sits above every application modal (icd10-viewer 100011, qm-board
+     100000, care-plan 2147483646, uda 2147483600, update-banner
+     2147483640) so SuperModal-based detail dialogs always render on top.
+     Toasts (2147483647) still announce above SuperModal — that's
+     intentional, status messages should never be obscured. */
+  z-index: 2147483645;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -334,7 +339,11 @@
   border: 1px solid var(--super-gray-200);
   border-radius: var(--super-radius);
   box-shadow: var(--super-shadow-lg);
-  z-index: 100000;
+  /* Higher than every application modal (icd10-viewer is 100011, qm-board
+     100000, etc.) so dropdowns rendered inside those modals show above
+     their parent container. SuperModal (9999999) still wins for the
+     dropdown-on-top-of-modal case. */
+  z-index: 2147483640;
   display: none;
   overflow: hidden;
 }
@@ -465,7 +474,11 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 100001;
+  /* Toasts must announce above every application modal — including
+     SuperModal (9999999), the ICD-10 viewer (100011), care-plan
+     (2147483646), QM Board, etc. Use the max safe value so toasts
+     are always reachable as the topmost UI layer. */
+  z-index: 2147483647;
   display: flex;
   flex-direction: column;
   gap: 10px;

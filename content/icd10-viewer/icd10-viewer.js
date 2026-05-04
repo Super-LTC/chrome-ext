@@ -397,7 +397,8 @@ const ICD10Viewer = {
       (payload) => this._handleQuerySingle(payload),
       (item) => this._handleUnstage(item),
       (groupKey, row) => this._handleDismiss(groupKey, row),
-      (groupKey, row) => this._handleUndismiss(groupKey, row)
+      (groupKey, row) => this._handleUndismiss(groupKey, row),
+      (queryId) => this._showQueryDetails(queryId),
     );
 
     // Initialize PDF viewer
@@ -417,14 +418,28 @@ const ICD10Viewer = {
         counts: this.counts,
         stagedBaseCodes: this._computeStagedBaseCodes(),
         approvedBaseCodes: this._computeApprovedBaseCodes(),
+        stagedLeafCodes: this._computeStagedLeafCodes(),
       },
       (selection) => this._handleSidebarSelection(selection),
       {
         onDismiss: (groupKey, row) => this._handleDismiss(groupKey, row),
         onUndismiss: (groupKey, row) => this._handleUndismiss(groupKey, row),
+        onExpandRow: (baseCode, row) => this._fetchLeavesForBase(baseCode),
+        onSelectLeaf: (baseCode, leafCode, leafDescription, row) =>
+          this._handleSidebarLeafSelect(baseCode, leafCode, leafDescription, row),
         dismissDisabled: this._dismissDisabled === true,
       }
     );
+
+    // Push initial approved-leaf set + queryHistory meta into the panel so
+    // the very first group focus already knows which codes are on PCC and
+    // which have outstanding queries. Staged set starts empty.
+    if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
+      ICD10EvidencePanel.setApprovedLeafCodes(this._computeApprovedLeafCodes());
+    }
+    if (typeof ICD10EvidencePanel?.setApprovedDiagnosisMeta === 'function') {
+      ICD10EvidencePanel.setApprovedDiagnosisMeta(this._computeApprovedDiagnosisMeta());
+    }
 
     console.log('[ICD10Viewer] All components initialized');
   },
@@ -446,8 +461,11 @@ const ICD10Viewer = {
       rationale: selection.rationale || null,
       pdpmCategory: selection.pdpmCategory || null,
       pdpmCategoryName: selection.pdpmCategoryName || null,
+      pdpmCategoryNumber: selection.pdpmCategoryNumber ?? null,
       pdpmPoints: selection.pdpmPoints,
       mdsItemCode: selection.mdsItemCode || null,
+      // queryable flows through from PCC rows. undefined when unknown.
+      queryable: selection.queryable,
     };
 
     // Sequence guard so a slow earlier fetch can't clobber the latest selection.
@@ -656,6 +674,7 @@ const ICD10Viewer = {
       }
 
       // Update sidebar with new data
+      const leafSet = this._computeStagedLeafCodes();
       ICD10Sidebar.updateData({
         topRanked: this.topRanked,
         approved: this.approved,
@@ -663,9 +682,12 @@ const ICD10Viewer = {
         approvedDiagnoses: this.approvedDiagnoses,
         stagedBaseCodes: this._computeStagedBaseCodes(),
         approvedBaseCodes: this._computeApprovedBaseCodes(),
+        stagedLeafCodes: leafSet,
       });
 
-      // Mark as added in evidence panel
+      // Push staged set into the panel so per-leaf Add/Added state survives
+      // navigation. markApproved also flips the legacy isApproved flag.
+      ICD10EvidencePanel.setStagedLeafCodes?.(leafSet);
       ICD10EvidencePanel.markApproved(item.id);
 
       // Update staged count badge
@@ -708,11 +730,274 @@ const ICD10Viewer = {
     return set;
   },
 
+  /** Set of leaf icd10 codes currently staged this session (for sidebar ✓). */
+  _computeStagedLeafCodes() {
+    const set = new Set();
+    for (const c of this.stagedCodes || []) if (c.icd10Code) set.add(c.icd10Code);
+    return set;
+  },
+
+  /**
+   * Open the query-detail modal for an existing pending/sent query.
+   * Reuses the existing QueryDetailModal — same surface coders see when
+   * they click into a query elsewhere in the extension.
+   */
+  async _showQueryDetails(queryId) {
+    if (!queryId) return;
+    if (typeof window.QueryAPI?.getQuery !== 'function') {
+      console.warn('[ICD10Viewer] QueryAPI.getQuery not available');
+      return;
+    }
+    if (typeof window.QueryDetailModal?.show !== 'function') {
+      console.warn('[ICD10Viewer] QueryDetailModal not available');
+      return;
+    }
+    try {
+      const query = await window.QueryAPI.getQuery(queryId);
+      if (!query) return;
+      window.QueryDetailModal.show(query, null, { showCodingStatus: false });
+    } catch (err) {
+      console.error('[ICD10Viewer] Failed to load query details:', err);
+      window.SuperToast?.show?.({
+        message: 'Could not load query details. Try again.',
+        type: 'error',
+      });
+    }
+  },
+
+  /**
+   * Refetch approvedDiagnoses (with evidences + queryHistory) and push the
+   * new state into the sidebar + panel. Called after a query submit so the
+   * queryHistory chip flips immediately, without requiring a viewer reload.
+   */
+  async _refreshApprovedDiagnoses() {
+    try {
+      const fresh = await ICD10API.getApprovedDiagnoses(
+        this.patientId, this.facilityName, this.orgSlug
+      );
+      this.approvedDiagnoses = fresh || [];
+      ICD10Sidebar.updateData({
+        approvedDiagnoses: this.approvedDiagnoses,
+        approvedBaseCodes: this._computeApprovedBaseCodes(),
+      });
+      if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
+        ICD10EvidencePanel.setApprovedLeafCodes(this._computeApprovedLeafCodes());
+      }
+      if (typeof ICD10EvidencePanel?.setApprovedDiagnosisMeta === 'function') {
+        ICD10EvidencePanel.setApprovedDiagnosisMeta(this._computeApprovedDiagnosisMeta());
+      }
+    } catch (err) {
+      console.warn('[ICD10Viewer] Failed to refresh approved diagnoses post-query:', err);
+    }
+  },
+
+  /**
+   * Map of leaf icd10 code → { queryHistory, queryable, pdpm*, onPcc, ... }.
+   *
+   * Merges two sources so the panel sees query history regardless of whether
+   * the focused leaf is on PCC or not:
+   *   1. approvedDiagnoses — authoritative for PCC codes (carries queryable)
+   *   2. inline leaves[] across topRanked / approved / flatGroups — covers
+   *      every base group's leaves, including ones not on PCC (e.g. R47.01
+   *      with an outstanding query but not yet billed).
+   *
+   * PCC entries take precedence; inline-leaf data only fills gaps.
+   */
+  _computeApprovedDiagnosisMeta() {
+    const map = new Map();
+    for (const d of this.approvedDiagnoses || []) {
+      if (!d?.icd10Code) continue;
+      map.set(d.icd10Code, {
+        queryHistory: d.queryHistory || null,
+        queryable: d.queryable === true,
+        pdpmCategory: d.pdpmCategory || null,
+        pdpmCategoryName: d.pdpmCategoryName || null,
+        pdpmCategoryNumber: d.pdpmCategoryNumber ?? null,
+        mdsItemCode: d.mdsItemCode || null,
+        onPcc: true,
+      });
+    }
+
+    // Walk every group's inline leaves[] and fold in queryHistory + pdpm
+    // metadata for any leaf the PCC pass didn't already cover.
+    const groupBuckets = [
+      ...(this.topRanked || []),
+      ...(this.approved || []),
+    ];
+    if (this.flatGroups && typeof this.flatGroups === 'object') {
+      for (const bucket of Object.values(this.flatGroups)) {
+        if (Array.isArray(bucket)) groupBuckets.push(...bucket);
+      }
+    }
+    for (const g of groupBuckets) {
+      for (const leaf of g?.leaves || []) {
+        if (!leaf?.code) continue;
+        const existing = map.get(leaf.code);
+        if (existing) {
+          // Don't overwrite PCC's authoritative fields; just fill missing
+          // queryHistory if the PCC entry lacked it (rare but possible).
+          if (!existing.queryHistory && leaf.queryHistory) {
+            existing.queryHistory = leaf.queryHistory;
+          }
+        } else {
+          map.set(leaf.code, {
+            queryHistory: leaf.queryHistory || null,
+            // queryable for non-PCC leaves: derive from mdsItemCode presence
+            // (matches backend's own definition). Falls back to pdpm presence.
+            queryable: !!leaf.mdsItemCode || !!leaf.pdpmCategory,
+            pdpmCategory: leaf.pdpmCategory || null,
+            pdpmCategoryName: leaf.pdpmCategoryName || null,
+            pdpmCategoryNumber: leaf.pdpmCategoryNumber ?? null,
+            mdsItemCode: leaf.mdsItemCode || null,
+            onPcc: false,
+          });
+        }
+      }
+    }
+    return map;
+  },
+
+  /** Set of leaf icd10 codes already on PCC. Drives the panel's "On PCC"
+   * pill and prevents double-billing via the Add button. */
+  _computeApprovedLeafCodes() {
+    const set = new Set();
+    for (const d of this.approvedDiagnoses || []) {
+      if (d.icd10Code) set.add(d.icd10Code);
+    }
+    return set;
+  },
+
   _refreshSidebarStaged() {
+    const leafSet = this._computeStagedLeafCodes();
+    const approvedLeafSet = this._computeApprovedLeafCodes();
     ICD10Sidebar.updateData({
       stagedBaseCodes: this._computeStagedBaseCodes(),
       approvedBaseCodes: this._computeApprovedBaseCodes(),
+      stagedLeafCodes: leafSet,
     });
+    // Mirror into the evidence panel so the focused-leaf state survives
+    // navigation: staged → ✓ Added pill, on-PCC → "On PCC" disabled pill.
+    if (typeof ICD10EvidencePanel?.setStagedLeafCodes === 'function') {
+      ICD10EvidencePanel.setStagedLeafCodes(leafSet);
+    }
+    if (typeof ICD10EvidencePanel?.setApprovedLeafCodes === 'function') {
+      ICD10EvidencePanel.setApprovedLeafCodes(approvedLeafSet);
+    }
+  },
+
+  /**
+   * Sidebar tree expansion: return the leaves under a base code. Backend
+   * v2 list response now ships `leaves[]` inline on every ranked / flat
+   * group summary, so the common path is a synchronous lookup against
+   * the data already in memory — no network round-trip on click.
+   *
+   * Falls back to deriving from per-base annotations only when the inline
+   * leaves field is missing (older API). Per-leaf pdpm fields come from
+   * each leaf object directly: one base can split across categories
+   * (e.g. E11.40 = Diabetes Mellitus, E11.621 = Diabetic Foot Ulcer).
+   *
+   * @param {string} baseCode
+   * @returns {Promise<Array<ICD10LeafSummary>>}
+   */
+  async _fetchLeavesForBase(baseCode) {
+    if (!baseCode) return [];
+    const inline = this._findInlineLeavesForBase(baseCode);
+    if (inline) return inline;
+
+    // Back-compat: derive from per-base annotations.
+    const annotations = await ICD10API.getAnnotationsByBaseCode(
+      this.patientId, baseCode, this.facilityName, this.orgSlug, this._assessmentId
+    );
+    const map = new Map();
+    for (const ann of annotations || []) {
+      const code = ann.icd10Code;
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = {
+          code,
+          description: ann.description || '',
+          pdpmCategory: ann.pdpmCategory ?? null,
+          pdpmCategoryName: ann.pdpmCategoryName ?? null,
+          pdpmPoints: ann.pdpmPoints ?? null,
+          mentionCount: 0,
+        };
+        map.set(code, row);
+      }
+      row.mentionCount += 1;
+      if (!row.description && ann.description) row.description = ann.description;
+      if (row.pdpmCategory == null && ann.pdpmCategory != null) {
+        row.pdpmCategory = ann.pdpmCategory;
+        row.pdpmPoints = ann.pdpmPoints ?? null;
+        row.pdpmCategoryName = ann.pdpmCategoryName ?? null;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      b.mentionCount - a.mentionCount || a.code.localeCompare(b.code)
+    );
+  },
+
+  /**
+   * Look up the inline leaves[] array for a base code from the in-memory
+   * v2 list response data. Checks topRanked, approved (annotation-derived,
+   * not the PCC list), and every flatGroups bucket. Returns null when the
+   * field is absent (older API version) so the caller can fall back.
+   */
+  _findInlineLeavesForBase(baseCode) {
+    const matches = (g) => (g?.groupCode || g?.group) === baseCode;
+    const fromGroup = (g) => Array.isArray(g?.leaves) ? g.leaves : null;
+
+    for (const g of this.topRanked || []) {
+      if (matches(g)) return fromGroup(g);
+    }
+    for (const g of this.approved || []) {
+      if (matches(g)) return fromGroup(g);
+    }
+    if (this.flatGroups && typeof this.flatGroups === 'object') {
+      for (const bucket of Object.values(this.flatGroups)) {
+        if (!Array.isArray(bucket)) continue;
+        for (const g of bucket) {
+          if (matches(g)) return fromGroup(g);
+        }
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Sidebar leaf clicked. The base group's annotations are already in the
+   * detail cache (fetch was triggered by the row's expand), so we drive the
+   * panel by selecting the base (existing flow) and then focusing the leaf.
+   */
+  async _handleSidebarLeafSelect(baseCode, leafCode, leafDescription, row) {
+    if (!baseCode || !leafCode) return;
+    // Build a sidebar-equivalent selection so the existing handler reuses its
+    // groupContext + items-fetch path. row.group / row.flatGroup carries the
+    // metadata we already have from sidebar render time.
+    const selection = {
+      category: row?.origin || 'topRanked',
+      baseCode,
+      groupKey: row?.groupKey || baseCode,
+      groupCode: baseCode,
+      dismissed: !!row?.dismissed,
+      groupName: row?.description || null,
+      pdpmCategory: row?.pdpmCategory || null,
+      pdpmCategoryName: row?.pdpmCategoryName || null,
+      pdpmCategoryNumber: row?.pdpmCategoryNumber ?? null,
+      pdpmPoints: row?.pdpmPoints,
+      mdsItemCode: row?.mdsItemCode || null,
+      // Authoritative queryable signal from backend (PCC rows only).
+      // null/undefined for non-PCC rows; panel falls back to pdpm-presence.
+      queryable: row?.queryable,
+      items: null,
+    };
+    await this._handleSidebarSelection(selection);
+    // After items load, focus the specific leaf in the evidence panel.
+    if (typeof ICD10EvidencePanel?._selectCode === 'function') {
+      ICD10EvidencePanel._selectCode(leafCode, leafDescription || '');
+    }
+    // Push focused-leaf back to sidebar so its leaf row highlights.
+    ICD10Sidebar.updateData({ focusedLeafCode: leafCode });
   },
 
   /**
@@ -727,16 +1012,11 @@ const ICD10Viewer = {
       window.SuperToast?.show?.({ message: 'No evidence to attach yet — wait for mentions to load.', type: 'info' });
       return;
     }
-    // Block when there's no PDPM signal at all — backend requires an mdsItem
-    // and the I8000 fallback is only meaningful with an NTA/SLP category.
-    const ctx = payload.groupContext || {};
-    if (!ctx.mdsItemCode && !ctx.pdpmCategory) {
-      window.SuperToast?.show?.({
-        message: `No MDS item slot for ${payload.baseCode} — can't attach a query.`,
-        type: 'warning',
-      });
-      return;
-    }
+    // No more frontend gating on pdpmCategory / mdsItemCode. Backend is the
+    // authority on queryable-or-not (POST /diagnosis-queries returns 400 on
+    // uncodable inputs); the FE optimizes UX via the `queryable` flag on
+    // the button styling but never silently swallows a click. If backend
+    // rejects, the query flow component surfaces the error.
 
     if (this._queryFlowUnmount) {
       this._queryFlowUnmount();
@@ -784,10 +1064,21 @@ const ICD10Viewer = {
           onComplete: (sentQueries, practitionerName) => {
             const n = (sentQueries || []).length;
             if (n > 0) {
+              const codeHint = sentQueries[0]?.icd10Code || sentQueries[0]?.diagnosisCode || payload.baseCode || '';
               window.SuperToast?.show?.({
-                message: `Query sent to ${practitionerName || 'practitioner'}.`,
+                message: n === 1
+                  ? `Query for ${codeHint} sent to ${practitionerName || 'practitioner'}.`
+                  : `${n} queries sent to ${practitionerName || 'practitioner'}.`,
                 type: 'success',
               });
+              // Refetch diagnoses so the queryHistory chip flips from "no
+              // chip" to "Query outstanding" without requiring a reload.
+              this._refreshApprovedDiagnoses();
+              // Also refresh the underlying meddiag-listing page if it's
+              // augmented — its CP/Query columns share state with us.
+              if (typeof window.MedDiagAugment?.refreshNow === 'function') {
+                window.MedDiagAugment.refreshNow();
+              }
             }
           },
         }),

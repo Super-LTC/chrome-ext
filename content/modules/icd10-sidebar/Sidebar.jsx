@@ -70,7 +70,79 @@ function badgesFromGroup(g) {
   };
 }
 
-function buildSections({ topRanked, approved, annotations, flatGroups }) {
+/**
+ * Category-priority for sidebar sorting. NTA first (Ricky's request),
+ * then SLP, then Nursing, then Section-I, then plain. Used as the primary
+ * sort key in Top Picks and Other so PDPM-relevant codes always cluster
+ * at the top of each section regardless of model rank.
+ */
+function categoryPriority(row) {
+  const cat = row?.pdpmCategory
+    || (row?.badges?.nta ? 'NTA' : null)
+    || (row?.badges?.slp ? 'SLP' : null)
+    || (row?.badges?.nursing ? 'NURSING' : null)
+    || (row?.badges?.sectionI ? 'SECTION-I' : null);
+  if (cat === 'NTA') return 0;
+  if (cat === 'SLP') return 1;
+  if (cat === 'NURSING') return 2;
+  if (cat === 'SECTION-I') return 3;
+  return 4;
+}
+
+/**
+ * Build approved-section rows from the PCC diagnoses list (one row per PCC
+ * code, never filtered by Comprehend match). Each row carries per-row
+ * evidence directly from the diagnosis's exactEvidences / siblingEvidences,
+ * so a code with zero chart matches still renders — with the honest
+ * "no chart evidence" hint instead of being hidden.
+ */
+function approvedRowsFromPccDiagnoses(approvedDiagnoses) {
+  if (!Array.isArray(approvedDiagnoses) || approvedDiagnoses.length === 0) return [];
+  return approvedDiagnoses.map((dx, idx) => {
+    const code = dx.icd10Code || '';
+    const baseCode = code.length >= 3 ? code.substring(0, 3) : code;
+    const exactCount = Array.isArray(dx.exactEvidences) ? dx.exactEvidences.length : 0;
+    const siblingCount = Array.isArray(dx.siblingEvidences) ? dx.siblingEvidences.length : 0;
+    const hasEvData = ('exactEvidences' in (dx || {})) || ('siblingEvidences' in (dx || {}));
+    return {
+      kind: 'pccDiagnosis',
+      key: `pcc:${code}:${idx}`,
+      origin: 'approved',
+      originLabel: 'Approved',
+      // No groupKey — PCC diagnoses aren't dismissable from the AI sidebar.
+      groupKey: null,
+      dismissed: false,
+      code,
+      baseCode,
+      description: dx.description || '',
+      badges: {
+        nta: dx.pdpmCategory === 'NTA',
+        slp: dx.pdpmCategory === 'SLP',
+        nursing: dx.pdpmCategory === 'NURSING',
+        sectionI: dx.pdpmCategory === 'SECTION-I',
+      },
+      pdpmCategory: dx.pdpmCategory || null,
+      pdpmCategoryName: dx.pdpmCategoryName || null,
+      pdpmCategoryNumber: dx.pdpmCategoryNumber ?? null,
+      pdpmPoints: dx.pdpmPoints,
+      mdsItemCode: dx.mdsItemCode || null,
+      // Backend's authoritative "is this queryable?" signal — true when
+      // mdsItemCode resolves. Used by the panel to mute (not block) the
+      // Query button when false. Backend still has final say at submit.
+      queryable: dx.queryable === true,
+      // Per-diagnosis query history — pending/sent counts, last-signed
+      // recency. Drives the sidebar chip + Query button gating.
+      queryHistory: dx.queryHistory || null,
+      // Inline per-row evidence chip data (chip rendering checks hasData).
+      evidence: hasEvData ? { exact: exactCount, sibling: siblingCount, hasData: true } : null,
+      // Stash the original diagnosis so click-through can read its leaves
+      // / siblings if needed downstream.
+      pccDiagnosis: dx,
+    };
+  });
+}
+
+function buildSections({ topRanked, approved, annotations, flatGroups, approvedDiagnoses }) {
   // v2: ranked groups have no annotations[]. Source of truth is pdpmCategory.
   // v1 fallback: derive from annotations.
   const rankedBadges = (g) => {
@@ -98,11 +170,41 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
     pdpmCategoryName: g.pdpmCategoryName || null,
     pdpmPoints: g.pdpmPoints,
     mdsItemCode: g.mdsItemCode || null,
+    // Group-level queryHistory from v2 list response. Falls back to null
+    // for older API responses or buckets where it isn't relevant.
+    queryHistory: g.queryHistory || null,
     group: g,
   });
 
-  const topPicks = (topRanked || []).map(g => enrichRanked(g, 't', 'topRanked'));
-  const approvedRows = (approved || []).map(g => enrichRanked(g, 'a', 'approved'));
+  // Stable-sort within Top Picks by category priority, with rank as tiebreak.
+  // The ranker's order within a category is preserved, but NTA/SLP/Nursing
+  // codes float above plain rows. Resolves Ricky's "NTA at the top" ask.
+  const topPicks = (topRanked || [])
+    .map(g => enrichRanked(g, 't', 'topRanked'))
+    .map((r, idx) => ({ r, idx }))
+    .sort((a, b) => {
+      const pd = categoryPriority(a.r) - categoryPriority(b.r);
+      if (pd !== 0) return pd;
+      const ar = a.r.rank ?? 9999;
+      const br = b.r.rank ?? 9999;
+      if (ar !== br) return ar - br;
+      return a.idx - b.idx;
+    })
+    .map(x => x.r);
+
+  // Approved section: prefer PCC diagnoses (one row per PCC code, never
+  // filtered) over the annotation-derived approved list (which silently
+  // dropped any PCC code without a Comprehend match — payment-relevant
+  // codes like D84.81 NTA-1pt would just disappear). Fall back to the
+  // annotation list only when approvedDiagnoses isn't supplied.
+  const approvedRows = (Array.isArray(approvedDiagnoses) && approvedDiagnoses.length > 0)
+    ? approvedRowsFromPccDiagnoses(approvedDiagnoses)
+        .sort((a, b) => {
+          const pd = categoryPriority(a) - categoryPriority(b);
+          if (pd !== 0) return pd;
+          return a.code.localeCompare(b.code);
+        })
+    : (approved || []).map(g => enrichRanked(g, 'a', 'approved'));
 
   // v2 pre-grouped path: render buckets directly, skip per-mention regrouping.
   if (flatGroups) {
@@ -123,6 +225,7 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
       pdpmCategory: g.pdpmCategory || null,
       pdpmCategoryName: g.pdpmCategoryName || null,
       mdsItemCode: g.mdsItemCode || null,
+      queryHistory: g.queryHistory || null,
       // No items[] in v2 — viewer fetches detail on click.
       items: null,
       flatGroup: g,
@@ -143,7 +246,14 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
       seen.add(r.code);
       return true;
     });
-    otherDeduped.sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+    // NTA/SLP/Nursing first inside Other (mirrors Top Picks priority sort);
+    // then most-mentioned, then alphabetic for stability.
+    otherDeduped.sort((a, b) => {
+      const pd = categoryPriority(a) - categoryPriority(b);
+      if (pd !== 0) return pd;
+      if (b.count !== a.count) return b.count - a.count;
+      return a.code.localeCompare(b.code);
+    });
 
     const speculative = (flatGroups.speculative || [])
       .map(g => flatToRow(g, 'speculative', 's'))
@@ -188,7 +298,12 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
         baseCode: g.baseCode,
         items: g.items,
       }))
-      .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+      .sort((a, b) => {
+        const pd = categoryPriority(a) - categoryPriority(b);
+        if (pd !== 0) return pd;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.code.localeCompare(b.code);
+      });
 
   return {
     topPicks,
@@ -279,12 +394,81 @@ function Icon({ name }) {
   return null;
 }
 
-function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled }) {
+function LeafRow({ leaf, baseCode, focused, staged, onClick }) {
+  const cls = ['icd10-sb__leaf'];
+  if (focused) cls.push('icd10-sb__leaf--focused');
+  if (staged) cls.push('icd10-sb__leaf--staged');
+  const cat = leaf.pdpmCategory || null;
+  let badgeLabel = null, badgeClass = null, badgeTooltip = null;
+  if (cat) {
+    badgeClass = cat.toLowerCase().replace(/[^a-z]/g, '');
+    // Inline badge stays abbreviated (sidebar is space-constrained); the
+    // full PDPM label including category name lands in the tooltip so a
+    // hover reveals "NURSING · 1pt · Hemiplegia/Hemiparesis."
+    badgeLabel = cat === 'NTA' && leaf.pdpmPoints != null
+      ? `NTA +${leaf.pdpmPoints}`
+      : cat === 'NURSING' ? 'NURS' : cat === 'SECTION-I' ? 'I' : cat;
+    badgeTooltip = [
+      cat,
+      leaf.pdpmPoints != null ? `${leaf.pdpmPoints}pt` : null,
+      leaf.pdpmCategoryName,
+    ].filter(Boolean).join(' · ');
+  }
+  // Row-level tooltip: leaf description + full PDPM line if any. Coders can
+  // hover any row in the tree to learn what the category is, no need to
+  // memorize.
+  const rowTooltip = badgeTooltip
+    ? `${leaf.description || ''}\n${badgeTooltip}`
+    : (leaf.description || '');
+  return h('div', {
+    class: cls.join(' '),
+    onClick: () => onClick(baseCode, leaf),
+    title: rowTooltip,
+  },
+    staged && h('span', { class: 'icd10-sb__leaf-check', 'aria-label': 'Staged' }, h(Icon, { name: 'check' })),
+    h('span', { class: 'icd10-sb__leaf-code' }, leaf.code),
+    h('span', { class: 'icd10-sb__leaf-desc' }, leaf.description || ''),
+    // Leaf-level queryHistory (preferred over group-level when present —
+    // one base can split across multiple mdsItems, e.g. E11.40 → I2900
+    // while E11.621 → no Section I checkbox).
+    leaf.queryHistory && h(QueryHistoryChip, { history: leaf.queryHistory }),
+    badgeLabel && h('span', {
+      class: `icd10-sb__leaf-badge icd10-sb__leaf-badge--${badgeClass}`,
+      title: badgeTooltip || undefined,
+    }, badgeLabel),
+  );
+}
+
+function LeafList({ baseCode, leaves, focusedLeafCode, stagedLeafSet, onSelectLeaf }) {
+  if (!leaves) {
+    return h('div', { class: 'icd10-sb__leaves icd10-sb__leaves--loading' },
+      h('span', { class: 'icd10-sb__leaves-loading-text' }, 'Loading…')
+    );
+  }
+  if (leaves.length === 0) {
+    return h('div', { class: 'icd10-sb__leaves icd10-sb__leaves--empty' },
+      h('span', { class: 'icd10-sb__leaves-empty-text' }, 'No mentions found')
+    );
+  }
+  return h('div', { class: 'icd10-sb__leaves' },
+    leaves.map(leaf => h(LeafRow, {
+      key: leaf.code,
+      leaf,
+      baseCode,
+      focused: focusedLeafCode === leaf.code,
+      staged: stagedLeafSet.has(leaf.code),
+      onClick: onSelectLeaf,
+    }))
+  );
+}
+
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, evidenceChip, queryHistory, isPcc }) {
   const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
   if (row.rank != null) cls.push('icd10-sb__row--ranked');
   if (hidden) cls.push('icd10-sb__row--hidden');
+  if (isPcc) cls.push('icd10-sb__row--pcc');
   // Staged takes precedence over approved visually (it's the active in-flight state).
   if (staged) cls.push('icd10-sb__row--staged');
   else if (approved) cls.push('icd10-sb__row--approved');
@@ -329,6 +513,8 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
       b.nursing && h('span', { class: 'icd10-sb__badge icd10-sb__badge--nursing' }, 'NURS'),
       b.sectionI && h('span', { class: 'icd10-sb__badge icd10-sb__badge--sectioni' }, 'I')
     ),
+    queryHistory && h(QueryHistoryChip, { history: queryHistory }),
+    evidenceChip && h(EvidenceChip, evidenceChip),
     showDismiss && h('button', {
       type: 'button',
       class: 'icd10-sb__dismiss',
@@ -345,6 +531,83 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
       disabled: busy,
       onClick: handleUndo,
     }, 'Undo')
+  );
+}
+
+/**
+ * Per-row evidence chip for the Approved section. Renders the prototype's
+ * load-bearing visual distinction:
+ *   "{N} direct"  — emerald, prominent (exactEvidences from PCC diagnoses)
+ *   "+{M} related" — slate, muted, smaller (siblingEvidences)
+ *   "no chart evidence" — amber hint when both zero
+ * Lumping these together would re-introduce the same audit issue at the
+ * Approved layer (different leaf in the same family looking like
+ * confirmation of the approved code).
+ */
+/**
+ * Query-history chip rendered on rows that have query activity.
+ * Icon-only to keep rows compact (descriptions take the horizontal
+ * space). Tooltip carries the verbose detail.
+ *
+ *   hasOutstanding → paper-plane (amber) — most urgent
+ *   recently signed (<60d) → check-circle (slate) — informational
+ *   older signed (≥60d) → omitted entirely (re-query is fine)
+ */
+function PaperPlaneIcon() {
+  return h('svg', { width: 11, height: 11, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+    h('line', { x1: 22, y1: 2, x2: 11, y2: 13 }),
+    h('polygon', { points: '22 2 15 22 11 13 2 9 22 2' })
+  );
+}
+function CheckCircleIcon() {
+  return h('svg', { width: 11, height: 11, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+    h('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' }),
+    h('polyline', { points: '22 4 12 14.01 9 11.01' })
+  );
+}
+
+function QueryHistoryChip({ history }) {
+  if (!history) return null;
+  const out = (history.pendingCount || 0) + (history.sentCount || 0);
+  if (history.hasOutstanding && out > 0) {
+    return h('span', {
+      class: 'icd10-sb__qh-chip icd10-sb__qh-chip--out',
+      title: out === 1
+        ? 'Query pending physician sign-off. Click row to view.'
+        : `${out} queries pending physician sign-off. Click row to view.`,
+      'aria-label': out === 1 ? 'Query pending' : `${out} queries pending`,
+    }, h(PaperPlaneIcon), out > 1 && h('span', { class: 'icd10-sb__qh-chip-count' }, out));
+  }
+  if (history.lastSignedAt) {
+    const days = typeof history.daysSinceLastSigned === 'number'
+      ? Math.floor(history.daysSinceLastSigned) : null;
+    if (days != null && days < 60) {
+      return h('span', {
+        class: 'icd10-sb__qh-chip icd10-sb__qh-chip--signed',
+        title: `Signed ${days} day${days === 1 ? '' : 's'} ago. Re-querying within 60 days is usually unnecessary.`,
+        'aria-label': `Signed ${days} days ago`,
+      }, h(CheckCircleIcon));
+    }
+  }
+  return null;
+}
+
+function EvidenceChip({ exact, sibling }) {
+  if (!exact && !sibling) {
+    return h('span', {
+      class: 'icd10-sb__ev-chip icd10-sb__ev-chip--empty',
+      title: 'This approved code has no chart evidence in our extraction. Recheck after re-extraction or review documentation.',
+    }, 'no evidence found');
+  }
+  return h('span', { class: 'icd10-sb__ev-chips' },
+    exact > 0 && h('span', {
+      class: 'icd10-sb__ev-chip icd10-sb__ev-chip--exact',
+      title: `${exact} direct mention${exact === 1 ? '' : 's'} of this specific code in the chart`,
+    }, `${exact} direct`),
+    sibling > 0 && h('span', {
+      class: 'icd10-sb__ev-chip icd10-sb__ev-chip--sibling',
+      title: `${sibling} mention${sibling === 1 ? '' : 's'} of a different leaf in the same family — supporting context, not direct`,
+    }, `+${sibling} related`)
   );
 }
 
@@ -373,9 +636,10 @@ function StaticHeader({ label, icon }) {
   );
 }
 
-export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false }) {
+export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, approvedDiagnoses = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false, onExpandRow = null, onSelectLeaf = null, stagedLeafCodes = null, focusedLeafCode = null }) {
   const stagedSet = stagedBaseCodes instanceof Set ? stagedBaseCodes : new Set(stagedBaseCodes || []);
   const approvedSet = approvedBaseCodes instanceof Set ? approvedBaseCodes : new Set(approvedBaseCodes || []);
+  const stagedLeafSet = stagedLeafCodes instanceof Set ? stagedLeafCodes : new Set(stagedLeafCodes || []);
   const isStaged = (row) => stagedSet.has(row.code) || stagedSet.has(row.baseCode);
   const isApproved = (row) => approvedSet.has(row.code) || approvedSet.has(row.baseCode);
   const [approvedOpen, setApprovedOpen] = useState(false);
@@ -384,13 +648,21 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const [selectedKey, setSelectedKey] = useState(null);
   const autoSelectedForRef = useRef(null);
 
+  // Selected row's leaves auto-load and render inline. No user-driven
+  // expand/collapse — only the selected row reveals its leaves, and only
+  // when there's more than one (single-leaf bases get no nested list).
+  const [leavesByCode, setLeavesByCode] = useState(() => new Map());
+  const [loadingCodes, setLoadingCodes] = useState(() => new Set());
+
+  const leafExpandable = typeof onExpandRow === 'function' && typeof onSelectLeaf === 'function';
+
   // Optimistic overrides: { [groupKey]: { dismissed: true|false } }.
   // Applied on top of server `dismissed` until the next refetch reconciles.
   const [optimisticOverrides, setOptimisticOverrides] = useState({});
 
   const rawSections = useMemo(
-    () => buildSections({ topRanked, approved, annotations, flatGroups }),
-    [topRanked, approved, annotations, flatGroups]
+    () => buildSections({ topRanked, approved, annotations, flatGroups, approvedDiagnoses }),
+    [topRanked, approved, annotations, flatGroups, approvedDiagnoses]
   );
 
   // Reconcile: clear optimistic entries that now match server state.
@@ -489,6 +761,53 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
     if (row && onSelect) onSelect(buildSelectionPayload(row));
   }, [sections, selectedKey, validKeys, onSelect]);
 
+  // Track in-flight fetches in a ref so concurrent re-runs of this effect
+  // (driven by sections / staged set updates) don't double-fire requests.
+  // State-based dedupe doesn't work here: changing leavesByCode in deps
+  // re-runs the effect, which cancels the previous run, which means its
+  // `finally` skips clearing loading state — stuck spinner.
+  const inFlightRef = useRef(new Set());
+
+  // Auto-fetch leaves for the selected row's base code. Cached after first
+  // fetch so re-selecting the same row is instant. Loading-state clear is
+  // NOT gated on the cancelled flag — leaves updates are. Re-runs of this
+  // effect must always clear their own loading marker.
+  useEffect(() => {
+    if (!leafExpandable || !selectedKey) return;
+    const row = allRows(sections).find(r => r.key === selectedKey);
+    const code = row?.code;
+    if (!code) return;
+    // PCC-diagnosis rows are leaves themselves — never fire a leaf fetch.
+    if (row.kind === 'pccDiagnosis') return;
+    if (leavesByCode.has(code)) return; // cached
+    if (inFlightRef.current.has(code)) return; // in flight
+    let cancelled = false;
+    inFlightRef.current.add(code);
+    setLoadingCodes(prev => new Set([...prev, code]));
+    Promise.resolve(onExpandRow(code, row))
+      .then(leaves => {
+        if (!cancelled) {
+          setLeavesByCode(prev => new Map(prev).set(code, leaves || []));
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          console.error('[Sidebar] leaf fetch failed:', err);
+          setLeavesByCode(prev => new Map(prev).set(code, []));
+        }
+      })
+      .finally(() => {
+        inFlightRef.current.delete(code);
+        // Always clear the loading marker, even if a re-run cancelled us —
+        // the marker belongs to this code, not this closure.
+        setLoadingCodes(prev => {
+          if (!prev.has(code)) return prev;
+          const n = new Set(prev); n.delete(code); return n;
+        });
+      });
+    return () => { cancelled = true; };
+  }, [selectedKey, sections, leafExpandable, onExpandRow, leavesByCode]);
+
   const handleClick = (key) => {
     setSelectedKey(key);
     const row = allRows(sections).find(r => r.key === key)
@@ -500,13 +819,109 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       const merged = ovr ? { ...row, dismissed: ovr.dismissed } : row;
       // ICD-10 code is reference data — safe categorical value, never PHI.
       track('icd10_code_clicked', { code: row.code, source: 'sidebar' });
-      if (onSelect) onSelect(buildSelectionPayload(merged));
+      // PCC-diagnosis rows are leaf-level (e.g. D84.81). Route through the
+      // leaf-select handler so the panel fetches annotations for the base
+      // (D84) and focuses the specific leaf — gives the user a leaf-focused
+      // empty state when there's no Comprehend evidence.
+      if (row.kind === 'pccDiagnosis' && typeof onSelectLeaf === 'function') {
+        onSelectLeaf(row.baseCode, row.code, row.description, row);
+      } else if (onSelect) {
+        onSelect(buildSelectionPayload(merged));
+      }
     }
   };
 
   const showApproved = sections.approved.length > 0;
   const showOther = sections.other.length > 0;
   const showSpeculative = sections.speculative.length > 0;
+
+  // Build a base-code → { exact, sibling } map from approvedDiagnoses so
+  // each approved row in the sidebar can render evidence chips. The backend
+  // returns exactEvidences/siblingEvidences per diagnosis; aggregate across
+  // diagnoses sharing the same 3-char base. Skip when withEvidences was
+  // never fetched (older deployments) — chips just won't render.
+  const evidenceByBase = new Map();
+  if (Array.isArray(approvedDiagnoses)) {
+    for (const dx of approvedDiagnoses) {
+      const code = dx?.icd10Code || '';
+      if (code.length < 3) continue;
+      const base = code.substring(0, 3);
+      const exact = Array.isArray(dx.exactEvidences) ? dx.exactEvidences.length : 0;
+      const sibling = Array.isArray(dx.siblingEvidences) ? dx.siblingEvidences.length : 0;
+      // Only count when the response actually carried evidence arrays;
+      // undefined means "older API, skip chip rendering for this base."
+      const hasEvData = ('exactEvidences' in (dx || {})) || ('siblingEvidences' in (dx || {}));
+      if (!hasEvData) continue;
+      const cur = evidenceByBase.get(base) || { exact: 0, sibling: 0, hasData: false };
+      cur.exact += exact;
+      cur.sibling += sibling;
+      cur.hasData = true;
+      evidenceByBase.set(base, cur);
+    }
+  }
+
+  // Helper: render Row + (optional) nested LeafList. Leaves auto-render only
+  // for the selected row, and only when there's more than one leaf — a
+  // single-leaf base is identical to the row itself, no nesting needed.
+  const renderRowAndLeaves = (row, opts = {}) => {
+    const isHidden = !!opts.hidden;
+    const isSelected = opts.selected ?? (selectedKey === row.key);
+    // Evidence chip only on Approved-section rows. PCC-diagnosis rows carry
+    // their own per-row evidence (one chip per PCC code); annotation-derived
+    // approved rows fall back to the base-aggregated map.
+    let evidenceChip = null;
+    if (row.origin === 'approved') {
+      if (row.evidence?.hasData) {
+        evidenceChip = { exact: row.evidence.exact, sibling: row.evidence.sibling };
+      } else {
+        const agg = evidenceByBase.get(row.code) || evidenceByBase.get(row.baseCode);
+        if (agg?.hasData) evidenceChip = { exact: agg.exact, sibling: agg.sibling };
+      }
+    }
+    const isPcc = row.kind === 'pccDiagnosis';
+    const rowProps = {
+      key: row.key,
+      row,
+      selected: isSelected,
+      onClick: handleClick,
+      staged: opts.staged ?? isStaged(row),
+      approved: opts.approved ?? isApproved(row),
+      hidden: isHidden,
+      onDismiss: opts.hidden ? undefined : handleDismiss,
+      onUndismiss: opts.hidden ? handleUndismiss : undefined,
+      dismissDisabled,
+      evidenceChip,
+      // Group-level queryHistory shows on every row that has one
+      // (PCC, Top Picks, Other, etc.). Leaf-level queryHistory rendered
+      // inside LeafList per-leaf — handled separately below.
+      queryHistory: isHidden ? null : (row.queryHistory || null),
+      isPcc,
+    };
+    const out = [h(Row, rowProps)];
+
+    const leaves = leavesByCode.get(row.code);
+    const isLoading = loadingCodes.has(row.code);
+    // PCC-diagnosis rows are leaves themselves — no nested leaf list to
+    // expand. Skip both the loading shell and any future leaves render.
+    const shouldShowLeaves = !isPcc && leafExpandable && isSelected && !isHidden && (
+      (leaves == null && isLoading) || (leaves != null && leaves.length > 1)
+    );
+    if (shouldShowLeaves) {
+      out.push(h(LeafList, {
+        key: `${row.key}::leaves`,
+        baseCode: row.code,
+        leaves: leaves || null,
+        focusedLeafCode,
+        stagedLeafSet,
+        onSelectLeaf: (baseCode, leaf) => {
+          if (typeof onSelectLeaf === 'function') {
+            onSelectLeaf(baseCode, leaf.code, leaf.description, row);
+          }
+        },
+      }));
+    }
+    return out;
+  };
 
   return h('div', { class: 'icd10-sb' },
     showApproved && h('section', { class: 'icd10-sb__section' },
@@ -519,9 +934,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         variant: 'approved',
       }),
       approvedOpen && h('div', { class: 'icd10-sb__section-body' },
-        sections.approved.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-        )
+        sections.approved.flatMap(row => renderRowAndLeaves(row))
       )
     ),
 
@@ -529,9 +942,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       h(StaticHeader, { label: 'Top picks', icon: 'star' }),
       h('div', { class: 'icd10-sb__section-body' },
         sections.topPicks.length > 0
-          ? sections.topPicks.map(row =>
-              h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-            )
+          ? sections.topPicks.flatMap(row => renderRowAndLeaves(row))
           : h('div', { class: 'icd10-sb__empty' }, 'No suggestions yet')
       )
     ),
@@ -539,9 +950,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
     showOther && h('section', { class: 'icd10-sb__section' },
       h(StaticHeader, { label: 'Other suggestions' }),
       h('div', { class: 'icd10-sb__section-body' },
-        sections.other.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-        )
+        sections.other.flatMap(row => renderRowAndLeaves(row))
       )
     ),
 
@@ -555,9 +964,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         variant: 'warning',
       }),
       speculativeOpen && h('div', { class: 'icd10-sb__section-body' },
-        sections.speculative.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-        )
+        sections.speculative.flatMap(row => renderRowAndLeaves(row))
       )
     ),
 
@@ -571,9 +978,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         variant: 'hidden',
       }),
       hiddenOpen && h('div', { class: 'icd10-sb__section-body' },
-        sections.hidden.map(row =>
-          h(Row, { key: row.key, row, selected: false, onClick: handleClick, staged: false, approved: false, hidden: true, onUndismiss: handleUndismiss })
-        )
+        sections.hidden.flatMap(row => renderRowAndLeaves(row, { hidden: true, selected: false, staged: false, approved: false }))
       )
     )
   );

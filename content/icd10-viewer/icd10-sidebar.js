@@ -39,6 +39,8 @@ const ICD10Sidebar = {
     this._onSelectionChange = onSelectionChange;
     this._onDismiss = callbacks?.onDismiss || null;
     this._onUndismiss = callbacks?.onUndismiss || null;
+    this._onExpandRow = callbacks?.onExpandRow || null;
+    this._onSelectLeaf = callbacks?.onSelectLeaf || null;
     this._dismissDisabled = !!callbacks?.dismissDisabled;
     this.selectedCategory = null;
     this.selectedBaseCode = null;
@@ -55,6 +57,8 @@ const ICD10Sidebar = {
     if (data.flatGroups !== undefined) this._data.flatGroups = data.flatGroups;
     if (data.stagedBaseCodes !== undefined) this._data.stagedBaseCodes = data.stagedBaseCodes;
     if (data.approvedBaseCodes !== undefined) this._data.approvedBaseCodes = data.approvedBaseCodes;
+    if (data.stagedLeafCodes !== undefined) this._data.stagedLeafCodes = data.stagedLeafCodes;
+    if (data.focusedLeafCode !== undefined) this._data.focusedLeafCode = data.focusedLeafCode;
 
     if (this._ready) {
       this._render();
@@ -121,12 +125,21 @@ const ICD10Sidebar = {
         flatGroups: this._data.flatGroups,
         stagedBaseCodes: this._data.stagedBaseCodes,
         approvedBaseCodes: this._data.approvedBaseCodes,
+        stagedLeafCodes: this._data.stagedLeafCodes,
+        focusedLeafCode: this._data.focusedLeafCode,
         onSelect: (selection) => this._handleSelect(selection),
         onDismiss: this._onDismiss
           ? (groupKey, row) => this._onDismiss(groupKey, row)
           : null,
         onUndismiss: this._onUndismiss
           ? (groupKey, row) => this._onUndismiss(groupKey, row)
+          : null,
+        onExpandRow: this._onExpandRow
+          ? (baseCode, row) => this._onExpandRow(baseCode, row)
+          : null,
+        onSelectLeaf: this._onSelectLeaf
+          ? (baseCode, leafCode, leafDescription, row) =>
+              this._onSelectLeaf(baseCode, leafCode, leafDescription, row)
           : null,
         dismissDisabled: this._dismissDisabled,
       }),
