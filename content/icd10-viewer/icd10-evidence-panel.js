@@ -28,6 +28,10 @@ const ICD10EvidencePanel = {
   expandedDocItems: new Set(),
   approveLoading: false,
   isApproved: false,
+  // Mirror of viewer.stagedCodes by leaf icd10 code. Lets the panel render
+  // Add vs ✓ Added per the focused leaf even after the user navigates away
+  // and back. Updated by setStagedLeafCodes (called from the viewer).
+  stagedLeafCodes: null,
   selectedCode: null,
   selectedDescription: null,
   codeDropdownOpen: false,
@@ -62,6 +66,7 @@ const ICD10EvidencePanel = {
     this.expandedDocuments.clear();
     this.approveLoading = false;
     this.isApproved = false;
+    this.stagedLeafCodes = new Set();
     this.selectedCode = null;
     this.selectedDescription = null;
     this.codeDropdownOpen = false;
@@ -85,6 +90,9 @@ const ICD10EvidencePanel = {
     this.expandedDocItems.clear();
     this.approveLoading = false;
     this.isApproved = false;
+    // Preserve stagedLeafCodes across group switches — the staged set is a
+    // session-wide concept owned by the viewer, not a per-group thing.
+    if (!(this.stagedLeafCodes instanceof Set)) this.stagedLeafCodes = new Set();
     this.isDismissed = !!groupContext?.dismissed;
     this.dismissBusy = false;
     this.codeDropdownOpen = false;
@@ -372,8 +380,12 @@ const ICD10EvidencePanel = {
     const availableCodes = this._getAvailableCodes();
     const hasMultipleCodes = availableCodes.length > 1;
 
+    // Reflect "added" state from the session-wide staged set, so navigating
+    // away and back to a leaf still shows ✓ Added correctly.
+    const isFocusedStaged = this._isFocusedLeafStaged() || this.isApproved;
+
     let approveHtml = '';
-    if (this.isApproved) {
+    if (isFocusedStaged) {
       approveHtml = `
         <!-- NO_TRACK: undo button — local state flip, no API call -->
         <button class="icd10-evidence-panel__approve icd10-evidence-panel__approve--approved" data-action="unapprove" title="Click to remove (undo)">
@@ -414,7 +426,7 @@ const ICD10EvidencePanel = {
 
     // Query button: only shown when we have items (i.e. detail has loaded) and
     // a query handle (onQuery) is wired in.
-    const canDismiss = !!this.groupContext?.groupKey && !this.isApproved;
+    const canDismiss = !!this.groupContext?.groupKey && !isFocusedStaged;
     const dismissBusy = this.dismissBusy;
     const dismissed = this.isDismissed;
     let dismissHtml = '';
@@ -1008,7 +1020,7 @@ const ICD10EvidencePanel = {
    * Handle approve button click - approves whatever code is currently shown
    */
   async _handleApprove() {
-    if (this.approveLoading || this.isApproved) return;
+    if (this.approveLoading || this._isFocusedLeafStaged() || this.isApproved) return;
 
     this.approveLoading = true;
     this.render();
@@ -1035,8 +1047,10 @@ const ICD10EvidencePanel = {
   },
 
   /**
-   * Mark an item as approved (external call)
-   * @param {string} itemId - Item ID that was approved
+   * Mark an item as approved (external call). Now a thin wrapper —
+   * authoritative source is stagedLeafCodes pushed via setStagedLeafCodes.
+   * Kept so callers that don't know the leaf code (only the annotation id)
+   * still trigger a render after the viewer's stagedCodes mutation.
    */
   markApproved(itemId) {
     this.isApproved = true;
@@ -1048,8 +1062,27 @@ const ICD10EvidencePanel = {
     this.render();
   },
 
+  /**
+   * Push the viewer's session-staged leaf codes into the panel so the Add
+   * button reflects the right state per focused leaf. Called from the viewer
+   * on every stage/unstage and after every group load.
+   *
+   * @param {Iterable<string>} codes
+   */
+  setStagedLeafCodes(codes) {
+    this.stagedLeafCodes = new Set(codes || []);
+    this.render();
+  },
+
+  /** True iff the currently focused leaf is in the session-staged set. */
+  _isFocusedLeafStaged() {
+    if (!this.selectedCode) return false;
+    if (!(this.stagedLeafCodes instanceof Set)) return false;
+    return this.stagedLeafCodes.has(this.selectedCode);
+  },
+
   _handleUnapprove() {
-    if (!this.isApproved) return;
+    if (!this._isFocusedLeafStaged() && !this.isApproved) return;
     const baseItem = this.items[0] || {};
     const item = {
       ...baseItem,

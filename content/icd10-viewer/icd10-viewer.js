@@ -660,6 +660,7 @@ const ICD10Viewer = {
       }
 
       // Update sidebar with new data
+      const leafSet = this._computeStagedLeafCodes();
       ICD10Sidebar.updateData({
         topRanked: this.topRanked,
         approved: this.approved,
@@ -667,9 +668,12 @@ const ICD10Viewer = {
         approvedDiagnoses: this.approvedDiagnoses,
         stagedBaseCodes: this._computeStagedBaseCodes(),
         approvedBaseCodes: this._computeApprovedBaseCodes(),
+        stagedLeafCodes: leafSet,
       });
 
-      // Mark as added in evidence panel
+      // Push staged set into the panel so per-leaf Add/Added state survives
+      // navigation. markApproved also flips the legacy isApproved flag.
+      ICD10EvidencePanel.setStagedLeafCodes?.(leafSet);
       ICD10EvidencePanel.markApproved(item.id);
 
       // Update staged count badge
@@ -720,11 +724,17 @@ const ICD10Viewer = {
   },
 
   _refreshSidebarStaged() {
+    const leafSet = this._computeStagedLeafCodes();
     ICD10Sidebar.updateData({
       stagedBaseCodes: this._computeStagedBaseCodes(),
       approvedBaseCodes: this._computeApprovedBaseCodes(),
-      stagedLeafCodes: this._computeStagedLeafCodes(),
+      stagedLeafCodes: leafSet,
     });
+    // Mirror into the evidence panel so the focused-leaf Add/Added state
+    // survives navigating away and back to the same leaf.
+    if (typeof ICD10EvidencePanel?.setStagedLeafCodes === 'function') {
+      ICD10EvidencePanel.setStagedLeafCodes(leafSet);
+    }
   },
 
   /**
