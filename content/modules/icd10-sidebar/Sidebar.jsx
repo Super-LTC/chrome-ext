@@ -279,20 +279,6 @@ function Icon({ name }) {
   return null;
 }
 
-function ChevronToggle({ expanded, loading, onToggle, ariaLabel }) {
-  return h('button', {
-    type: 'button',
-    class: `icd10-sb__chev ${expanded ? 'icd10-sb__chev--open' : ''}`,
-    onClick: (e) => { e.stopPropagation(); onToggle(); },
-    'aria-label': ariaLabel,
-    'aria-expanded': expanded,
-  },
-    loading
-      ? h('span', { class: 'icd10-sb__chev-spinner' })
-      : h(Icon, { name: 'chevron' })
-  );
-}
-
 function LeafRow({ leaf, baseCode, focused, staged, onClick }) {
   const cls = ['icd10-sb__leaf'];
   if (focused) cls.push('icd10-sb__leaf--focused');
@@ -340,7 +326,7 @@ function LeafList({ baseCode, leaves, focusedLeafCode, stagedLeafSet, onSelectLe
   );
 }
 
-function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, expandable, expanded, expandLoading, onToggleExpand }) {
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled }) {
   const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
@@ -378,12 +364,6 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
     class: cls.join(' '),
     onClick: () => onClick(row.key),
   },
-    expandable && !hidden && h(ChevronToggle, {
-      expanded,
-      loading: expandLoading,
-      onToggle: () => onToggleExpand && onToggleExpand(row),
-      ariaLabel: expanded ? `Collapse ${row.code} variants` : `Expand ${row.code} variants`,
-    }),
     row.rank != null && !hidden && h('span', { class: 'icd10-sb__rank' }, `#${row.rank}`),
     h('span', { class: 'icd10-sb__code' }, row.code),
     h('span', { class: 'icd10-sb__desc', title: row.description }, row.description),
@@ -452,37 +432,13 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const [selectedKey, setSelectedKey] = useState(null);
   const autoSelectedForRef = useRef(null);
 
-  // Leaf-tree state. expandedKeys = row keys currently expanded in the tree.
-  // leavesByCode = fetched leaves keyed by base code (cached across collapses).
-  // loadingCodes = base codes with an in-flight fetch (for chevron spinner).
-  const [expandedKeys, setExpandedKeys] = useState(() => new Set());
+  // Selected row's leaves auto-load and render inline. No user-driven
+  // expand/collapse — only the selected row reveals its leaves, and only
+  // when there's more than one (single-leaf bases get no nested list).
   const [leavesByCode, setLeavesByCode] = useState(() => new Map());
   const [loadingCodes, setLoadingCodes] = useState(() => new Set());
 
   const leafExpandable = typeof onExpandRow === 'function' && typeof onSelectLeaf === 'function';
-
-  const handleToggleExpand = async (row) => {
-    if (!leafExpandable) return;
-    const key = row.key;
-    const code = row.code;
-    if (expandedKeys.has(key)) {
-      setExpandedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
-      return;
-    }
-    setExpandedKeys(prev => new Set([...prev, key]));
-    if (leavesByCode.has(code) || loadingCodes.has(code)) return;
-    setLoadingCodes(prev => new Set([...prev, code]));
-    try {
-      const leaves = await onExpandRow(code, row);
-      setLeavesByCode(prev => new Map(prev).set(code, leaves || []));
-    } catch (err) {
-      console.error('[Sidebar] expand fetch failed:', err);
-      // Cache empty so we don't refetch on every chevron click after a fail.
-      setLeavesByCode(prev => new Map(prev).set(code, []));
-    } finally {
-      setLoadingCodes(prev => { const n = new Set(prev); n.delete(code); return n; });
-    }
-  };
 
   // Optimistic overrides: { [groupKey]: { dismissed: true|false } }.
   // Applied on top of server `dismissed` until the next refetch reconciles.
@@ -589,6 +545,34 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
     if (row && onSelect) onSelect(buildSelectionPayload(row));
   }, [sections, selectedKey, validKeys, onSelect]);
 
+  // Auto-fetch leaves for the selected row's base code. Cached after first
+  // fetch so re-selecting the same row is instant. Only fires when the
+  // sidebar has been wired with onExpandRow (otherwise tree mode is off).
+  useEffect(() => {
+    if (!leafExpandable || !selectedKey) return;
+    const row = allRows(sections).find(r => r.key === selectedKey);
+    const code = row?.code;
+    if (!code) return;
+    if (leavesByCode.has(code) || loadingCodes.has(code)) return;
+    let cancelled = false;
+    setLoadingCodes(prev => new Set([...prev, code]));
+    Promise.resolve(onExpandRow(code, row))
+      .then(leaves => {
+        if (cancelled) return;
+        setLeavesByCode(prev => new Map(prev).set(code, leaves || []));
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('[Sidebar] leaf fetch failed:', err);
+        setLeavesByCode(prev => new Map(prev).set(code, []));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingCodes(prev => { const n = new Set(prev); n.delete(code); return n; });
+      });
+    return () => { cancelled = true; };
+  }, [selectedKey, sections, leafExpandable, onExpandRow, leavesByCode, loadingCodes]);
+
   const handleClick = (key) => {
     setSelectedKey(key);
     const row = allRows(sections).find(r => r.key === key)
@@ -608,17 +592,16 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const showOther = sections.other.length > 0;
   const showSpeculative = sections.speculative.length > 0;
 
-  // Helper: render Row + (optional) nested LeafList. Returns an array so it
-  // flattens into the section body's children. Leaves are only rendered for
-  // visible rows (not hidden), and only when the parent is leaf-expandable.
+  // Helper: render Row + (optional) nested LeafList. Leaves auto-render only
+  // for the selected row, and only when there's more than one leaf — a
+  // single-leaf base is identical to the row itself, no nesting needed.
   const renderRowAndLeaves = (row, opts = {}) => {
     const isHidden = !!opts.hidden;
-    const expanded = !isHidden && expandedKeys.has(row.key);
-    const expandLoading = loadingCodes.has(row.code);
+    const isSelected = opts.selected ?? (selectedKey === row.key);
     const rowProps = {
       key: row.key,
       row,
-      selected: opts.selected ?? (selectedKey === row.key),
+      selected: isSelected,
       onClick: handleClick,
       staged: opts.staged ?? isStaged(row),
       approved: opts.approved ?? isApproved(row),
@@ -626,17 +609,21 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       onDismiss: opts.hidden ? undefined : handleDismiss,
       onUndismiss: opts.hidden ? handleUndismiss : undefined,
       dismissDisabled,
-      expandable: leafExpandable && !isHidden,
-      expanded,
-      expandLoading,
-      onToggleExpand: handleToggleExpand,
     };
     const out = [h(Row, rowProps)];
-    if (expanded) {
+
+    const leaves = leavesByCode.get(row.code);
+    const isLoading = loadingCodes.has(row.code);
+    const shouldShowLeaves = leafExpandable && isSelected && !isHidden && (
+      // While loading, render the loading shell so the user sees something
+      // happen without flicker. Once loaded, only render if >1 leaf.
+      (leaves == null && isLoading) || (leaves != null && leaves.length > 1)
+    );
+    if (shouldShowLeaves) {
       out.push(h(LeafList, {
         key: `${row.key}::leaves`,
         baseCode: row.code,
-        leaves: leavesByCode.get(row.code),
+        leaves: leaves || null,
         focusedLeafCode,
         stagedLeafSet,
         onSelectLeaf: (baseCode, leaf) => {
