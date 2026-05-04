@@ -89,7 +89,52 @@ function categoryPriority(row) {
   return 4;
 }
 
-function buildSections({ topRanked, approved, annotations, flatGroups }) {
+/**
+ * Build approved-section rows from the PCC diagnoses list (one row per PCC
+ * code, never filtered by Comprehend match). Each row carries per-row
+ * evidence directly from the diagnosis's exactEvidences / siblingEvidences,
+ * so a code with zero chart matches still renders — with the honest
+ * "no chart evidence" hint instead of being hidden.
+ */
+function approvedRowsFromPccDiagnoses(approvedDiagnoses) {
+  if (!Array.isArray(approvedDiagnoses) || approvedDiagnoses.length === 0) return [];
+  return approvedDiagnoses.map((dx, idx) => {
+    const code = dx.icd10Code || '';
+    const baseCode = code.length >= 3 ? code.substring(0, 3) : code;
+    const exactCount = Array.isArray(dx.exactEvidences) ? dx.exactEvidences.length : 0;
+    const siblingCount = Array.isArray(dx.siblingEvidences) ? dx.siblingEvidences.length : 0;
+    const hasEvData = ('exactEvidences' in (dx || {})) || ('siblingEvidences' in (dx || {}));
+    return {
+      kind: 'pccDiagnosis',
+      key: `pcc:${code}:${idx}`,
+      origin: 'approved',
+      originLabel: 'Approved',
+      // No groupKey — PCC diagnoses aren't dismissable from the AI sidebar.
+      groupKey: null,
+      dismissed: false,
+      code,
+      baseCode,
+      description: dx.description || '',
+      badges: {
+        nta: dx.pdpmCategory === 'NTA',
+        slp: dx.pdpmCategory === 'SLP',
+        nursing: dx.pdpmCategory === 'NURSING',
+        sectionI: dx.pdpmCategory === 'SECTION-I',
+      },
+      pdpmCategory: dx.pdpmCategory || null,
+      pdpmCategoryName: dx.pdpmCategoryName || null,
+      pdpmPoints: dx.pdpmPoints,
+      mdsItemCode: dx.mdsItemCode || null,
+      // Inline per-row evidence chip data (chip rendering checks hasData).
+      evidence: hasEvData ? { exact: exactCount, sibling: siblingCount, hasData: true } : null,
+      // Stash the original diagnosis so click-through can read its leaves
+      // / siblings if needed downstream.
+      pccDiagnosis: dx,
+    };
+  });
+}
+
+function buildSections({ topRanked, approved, annotations, flatGroups, approvedDiagnoses }) {
   // v2: ranked groups have no annotations[]. Source of truth is pdpmCategory.
   // v1 fallback: derive from annotations.
   const rankedBadges = (g) => {
@@ -135,7 +180,20 @@ function buildSections({ topRanked, approved, annotations, flatGroups }) {
       return a.idx - b.idx;
     })
     .map(x => x.r);
-  const approvedRows = (approved || []).map(g => enrichRanked(g, 'a', 'approved'));
+
+  // Approved section: prefer PCC diagnoses (one row per PCC code, never
+  // filtered) over the annotation-derived approved list (which silently
+  // dropped any PCC code without a Comprehend match — payment-relevant
+  // codes like D84.81 NTA-1pt would just disappear). Fall back to the
+  // annotation list only when approvedDiagnoses isn't supplied.
+  const approvedRows = (Array.isArray(approvedDiagnoses) && approvedDiagnoses.length > 0)
+    ? approvedRowsFromPccDiagnoses(approvedDiagnoses)
+        .sort((a, b) => {
+          const pd = categoryPriority(a) - categoryPriority(b);
+          if (pd !== 0) return pd;
+          return a.code.localeCompare(b.code);
+        })
+    : (approved || []).map(g => enrichRanked(g, 'a', 'approved'));
 
   // v2 pre-grouped path: render buckets directly, skip per-mention regrouping.
   if (flatGroups) {
@@ -537,8 +595,8 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const [optimisticOverrides, setOptimisticOverrides] = useState({});
 
   const rawSections = useMemo(
-    () => buildSections({ topRanked, approved, annotations, flatGroups }),
-    [topRanked, approved, annotations, flatGroups]
+    () => buildSections({ topRanked, approved, annotations, flatGroups, approvedDiagnoses }),
+    [topRanked, approved, annotations, flatGroups, approvedDiagnoses]
   );
 
   // Reconcile: clear optimistic entries that now match server state.
@@ -693,7 +751,15 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       const merged = ovr ? { ...row, dismissed: ovr.dismissed } : row;
       // ICD-10 code is reference data — safe categorical value, never PHI.
       track('icd10_code_clicked', { code: row.code, source: 'sidebar' });
-      if (onSelect) onSelect(buildSelectionPayload(merged));
+      // PCC-diagnosis rows are leaf-level (e.g. D84.81). Route through the
+      // leaf-select handler so the panel fetches annotations for the base
+      // (D84) and focuses the specific leaf — gives the user a leaf-focused
+      // empty state when there's no Comprehend evidence.
+      if (row.kind === 'pccDiagnosis' && typeof onSelectLeaf === 'function') {
+        onSelectLeaf(row.baseCode, row.code, row.description, row);
+      } else if (onSelect) {
+        onSelect(buildSelectionPayload(merged));
+      }
     }
   };
 
@@ -732,12 +798,18 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const renderRowAndLeaves = (row, opts = {}) => {
     const isHidden = !!opts.hidden;
     const isSelected = opts.selected ?? (selectedKey === row.key);
-    // Evidence chip only on Approved-section rows (origin === 'approved').
-    // Other sections aren't about PCC state, so evidence counts don't apply.
-    const evidence = (row.origin === 'approved') ? evidenceByBase.get(row.code) : null;
-    const evidenceChip = evidence?.hasData
-      ? { exact: evidence.exact, sibling: evidence.sibling }
-      : null;
+    // Evidence chip only on Approved-section rows. PCC-diagnosis rows carry
+    // their own per-row evidence (one chip per PCC code); annotation-derived
+    // approved rows fall back to the base-aggregated map.
+    let evidenceChip = null;
+    if (row.origin === 'approved') {
+      if (row.evidence?.hasData) {
+        evidenceChip = { exact: row.evidence.exact, sibling: row.evidence.sibling };
+      } else {
+        const agg = evidenceByBase.get(row.code) || evidenceByBase.get(row.baseCode);
+        if (agg?.hasData) evidenceChip = { exact: agg.exact, sibling: agg.sibling };
+      }
+    }
     const rowProps = {
       key: row.key,
       row,
