@@ -170,6 +170,9 @@ function buildSections({ topRanked, approved, annotations, flatGroups, approvedD
     pdpmCategoryName: g.pdpmCategoryName || null,
     pdpmPoints: g.pdpmPoints,
     mdsItemCode: g.mdsItemCode || null,
+    // Group-level queryHistory from v2 list response. Falls back to null
+    // for older API responses or buckets where it isn't relevant.
+    queryHistory: g.queryHistory || null,
     group: g,
   });
 
@@ -222,6 +225,7 @@ function buildSections({ topRanked, approved, annotations, flatGroups, approvedD
       pdpmCategory: g.pdpmCategory || null,
       pdpmCategoryName: g.pdpmCategoryName || null,
       mdsItemCode: g.mdsItemCode || null,
+      queryHistory: g.queryHistory || null,
       // No items[] in v2 — viewer fetches detail on click.
       items: null,
       flatGroup: g,
@@ -424,6 +428,10 @@ function LeafRow({ leaf, baseCode, focused, staged, onClick }) {
     staged && h('span', { class: 'icd10-sb__leaf-check', 'aria-label': 'Staged' }, h(Icon, { name: 'check' })),
     h('span', { class: 'icd10-sb__leaf-code' }, leaf.code),
     h('span', { class: 'icd10-sb__leaf-desc' }, leaf.description || ''),
+    // Leaf-level queryHistory (preferred over group-level when present —
+    // one base can split across multiple mdsItems, e.g. E11.40 → I2900
+    // while E11.621 → no Section I checkbox).
+    leaf.queryHistory && h(QueryHistoryChip, { history: leaf.queryHistory }),
     badgeLabel && h('span', {
       class: `icd10-sb__leaf-badge icd10-sb__leaf-badge--${badgeClass}`,
       title: badgeTooltip || undefined,
@@ -864,7 +872,10 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       onUndismiss: opts.hidden ? handleUndismiss : undefined,
       dismissDisabled,
       evidenceChip,
-      queryHistory: isPcc ? row.queryHistory : null,
+      // Group-level queryHistory shows on every row that has one
+      // (PCC, Top Picks, Other, etc.). Leaf-level queryHistory rendered
+      // inside LeafList per-leaf — handled separately below.
+      queryHistory: isHidden ? null : (row.queryHistory || null),
       isPcc,
     };
     const out = [h(Row, rowProps)];
