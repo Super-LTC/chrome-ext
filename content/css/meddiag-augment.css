@@ -120,54 +120,134 @@
 
 .super-meddiag-cp-panel {
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-  padding: 4px;
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-.super-meddiag-cp-panel__row {
-  border-left: 3px solid #16a34a;
-  padding: 10px 14px;
-  border-radius: 4px;
-  background: #fff;
+/* ---- Header strip ---- */
+
+.super-meddiag-cp-panel__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.super-meddiag-cp-panel__head-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1px;
+}
+
+.super-meddiag-cp-panel__head-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .super-meddiag-cp-panel__status {
   font-size: 13px;
   font-weight: 700;
-  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+  margin-bottom: 2px;
 }
 
 .super-meddiag-cp-panel__code {
   font-size: 12px;
-  font-weight: 600;
-  color: #0f172a;
-  margin-bottom: 8px;
-  line-height: 1.35;
+  color: #334155;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
-.super-meddiag-cp-panel__focus {
-  font-size: 12px;
-  color: #334155;
-  line-height: 1.45;
+/* ---- Card stack ---- */
+
+.super-meddiag-cp-panel__body {
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.super-meddiag-cp-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.super-meddiag-cp-card--ai {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.super-meddiag-cp-card--missing {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.super-meddiag-cp-card__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
   margin-bottom: 6px;
 }
 
-.super-meddiag-cp-panel__reason {
-  font-size: 12px;
+.super-meddiag-cp-card--ai .super-meddiag-cp-card__label {
+  color: #4338ca;
+}
+
+.super-meddiag-cp-card__tag {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.super-meddiag-cp-card__tag--ok {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.super-meddiag-cp-card__tag--resolved {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+}
+
+.super-meddiag-cp-card__body {
+  font-size: 12.5px;
+  color: #1e293b;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.super-meddiag-cp-card__body--muted {
   color: #64748b;
+  font-style: italic;
+  font-size: 11.5px;
+}
+
+.super-meddiag-cp-card__body--ai {
+  color: #4c1d95;
+  font-size: 12px;
   line-height: 1.55;
 }
 
-.super-meddiag-cp-panel__hint {
-  margin-top: 10px;
-  padding: 8px 10px;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: 6px;
-  font-size: 12px;
+.super-meddiag-cp-card--missing .super-meddiag-cp-card__body {
   color: #92400e;
+  font-size: 12.5px;
   line-height: 1.45;
 }
 

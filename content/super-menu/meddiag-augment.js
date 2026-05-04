@@ -351,43 +351,78 @@ const MedDiagAugment = {
   },
 
   /**
-   * Anchored care-plan panel rendered next to the chip — same visual
-   * language as the MDS overlay's toggleCarePlanInline. Click backdrop
-   * or another chip to dismiss.
+   * Anchored care-plan panel — distinct cards for Focus / Intervention /
+   * AI explanation so it's clear what came from the chart vs what the
+   * model inferred.
    */
   _showCarePlanDetails(dx, anchorEl) {
     this._closeCarePlanPanel();
     const cp = dx.carePlanStatus || {};
     const status = cp.status || 'missing';
-    const statusLabels = {
-      covered: 'Care Planned',
-      partial: 'Partially Care Planned',
-      missing: 'Not Care Planned',
+    const statusMeta = {
+      covered: { label: 'Care Planned', color: '#16a34a', bg: '#f0fdf4', icon: this._checkBadgeSvg('#16a34a') },
+      partial: { label: 'Partially Care Planned', color: '#d97706', bg: '#fffbeb', icon: this._partialBadgeSvg('#d97706') },
+      missing: { label: 'Not Care Planned', color: '#dc2626', bg: '#fef2f2', icon: this._alertBadgeSvg('#dc2626') },
     };
-    const statusColors = {
-      covered: '#16a34a',
-      partial: '#d97706',
-      missing: '#dc2626',
-    };
-    const label = statusLabels[status] || status;
-    const color = statusColors[status] || '#64748b';
+    const meta = statusMeta[status] || statusMeta.missing;
 
-    const focusName = cp.matchedFocus?.focusText
-      ? cp.matchedFocus.focusText.split('\n')[0].split('--')[0].trim().replace(/\s+AEB\s*$/i, '')
+    // PCC focus text often arrives with a "DX: " or similar prefix and an
+    // "AEB ..." suffix — strip both so the focus reads cleanly.
+    const focusText = cp.matchedFocus?.focusText
+      ? cp.matchedFocus.focusText
+          .replace(/^DX:\s*/i, '')
+          .replace(/\s+AEB[\s\S]*$/i, '')
+          .trim()
       : '';
+    const focusResolved = !!cp.matchedFocus?.isResolved;
+    const hasIntervention = !!cp.matchedInterventionId;
 
     const panel = document.createElement('div');
-    panel.className = 'super-meddiag-cp-panel';
+    panel.className = 'super-meddiag-cp-panel super-meddiag-cp-panel--cards';
     panel.innerHTML = `
-      <div class="super-meddiag-cp-panel__row" style="border-left-color:${color};">
-        <div class="super-meddiag-cp-panel__status" style="color:${color};">${this._esc(label)}</div>
-        <div class="super-meddiag-cp-panel__code">${this._esc(dx.code || '')} — ${this._esc(dx.description || '')}</div>
-        ${focusName ? `<div class="super-meddiag-cp-panel__focus">${this._esc(focusName)}</div>` : ''}
-        ${cp.reason ? `<div class="super-meddiag-cp-panel__reason">${this._esc(cp.reason)}</div>` : ''}
-        ${status === 'missing' ? `
-          <div class="super-meddiag-cp-panel__hint">
-            No matching care plan focus. Add one in PCC's Care Plan tab.
-          </div>` : ''}
+      <div class="super-meddiag-cp-panel__head" style="background:${meta.bg};border-color:${meta.color};">
+        <div class="super-meddiag-cp-panel__head-icon" style="color:${meta.color};">${meta.icon}</div>
+        <div class="super-meddiag-cp-panel__head-text">
+          <div class="super-meddiag-cp-panel__status" style="color:${meta.color};">${this._esc(meta.label)}</div>
+          <div class="super-meddiag-cp-panel__code">${this._esc(dx.code || '')} · ${this._esc(dx.description || '')}</div>
+        </div>
+      </div>
+      <div class="super-meddiag-cp-panel__body">
+        ${focusText ? `
+          <div class="super-meddiag-cp-card">
+            <div class="super-meddiag-cp-card__label">
+              ${this._targetSvg('#0f172a')} Focus
+              ${focusResolved ? `<span class="super-meddiag-cp-card__tag super-meddiag-cp-card__tag--resolved">Resolved</span>` : ''}
+            </div>
+            <div class="super-meddiag-cp-card__body">${this._esc(focusText)}</div>
+          </div>
+        ` : ''}
+        ${hasIntervention ? `
+          <div class="super-meddiag-cp-card">
+            <div class="super-meddiag-cp-card__label">
+              ${this._wrenchSvg('#0f172a')} Intervention
+              <span class="super-meddiag-cp-card__tag super-meddiag-cp-card__tag--ok">Matched</span>
+            </div>
+            <div class="super-meddiag-cp-card__body super-meddiag-cp-card__body--muted">
+              An intervention is linked under this focus. Open in PCC's Care Plan tab to view full text.
+            </div>
+          </div>
+        ` : ''}
+        ${cp.reason ? `
+          <div class="super-meddiag-cp-card super-meddiag-cp-card--ai">
+            <div class="super-meddiag-cp-card__label">
+              ${this._sparkleSvg('#6366f1')} Why this matches
+            </div>
+            <div class="super-meddiag-cp-card__body super-meddiag-cp-card__body--ai">${this._esc(cp.reason)}</div>
+          </div>
+        ` : ''}
+        ${status === 'missing' && !focusText ? `
+          <div class="super-meddiag-cp-card super-meddiag-cp-card--missing">
+            <div class="super-meddiag-cp-card__body">
+              No matching care plan focus. Add one in PCC's Care Plan tab to address this diagnosis.
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
 
@@ -811,6 +846,24 @@ const MedDiagAugment = {
   },
   _chatSvg(color) {
     return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+  },
+  _checkBadgeSvg(color) {
+    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+  },
+  _partialBadgeSvg(color) {
+    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2 a10 10 0 0 1 0 20 z" fill="${color}"></path></svg>`;
+  },
+  _alertBadgeSvg(color) {
+    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+  },
+  _targetSvg(color) {
+    return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>`;
+  },
+  _wrenchSvg(color) {
+    return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`;
+  },
+  _sparkleSvg(color) {
+    return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 14 9 20 11 14 13 12 19 10 13 4 11 10 9 z"></path></svg>`;
   },
 
   _esc(s) {
