@@ -491,6 +491,13 @@ const ICD10EvidencePanel = {
     const availableCodes = this._getAvailableCodes();
     const hasMultipleCodes = availableCodes.length > 1;
 
+    // Resolve focused leaf metadata up front — used for the header badge,
+    // the alternate-detection, and the staged/alternate Add button choice.
+    const focusedMeta =
+      (this.items || []).find(it => it.icd10Code === code)
+      || availableCodes.find(c => c.code === code)
+      || null;
+
     // Reflect "added" state from the session-wide staged set, so navigating
     // away and back to a leaf still shows ✓ Added correctly.
     const isFocusedStaged = this._isFocusedLeafStaged() || this.isApproved;
@@ -610,14 +617,8 @@ const ICD10EvidencePanel = {
       </button>
     ` : '';
 
-    // Resolve the focused code's pdpm badge so it renders next to the code
-    // pill at the top — same info as the dropdown rows, but visible without
-    // opening the dropdown. Pull from items (the loaded mentions for this
-    // group) or fall back to the matching availableCodes entry.
-    const focusedMeta =
-      (this.items || []).find(it => it.icd10Code === code)
-      || availableCodes.find(c => c.code === code)
-      || null;
+    // Render the focused code's pdpm badge inline with the code pill —
+    // focusedMeta was already resolved above for the alternate check.
     let headerBadgeHtml = '';
     if (focusedMeta && focusedMeta.pdpmCategory) {
       const cat = focusedMeta.pdpmCategory;
