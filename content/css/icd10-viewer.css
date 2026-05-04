@@ -3070,3 +3070,170 @@
   }
 }
 
+
+/* ============================================================================
+ * Sidebar leaf tree — chevron toggle on each row, nested leaf list when
+ * expanded. Lazy-loaded leaves come from getAnnotationsByBaseCode.
+ * ============================================================================ */
+
+.icd10-sb__chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--super-gray-500, #737373);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: transform 0.15s, background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.icd10-sb__chev:hover {
+  background: var(--super-gray-100, #f5f5f5);
+  color: var(--super-gray-700, #404040);
+}
+
+.icd10-sb__chev--open {
+  transform: rotate(0deg); /* chevron points down already; rotation handled by base SVG which is "v" */
+}
+
+.icd10-sb__chev:not(.icd10-sb__chev--open) svg {
+  transform: rotate(-90deg);
+  transition: transform 0.15s;
+}
+
+.icd10-sb__chev--open svg {
+  transform: rotate(0deg);
+  transition: transform 0.15s;
+}
+
+.icd10-sb__chev-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--super-gray-300, #d4d4d4);
+  border-top-color: var(--super-primary, #6366f1);
+  border-radius: 50%;
+  animation: icd10-sb-spin 0.6s linear infinite;
+}
+
+@keyframes icd10-sb-spin {
+  to { transform: rotate(360deg); }
+}
+
+.icd10-sb__leaves {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 4px 24px;
+  background: var(--super-gray-50, #fafafa);
+  border-left: 2px solid var(--super-gray-200, #e5e5e5);
+  margin-left: 10px;
+}
+
+.icd10-sb__leaves--loading,
+.icd10-sb__leaves--empty {
+  padding: 6px 12px 6px 24px;
+  font-size: 11px;
+  color: var(--super-gray-500, #737373);
+  font-style: italic;
+}
+
+.icd10-sb__leaf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--super-gray-700, #404040);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.icd10-sb__leaf:hover {
+  background: var(--super-gray-100, #f5f5f5);
+}
+
+.icd10-sb__leaf--focused {
+  background: #eef2ff;
+  color: var(--super-primary-dark, #4338ca);
+  font-weight: 500;
+}
+
+.icd10-sb__leaf--focused:hover {
+  background: #e0e7ff;
+}
+
+.icd10-sb__leaf--staged {
+  background: #f0fdf4;
+}
+
+.icd10-sb__leaf-check {
+  display: inline-flex;
+  align-items: center;
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.icd10-sb__leaf-code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--super-gray-900, #171717);
+  flex-shrink: 0;
+  min-width: 48px;
+}
+
+.icd10-sb__leaf--focused .icd10-sb__leaf-code {
+  color: var(--super-primary-dark, #4338ca);
+}
+
+.icd10-sb__leaf-desc {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icd10-sb__leaf-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.icd10-sb__leaf-badge--nta {
+  color: var(--super-primary-dark, #4338ca);
+  border-color: var(--super-primary, #6366f1);
+  background: #eef2ff;
+}
+
+.icd10-sb__leaf-badge--slp {
+  color: #0f766e;
+  border-color: #14b8a6;
+  background: #ccfbf1;
+}
+
+.icd10-sb__leaf-badge--nursing {
+  color: #9a3412;
+  border-color: #f97316;
+  background: #ffedd5;
+}
+
+.icd10-sb__leaf-badge--sectioni,
+.icd10-sb__leaf-badge--i {
+  color: #6b21a8;
+  border-color: #a855f7;
+  background: #f3e8ff;
+}

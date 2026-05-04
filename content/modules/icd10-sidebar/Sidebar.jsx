@@ -279,7 +279,68 @@ function Icon({ name }) {
   return null;
 }
 
-function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled }) {
+function ChevronToggle({ expanded, loading, onToggle, ariaLabel }) {
+  return h('button', {
+    type: 'button',
+    class: `icd10-sb__chev ${expanded ? 'icd10-sb__chev--open' : ''}`,
+    onClick: (e) => { e.stopPropagation(); onToggle(); },
+    'aria-label': ariaLabel,
+    'aria-expanded': expanded,
+  },
+    loading
+      ? h('span', { class: 'icd10-sb__chev-spinner' })
+      : h(Icon, { name: 'chevron' })
+  );
+}
+
+function LeafRow({ leaf, baseCode, focused, staged, onClick }) {
+  const cls = ['icd10-sb__leaf'];
+  if (focused) cls.push('icd10-sb__leaf--focused');
+  if (staged) cls.push('icd10-sb__leaf--staged');
+  const cat = leaf.pdpmCategory || null;
+  let badgeLabel = null, badgeClass = null;
+  if (cat) {
+    badgeClass = cat.toLowerCase().replace(/[^a-z]/g, '');
+    badgeLabel = cat === 'NTA' && leaf.pdpmPoints != null
+      ? `NTA +${leaf.pdpmPoints}`
+      : cat === 'NURSING' ? 'NURS' : cat === 'SECTION-I' ? 'I' : cat;
+  }
+  return h('div', {
+    class: cls.join(' '),
+    onClick: () => onClick(baseCode, leaf),
+    title: leaf.description,
+  },
+    staged && h('span', { class: 'icd10-sb__leaf-check', 'aria-label': 'Staged' }, h(Icon, { name: 'check' })),
+    h('span', { class: 'icd10-sb__leaf-code' }, leaf.code),
+    h('span', { class: 'icd10-sb__leaf-desc' }, leaf.description || ''),
+    badgeLabel && h('span', { class: `icd10-sb__leaf-badge icd10-sb__leaf-badge--${badgeClass}` }, badgeLabel),
+  );
+}
+
+function LeafList({ baseCode, leaves, focusedLeafCode, stagedLeafSet, onSelectLeaf }) {
+  if (!leaves) {
+    return h('div', { class: 'icd10-sb__leaves icd10-sb__leaves--loading' },
+      h('span', { class: 'icd10-sb__leaves-loading-text' }, 'Loading…')
+    );
+  }
+  if (leaves.length === 0) {
+    return h('div', { class: 'icd10-sb__leaves icd10-sb__leaves--empty' },
+      h('span', { class: 'icd10-sb__leaves-empty-text' }, 'No mentions found')
+    );
+  }
+  return h('div', { class: 'icd10-sb__leaves' },
+    leaves.map(leaf => h(LeafRow, {
+      key: leaf.code,
+      leaf,
+      baseCode,
+      focused: focusedLeafCode === leaf.code,
+      staged: stagedLeafSet.has(leaf.code),
+      onClick: onSelectLeaf,
+    }))
+  );
+}
+
+function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUndismiss, dismissDisabled, expandable, expanded, expandLoading, onToggleExpand }) {
   const [busy, setBusy] = useState(false);
   const cls = ['icd10-sb__row'];
   if (selected) cls.push('icd10-sb__row--selected');
@@ -317,6 +378,12 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
     class: cls.join(' '),
     onClick: () => onClick(row.key),
   },
+    expandable && !hidden && h(ChevronToggle, {
+      expanded,
+      loading: expandLoading,
+      onToggle: () => onToggleExpand && onToggleExpand(row),
+      ariaLabel: expanded ? `Collapse ${row.code} variants` : `Expand ${row.code} variants`,
+    }),
     row.rank != null && !hidden && h('span', { class: 'icd10-sb__rank' }, `#${row.rank}`),
     h('span', { class: 'icd10-sb__code' }, row.code),
     h('span', { class: 'icd10-sb__desc', title: row.description }, row.description),
@@ -373,9 +440,10 @@ function StaticHeader({ label, icon }) {
   );
 }
 
-export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false }) {
+export function Sidebar({ topRanked = [], approved = [], annotations = [], flatGroups = null, onSelect, stagedBaseCodes = null, approvedBaseCodes = null, onDismiss, onUndismiss, dismissDisabled = false, onExpandRow = null, onSelectLeaf = null, stagedLeafCodes = null, focusedLeafCode = null }) {
   const stagedSet = stagedBaseCodes instanceof Set ? stagedBaseCodes : new Set(stagedBaseCodes || []);
   const approvedSet = approvedBaseCodes instanceof Set ? approvedBaseCodes : new Set(approvedBaseCodes || []);
+  const stagedLeafSet = stagedLeafCodes instanceof Set ? stagedLeafCodes : new Set(stagedLeafCodes || []);
   const isStaged = (row) => stagedSet.has(row.code) || stagedSet.has(row.baseCode);
   const isApproved = (row) => approvedSet.has(row.code) || approvedSet.has(row.baseCode);
   const [approvedOpen, setApprovedOpen] = useState(false);
@@ -383,6 +451,38 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
   const autoSelectedForRef = useRef(null);
+
+  // Leaf-tree state. expandedKeys = row keys currently expanded in the tree.
+  // leavesByCode = fetched leaves keyed by base code (cached across collapses).
+  // loadingCodes = base codes with an in-flight fetch (for chevron spinner).
+  const [expandedKeys, setExpandedKeys] = useState(() => new Set());
+  const [leavesByCode, setLeavesByCode] = useState(() => new Map());
+  const [loadingCodes, setLoadingCodes] = useState(() => new Set());
+
+  const leafExpandable = typeof onExpandRow === 'function' && typeof onSelectLeaf === 'function';
+
+  const handleToggleExpand = async (row) => {
+    if (!leafExpandable) return;
+    const key = row.key;
+    const code = row.code;
+    if (expandedKeys.has(key)) {
+      setExpandedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
+      return;
+    }
+    setExpandedKeys(prev => new Set([...prev, key]));
+    if (leavesByCode.has(code) || loadingCodes.has(code)) return;
+    setLoadingCodes(prev => new Set([...prev, code]));
+    try {
+      const leaves = await onExpandRow(code, row);
+      setLeavesByCode(prev => new Map(prev).set(code, leaves || []));
+    } catch (err) {
+      console.error('[Sidebar] expand fetch failed:', err);
+      // Cache empty so we don't refetch on every chevron click after a fail.
+      setLeavesByCode(prev => new Map(prev).set(code, []));
+    } finally {
+      setLoadingCodes(prev => { const n = new Set(prev); n.delete(code); return n; });
+    }
+  };
 
   // Optimistic overrides: { [groupKey]: { dismissed: true|false } }.
   // Applied on top of server `dismissed` until the next refetch reconciles.
@@ -508,6 +608,47 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
   const showOther = sections.other.length > 0;
   const showSpeculative = sections.speculative.length > 0;
 
+  // Helper: render Row + (optional) nested LeafList. Returns an array so it
+  // flattens into the section body's children. Leaves are only rendered for
+  // visible rows (not hidden), and only when the parent is leaf-expandable.
+  const renderRowAndLeaves = (row, opts = {}) => {
+    const isHidden = !!opts.hidden;
+    const expanded = !isHidden && expandedKeys.has(row.key);
+    const expandLoading = loadingCodes.has(row.code);
+    const rowProps = {
+      key: row.key,
+      row,
+      selected: opts.selected ?? (selectedKey === row.key),
+      onClick: handleClick,
+      staged: opts.staged ?? isStaged(row),
+      approved: opts.approved ?? isApproved(row),
+      hidden: isHidden,
+      onDismiss: opts.hidden ? undefined : handleDismiss,
+      onUndismiss: opts.hidden ? handleUndismiss : undefined,
+      dismissDisabled,
+      expandable: leafExpandable && !isHidden,
+      expanded,
+      expandLoading,
+      onToggleExpand: handleToggleExpand,
+    };
+    const out = [h(Row, rowProps)];
+    if (expanded) {
+      out.push(h(LeafList, {
+        key: `${row.key}::leaves`,
+        baseCode: row.code,
+        leaves: leavesByCode.get(row.code),
+        focusedLeafCode,
+        stagedLeafSet,
+        onSelectLeaf: (baseCode, leaf) => {
+          if (typeof onSelectLeaf === 'function') {
+            onSelectLeaf(baseCode, leaf.code, leaf.description, row);
+          }
+        },
+      }));
+    }
+    return out;
+  };
+
   return h('div', { class: 'icd10-sb' },
     showApproved && h('section', { class: 'icd10-sb__section' },
       h(CollapsibleHeader, {
@@ -519,9 +660,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         variant: 'approved',
       }),
       approvedOpen && h('div', { class: 'icd10-sb__section-body' },
-        sections.approved.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-        )
+        sections.approved.flatMap(row => renderRowAndLeaves(row))
       )
     ),
 
@@ -529,9 +668,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
       h(StaticHeader, { label: 'Top picks', icon: 'star' }),
       h('div', { class: 'icd10-sb__section-body' },
         sections.topPicks.length > 0
-          ? sections.topPicks.map(row =>
-              h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-            )
+          ? sections.topPicks.flatMap(row => renderRowAndLeaves(row))
           : h('div', { class: 'icd10-sb__empty' }, 'No suggestions yet')
       )
     ),
@@ -539,9 +676,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
     showOther && h('section', { class: 'icd10-sb__section' },
       h(StaticHeader, { label: 'Other suggestions' }),
       h('div', { class: 'icd10-sb__section-body' },
-        sections.other.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-        )
+        sections.other.flatMap(row => renderRowAndLeaves(row))
       )
     ),
 
@@ -555,9 +690,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         variant: 'warning',
       }),
       speculativeOpen && h('div', { class: 'icd10-sb__section-body' },
-        sections.speculative.map(row =>
-          h(Row, { key: row.key, row, selected: selectedKey === row.key, onClick: handleClick, staged: isStaged(row), approved: isApproved(row), onDismiss: handleDismiss, dismissDisabled })
-        )
+        sections.speculative.flatMap(row => renderRowAndLeaves(row))
       )
     ),
 
@@ -571,9 +704,7 @@ export function Sidebar({ topRanked = [], approved = [], annotations = [], flatG
         variant: 'hidden',
       }),
       hiddenOpen && h('div', { class: 'icd10-sb__section-body' },
-        sections.hidden.map(row =>
-          h(Row, { key: row.key, row, selected: false, onClick: handleClick, staged: false, approved: false, hidden: true, onUndismiss: handleUndismiss })
-        )
+        sections.hidden.flatMap(row => renderRowAndLeaves(row, { hidden: true, selected: false, staged: false, approved: false }))
       )
     )
   );

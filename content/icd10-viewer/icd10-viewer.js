@@ -417,11 +417,15 @@ const ICD10Viewer = {
         counts: this.counts,
         stagedBaseCodes: this._computeStagedBaseCodes(),
         approvedBaseCodes: this._computeApprovedBaseCodes(),
+        stagedLeafCodes: this._computeStagedLeafCodes(),
       },
       (selection) => this._handleSidebarSelection(selection),
       {
         onDismiss: (groupKey, row) => this._handleDismiss(groupKey, row),
         onUndismiss: (groupKey, row) => this._handleUndismiss(groupKey, row),
+        onExpandRow: (baseCode, row) => this._fetchLeavesForBase(baseCode),
+        onSelectLeaf: (baseCode, leafCode, leafDescription, row) =>
+          this._handleSidebarLeafSelect(baseCode, leafCode, leafDescription, row),
         dismissDisabled: this._dismissDisabled === true,
       }
     );
@@ -708,11 +712,92 @@ const ICD10Viewer = {
     return set;
   },
 
+  /** Set of leaf icd10 codes currently staged this session (for sidebar ✓). */
+  _computeStagedLeafCodes() {
+    const set = new Set();
+    for (const c of this.stagedCodes || []) if (c.icd10Code) set.add(c.icd10Code);
+    return set;
+  },
+
   _refreshSidebarStaged() {
     ICD10Sidebar.updateData({
       stagedBaseCodes: this._computeStagedBaseCodes(),
       approvedBaseCodes: this._computeApprovedBaseCodes(),
+      stagedLeafCodes: this._computeStagedLeafCodes(),
     });
+  },
+
+  /**
+   * Sidebar tree expansion: fetch the leaves under a base code. Reuses the
+   * existing per-base annotations endpoint (already cached in
+   * ICD10API.detailCache by patient+base+assessment), then derives one row
+   * per unique leaf with mention count + pdpm metadata.
+   *
+   * @param {string} baseCode
+   * @returns {Promise<Array<{code, description, pdpmCategory, pdpmPoints, mentionCount}>>}
+   */
+  async _fetchLeavesForBase(baseCode) {
+    if (!baseCode) return [];
+    const annotations = await ICD10API.getAnnotationsByBaseCode(
+      this.patientId, baseCode, this.facilityName, this.orgSlug, this._assessmentId
+    );
+    const map = new Map();
+    for (const ann of annotations || []) {
+      const code = ann.icd10Code;
+      if (!code) continue;
+      let row = map.get(code);
+      if (!row) {
+        row = {
+          code,
+          description: ann.description || '',
+          pdpmCategory: ann.pdpmCategory ?? null,
+          pdpmPoints: ann.pdpmPoints ?? null,
+          mentionCount: 0,
+        };
+        map.set(code, row);
+      }
+      row.mentionCount += 1;
+      // Prefer the first non-empty description; first non-null pdpmCategory.
+      if (!row.description && ann.description) row.description = ann.description;
+      if (row.pdpmCategory == null && ann.pdpmCategory != null) {
+        row.pdpmCategory = ann.pdpmCategory;
+        row.pdpmPoints = ann.pdpmPoints ?? null;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      b.mentionCount - a.mentionCount || a.code.localeCompare(b.code)
+    );
+  },
+
+  /**
+   * Sidebar leaf clicked. The base group's annotations are already in the
+   * detail cache (fetch was triggered by the row's expand), so we drive the
+   * panel by selecting the base (existing flow) and then focusing the leaf.
+   */
+  async _handleSidebarLeafSelect(baseCode, leafCode, leafDescription, row) {
+    if (!baseCode || !leafCode) return;
+    // Build a sidebar-equivalent selection so the existing handler reuses its
+    // groupContext + items-fetch path. row.group / row.flatGroup carries the
+    // metadata we already have from sidebar render time.
+    const selection = {
+      category: row?.origin || 'topRanked',
+      baseCode,
+      groupKey: row?.groupKey || baseCode,
+      groupCode: baseCode,
+      dismissed: !!row?.dismissed,
+      groupName: row?.description || null,
+      pdpmCategory: row?.pdpmCategory || null,
+      pdpmCategoryName: row?.pdpmCategoryName || null,
+      mdsItemCode: row?.mdsItemCode || null,
+      items: null,
+    };
+    await this._handleSidebarSelection(selection);
+    // After items load, focus the specific leaf in the evidence panel.
+    if (typeof ICD10EvidencePanel?._selectCode === 'function') {
+      ICD10EvidencePanel._selectCode(leafCode, leafDescription || '');
+    }
+    // Push focused-leaf back to sidebar so its leaf row highlights.
+    ICD10Sidebar.updateData({ focusedLeafCode: leafCode });
   },
 
   /**
