@@ -219,13 +219,13 @@ const MedDiagAugment = {
     ].filter(Boolean).join(' — ');
     wrap.innerHTML = this._shieldSvg(color);
 
-    if (cp.matchedFocus?.id || cp.matchedInterventionId || status === 'missing') {
-      wrap.style.cursor = 'pointer';
-      wrap.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._showCarePlanDetails(dx);
-      });
-    }
+    // Always clickable — show details panel on every status (including
+    // missing, where we surface the "add focus" hint).
+    wrap.style.cursor = 'pointer';
+    wrap.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._showCarePlanDetails(dx, wrap);
+    });
     return wrap;
   },
 
@@ -253,7 +253,7 @@ const MedDiagAugment = {
       wrap.style.cursor = 'pointer';
       wrap.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._showQueryDetails(qh.outstandingQueryId);
+        this._showQueryDetails(qh.outstandingQueryId, wrap);
       });
       return wrap;
     }
@@ -269,12 +269,11 @@ const MedDiagAugment = {
       const color = overdue ? '#ef4444' : '#475569';
       wrap.innerHTML = this._checkCircleSvg(color) +
         `<span class="super-meddiag-chip__label">${overdue ? `Re-query (${days}d)` : `Signed ${days}d`}</span>`;
-      // Re-query overdue: launch new query flow via the icd10-viewer.
-      // Otherwise still clickable to re-query, just with a different cue.
+      // Re-query overdue or recently signed: launch new query flow inline.
       wrap.style.cursor = 'pointer';
       wrap.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._launchQueryFor(dx);
+        this._launchQueryFor(dx, wrap);
       });
       return wrap;
     }
@@ -287,17 +286,28 @@ const MedDiagAugment = {
     wrap.style.cursor = 'pointer';
     wrap.addEventListener('click', (e) => {
       e.stopPropagation();
-      this._launchQueryFor(dx);
+      this._launchQueryFor(dx, wrap);
     });
     return wrap;
   },
 
   // ---- click handlers ---------------------------------------------------
 
-  async _showQueryDetails(queryId) {
+  /**
+   * Open the QueryDetailModal for an existing query. Adds an in-chip
+   * spinner so the click feels instant; the modal pops once the fetch
+   * resolves (~200-500ms). chipEl is the clicked chip element so we can
+   * restore its content on completion.
+   */
+  async _showQueryDetails(queryId, chipEl) {
     if (!queryId) return;
     if (typeof window.QueryAPI?.getQuery !== 'function') return;
     if (typeof window.QueryDetailModal?.show !== 'function') return;
+
+    // Visual feedback: replace chip content with a spinner so the user
+    // knows the click registered (the underlying fetch is the slow part).
+    const restore = chipEl ? this._setChipLoading(chipEl) : null;
+
     try {
       const query = await window.QueryAPI.getQuery(queryId);
       if (!query) return;
@@ -308,56 +318,242 @@ const MedDiagAugment = {
         message: 'Could not load query. Try again.',
         type: 'error',
       });
+    } finally {
+      if (restore) restore();
     }
   },
 
-  _showCarePlanDetails(dx) {
-    // Reuse a SuperModal — the MDS overlay's inline panel is too tightly
-    // coupled to its DOM context to drop in here. Show the focus + reason
-    // + status; offer an "Add focus" link when missing.
-    if (typeof window.SuperModal?.show !== 'function') return;
+  /**
+   * Anchored care-plan panel rendered next to the chip — same visual
+   * language as the MDS overlay's toggleCarePlanInline. Click backdrop
+   * or another chip to dismiss.
+   */
+  _showCarePlanDetails(dx, anchorEl) {
+    this._closeCarePlanPanel();
     const cp = dx.carePlanStatus || {};
     const status = cp.status || 'missing';
-    const color = status === 'covered' ? '#16a34a'
-      : status === 'partial' ? '#f59e0b'
-      : '#ef4444';
-    const lines = [
-      `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-        ${this._shieldSvg(color)}
-        <strong style="text-transform:capitalize;">${this._esc(status)}</strong>
-      </div>`,
-    ];
-    if (cp.matchedFocus?.focusText) {
-      lines.push(`<div style="margin-bottom:8px;"><strong>Focus:</strong> ${this._esc(cp.matchedFocus.focusText)}</div>`);
-    }
-    if (cp.reason) {
-      lines.push(`<div style="margin-bottom:8px;"><strong>Reason:</strong> ${this._esc(cp.reason)}</div>`);
-    }
-    if (cp.stale) {
-      lines.push(`<div style="color:#737373;font-size:12px;font-style:italic;">Updating…</div>`);
-    }
-    if (status === 'missing') {
-      lines.push(`<div style="margin-top:12px;color:#92400e;background:#fef3c7;border:1px solid #f59e0b;padding:8px 10px;border-radius:6px;font-size:13px;">
-        No matching care plan focus. Add one in PCC's Care Plan tab.
-      </div>`);
-    }
-    window.SuperModal.show({
-      title: `Care Plan — ${this._esc(dx.icd10Code || '')}`,
-      content: lines.join(''),
-      size: 'small',
-      actions: [
-        { label: 'Close', variant: 'secondary', onClick: () => window.SuperModal.close() },
-      ],
-    });
+    const statusLabels = {
+      covered: 'Care Planned',
+      partial: 'Partially Care Planned',
+      missing: 'Not Care Planned',
+    };
+    const statusColors = {
+      covered: '#16a34a',
+      partial: '#d97706',
+      missing: '#dc2626',
+    };
+    const label = statusLabels[status] || status;
+    const color = statusColors[status] || '#64748b';
+
+    const focusName = cp.matchedFocus?.focusText
+      ? cp.matchedFocus.focusText.split('\n')[0].split('--')[0].trim().replace(/\s+AEB\s*$/i, '')
+      : '';
+
+    const panel = document.createElement('div');
+    panel.className = 'super-meddiag-cp-panel';
+    panel.innerHTML = `
+      <div class="super-meddiag-cp-panel__row" style="border-left-color:${color};">
+        <div class="super-meddiag-cp-panel__status" style="color:${color};">${this._esc(label)}</div>
+        <div class="super-meddiag-cp-panel__code">${this._esc(dx.code || '')} — ${this._esc(dx.description || '')}</div>
+        ${focusName ? `<div class="super-meddiag-cp-panel__focus">${this._esc(focusName)}</div>` : ''}
+        ${cp.reason ? `<div class="super-meddiag-cp-panel__reason">${this._esc(cp.reason)}</div>` : ''}
+        ${status === 'missing' ? `
+          <div class="super-meddiag-cp-panel__hint">
+            No matching care plan focus. Add one in PCC's Care Plan tab.
+          </div>` : ''}
+      </div>
+    `;
+
+    // Backdrop closes on click
+    const backdrop = document.createElement('div');
+    backdrop.className = 'super-meddiag-cp-backdrop';
+    backdrop.addEventListener('click', () => this._closeCarePlanPanel());
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(panel);
+    this._activeCpPanel = panel;
+    this._activeCpBackdrop = backdrop;
+
+    // Position next to the anchor
+    this._positionPanel(panel, anchorEl);
+
+    // Close on Esc
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        this._closeCarePlanPanel();
+        document.removeEventListener('keydown', onKey);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    panel._onKey = onKey;
   },
 
-  _launchQueryFor(dx) {
-    // Shortest path to query: open the icd10-viewer modal — its sidebar
-    // will land on the right base, and its panel's Query button will
-    // start the existing flow. The user lands one click away from sending.
-    if (window.ICD10Viewer?.open) {
-      window.ICD10Viewer.open();
+  _closeCarePlanPanel() {
+    if (this._activeCpPanel) {
+      if (this._activeCpPanel._onKey) {
+        document.removeEventListener('keydown', this._activeCpPanel._onKey);
+      }
+      this._activeCpPanel.remove();
+      this._activeCpPanel = null;
     }
+    if (this._activeCpBackdrop) {
+      this._activeCpBackdrop.remove();
+      this._activeCpBackdrop = null;
+    }
+  },
+
+  _positionPanel(panel, anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    const margin = 8;
+    panel.style.position = 'fixed';
+    panel.style.zIndex = '2147483640';
+    // Default: below the chip, left-aligned
+    let top = r.bottom + margin;
+    let left = r.left;
+    // Constrain to viewport
+    const panelW = 380;
+    if (left + panelW > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - panelW - 12);
+    }
+    panel.style.top = `${top}px`;
+    panel.style.left = `${left}px`;
+    panel.style.width = `${panelW}px`;
+  },
+
+  /**
+   * Launch a query flow modal directly (no icd10-viewer chrome). Fetches
+   * annotations for the base code so the flow has evidence to attach.
+   *
+   * Visual feedback: chip shows spinner during the annotation fetch (the
+   * slow part) so the click feels responsive.
+   */
+  async _launchQueryFor(dx, chipEl) {
+    if (!dx?.code || !this._patientId) return;
+    const baseCode = dx.code.length >= 3 ? dx.code.substring(0, 3) : dx.code;
+
+    const restore = chipEl ? this._setChipLoading(chipEl) : null;
+
+    try {
+      // Fetch annotations for the base code (existing API client + cache)
+      let annotations = [];
+      if (typeof window.ICD10API?.getAnnotationsByBaseCode === 'function') {
+        try {
+          annotations = await window.ICD10API.getAnnotationsByBaseCode(
+            this._patientId, baseCode, this._facilityName, this._orgSlug, null
+          );
+        } catch (e) {
+          console.warn('[MedDiagAugment] failed to fetch annotations:', e);
+        }
+      }
+
+      const groupContext = {
+        groupCode: baseCode,
+        groupKey: baseCode,
+        groupName: dx.description || null,
+        pdpmCategory: dx.pdpmCategory || null,
+        pdpmCategoryName: dx.pdpmCategoryName || null,
+        pdpmCategoryNumber: dx.pdpmCategoryNumber ?? null,
+        pdpmPoints: dx.pdpmPoints,
+        mdsItemCode: dx.mdsItemCode || null,
+        queryable: dx.queryable === true,
+      };
+
+      await this._mountQueryFlow({
+        baseCode: dx.code,
+        description: dx.description || '',
+        groupContext,
+        items: annotations || [],
+      });
+    } finally {
+      if (restore) restore();
+    }
+  },
+
+  /**
+   * Mount the Icd10QueryFlow Preact component into a fresh container.
+   * Same pattern the icd10-viewer uses internally.
+   */
+  async _mountQueryFlow({ baseCode, description, groupContext, items }) {
+    if (this._queryFlowUnmount) {
+      try { this._queryFlowUnmount(); } catch (_) {}
+      this._queryFlowUnmount = null;
+    }
+
+    const mountEl = document.createElement('div');
+    mountEl.className = 'super-meddiag-query-flow-mount';
+    document.body.appendChild(mountEl);
+
+    let render, h, Icd10QueryFlow;
+    try {
+      if (window.__preact && window.__Icd10QueryFlow) {
+        ({ render, h } = window.__preact);
+        Icd10QueryFlow = window.__Icd10QueryFlow;
+      } else {
+        const [preactMod, flowMod] = await Promise.all([
+          import('preact'),
+          import('../modules/icd10-query-flow/Icd10QueryFlow.jsx'),
+        ]);
+        ({ render, h } = preactMod);
+        ({ Icd10QueryFlow } = flowMod);
+        if (!window.__preact) window.__preact = preactMod;
+        if (!window.__Icd10QueryFlow) window.__Icd10QueryFlow = Icd10QueryFlow;
+      }
+    } catch (err) {
+      console.error('[MedDiagAugment] failed to load query flow:', err);
+      mountEl.remove();
+      window.SuperToast?.show?.({ message: 'Could not load query flow.', type: 'error' });
+      return;
+    }
+
+    const cleanup = () => {
+      try { render(null, mountEl); } catch (_) {}
+      mountEl.remove();
+      this._queryFlowUnmount = null;
+    };
+    this._queryFlowUnmount = cleanup;
+
+    render(
+      h(Icd10QueryFlow, {
+        baseCode,
+        description,
+        groupContext,
+        items,
+        patientId: this._patientId,
+        facilityName: this._facilityName,
+        orgSlug: this._orgSlug,
+        assessmentId: null,
+        onClose: () => cleanup(),
+        onComplete: (sentQueries, practitionerName) => {
+          const n = (sentQueries || []).length;
+          if (n > 0) {
+            window.SuperToast?.show?.({
+              message: n === 1
+                ? `Query for ${baseCode} sent to ${practitionerName || 'practitioner'}.`
+                : `${n} queries sent to ${practitionerName || 'practitioner'}.`,
+              type: 'success',
+            });
+            // Refresh page chips so "Query" → "Pending" without reload.
+            this._fetchAndRender();
+          }
+        },
+      }),
+      mountEl
+    );
+  },
+
+  /**
+   * Replace a chip's content with a spinner during async work.
+   * Returns a restore() function the caller calls when done.
+   */
+  _setChipLoading(chipEl) {
+    if (!chipEl) return null;
+    const original = chipEl.innerHTML;
+    chipEl.innerHTML = `<span class="super-meddiag-chip__spinner"></span>`;
+    chipEl.style.pointerEvents = 'none';
+    return () => {
+      chipEl.innerHTML = original;
+      chipEl.style.pointerEvents = '';
+    };
   },
 
   // ---- svg helpers ------------------------------------------------------
