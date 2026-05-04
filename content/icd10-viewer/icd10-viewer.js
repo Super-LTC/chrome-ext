@@ -397,7 +397,8 @@ const ICD10Viewer = {
       (payload) => this._handleQuerySingle(payload),
       (item) => this._handleUnstage(item),
       (groupKey, row) => this._handleDismiss(groupKey, row),
-      (groupKey, row) => this._handleUndismiss(groupKey, row)
+      (groupKey, row) => this._handleUndismiss(groupKey, row),
+      (queryId) => this._showQueryDetails(queryId),
     );
 
     // Initialize PDF viewer
@@ -734,6 +735,34 @@ const ICD10Viewer = {
     const set = new Set();
     for (const c of this.stagedCodes || []) if (c.icd10Code) set.add(c.icd10Code);
     return set;
+  },
+
+  /**
+   * Open the query-detail modal for an existing pending/sent query.
+   * Reuses the existing QueryDetailModal — same surface coders see when
+   * they click into a query elsewhere in the extension.
+   */
+  async _showQueryDetails(queryId) {
+    if (!queryId) return;
+    if (typeof window.QueryAPI?.getQuery !== 'function') {
+      console.warn('[ICD10Viewer] QueryAPI.getQuery not available');
+      return;
+    }
+    if (typeof window.QueryDetailModal?.show !== 'function') {
+      console.warn('[ICD10Viewer] QueryDetailModal not available');
+      return;
+    }
+    try {
+      const query = await window.QueryAPI.getQuery(queryId);
+      if (!query) return;
+      window.QueryDetailModal.show(query, null, { showCodingStatus: false });
+    } catch (err) {
+      console.error('[ICD10Viewer] Failed to load query details:', err);
+      window.SuperToast?.show?.({
+        message: 'Could not load query details. Try again.',
+        type: 'error',
+      });
+    }
   },
 
   /**

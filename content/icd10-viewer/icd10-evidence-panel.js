@@ -80,7 +80,7 @@ const ICD10EvidencePanel = {
    * @param {Function} onCardSelect - Callback when an evidence item is selected
    * @param {Function} onApprove - Callback when approve is clicked
    */
-  init(container, onCardSelect, onApprove, onQuery, onUnapprove, onDismiss, onUndismiss) {
+  init(container, onCardSelect, onApprove, onQuery, onUnapprove, onDismiss, onUndismiss, onViewQuery) {
     this.container = container;
     this.onCardSelect = onCardSelect;
     this.onApprove = onApprove;
@@ -88,6 +88,7 @@ const ICD10EvidencePanel = {
     this.onUnapprove = onUnapprove;
     this.onDismiss = onDismiss || null;
     this.onUndismiss = onUndismiss || null;
+    this.onViewQuery = onViewQuery || null;
     this.dismissBusy = false;
     this.isDismissed = false;
     // Reset all state from any previous opening
@@ -685,34 +686,44 @@ const ICD10EvidencePanel = {
     const hasOutstanding = !!queryHistory?.hasOutstanding;
     const recentlySigned = daysSinceSigned != null && daysSinceSigned < 60;
     // Query button states (in priority order):
-    //   1. hasOutstanding → muted "Query outstanding" with day count
-    //   2. recentlySigned (<60d) → muted "Signed Nd ago"
-    //   3. !focusedQueryable → muted, generic "may not be queryable" tooltip
-    //   4. default → full-color "Query"
+    //   1. hasOutstanding → "Query pending" — click to view existing
+    //   2. recentlySigned (<60d) → "Query signed Nd ago" — click for new
+    //   3. !focusedQueryable → muted, generic tooltip
+    //   4. default → full-color "Query" — click for new
     let queryLabel = 'Query';
     let queryTitle = 'Generate a physician query for this code';
     let queryMuted = false;
+    let queryAction = 'query'; // 'query' = new flow, 'view-query' = show details modal
     if (hasOutstanding) {
       const out = (queryHistory.pendingCount || 0) + (queryHistory.sentCount || 0);
-      queryLabel = `Query outstanding${out > 1 ? ` (${out})` : ''}`;
-      queryTitle = 'A query is already pending or awaiting physician sign-off for this code.';
+      queryLabel = out > 1 ? `Query pending (${out})` : 'Query pending';
+      queryTitle = 'A query is awaiting physician sign-off. Click to view.';
       queryMuted = true;
+      queryAction = 'view-query';
     } else if (recentlySigned) {
-      queryLabel = `Signed ${daysSinceSigned}d ago`;
-      queryTitle = `Last signed ${daysSinceSigned} days ago. Re-querying within 60 days is usually unnecessary — click anyway to override.`;
+      queryLabel = `Query signed ${daysSinceSigned}d ago`;
+      queryTitle = `Last signed ${daysSinceSigned} days ago. Re-querying within 60 days is usually unnecessary — click to start a new query anyway.`;
       queryMuted = true;
     } else if (!focusedQueryable) {
       queryTitle = 'Backend may not be able to attach a query for this code — click anyway to try.';
       queryMuted = true;
     }
     const queryHtml = canQuery ? `
-      <!-- NO_TRACK: query create flow tracks dx_query_created at submit time -->
-      <button class="icd10-evidence-panel__query ${queryMuted ? 'icd10-evidence-panel__query--muted' : ''}"
-              data-action="query"
+      <!-- NO_TRACK: view-query / query create both emit their own events downstream -->
+      <button class="icd10-evidence-panel__query ${queryMuted ? 'icd10-evidence-panel__query--muted' : ''} ${queryAction === 'view-query' ? 'icd10-evidence-panel__query--view' : ''}"
+              data-action="${queryAction}"
+              data-query-id="${queryAction === 'view-query' ? this._escapeHtml(queryHistory?.outstandingQueryId || '') : ''}"
               title="${this._escapeHtml(queryTitle)}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
+        ${queryAction === 'view-query'
+          // Paper-airplane icon for view existing query
+          ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>`
+          // Speech-bubble icon for new query
+          : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>`}
         ${this._escapeHtml(queryLabel)}
       </button>
     ` : '';
@@ -1054,6 +1065,18 @@ const ICD10EvidencePanel = {
 
     // Query button click — hands off to the viewer's onQuery callback
     // with everything needed to build a single-item solverResult.
+    // "View existing query" click (button is in queryAction='view-query' mode)
+    const viewQueryBtn = this.container.querySelector('[data-action="view-query"]');
+    if (viewQueryBtn) {
+      viewQueryBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const queryId = viewQueryBtn.dataset.queryId;
+        if (typeof this.onViewQuery === 'function' && queryId) {
+          this.onViewQuery(queryId);
+        }
+      });
+    }
+
     const queryBtn = this.container.querySelector('[data-action="query"]');
     if (queryBtn) {
       queryBtn.addEventListener('click', (e) => {

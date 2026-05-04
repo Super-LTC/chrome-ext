@@ -545,20 +545,38 @@ function Row({ row, selected, onClick, staged, approved, hidden, onDismiss, onUn
  * confirmation of the approved code).
  */
 /**
- * Query-history chip rendered on PCC-diagnosis rows. Surfaces:
- *   hasOutstanding → amber "Query out" chip (most urgent)
- *   recently signed (<60d) → muted "Signed Nd" chip (informational)
- *   older signed (≥60d) → omitted entirely (visual noise; re-query is fine)
- *   no query history → omitted entirely
+ * Query-history chip rendered on rows that have query activity.
+ * Icon-only to keep rows compact (descriptions take the horizontal
+ * space). Tooltip carries the verbose detail.
+ *
+ *   hasOutstanding → paper-plane (amber) — most urgent
+ *   recently signed (<60d) → check-circle (slate) — informational
+ *   older signed (≥60d) → omitted entirely (re-query is fine)
  */
+function PaperPlaneIcon() {
+  return h('svg', { width: 11, height: 11, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+    h('line', { x1: 22, y1: 2, x2: 11, y2: 13 }),
+    h('polygon', { points: '22 2 15 22 11 13 2 9 22 2' })
+  );
+}
+function CheckCircleIcon() {
+  return h('svg', { width: 11, height: 11, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+    h('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' }),
+    h('polyline', { points: '22 4 12 14.01 9 11.01' })
+  );
+}
+
 function QueryHistoryChip({ history }) {
   if (!history) return null;
   const out = (history.pendingCount || 0) + (history.sentCount || 0);
   if (history.hasOutstanding && out > 0) {
     return h('span', {
       class: 'icd10-sb__qh-chip icd10-sb__qh-chip--out',
-      title: `${out} query${out === 1 ? '' : 'ies'} pending or awaiting physician sign-off.`,
-    }, out > 1 ? `Query out (${out})` : 'Query out');
+      title: out === 1
+        ? 'Query pending physician sign-off. Click row to view.'
+        : `${out} queries pending physician sign-off. Click row to view.`,
+      'aria-label': out === 1 ? 'Query pending' : `${out} queries pending`,
+    }, h(PaperPlaneIcon), out > 1 && h('span', { class: 'icd10-sb__qh-chip-count' }, out));
   }
   if (history.lastSignedAt) {
     const days = typeof history.daysSinceLastSigned === 'number'
@@ -566,8 +584,9 @@ function QueryHistoryChip({ history }) {
     if (days != null && days < 60) {
       return h('span', {
         class: 'icd10-sb__qh-chip icd10-sb__qh-chip--signed',
-        title: `Last signed ${days} day${days === 1 ? '' : 's'} ago. Re-querying within 60 days is usually unnecessary.`,
-      }, `Signed ${days}d`);
+        title: `Signed ${days} day${days === 1 ? '' : 's'} ago. Re-querying within 60 days is usually unnecessary.`,
+        'aria-label': `Signed ${days} days ago`,
+      }, h(CheckCircleIcon));
     }
   }
   return null;

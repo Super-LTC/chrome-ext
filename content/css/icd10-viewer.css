@@ -3497,15 +3497,20 @@
    appropriate. */
 .icd10-sb__qh-chip {
   flex-shrink: 0;
-  padding: 1px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 2px 5px;
   border-radius: 8px;
   border: 1px solid transparent;
+  line-height: 1;
+}
+
+.icd10-sb__qh-chip-count {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1.4;
-  text-transform: uppercase;
-  white-space: nowrap;
+  margin-left: 1px;
 }
 
 .icd10-sb__qh-chip--out {
@@ -3518,6 +3523,18 @@
   color: #475569;
   border-color: #cbd5e1;
   background: #f1f5f9;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+}
+
+/* "View existing query" variant of the panel Query button — paper-airplane
+   icon, amber theming so it reads as "look at the query that's already
+   on the way" rather than "start a new one". */
+.icd10-evidence-panel__query--view {
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+  background: #fffbeb !important;
+  opacity: 1 !important;
+}
+
+.icd10-evidence-panel__query--view:hover:not(:disabled) {
+  background: #fef3c7 !important;
 }
