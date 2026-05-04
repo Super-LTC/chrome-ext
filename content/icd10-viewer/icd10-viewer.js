@@ -759,16 +759,25 @@ const ICD10Viewer = {
   },
 
   /**
-   * Sidebar tree expansion: fetch the leaves under a base code. Reuses the
-   * existing per-base annotations endpoint (already cached in
-   * ICD10API.detailCache by patient+base+assessment), then derives one row
-   * per unique leaf with mention count + pdpm metadata.
+   * Sidebar tree expansion: return the leaves under a base code. Backend
+   * v2 list response now ships `leaves[]` inline on every ranked / flat
+   * group summary, so the common path is a synchronous lookup against
+   * the data already in memory — no network round-trip on click.
+   *
+   * Falls back to deriving from per-base annotations only when the inline
+   * leaves field is missing (older API). Per-leaf pdpm fields come from
+   * each leaf object directly: one base can split across categories
+   * (e.g. E11.40 = Diabetes Mellitus, E11.621 = Diabetic Foot Ulcer).
    *
    * @param {string} baseCode
-   * @returns {Promise<Array<{code, description, pdpmCategory, pdpmPoints, mentionCount}>>}
+   * @returns {Promise<Array<ICD10LeafSummary>>}
    */
   async _fetchLeavesForBase(baseCode) {
     if (!baseCode) return [];
+    const inline = this._findInlineLeavesForBase(baseCode);
+    if (inline) return inline;
+
+    // Back-compat: derive from per-base annotations.
     const annotations = await ICD10API.getAnnotationsByBaseCode(
       this.patientId, baseCode, this.facilityName, this.orgSlug, this._assessmentId
     );
@@ -782,22 +791,50 @@ const ICD10Viewer = {
           code,
           description: ann.description || '',
           pdpmCategory: ann.pdpmCategory ?? null,
+          pdpmCategoryName: ann.pdpmCategoryName ?? null,
           pdpmPoints: ann.pdpmPoints ?? null,
           mentionCount: 0,
         };
         map.set(code, row);
       }
       row.mentionCount += 1;
-      // Prefer the first non-empty description; first non-null pdpmCategory.
       if (!row.description && ann.description) row.description = ann.description;
       if (row.pdpmCategory == null && ann.pdpmCategory != null) {
         row.pdpmCategory = ann.pdpmCategory;
         row.pdpmPoints = ann.pdpmPoints ?? null;
+        row.pdpmCategoryName = ann.pdpmCategoryName ?? null;
       }
     }
     return Array.from(map.values()).sort((a, b) =>
       b.mentionCount - a.mentionCount || a.code.localeCompare(b.code)
     );
+  },
+
+  /**
+   * Look up the inline leaves[] array for a base code from the in-memory
+   * v2 list response data. Checks topRanked, approved (annotation-derived,
+   * not the PCC list), and every flatGroups bucket. Returns null when the
+   * field is absent (older API version) so the caller can fall back.
+   */
+  _findInlineLeavesForBase(baseCode) {
+    const matches = (g) => (g?.groupCode || g?.group) === baseCode;
+    const fromGroup = (g) => Array.isArray(g?.leaves) ? g.leaves : null;
+
+    for (const g of this.topRanked || []) {
+      if (matches(g)) return fromGroup(g);
+    }
+    for (const g of this.approved || []) {
+      if (matches(g)) return fromGroup(g);
+    }
+    if (this.flatGroups && typeof this.flatGroups === 'object') {
+      for (const bucket of Object.values(this.flatGroups)) {
+        if (!Array.isArray(bucket)) continue;
+        for (const g of bucket) {
+          if (matches(g)) return fromGroup(g);
+        }
+      }
+    }
+    return null;
   },
 
   /**
