@@ -103,6 +103,11 @@ const QuerySendModal = {
       // If we have a result (not existing query), generate AI note
       if (this._state.result && !this._state.existingQuery) {
         try {
+          // Safety net: if the caller passed a result whose aiAnswer has
+          // evidenceCount > 0 but no evidence array (caller didn't lazy-load
+          // before opening the modal), fetch and backfill before generate-note
+          // — otherwise the AI has nothing to cite and picks codes blindly.
+          await this._ensureEvidenceLoaded(this._state.result);
           this._state.noteData = await QueryAPI.generateNote(
             this._state.result.mdsItem,
             this._state.result.aiAnswer
@@ -530,6 +535,56 @@ const QuerySendModal = {
       successEl.classList.remove('super-query-success--visible');
       setTimeout(() => successEl.remove(), 300);
     }, 1500);
+  },
+
+  /**
+   * Backfill evidence onto result.aiAnswer if the caller didn't lazy-load it
+   * before opening the modal. Common case: Section I popover renders with
+   * only evidenceCount, then user clicks Query before the auto-load resolved.
+   * Without this, generate-note runs with zero citations and the AI picks
+   * codes blindly.
+   */
+  async _ensureEvidenceLoaded(result) {
+    if (!result?.aiAnswer || !result.mdsItem) return;
+    const ai = result.aiAnswer;
+    const haveArr = (a) => Array.isArray(a) && a.length > 0;
+    if (haveArr(ai.evidence) || haveArr(ai.queryEvidence)) return;
+    const totalCount = (ai.evidenceCount || 0) + (ai.queryEvidenceCount || 0);
+    if (totalCount === 0) return;
+
+    const ctx = this._state.context || {};
+    const section = (result.section || result.mdsItem?.charAt(0) || '').toUpperCase();
+    if (!section || !ctx.facilityName || !ctx.orgSlug) {
+      console.warn('[QuerySendModal] cannot fetch evidence — missing section/facility/org', { section, ctx });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      facilityName: ctx.facilityName,
+      orgSlug: ctx.orgSlug,
+    });
+    if (ctx.assessmentId) params.set('externalAssessmentId', ctx.assessmentId);
+    const endpoint = `/api/extension/mds/sections/${section}/items/${encodeURIComponent(result.mdsItem)}/evidence?${params}`;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'API_REQUEST',
+        endpoint,
+      });
+      if (!response?.success || !response.data) {
+        console.warn('[QuerySendModal] evidence backfill failed', response?.error);
+        return;
+      }
+      // Response shape: { success, itemCode, section, item: { evidence, queryEvidence, ... } }
+      // Fall back to top-level for older shapes / different sections.
+      const item = response.data.item || response.data;
+      const columnEvidence = (result.column && item.evidenceByColumn?.[result.column]) || null;
+      ai.evidence = columnEvidence || item.evidence || [];
+      ai.queryEvidence = item.queryEvidence || [];
+      if (item.validation) ai.validation = item.validation;
+    } catch (err) {
+      console.error('[QuerySendModal] evidence backfill threw:', err);
+    }
   },
 
   /**

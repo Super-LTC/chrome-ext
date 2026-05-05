@@ -1925,10 +1925,14 @@ function setupPopoverListeners(popover, result) {
     handleAction('disagree', result);
   });
 
-  // Query button (for Section I diagnosis items)
+  // Query button (for Section I diagnosis items). If the auto-load is still
+  // in flight (or hasn't run because the user clicked before scroll finished
+  // setting up evidence), block the click until evidence is backfilled onto
+  // result.aiAnswer — otherwise the query modal opens with no citations.
   const queryBtn = popover.querySelector('[data-action="query"]');
   if (queryBtn) {
-    queryBtn.addEventListener('click', () => {
+    queryBtn.addEventListener('click', async () => {
+      await ensureEvidenceLoaded(result, queryBtn);
       closePopover();
       window.QuerySendModal?.show(result);
     });
@@ -1987,7 +1991,10 @@ function setupPopoverListeners(popover, result) {
   if (evidenceContainer) {
     const totalCount = (result.aiAnswer.evidenceCount || 0) + (result.aiAnswer.queryEvidenceCount || 0);
     if (totalCount > 0) {
-      fetchItemEvidence(SuperOverlay.section, result.mdsItem).then(data => {
+      // Stash the in-flight promise so the Query button can await it if the
+      // user clicks before the auto-load resolves (otherwise QuerySendModal
+      // opens with empty evidence and the AI note has nothing to cite).
+      const evidencePromise = fetchItemEvidence(SuperOverlay.section, result.mdsItem).then(data => {
         // Prefer per-column evidence when available (Section O nests evidence inside columns.A/B)
         const columnEvidence = (result.column && data.evidenceByColumn?.[result.column]) || null;
         const baseEvidence = columnEvidence || data.evidence || [];
@@ -2044,6 +2051,7 @@ function setupPopoverListeners(popover, result) {
         console.error('[Super LTC] Failed to load evidence:', err);
         evidenceContainer.innerHTML = '<div class="super-evidence-error">Failed to load evidence</div>';
       });
+      result.aiAnswer._evidencePromise = evidencePromise;
     }
   }
 }
@@ -4351,11 +4359,69 @@ function restorePopoverActions(popover, result) {
   actionsEl.querySelector('[data-action="disagree"]').addEventListener('click', () => handleAction('disagree', result));
   const queryBtn = actionsEl.querySelector('[data-action="query"]');
   if (queryBtn) {
-    queryBtn.addEventListener('click', () => {
+    queryBtn.addEventListener('click', async () => {
+      await ensureEvidenceLoaded(result, queryBtn);
       closePopover();
       window.QuerySendModal?.show(result);
     });
   }
+}
+
+/**
+ * Block opening QuerySendModal until evidence is backfilled onto
+ * result.aiAnswer. Awaits the in-flight auto-load promise if present;
+ * otherwise kicks off a one-shot fetch (covers the case where the popover
+ * was rendered without an auto-load — e.g. evidenceCount=0 but the user
+ * still wants to query, or restoreActions was called).
+ *
+ * Shows a brief "Loading…" state on the button so the click feels alive.
+ */
+async function ensureEvidenceLoaded(result, btnEl) {
+  if (!result?.aiAnswer || !result.mdsItem) return;
+
+  const haveArr = (a) => Array.isArray(a) && a.length > 0;
+  if (haveArr(result.aiAnswer.evidence) || haveArr(result.aiAnswer.queryEvidence)) return;
+
+  const restore = btnEl ? setBtnLoading(btnEl, 'Loading evidence…') : null;
+  try {
+    // Reuse the auto-load promise if it's in flight, ignoring its rejections
+    // — we'll re-check evidence afterwards and fall through to a fresh fetch
+    // if the backfill didn't happen for any reason.
+    if (result.aiAnswer._evidencePromise) {
+      try { await result.aiAnswer._evidencePromise; } catch (_) {}
+    }
+
+    const stillEmpty = !haveArr(result.aiAnswer.evidence) && !haveArr(result.aiAnswer.queryEvidence);
+    if (stillEmpty) {
+      const data = await fetchItemEvidence(SuperOverlay.section, result.mdsItem);
+      const columnEvidence = (result.column && data.evidenceByColumn?.[result.column]) || null;
+      result.aiAnswer.evidence = columnEvidence || data.evidence || [];
+      result.aiAnswer.queryEvidence = data.queryEvidence || [];
+      if (data.validation) result.aiAnswer.validation = data.validation;
+    }
+  } catch (err) {
+    console.error('[Super LTC] ensureEvidenceLoaded failed:', err);
+  } finally {
+    if (restore) restore();
+  }
+}
+
+/**
+ * Replace a button's content with a small spinner + label during async work.
+ * Returns a restore() callback the caller must invoke when done.
+ */
+function setBtnLoading(btnEl, label = 'Loading…') {
+  if (!btnEl) return () => {};
+  const original = btnEl.innerHTML;
+  const wasDisabled = btnEl.disabled;
+  btnEl.disabled = true;
+  btnEl.style.opacity = '0.75';
+  btnEl.innerHTML = `<span class="super-btn__spinner" style="width:10px;height:10px;margin-right:6px;"></span>${label}`;
+  return () => {
+    btnEl.innerHTML = original;
+    btnEl.disabled = wasDisabled;
+    btnEl.style.opacity = '';
+  };
 }
 
 /**

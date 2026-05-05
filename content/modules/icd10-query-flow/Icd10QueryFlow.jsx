@@ -79,6 +79,10 @@ function buildSolverItem({ baseCode, description, groupContext, items }) {
 
   return {
     mdsItem,
+    // Source ICD-10 code from the diagnosis row the user clicked. Backend
+    // uses this to default `preferredIcd10` to the user's actual chart code
+    // instead of letting the model pick alphabetically when evidence is thin.
+    icd10Code: baseCode,
     mdsItemName: pdpmCategoryName || description || baseCode,
     pdpmCategoryName,
     pdpmCategory,

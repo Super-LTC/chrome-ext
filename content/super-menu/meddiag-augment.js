@@ -268,14 +268,20 @@ const MedDiagAugment = {
       return wrap;
     }
 
+    // Icon-only chip variants. Color carries the state signal; an optional
+    // numeric badge surfaces pending count.
+    wrap.classList.add('super-meddiag-chip--q-icon');
+
     if (qh?.hasOutstanding) {
       const out = (qh.pendingCount || 0) + (qh.sentCount || 0);
       wrap.classList.add('super-meddiag-chip--q-pending');
       wrap.title = out === 1
         ? 'Query awaiting physician sign-off. Click for history.'
         : `${out} queries awaiting physician sign-off. Click for history.`;
-      wrap.innerHTML = this._paperPlaneSvg('#92400e') +
-        `<span class="super-meddiag-chip__label">Pending${out > 1 ? ` (${out})` : ''}</span>`;
+      const badge = out > 1
+        ? `<span class="super-meddiag-chip__badge super-meddiag-chip__badge--count">${out}</span>`
+        : `<span class="super-meddiag-chip__badge super-meddiag-chip__badge--clock">${this._clockSvg('#fff')}</span>`;
+      wrap.innerHTML = this._stethoscopeSvg('#b45309') + badge;
       wrap.style.cursor = 'pointer';
       wrap.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -292,11 +298,11 @@ const MedDiagAugment = {
       wrap.title = overdue
         ? `Last signed ${days} days ago — re-query recommended (>60d). Click for history.`
         : `Last signed ${days} day${days === 1 ? '' : 's'} ago. Click for history.`;
-      const color = overdue ? '#ef4444' : '#475569';
-      wrap.innerHTML = this._checkCircleSvg(color) +
-        `<span class="super-meddiag-chip__label">${overdue ? `Re-query (${days}d)` : `Signed ${days}d`}</span>`;
-      // History exists → open timeline panel. From there the user can
-      // open any past query's detail or trigger a re-query.
+      const iconColor = overdue ? '#dc2626' : '#16a34a';
+      const badge = overdue
+        ? `<span class="super-meddiag-chip__badge super-meddiag-chip__badge--alert">${this._alertSvg('#fff')}</span>`
+        : `<span class="super-meddiag-chip__badge super-meddiag-chip__badge--check">${this._checkSvg('#fff')}</span>`;
+      wrap.innerHTML = this._stethoscopeSvg(iconColor) + badge;
       wrap.style.cursor = 'pointer';
       wrap.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -305,11 +311,10 @@ const MedDiagAugment = {
       return wrap;
     }
 
-    // Queryable but no history yet — offer a one-click "Query" launcher.
+    // Queryable but no history yet — one-click launcher.
     wrap.classList.add('super-meddiag-chip--q-ready');
-    wrap.title = 'Queryable — click to launch a physician query.';
-    wrap.innerHTML = this._chatSvg('#4338ca') +
-      `<span class="super-meddiag-chip__label">Query</span>`;
+    wrap.title = 'Ask the physician about this code';
+    wrap.innerHTML = this._stethoscopeSvg('#64748b');
     wrap.style.cursor = 'pointer';
     wrap.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -846,6 +851,20 @@ const MedDiagAugment = {
   },
   _chatSvg(color) {
     return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+  },
+  _stethoscopeSvg(color) {
+    // Person + clipboard — same icon used on Query badges elsewhere in the
+    // app (see query-badges.js). Reads as "physician with chart."
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="3"/><path d="M3 21v-2a6 6 0 0 1 6-6 6 6 0 0 1 3 .8"/><rect x="15" y="11" width="7" height="10" rx="1.5"/><path d="M17.5 11V9.5a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1V11"/><line x1="17" y1="14.5" x2="20" y2="14.5"/><line x1="17" y1="16.5" x2="20" y2="16.5"/><line x1="17" y1="18.5" x2="19" y2="18.5"/></svg>`;
+  },
+  _clockSvg(color) {
+    return `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+  },
+  _checkSvg(color) {
+    return `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+  },
+  _alertSvg(color) {
+    return `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="14"></line><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`;
   },
   _checkBadgeSvg(color) {
     return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;

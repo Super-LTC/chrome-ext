@@ -192,12 +192,21 @@ const QueryAPI = {
   async generateNote(mdsItem, solverResult) {
     const endpoint = `/api/extension/diagnosis-queries/generate-note`;
 
+    // Forward the source ICD-10 code at the top level when the caller has
+    // it on the solverResult (set by Icd10QueryFlow from the row the user
+    // clicked). Backend defaults preferredIcd10 to this code when it's a
+    // valid option, instead of letting the model pick alphabetically.
+    const sourceIcd10Code = solverResult?.icd10Code || solverResult?.sourceIcd10Code || solverResult?.code || null;
+    const body = sourceIcd10Code
+      ? { mdsItem, icd10Code: sourceIcd10Code, solverResult }
+      : { mdsItem, solverResult };
+
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
       endpoint,
       options: {
         method: 'POST',
-        body: JSON.stringify({ mdsItem, solverResult })
+        body: JSON.stringify(body)
       }
     });
 

@@ -62,45 +62,58 @@
 
 /* ---- Query variants ------------------------------------------------------ */
 
-.super-meddiag-chip--q-pending {
-  background: #fef3c7;
-  border-color: #f59e0b;
-  color: #92400e;
+/* Icon-only chips: bare icon, no background. Color of the icon carries
+   the state signal. Matches the CP shield treatment for visual calm. */
+.super-meddiag-chip--q-icon {
+  position: relative;
+  padding: 3px;
+  gap: 0;
+  border: none;
+  background: transparent;
+  min-width: 0;
+  justify-content: center;
+  transition: transform 120ms ease;
 }
 
-.super-meddiag-chip--q-pending:hover {
-  background: #fde68a;
+.super-meddiag-chip--q-icon:hover {
+  transform: scale(1.12);
 }
 
-.super-meddiag-chip--q-signed {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #475569;
+.super-meddiag-chip__badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px #fff;
 }
 
-.super-meddiag-chip--q-signed:hover {
-  background: #e2e8f0;
+.super-meddiag-chip__badge--count,
+.super-meddiag-chip__badge--clock {
+  background: #d97706;
 }
 
-.super-meddiag-chip--q-overdue {
-  background: #fee2e2;
-  border-color: #ef4444;
-  color: #991b1b;
+.super-meddiag-chip__badge--check {
+  background: #16a34a;
 }
 
-.super-meddiag-chip--q-overdue:hover {
-  background: #fecaca;
+.super-meddiag-chip__badge--alert {
+  background: #dc2626;
 }
 
-.super-meddiag-chip--q-ready {
-  background: #eef2ff;
-  border-color: #6366f1;
-  color: #4338ca;
+.super-meddiag-chip__badge svg {
+  display: block;
 }
 
-.super-meddiag-chip--q-ready:hover {
-  background: #e0e7ff;
-}
 
 .super-meddiag-chip--q-none {
   background: transparent;

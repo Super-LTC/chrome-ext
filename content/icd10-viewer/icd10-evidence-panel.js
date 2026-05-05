@@ -403,6 +403,23 @@ const ICD10EvidencePanel = {
     }
 
     if (this.items.length === 0) {
+      // If a code is selected (user clicked a diagnosis but it has no
+      // evidence), keep the diagnosis header so the Query / Approve actions
+      // remain available. Only show the generic placeholder when no code
+      // is selected at all.
+      if (this.selectedCode) {
+        const summaryHtml = this._buildSummaryHtml() || '';
+        this.container.innerHTML = `
+          ${this._renderDiagnosisHeader()}
+          ${summaryHtml}
+          <div class="icd10-evidence-panel__doc-count icd10-evidence-panel__doc-count--empty">
+            No evidence found for <strong>${this._escapeHtml(this.selectedCode)}</strong>.
+          </div>
+        `;
+        this._attachEventListeners();
+        return;
+      }
+
       this.container.innerHTML = `
         <div class="icd10-evidence-panel__empty">
           <div class="icd10-evidence-panel__empty-icon">
