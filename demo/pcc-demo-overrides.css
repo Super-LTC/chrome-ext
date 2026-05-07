@@ -2,7 +2,9 @@
  * PCC Demo overrides — hides vanilla Super elements and polishes Preact overlays.
  */
 
-/* ── Hide vanilla Super side panel, popover, modals, and FAB ── */
+/* ── Hide vanilla Super side panel, popover, modals, and FAB ──
+   NOTE: do NOT include .super-modal here — the Preact FeedbackModal uses
+   that class. Vanilla legacy modals are id-based (#superModal, #notesModal). */
 #superPanel,
 #superPopover,
 #superModal,
@@ -14,8 +16,7 @@
 .super-chat-fab,
 #super-chat-panel,
 .super-chat-panel,
-#notesModal,
-.super-modal {
+#notesModal {
   display: none !important;
 }
 

@@ -60,10 +60,53 @@ export function RecommendationText({
   if (isRec) variant = 'positive';
   else if (!allSame) variant = 'warning';
 
+  // \u2500\u2500 IV-medications look-back narrative \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // O0110H1 IV Medications has a 7-day look-back ending on the ARD. When
+  // hospital IV meds (vancomycin/IV fluids) bridge admission, ARD timing is
+  // the single biggest NTA lever. Surface this story prominently so coders
+  // see exactly which day window keeps O0110H1 capturable.
+  const ivMedItem = (result.classifiedItems || []).find(
+    i => i.mdsItem === 'O0110' && (i.mdsColumn === 'H1' || !i.mdsColumn)
+  );
+  const ivMedCaptured = ivMedItem?.capturedOnDays?.includes(selectedDay);
+  const ivMedLastDay = ivMedItem
+    ? Math.max(...(ivMedItem.capturedOnDays || [0]))
+    : null;
+  const showIvBanner = !!ivMedItem && ivMedLastDay != null;
+
   return (
-    <div className={`ard-est__rec-text ard-est__rec-text--${variant}`}>
-      <span className="ard-est__rec-text-bold">Day {selectedDay} {'\u2014'} </span>
-      {text}
-    </div>
+    <>
+      <div className={`ard-est__rec-text ard-est__rec-text--${variant}`}>
+        <span className="ard-est__rec-text-bold">Day {selectedDay} {'\u2014'} </span>
+        {text}
+      </div>
+      {showIvBanner && (
+        <div
+          className={`ard-est__rec-text ard-est__rec-text--${ivMedCaptured ? 'positive' : 'warning'}`}
+          style={{ marginTop: 8 }}
+        >
+          <span className="ard-est__rec-text-bold">
+            IV medications look-back {'\u2014'}{' '}
+          </span>
+          {ivMedCaptured ? (
+            <>
+              IV vancomycin continued at the SNF on 1/11 (Day 2) for 1 dose
+              before stepping down to PO. ARD on Day {selectedDay} keeps that
+              SNF admin inside the 7-day O0110H1 look-back {'\u2014'} captures{' '}
+              <strong>+{ivMedItem.ntaPoints} NTA</strong> via O0110H1b
+              (post-admit, while a resident).
+            </>
+          ) : (
+            <>
+              ARD on Day {selectedDay} sits outside the 7-day O0110H1
+              look-back for the SNF vanco dose on 1/11. Move ARD to
+              Day {ivMedItem.capturedOnDays?.[0] ?? 2}{'\u2013'}Day {ivMedLastDay}{' '}
+              to capture <strong>+{ivMedItem.ntaPoints} NTA</strong> via
+              O0110H1b (post-admit, while a resident).
+            </>
+          )}
+        </div>
+      )}
+    </>
   );
 }

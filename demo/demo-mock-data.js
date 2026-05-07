@@ -2216,194 +2216,319 @@ export const DEMO_API_RESPONSES = {
     }
   ],
 
-  // ════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // ARD RECOMMENDATION (useArdEstimator)
-  // 5-Day PPS scenario for Doe, Jane. Day 5 is the recommended ARD,
-  // Day 3 drops NTA because a look-back-limited dx wasn't captured yet.
-  // ════════════════════════════════════════════
+  // 14-day ARD window for Doe, Jane (admit 2026-01-10).
+  //
+  // Patient story: post-acute SNF admission after pneumonia w/ sepsis.
+  // Hospital stay 2026-01-08 → 2026-01-10 included IV vancomycin + IV fluids.
+  // Active comorbidities: Type 2 DM, HTN, CAD, mild PVD, mild CHF, COPD,
+  // mild expressive aphasia (post-stroke 2024), depression (home meds),
+  // mechanically altered (puree) diet.
+  //
+  // PDPM NTA point ceiling (FY2025 CMS), if every item is captured:
+  //   I2900 Diabetes ........... 2
+  //   I6100 COPD ............... 2
+  //   I2000 Pneumonia .......... 1
+  //   I2100 Septicemia ......... 2
+  //   I4300 Aphasia ............ 1
+  //   O0110H1 IV Medications ... 5  (7-day lookback before ARD)
+  //   ── total ──────────────── 13   → NTA Level NA (≥12)
+  // Without IV meds capture: 8  → NTA Level NC (6–8)
+  //
+  // Day-by-day evolution (key milestones):
+  //   Days 1–3: PHQ-9 not yet administered, query responses for pneumonia /
+  //             sepsis / IV meds not back. Only diagnoses on hospital
+  //             face-sheet count (DM, COPD, aphasia) ⇒ 5 NTA pts (NE).
+  //             Nursing = "Clinically Complex" (CBC1) — no PHQ-9 → no
+  //             depression-end-split bump.
+  //   Day 4   : PHQ-9 done (D0150 score 9). Pneumonia + Septicemia
+  //             query responses returned ⇒ +3 NTA → 8 pts (NC).
+  //             Depression coded → nursing CDE end-split bump.
+  //   Day 5–7 : IV-medication query response returned (+5 NTA) → 13 pts
+  //             (NA). RECOMMENDED ARD WINDOW.  IV med 7-day lookback still
+  //             includes hospital admin on 2026-01-10.
+  //   Day 8   : Lookback 1/2 → 1/8 plus ARD = 1/17 covers hospital IV meds
+  //             on 1/8–1/10 — still capturable.
+  //   Day 9+  : Lookback no longer reaches 1/10 → O0110H1 lost (-5 NTA),
+  //             back down to 8 pts (NC).
+  // ════════════════════════════════════════════════════════════════════════════
   ardRecommendation: {
     success: true,
     externalAssessmentId: '4860265',
     admissionDate: '2026-01-10',
     recommendedDayNumber: 5,
-    potentialPpd: 612,
+    potentialPpd: 612,        // achievable ceiling at recommended day
+    potentialNtaPoints: 12,   // I2900(2) + I6200(2) + I1700(1) + I2500(2) + O0110H1b(5) = 12 → NA
+    sectionsMissing: [],
     scores: [
+      // Day 1 (admit night): face-sheet dx only. NTA = DM(2) + COPD(2) = 4 → ND.
+      // Nursing: pneumonia/sepsis treated at hospital, vitals stable on
+      //   admit. PHQ-9 not done yet. Maps to Reduced Physical Function (PA1)
+      //   with low function score until SCH triggers fire.
       {
-        dayNumber: 1,
-        dayDate: '2026-01-10',
-        hippsCode: 'HBC11',
-        estimatedPpd: 498,
-        nursingMainCategory: 'CDE',
-        nursingPaymentGroup: 'CBC1',
-        ntaLevel: 'NE',
-        ntaPoints: 4,
-        slpGroup: 'SB',
-        ptotGroup: 'TB'
+        dayNumber: 1, dayDate: '2026-01-10',
+        hippsCode: 'PDC11', estimatedPpd: 478,
+        nursingMainCategory: 'Reduced Physical Function', nursingPaymentGroup: 'PBC1',
+        ntaLevel: 'ND', ntaPoints: 4,
+        slpGroup: 'SC', ptotGroup: 'TB'
+      },
+      // Days 2–3: SNF vanco given on Day 2 → O0110H1b captures (+5 NTA → 9, NB).
+      //   Still pre-PHQ-9, MDRO/wound queries pending.
+      {
+        dayNumber: 2, dayDate: '2026-01-11',
+        hippsCode: 'PDB11', estimatedPpd: 522,
+        nursingMainCategory: 'Reduced Physical Function', nursingPaymentGroup: 'PBC1',
+        ntaLevel: 'NB', ntaPoints: 9,
+        slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
-        dayNumber: 2,
-        dayDate: '2026-01-11',
-        hippsCode: 'HBC11',
-        estimatedPpd: 498,
-        nursingMainCategory: 'CDE',
-        nursingPaymentGroup: 'CBC1',
-        ntaLevel: 'NE',
-        ntaPoints: 4,
-        slpGroup: 'SB',
-        ptotGroup: 'TB'
+        dayNumber: 3, dayDate: '2026-01-12',
+        hippsCode: 'PDB11', estimatedPpd: 522,
+        nursingMainCategory: 'Reduced Physical Function', nursingPaymentGroup: 'PBC1',
+        ntaLevel: 'NB', ntaPoints: 9,
+        slpGroup: 'SC', ptotGroup: 'TB'
+      },
+      // Day 4: PHQ-9 done (score 11) → depression. Pneumonia+fever (J1550A)
+      //   triggers Special Care High nursing → HBC2 (function 6–10, with
+      //   depression). MDRO query back+ → +1 NTA (10 pts, still NB).
+      {
+        dayNumber: 4, dayDate: '2026-01-13',
+        hippsCode: 'HDB21', estimatedPpd: 580,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        ntaLevel: 'NB', ntaPoints: 10,
+        slpGroup: 'SC', ptotGroup: 'TB'
+      },
+      // Day 5 (RECOMMENDED): wound-infection query back+ → +2 NTA = 12 → NA.
+      //   All time-sensitive items captured.
+      {
+        dayNumber: 5, dayDate: '2026-01-14',
+        hippsCode: 'HDA21', estimatedPpd: 612,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        ntaLevel: 'NA', ntaPoints: 12,
+        slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
-        dayNumber: 3,
-        dayDate: '2026-01-12',
-        hippsCode: 'HBC11',
-        estimatedPpd: 498,
-        nursingMainCategory: 'CDE',
-        nursingPaymentGroup: 'CBC1',
-        ntaLevel: 'NE',
-        ntaPoints: 4,
-        slpGroup: 'SB',
-        ptotGroup: 'TB'
+        dayNumber: 6, dayDate: '2026-01-15',
+        hippsCode: 'HDA21', estimatedPpd: 612,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        ntaLevel: 'NA', ntaPoints: 12,
+        slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
-        dayNumber: 4,
-        dayDate: '2026-01-13',
-        hippsCode: 'HDC21',
-        estimatedPpd: 556,
-        nursingMainCategory: 'CDE',
-        nursingPaymentGroup: 'CBC2',
-        ntaLevel: 'ND',
-        ntaPoints: 7,
-        slpGroup: 'SC',
-        ptotGroup: 'TB'
+        dayNumber: 7, dayDate: '2026-01-16',
+        hippsCode: 'HDA21', estimatedPpd: 612,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        ntaLevel: 'NA', ntaPoints: 12,
+        slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
-        dayNumber: 5,
-        dayDate: '2026-01-14',
-        hippsCode: 'HDE21',
-        estimatedPpd: 589,
-        nursingMainCategory: 'CDE',
-        nursingPaymentGroup: 'CBC2',
-        ntaLevel: 'NC',
-        ntaPoints: 10,
-        slpGroup: 'SC',
-        ptotGroup: 'TB'
-      }
+        dayNumber: 8, dayDate: '2026-01-17',
+        hippsCode: 'HDA21', estimatedPpd: 612,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        ntaLevel: 'NA', ntaPoints: 12,
+        slpGroup: 'SC', ptotGroup: 'TB'
+      },
     ],
     classifiedItems: [
-      {
-        mdsItem: 'I4300',
-        mdsColumn: '',
-        description: 'Aphasia',
-        classification: 'time_sensitive_captured',
-        ntaPoints: 0,
-        pdpmComponents: ['slp'],
-        nursingInfo: null,
-        queryStatus: null,
-        capturedOnDays: [1, 2, 3, 4, 5],
-        solverAnswer: 'yes',
-        queryPdpmImpact: ''
-      },
-      {
-        mdsItem: 'K0510',
-        mdsColumn: 'B1',
-        description: 'Mechanically altered diet',
-        classification: 'time_sensitive_captured',
-        ntaPoints: 0,
-        pdpmComponents: ['slp'],
-        nursingInfo: null,
-        queryStatus: null,
-        capturedOnDays: [1, 2, 3, 4, 5],
-        solverAnswer: 'yes',
-        queryPdpmImpact: ''
-      },
+      // ── Always captured (face-sheet diagnoses, no time-sensitivity) ──────
       {
         mdsItem: 'I2900',
         mdsColumn: '',
-        description: 'Diabetes mellitus',
-        classification: 'time_sensitive_at_risk',
+        description: 'Diabetes Mellitus',
+        classification: 'always_captured',
         ntaPoints: 2,
         pdpmComponents: ['nta'],
         nursingInfo: null,
         queryStatus: null,
-        capturedOnDays: [4, 5],
-        solverAnswer: 'yes',
-        queryPdpmImpact: 'Captured only on Days 4–5 — earlier ARD loses 2 NTA points.'
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
       },
+      // CMS NTA Table 2: COPD/Asthma/Chronic Lung Disease is captured at I6200, not I6100.
       {
-        mdsItem: 'I2100',
+        mdsItem: 'I6200',
         mdsColumn: '',
-        description: 'Septicemia',
-        classification: 'item_to_query',
-        ntaPoints: 3,
-        pdpmComponents: ['nta'],
-        nursingInfo: null,
-        queryStatus: null,
-        capturedOnDays: [],
-        solverAnswer: 'needs_review',
-        queryPdpmImpact: 'Hospital notes reference sepsis — confirm diagnosis for +3 NTA.'
-      },
-      {
-        mdsItem: 'I2000',
-        mdsColumn: '',
-        description: 'Pneumonia',
-        classification: 'item_to_query',
+        description: 'Asthma/COPD/Chronic Lung Disease',
+        classification: 'always_captured',
         ntaPoints: 2,
         pdpmComponents: ['nta'],
         nursingInfo: null,
         queryStatus: null,
-        capturedOnDays: [],
-        solverAnswer: 'needs_review',
-        queryPdpmImpact: 'Chest imaging suggests infiltrate — confirm for +2 NTA.'
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
       },
+      // Aphasia (I4300) is an SLP comorbidity, NOT an NTA item — it does not
+      // appear in CMS PDPM Table 2 (NTA Comorbidity Score Calculation).
       {
-        mdsItem: 'O0110',
-        mdsColumn: 'A1',
-        description: 'IV medications',
-        classification: 'item_to_query',
-        ntaPoints: 5,
-        pdpmComponents: ['nta'],
-        nursingInfo: null,
-        queryStatus: 'sent',
-        capturedOnDays: [],
-        solverAnswer: 'needs_review',
-        queryPdpmImpact: 'Query sent — awaiting response.'
-      },
-      {
-        mdsItem: 'GG0170',
-        mdsColumn: 'C1',
-        description: 'Functional mobility — bed mobility',
+        mdsItem: 'I4300',
+        mdsColumn: '',
+        description: 'Aphasia (SLP comorbidity)',
         classification: 'always_captured',
         ntaPoints: 0,
-        pdpmComponents: ['ptot', 'nursing'],
-        nursingInfo: { category: 'CDE' },
+        pdpmComponents: ['slp'],
+        nursingInfo: null,
         queryStatus: null,
-        capturedOnDays: [1, 2, 3, 4, 5],
+        capturedOnDays: [1,2,3,4,5,6,7,8],
         solverAnswer: 'coded',
         queryPdpmImpact: ''
       },
       {
-        mdsItem: 'B0700',
+        mdsItem: 'I0700',
         mdsColumn: '',
-        description: 'Makes self understood',
-        classification: 'needs_review',
+        description: 'Hypertension',
+        classification: 'always_captured',
+        ntaPoints: 0,
+        pdpmComponents: [],
+        nursingInfo: null,
+        queryStatus: null,
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
+      },
+      {
+        mdsItem: 'I0400',
+        mdsColumn: '',
+        description: 'Coronary Artery Disease (CAD)',
+        classification: 'always_captured',
+        ntaPoints: 0,
+        pdpmComponents: [],
+        nursingInfo: null,
+        queryStatus: null,
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
+      },
+      {
+        mdsItem: 'I0600',
+        mdsColumn: '',
+        description: 'Heart Failure',
+        classification: 'always_captured',
+        ntaPoints: 0,
+        pdpmComponents: [],
+        nursingInfo: null,
+        queryStatus: null,
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
+      },
+      {
+        mdsItem: 'I0900',
+        mdsColumn: '',
+        description: 'Peripheral Vascular Disease',
+        classification: 'always_captured',
+        ntaPoints: 0,
+        pdpmComponents: [],
+        nursingInfo: null,
+        queryStatus: null,
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
+      },
+      // K0510B (mechanically altered diet) — SLP component, captured every day.
+      {
+        mdsItem: 'K0510',
+        mdsColumn: 'B1',
+        description: 'Mechanically Altered Diet (puree)',
+        classification: 'always_captured',
         ntaPoints: 0,
         pdpmComponents: ['slp'],
         nursingInfo: null,
         queryStatus: null,
-        capturedOnDays: [],
-        solverAnswer: 'needs_review',
-        queryPdpmImpact: 'Documentation is ambiguous — review with SLP.'
+        capturedOnDays: [1,2,3,4,5,6,7,8],
+        solverAnswer: 'coded',
+        queryPdpmImpact: ''
       },
+
+      // ── Time-sensitive: PHQ-9 / Depression nursing end-split ─────────────
+      // D0150 must be administered during 7-day look-back before ARD. RAI
+      // convention: on this admit it isn't completed until day 4. PHQ-9 score
+      // ≥10 triggers depression end-split (CBC1 → CBC2 nursing bump).
       {
-        mdsItem: 'N0415',
-        mdsColumn: 'H1',
-        description: 'Anticoagulant',
-        classification: 'always_captured',
+        mdsItem: 'D0150',
+        mdsColumn: '',
+        description: 'PHQ-9 Resident Mood Interview',
+        classification: 'time_sensitive_at_risk',
+        ntaPoints: 0,
+        pdpmComponents: ['nursing'],
+        nursingInfo: null,
+        queryStatus: null,
+        firstAdministered: '2026-01-13',
+        lastAdministered: '2026-01-13',
+        capturedOnDays: [4,5,6,7,8],
+        solverAnswer: 'yes',
+        queryPdpmImpact:
+          'Administered Day 4, score 11 (≥10) — qualifies as depressed per PDPM (D0160 Total Severity Score ≥10). Triggers the depression end-split for the nursing case-mix group. ARD on Days 1–3 (before PHQ-9) misses this end-split.'
+      },
+
+      // ── Queryable NTA items (per CMS NTA Table 2) ───────────────────────
+      // I1700 MDRO — hospital wound culture grew MRSA; coding requires
+      // active dx at SNF admit. +1 NTA when confirmed.
+      {
+        mdsItem: 'I1700',
+        mdsColumn: '',
+        description: 'Multi-Drug Resistant Organism (MRSA)',
+        classification: 'item_to_query',
         ntaPoints: 1,
         pdpmComponents: ['nta'],
         nursingInfo: null,
         queryStatus: null,
-        capturedOnDays: [1, 2, 3, 4, 5],
+        capturedOnDays: [4,5,6,7,8],
+        solverAnswer: 'needs_review',
+        queryPdpmImpact:
+          'Hospital wound culture (1/9): MRSA positive, sensitive to vancomycin. Query MD to confirm dx active at SNF admit → +1 NTA via I1700.'
+      },
+      // I2500 Wound Infection — PICC site cellulitis on transfer note.
+      // +2 NTA when confirmed. Captured Day 5+ assuming query response back.
+      {
+        mdsItem: 'I2500',
+        mdsColumn: '',
+        description: 'Wound Infection (other than UTI)',
+        classification: 'item_to_query',
+        ntaPoints: 2,
+        pdpmComponents: ['nta'],
+        nursingInfo: null,
+        queryStatus: null,
+        capturedOnDays: [5,6,7,8],
+        solverAnswer: 'needs_review',
+        queryPdpmImpact:
+          'Hospital DC nursing note 1/10 documents PICC site erythema and induration. Query MD to confirm cellulitis dx active at SNF admit → +2 NTA via I2500.'
+      },
+      // O0110H1b "IV Medications, Post-admit" — captures IV meds administered
+      // WHILE A RESIDENT (at the SNF) within the 7-day ARD look-back. Per
+      // RAI Chapter 3, hospital IV doses are coded in O0110H column 1 ("while
+      // NOT a resident") and do NOT score NTA. Only "while a resident" counts.
+      // For Doe Jane: hospital vanco continued at SNF on 1/11 (Day 2) for
+      // 1 dose before transition to PO. Any ARD on Day 2+ captures +5 NTA.
+      {
+        mdsItem: 'O0110',
+        mdsColumn: 'H1',
+        description: 'IV Medications (post-admit, while a resident)',
+        classification: 'time_sensitive_at_risk',
+        ntaPoints: 5,
+        pdpmComponents: ['nta'],
+        nursingInfo: null,
+        queryStatus: null,
+        firstAdministered: '2026-01-11',
+        lastAdministered: '2026-01-11',
+        capturedOnDays: [2,3,4,5,6,7,8],
+        solverAnswer: 'needs_review',
+        queryPdpmImpact:
+          'IV vancomycin continued at the SNF on 1/11 (Day 2) for 1 dose before stepping down to PO. ARD on Day 2 or later keeps 1/11 inside the 7-day O0110H1 look-back → +5 NTA via O0110H1b. ARD on admit night (Day 1) captures nothing here (no SNF dose given yet).'
+      },
+
+      // ── Always-captured GG and SLP items (informational) ────────────────
+      {
+        mdsItem: 'GG0170',
+        mdsColumn: 'C1',
+        description: 'Functional Mobility — Bed Mobility',
+        classification: 'always_captured',
+        ntaPoints: 0,
+        pdpmComponents: ['ptot', 'nursing'],
+        nursingInfo: { category: 'Special Care High', mainCategory: 'Special Care High' },
+        queryStatus: null,
+        capturedOnDays: [1,2,3,4,5,6,7,8],
         solverAnswer: 'coded',
         queryPdpmImpact: ''
       }

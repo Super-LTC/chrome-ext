@@ -16,6 +16,9 @@ export function SuperDemoFab({
   onOpenQm,
   onOpen24hr,
   onOpenChat,
+  onOpenFeedback,
+  onOpenCoverage,
+  showCoverage = false,
   mdsBadgeCount = 0,
 }) {
   const [open, setOpen] = useState(false);
@@ -47,6 +50,16 @@ export function SuperDemoFab({
       ref={containerRef}
       class={open ? 'super-dial--open' : ''}
     >
+      <button
+        id="super-feedback-action"
+        type="button"
+        class="super-dial__action super-dial__action--feedback"
+        aria-label="Send Feedback"
+        onClick={act(onOpenFeedback)}
+      >
+        ?
+      </button>
+
       <button
         id="super-chat-action"
         type="button"
@@ -89,6 +102,18 @@ export function SuperDemoFab({
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
         </svg>
       </button>
+
+      {showCoverage && (
+        <button
+          id="super-coverage-action"
+          type="button"
+          class="super-dial__action super-dial__action--coverage"
+          aria-label="Care Plan Coverage"
+          onClick={act(onOpenCoverage)}
+        >
+          CP
+        </button>
+      )}
 
       <button
         id="super-24hr-action"

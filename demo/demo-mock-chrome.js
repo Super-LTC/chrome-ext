@@ -250,6 +250,79 @@ function routeApiRequest(endpoint) {
     return { success: false, error: `No assessments for patient ${patientId}` };
   }
 
+  // /api/extension/patients/{patientId}/coverage/summary
+  const coverageSummaryMatch = path.match(/\/api\/extension\/patients\/([^/]+)\/coverage\/summary/);
+  if (coverageSummaryMatch) {
+    return {
+      success: true,
+      data: {
+        score: 78,
+        diagnosisCovered: 9,
+        diagnosisTotal: 12,
+        orderCovered: 18,
+        orderTotal: 22,
+        hasResults: true,
+        checkedAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
+        pendingChanges: { newDiagnoses: 2, newOrders: 1 },
+        gaps: [
+          { type: 'diagnosis', status: 'missing', code: 'I50.9', description: 'Heart failure, unspecified',
+            reason: 'New diagnosis added 2026-01-12 — no matching focus/intervention in care plan.' },
+          { type: 'diagnosis', status: 'missing', code: 'E11.51', description: 'Type 2 diabetes mellitus with diabetic peripheral angiopathy',
+            reason: 'Endocrinology consult note 2026-01-13 documents PVD with DM; care plan only addresses uncomplicated DM.' },
+          { type: 'diagnosis', status: 'partial', code: 'J44.9', description: 'COPD, unspecified',
+            matchedFocus: 'Respiratory status', matchedIntervention: 'Monitor SpO2 q-shift',
+            reason: 'Focus exists but missing bronchodilator administration intervention.' },
+          { type: 'order', status: 'missing', code: 'RX', description: 'Vancomycin 1g IV q12h',
+            reason: 'New IV antibiotic ordered 2026-01-12 — no infection-control or IV-site monitoring intervention.' },
+          { type: 'order', status: 'missing', code: 'DIET', description: 'Mechanically altered diet — puree',
+            reason: 'Diet order updated 2026-01-11; nutrition focus not updated for aspiration risk.' },
+          { type: 'order', status: 'partial', code: 'PT/OT', description: 'Therapy 5×/week',
+            matchedFocus: 'Functional mobility', matchedIntervention: 'Bed mobility assist',
+            reason: 'PT plan covers mobility but no transfer training documented in care plan.' },
+        ],
+        covered: [
+          { type: 'diagnosis', status: 'covered', code: 'I10', description: 'Essential hypertension',
+            matchedFocus: 'Cardiovascular status', matchedIntervention: 'BP q-shift, Lisinopril 10 mg daily' },
+          { type: 'diagnosis', status: 'covered', code: 'I25.10', description: 'Atherosclerotic heart disease without angina pectoris',
+            matchedFocus: 'Cardiovascular status', matchedIntervention: 'Aspirin 81 mg, Atorvastatin 40 mg HS' },
+          { type: 'diagnosis', status: 'covered', code: 'F32.9', description: 'Major depressive disorder, unspecified',
+            matchedFocus: 'Mood', matchedIntervention: 'Sertraline 50 mg daily; PHQ-9 weekly' },
+          { type: 'order', status: 'covered', code: 'FALL', description: 'Fall precautions',
+            matchedFocus: 'Fall risk', matchedIntervention: 'Bed alarm; non-skid socks; Q2h rounding' },
+          { type: 'order', status: 'covered', code: 'SKIN', description: 'Skin assessment q-shift',
+            matchedFocus: 'Skin integrity', matchedIntervention: 'Braden q-shift; turn q2h' },
+        ],
+      },
+    };
+  }
+
+  const coverageChangesMatch = path.match(/\/api\/extension\/patients\/([^/]+)\/coverage\/changes/);
+  if (coverageChangesMatch) {
+    return {
+      success: true,
+      data: {
+        changes: [
+          { date: '2026-01-13', type: 'diagnosis_added', code: 'E11.51',
+            description: 'Type 2 diabetes mellitus with diabetic peripheral angiopathy', source: 'MD Progress Note' },
+          { date: '2026-01-12', type: 'diagnosis_added', code: 'I50.9',
+            description: 'Heart failure, unspecified', source: 'Cardiology Consult' },
+          { date: '2026-01-12', type: 'order_added', code: 'RX',
+            description: 'Vancomycin 1g IV q12h × 7 days', source: 'Hospitalist Order' },
+        ],
+      },
+    };
+  }
+
+  // /api/patients/{patientId}/care-plans/check (POST trigger)
+  if (path.match(/\/api\/patients\/[^/]+\/care-plans\/check/)) {
+    return { success: true, data: { triggered: true } };
+  }
+
+  // /api/extension/compliance/dashboard family (used by Coverage tabs)
+  if (path.startsWith('/api/extension/compliance/dashboard')) {
+    return { success: true, data: { facilities: [], summary: { passed: 0, total: 0 } } };
+  }
+
   // /api/extension/mds/items/{code}
   const itemDetailMatch = path.match(/\/api\/extension\/mds\/items\/([^/]+)/);
   if (itemDetailMatch) {
@@ -453,6 +526,17 @@ async function handleMessage(msg) {
     case 'API_REQUEST':
       return routeApiRequest(msg.endpoint);
 
+    case 'CAPTURE_VIEWPORT':
+      // 1×1 transparent PNG so the FeedbackModal preview/region selector has something to render.
+      return {
+        ok: true,
+        dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      };
+
+    case 'SUBMIT_FEEDBACK':
+      console.log('[DemoMock] SUBMIT_FEEDBACK (no-op in demo):', msg.payload);
+      return { ok: true, id: `demo-feedback-${Date.now()}` };
+
     default:
       console.log('[DemoMock] Unhandled message type:', msg.type);
       return {};
@@ -492,6 +576,11 @@ export function createMockChrome() {
     // Map extension paths to demo-relative paths
     if (path.startsWith('lib/')) return `./${path}`;
     return path;
+  };
+
+  // Mock getManifest — used by FeedbackModal to attach version to payload.
+  window.chrome.runtime.getManifest = function () {
+    return { name: 'Super LTC Demo', version: '0.0.0-demo' };
   };
 
   // Mock chrome.runtime.id (some code checks for extension context)

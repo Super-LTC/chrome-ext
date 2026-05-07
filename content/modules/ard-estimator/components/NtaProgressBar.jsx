@@ -5,17 +5,18 @@
  * Ghost extension shows potential if queries confirmed.
  */
 
-// Ordered left-to-right: lowest tier first (NF = 0 pts) → highest last (NA = 12+)
+// CMS PDPM-NTA tier ranges (FY2025): NF=0, NE=1–2, ND=3–5, NC=6–8, NB=9–11, NA≥12.
+// Ordered left-to-right: lowest tier first (NF = 0 pts) → highest last (NA = 12+).
 const NTA_TIERS = [
-  { level: 'NF', min: 0, max: 0 },
-  { level: 'NE', min: 1, max: 2 },
-  { level: 'ND', min: 3, max: 7 },
-  { level: 'NC', min: 8, max: 11 },
-  { level: 'NB', min: 12, max: 15 },
-  { level: 'NA', min: 16, max: 20 },
+  { level: 'NF', min: 0,  max: 0  },
+  { level: 'NE', min: 1,  max: 2  },
+  { level: 'ND', min: 3,  max: 5  },
+  { level: 'NC', min: 6,  max: 8  },
+  { level: 'NB', min: 9,  max: 11 },
+  { level: 'NA', min: 12, max: 30 },
 ];
 
-const MAX_DISPLAY = 20;
+const MAX_DISPLAY = 18;
 
 function getTierForPoints(pts) {
   for (const tier of NTA_TIERS) {

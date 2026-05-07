@@ -10,6 +10,8 @@ import { PDPMAnalyzer } from '../../content/modules/pdpm-analyzer/PDPMAnalyzer.j
 import { QueryItemsPage } from '../../content/modules/query-items/QueryItemsPage.jsx';
 import { QMBoard } from '../../content/modules/qm-board/QMBoard.jsx';
 import { TwentyFourHourReport } from '../../content/modules/twenty-four-hour-report/TwentyFourHourReport.jsx';
+import { FeedbackModal } from '../../content/modules/feedback/FeedbackModal.jsx';
+import { CoveragePanel } from '../../content/modules/care-plan-coverage/CoveragePanel.jsx';
 import { DemoChatOverlay } from './DemoChatOverlay.jsx';
 import { SuperDemoFab } from './SuperDemoFab.jsx';
 
@@ -160,12 +162,37 @@ export function DemoApp() {
         </div>
       )}
 
+      {overlay === 'feedback' && (
+        <FeedbackModal onClose={handleClose} />
+      )}
+
+      {overlay === 'coverage' && (
+        <div style={overlayWrapperStyle}>
+          <div style={overlayHeaderStyle}>
+            <span style={{ fontWeight: 600 }}>Care Plan Coverage</span>
+            <button onClick={handleClose} style={closeButtonStyle}>&times;</button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <CoveragePanel
+              patientId="2657226"
+              patientName="Doe, Jane"
+              facilityName={FACILITY_NAME}
+              orgSlug={ORG_SLUG}
+              onClose={handleClose}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Real Super speed-dial FAB ── */}
       <SuperDemoFab
         onOpenMds={() => setOverlay('commandCenter')}
         onOpenQm={() => setOverlay('qm')}
         onOpen24hr={() => setOverlay('24hr')}
         onOpenChat={() => setOverlay('chat')}
+        onOpenFeedback={() => setOverlay('feedback')}
+        onOpenCoverage={() => setOverlay('coverage')}
+        showCoverage={true}
       />
     </>
   );

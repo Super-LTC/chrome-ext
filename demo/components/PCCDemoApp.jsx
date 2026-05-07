@@ -16,6 +16,8 @@ import { PDPMAnalyzer } from '../../content/modules/pdpm-analyzer/PDPMAnalyzer.j
 import { ItemPopover } from '../../content/modules/mds-command-center/ItemPopover.jsx';
 import { QMBoard } from '../../content/modules/qm-board/QMBoard.jsx';
 import { TwentyFourHourReport } from '../../content/modules/twenty-four-hour-report/TwentyFourHourReport.jsx';
+import { FeedbackModal } from '../../content/modules/feedback/FeedbackModal.jsx';
+import { CoveragePanel } from '../../content/modules/care-plan-coverage/CoveragePanel.jsx';
 import { DemoQueryModal } from './DemoQueryModal.jsx';
 import { DemoChatOverlay } from './DemoChatOverlay.jsx';
 import { SuperDemoFab } from './SuperDemoFab.jsx';
@@ -23,49 +25,25 @@ import { SuperDemoFab } from './SuperDemoFab.jsx';
 const FACILITY_NAME = 'SUNNY MEADOWS DEMO FACILITY';
 const ORG_SLUG = 'demo-org';
 
-// ── Badge definitions: which MDS items get which badge type ──
-// status: 'match' | 'mismatch' | 'review'
-// label: text shown in the badge
-const BADGE_DEFS = {
-  I0100: { status: 'match',    label: '+ Super: No' },
-  I0200: { status: 'match',    label: '+ Super: Yes' },
-  I0300: { status: 'match',    label: '+ Super: No' },
-  I0400: { status: 'mismatch', label: 'X Super: No' },
-  I0500: { status: 'match',    label: '+ Super: No' },
-  I0600: { status: 'match',    label: '+ Super: No' },
-  I0700: { status: 'match',    label: '+ Super: Yes' },
-  I0800: { status: 'match',    label: '+ Super: No' },
-  I0900: { status: 'review',   label: '! Super: Needs Review' },
-  I1100: { status: 'match',    label: '+ Super: No' },
-  I1200: { status: 'match',    label: '+ Super: Yes' },
-  I2000: { status: 'match',    label: '+ Super: Yes' },
-  I2100: { status: 'match',    label: '+ Super: Yes' },
-  I2300: { status: 'match',    label: '+ Super: No' },
-  I2900: { status: 'match',    label: '+ Super: No' },
-  I4200: { status: 'match',    label: '+ Super: Yes' },
-  I4300: { status: 'match',    label: '+ Super: No' },
-  I4400: { status: 'match',    label: '+ Super: No' },
-  I4500: { status: 'match',    label: '+ Super: No' },
-  I4900: { status: 'match',    label: '+ Super: No' },
-  I5100: { status: 'match',    label: '+ Super: No' },
-  I5200: { status: 'match',    label: '+ Super: No' },
-  I5250: { status: 'match',    label: '+ Super: No' },
-  I5300: { status: 'match',    label: '+ Super: No' },
-  I5350: { status: 'match',    label: '+ Super: No' },
-  I5400: { status: 'match',    label: '+ Super: No' },
-  I5500: { status: 'match',    label: '+ Super: No' },
-  I5600: { status: 'match',    label: '+ Super: Yes' },
-  I5700: { status: 'match',    label: '+ Super: No' },
-  I5800: { status: 'match',    label: '+ Super: No' },
-  I5900: { status: 'match',    label: '+ Super: No' },
-  I5950: { status: 'match',    label: '+ Super: No' },
-  I6000: { status: 'match',    label: '+ Super: No' },
-  I6100: { status: 'match',    label: '+ Super: No' },
-  I6200: { status: 'match',    label: '+ Super: No' },
-  I6300: { status: 'match',    label: '+ Super: No' },
-  I6500: { status: 'match',    label: '+ Super: No' },
-  I7900: { status: 'match',    label: '+ Super: No' },
-  I8000: { status: 'match',    label: '+ Super: None' },
+// ── AI's verdict for each MDS Section I item ──
+// AI_VERDICT[code] = 'Yes' | 'No' | 'review'
+// The badge status (match/mismatch/review) is computed at injection time by
+// comparing AI_VERDICT to the PCC-form selected answer, so red/green badges
+// are always consistent with what's actually checked on the page.
+//
+// Items not listed here default to AI agreeing with PCC (always match).
+const AI_VERDICT = {
+  // Confirmed mismatches — AI found chart evidence that PCC missed
+  I0200: 'Yes',  // Anemia — labs show low hemoglobin
+  I0600: 'Yes',  // Heart Failure — echo + lasix
+  I4200: 'Yes',  // MDRO — culture/sensitivity flag
+  I5400: 'Yes',  // Alzheimer's — donepezil + dx note
+  I5800: 'Yes',  // Anxiety — sertraline daily
+
+  // Items needing clinician review (evidence ambiguous)
+  I0900: 'review',  // PVD — partial evidence
+  I4300: 'review',  // Diabetes w/ PVD — depends on I0900 confirmation
+  I5500: 'review',  // MS — historical mention only
 };
 
 // ── Toast component ──
@@ -116,7 +94,10 @@ export function PCCDemoApp() {
       '#super-chat-button', '.super-chat-fab',
       '#super-chat-panel', '.super-chat-panel',
       '#super-menu-panel', '.super-menu-panel',
-      '#notesModal', '.super-modal',
+      '#notesModal',
+      // NOTE: do NOT hide .super-modal here — the Preact FeedbackModal uses
+      // that class. Vanilla legacy modals attached before mount have their
+      // own ids (#superModal, #notesModal) which we hide above.
     ];
     selectors.forEach(sel => {
       document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; });
@@ -144,20 +125,38 @@ export function PCCDemoApp() {
     // Remove any existing badges injected by demo-mds-overlay.js
     document.querySelectorAll('.super-badge').forEach(b => b.remove());
 
+    // Discover every MDS-I item present on the page and read its
+    // currently-selected answer so badge color reflects reality.
+    const wrappers = document.querySelectorAll('[id^="I"][id$="_wrapper"]');
     const badges = [];
-    for (const [code, def] of Object.entries(BADGE_DEFS)) {
-      const wrapper = document.getElementById(`${code}_wrapper`);
-      if (!wrapper) continue;
 
+    for (const wrapper of wrappers) {
+      const code = wrapper.id.replace('_wrapper', '');
       const label = wrapper.querySelector('.question_label');
       if (!label) continue;
-
       if (label.querySelector('.super-badge')) continue;
 
+      const pcc = readPccAnswer(wrapper);
+      if (pcc === null) continue;  // skip items with no answer captured
+
+      const aiVerdict = AI_VERDICT[code] || pcc;  // default: AI agrees with PCC
+      let status, text;
+      if (aiVerdict === 'review') {
+        status = 'review';
+        text = '! Super: Needs Review';
+      } else if (aiVerdict === pcc) {
+        status = 'match';
+        text = `+ Super: ${aiVerdict}`;
+      } else {
+        status = 'mismatch';
+        text = `X Super: ${aiVerdict}`;
+      }
+
       const badge = document.createElement('span');
-      badge.className = `super-badge super-badge--${def.status}`;
-      badge.textContent = def.label;
+      badge.className = `super-badge super-badge--${status}`;
+      badge.textContent = text;
       badge.setAttribute('data-mds-item', code);
+      const def = { status };
       badge.style.cssText = `
         display: inline-flex; align-items: center; gap: 4px;
         padding: 3px 8px; border-radius: 4px; font-size: 11px;
@@ -335,12 +334,39 @@ export function PCCDemoApp() {
         />
       )}
 
+      {/* ── Feedback Modal ── */}
+      {overlay === 'feedback' && (
+        <FeedbackModal onClose={handleClose} />
+      )}
+
+      {/* ── Care Plan Coverage ── */}
+      {overlay === 'coverage' && (
+        <div style={pdpmWrapperStyle}>
+          <div style={pdpmHeaderStyle}>
+            <span style={{ fontWeight: 600 }}>Care Plan Coverage</span>
+            <button onClick={handleClose} style={closeButtonStyle}>&times;</button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <CoveragePanel
+              patientId="2657226"
+              patientName="Doe, Jane"
+              facilityName={FACILITY_NAME}
+              orgSlug={ORG_SLUG}
+              onClose={handleClose}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Real Super speed-dial FAB ── */}
       <SuperDemoFab
         onOpenMds={() => setOverlay('commandCenter')}
         onOpenQm={() => setOverlay('qm')}
         onOpen24hr={() => setOverlay('24hr')}
         onOpenChat={() => setOverlay('chat')}
+        onOpenFeedback={() => setOverlay('feedback')}
+        onOpenCoverage={() => setOverlay('coverage')}
+        showCoverage={true}
       />
 
       {/* ── Query Modal ── */}
@@ -355,6 +381,29 @@ export function PCCDemoApp() {
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </>
   );
+}
+
+// ── Read the currently-selected PCC answer for a question wrapper.
+// Returns 'Yes' | 'No' | null. Handles both the radio-input pattern and the
+// styled-button "selected" pattern PCC uses for locked responses.
+function readPccAnswer(wrapper) {
+  const checked = wrapper.querySelector('input[type=radio]:checked, input[type=checkbox]:checked');
+  if (checked) {
+    const txt = (checked.parentElement?.textContent || checked.value || '').trim();
+    if (/^yes/i.test(txt)) return 'Yes';
+    if (/^no/i.test(txt)) return 'No';
+  }
+  // Locked-response styled buttons: PCC marks the active one with a class
+  // like "selected" or applies an aria-pressed/checked attribute.
+  const active = wrapper.querySelector(
+    '.selected, [class*="selected"], [aria-pressed="true"], [aria-checked="true"]'
+  );
+  if (active) {
+    const txt = (active.textContent || '').trim();
+    if (/^yes/i.test(txt)) return 'Yes';
+    if (/^no/i.test(txt)) return 'No';
+  }
+  return null;
 }
 
 // ── Item label map ──

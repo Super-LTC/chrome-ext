@@ -85,13 +85,94 @@ export function installGlobalMocks() {
 
       const note = notes[mdsItem] || `Dear Doctor,\n\nI am writing to request your clinical assessment regarding ${itemName} (${mdsItem}) for this patient's current MDS assessment.\n\nBased on our review of the clinical documentation, there appears to be evidence supporting this diagnosis/condition that may warrant coding on the MDS. Your confirmation would help ensure accurate assessment completion.\n\nThank you for your prompt attention to this matter.`;
 
-      return {
-        note,
-        preferredIcd10: item.recommendedIcd10?.[0] || { code: 'R69', description: 'Illness, unspecified' },
-        icd10Options: item.recommendedIcd10 || [
-          { code: 'R69', description: 'Illness, unspecified' }
-        ]
+      // I-code (MDS Section I) → realistic default ICD-10. Used when the
+      // upstream solver didn't ship recommendedIcd10 codes. Anything UN-mapped
+      // is flagged loudly in console rather than silently falling back to
+      // R69 ("illness, unspecified"), which is not codable on most MDS.
+      const ICODE_TO_ICD10 = {
+        // Section I diagnoses
+        'I0100': { code: 'C80.1',   description: 'Malignant neoplasm, unspecified' },
+        'I0200': { code: 'D64.9',   description: 'Anemia, unspecified' },
+        'I0300': { code: 'I48.91',  description: 'Atrial fibrillation, unspecified' },
+        'I0400': { code: 'I25.10',  description: 'Atherosclerotic heart disease of native coronary artery without angina pectoris' },
+        'I0500': { code: 'I82.40',  description: 'Acute embolism and thrombosis of unspecified deep veins of lower extremity' },
+        'I0600': { code: 'I50.9',   description: 'Heart failure, unspecified' },
+        'I0700': { code: 'I10',     description: 'Essential (primary) hypertension' },
+        'I0800': { code: 'I95.1',   description: 'Orthostatic hypotension' },
+        'I0900': { code: 'I73.9',   description: 'Peripheral vascular disease, unspecified' },
+        'I1100': { code: 'K74.60',  description: 'Unspecified cirrhosis of liver' },
+        'I1200': { code: 'K21.9',   description: 'Gastro-esophageal reflux disease without esophagitis' },
+        'I1300': { code: 'K50.90',  description: 'Crohn’s disease, unspecified, without complications' },
+        'I1400': { code: 'K76.9',   description: 'Liver disease, unspecified' },
+        'I1500': { code: 'N18.9',   description: 'Chronic kidney disease, unspecified' },
+        'I1550': { code: 'N40.0',   description: 'Benign prostatic hyperplasia without lower urinary tract symptoms' },
+        'I1700': { code: 'N40.0',   description: 'Benign prostatic hyperplasia without lower urinary tract symptoms' },
+        'I2000': { code: 'J18.9',   description: 'Pneumonia, unspecified organism' },
+        'I2100': { code: 'A41.9',   description: 'Sepsis, unspecified organism' },
+        'I2200': { code: 'A15.9',   description: 'Respiratory tuberculosis, unspecified' },
+        'I2300': { code: 'N39.0',   description: 'Urinary tract infection, site not specified' },
+        'I2400': { code: 'B19.9',   description: 'Unspecified viral hepatitis without hepatic coma' },
+        'I2500': { code: 'L08.9',   description: 'Local infection of skin and subcutaneous tissue, unspecified' },
+        'I2900': { code: 'E11.9',   description: 'Type 2 diabetes mellitus without complications' },
+        'I3100': { code: 'E87.1',   description: 'Hypo-osmolality and hyponatremia' },
+        'I3200': { code: 'E87.5',   description: 'Hyperkalemia' },
+        'I3300': { code: 'E78.5',   description: 'Hyperlipidemia, unspecified' },
+        'I3400': { code: 'E07.9',   description: 'Disorder of thyroid, unspecified' },
+        'I3700': { code: 'E05.90',  description: 'Thyrotoxicosis, unspecified' },
+        'I3800': { code: 'E03.9',   description: 'Hypothyroidism, unspecified' },
+        'I3900': { code: 'J18.9',   description: 'Pneumonia, unspecified organism' },
+        'I4000': { code: 'F31.9',   description: 'Bipolar disorder, unspecified' },
+        'I4200': { code: 'G30.9',   description: 'Alzheimer’s disease, unspecified' },
+        'I4300': { code: 'R47.01',  description: 'Aphasia' },
+        'I4400': { code: 'I69.998', description: 'Other sequelae of unspecified cerebrovascular disease' },
+        'I4500': { code: 'F03.90',  description: 'Unspecified dementia, unspecified severity' },
+        'I4800': { code: 'F03.90',  description: 'Unspecified dementia, unspecified severity' },
+        'I4900': { code: 'G81.90',  description: 'Hemiplegia, unspecified, affecting unspecified side' },
+        'I5000': { code: 'G82.20',  description: 'Paraplegia, unspecified' },
+        'I5100': { code: 'G82.50',  description: 'Quadriplegia, unspecified' },
+        'I5200': { code: 'G35',     description: 'Multiple sclerosis' },
+        'I5250': { code: 'G10',     description: 'Huntington’s disease' },
+        'I5300': { code: 'G20',     description: 'Parkinson’s disease' },
+        'I5350': { code: 'F95.2',   description: 'Tourette’s disorder' },
+        'I5400': { code: 'G40.909', description: 'Epilepsy, unspecified, not intractable, without status epilepticus' },
+        'I5500': { code: 'S06.9X9S',description: 'Unspecified intracranial injury, sequela' },
+        'I5600': { code: 'E46',     description: 'Unspecified protein-calorie malnutrition' },
+        'I5700': { code: 'F41.9',   description: 'Anxiety disorder, unspecified' },
+        'I5800': { code: 'F32.9',   description: 'Major depressive disorder, single episode, unspecified' },
+        'I5900': { code: 'F31.9',   description: 'Bipolar disorder, unspecified' },
+        'I5950': { code: 'F29',     description: 'Unspecified psychosis not due to a substance or known physiological condition' },
+        'I6000': { code: 'F20.9',   description: 'Schizophrenia, unspecified' },
+        'I6100': { code: 'J44.9',   description: 'Chronic obstructive pulmonary disease, unspecified' },
+        'I6200': { code: 'J96.90',  description: 'Respiratory failure, unspecified, unspecified whether with hypoxia or hypercapnia' },
       };
+
+      // Section O / K items don't carry an ICD-10 — they're checkbox MDS items.
+      // For those return null and let the BatchReviewPage hide the picker.
+      const NON_ICD10_PREFIXES = ['O0', 'K0', 'D0', 'GG', 'B0', 'C0', 'N0'];
+
+      let preferredIcd10 = item.recommendedIcd10?.[0] || null;
+      let icd10Options = item.recommendedIcd10 || null;
+
+      if (!preferredIcd10) {
+        // Try to extract a Section-I code from any I8000:NTA:N or plain I-code.
+        const iMatch = mdsItem.match(/^(I\d{4})/);
+        if (iMatch && ICODE_TO_ICD10[iMatch[1]]) {
+          preferredIcd10 = ICODE_TO_ICD10[iMatch[1]];
+          icd10Options = [preferredIcd10];
+        } else if (NON_ICD10_PREFIXES.some(p => mdsItem.startsWith(p))) {
+          // Checkbox-style MDS item — no ICD-10 needed.
+          preferredIcd10 = null;
+          icd10Options = [];
+        } else {
+          console.warn(
+            `[DemoMock] generateNote: no ICD-10 mapping for ${mdsItem}. Returning null (was R69 fallback).`
+          );
+          preferredIcd10 = null;
+          icd10Options = [];
+        }
+      }
+
+      return { note, preferredIcd10, icd10Options };
     },
 
     async createQuery(params) {

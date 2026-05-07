@@ -48,12 +48,16 @@ import { render } from 'preact';
 import { PCCDemoApp } from './components/PCCDemoApp.jsx';
 import { Sidebar as ICD10SidebarComponent } from '../content/modules/icd10-sidebar/Sidebar.jsx';
 import { ArdEstimator } from '../content/modules/ard-estimator/ArdEstimator.jsx';
+import { Icd10QueryFlow } from '../content/modules/icd10-query-flow/Icd10QueryFlow.jsx';
+import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confirmation/DiagnosisConfirmationDialog.jsx';
 
 // Expose preact + components globally so the vanilla icd10-viewer.js can
 // mount Preact trees without dynamic JSX imports in the classic-script load path.
 window.__preact = preact;
 window.__ICD10SidebarComponent = ICD10SidebarComponent;
 window.__ArdEstimator = ArdEstimator;
+window.__Icd10QueryFlow = Icd10QueryFlow;
+window.__DiagnosisConfirmationDialog = DiagnosisConfirmationDialog;
 
 function boot() {
   let root = document.getElementById('super-demo-root');

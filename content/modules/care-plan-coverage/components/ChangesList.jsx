@@ -23,7 +23,7 @@ export function ChangesList({ changes }) {
             {c.code && <span class="cpc__change-code">{c.code}</span>}
             <span class="cpc__item-desc">{c.description || 'Unknown'}</span>
             <span class="cpc__change-transition">
-              {c.previousStatus} \u2192 {c.currentStatus}
+              {c.previousStatus} {'\u2192'} {c.currentStatus}
             </span>
           </div>
         );

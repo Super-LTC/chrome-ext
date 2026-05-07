@@ -71,6 +71,11 @@ export default defineConfig(({ command }) => ({
     preact(),
   ],
   root: '.',
+  define: {
+    // Demo doesn't ship analytics — provide a stub so analytics.js loads.
+    __POSTHOG_KEY__: JSON.stringify(''),
+    __DEV_MODE__: true,
+  },
   build: {
     outDir: 'demo',
     emptyOutDir: false,
