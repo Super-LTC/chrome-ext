@@ -90,17 +90,15 @@ export function RecommendationText({
           </span>
           {ivMedCaptured ? (
             <>
-              IV vancomycin continued at the SNF on 1/11 (Day 2) for 1 dose
-              before stepping down to PO. ARD on Day {selectedDay} keeps that
-              SNF admin inside the 7-day O0110H1 look-back {'\u2014'} captures{' '}
+              IV fluids (NS at 75 mL/hr) ran at the SNF Day 2{'\u2013'}Day 5
+              for hydration support. ARD on Day {selectedDay} captures{' '}
               <strong>+{ivMedItem.ntaPoints} NTA</strong> via O0110H1b
               (post-admit, while a resident).
             </>
           ) : (
             <>
-              ARD on Day {selectedDay} sits outside the 7-day O0110H1
-              look-back for the SNF vanco dose on 1/11. Move ARD to
-              Day {ivMedItem.capturedOnDays?.[0] ?? 2}{'\u2013'}Day {ivMedLastDay}{' '}
+              ARD on Day {selectedDay} misses the SNF IV-fluids window.
+              Move ARD to Day {ivMedItem.capturedOnDays?.[0] ?? 2}{'\u2013'}Day {ivMedLastDay}{' '}
               to capture <strong>+{ivMedItem.ntaPoints} NTA</strong> via
               O0110H1b (post-admit, while a resident).
             </>

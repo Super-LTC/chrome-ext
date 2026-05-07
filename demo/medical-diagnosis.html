@@ -5072,6 +5072,25 @@ window.clientInfoGraph.moduleProps  = {
 <script src="./demo-navbar.js?v=1"></script>
 <script src="./demo-data.js?v=4"></script>
 <script src="./demo-super-menu.js?v=4"></script>
+<link rel="stylesheet" href="../content/css/meddiag-augment.css">
+<script src="../content/super-menu/meddiag-augment.js"></script>
 <link rel="stylesheet" href="./demo-entry.built.css">
 <script type="module" src="./demo-entry.built.js"></script>
+<script>
+  // Init MedDiagAugment for demo. The augment's _isOnMedDiagPage() URL guard
+  // looks for 'meddiag' in the URL — our demo file is 'medical-diagnosis.html'
+  // so we patch the guard to always pass before init.
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (!window.MedDiagAugment) return;
+      window.MedDiagAugment._isOnMedDiagPage = function () { return true; };
+      var pid = new URLSearchParams(window.location.search).get('ESOLclientid') || '2657226';
+      window.MedDiagAugment.init({
+        patientId: pid,
+        facilityName: 'SUNNY MEADOWS DEMO FACILITY',
+        orgSlug: 'demo-org',
+      });
+    }, 300);
+  });
+</script>
 </body></html>

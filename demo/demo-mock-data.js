@@ -2262,71 +2262,67 @@ export const DEMO_API_RESPONSES = {
     potentialNtaPoints: 12,   // I2900(2) + I6200(2) + I1700(1) + I2500(2) + O0110H1b(5) = 12 → NA
     sectionsMissing: [],
     scores: [
-      // Day 1 (admit night): face-sheet dx only. NTA = DM(2) + COPD(2) = 4 → ND.
-      // Nursing: pneumonia/sepsis treated at hospital, vitals stable on
-      //   admit. PHQ-9 not done yet. Maps to Reduced Physical Function (PA1)
-      //   with low function score until SCH triggers fire.
+      // Day 1 (admit night): face-sheet dx only. NTA = DM(2)+COPD(2) = 4 → ND.
       {
         dayNumber: 1, dayDate: '2026-01-10',
-        hippsCode: 'PDC11', estimatedPpd: 478,
-        nursingMainCategory: 'Reduced Physical Function', nursingPaymentGroup: 'PBC1',
+        hippsCode: 'HBC11', estimatedPpd: 478,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
         ntaLevel: 'ND', ntaPoints: 4,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
-      // Days 2–3: SNF vanco given on Day 2 → O0110H1b captures (+5 NTA → 9, NB).
-      //   Still pre-PHQ-9, MDRO/wound queries pending.
+      // Days 2–3: SNF IV fluids running → +5 NTA via O0110H1b (9 pts, NB).
       {
         dayNumber: 2, dayDate: '2026-01-11',
-        hippsCode: 'PDB11', estimatedPpd: 522,
-        nursingMainCategory: 'Reduced Physical Function', nursingPaymentGroup: 'PBC1',
+        hippsCode: 'HBB11', estimatedPpd: 522,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
         ntaLevel: 'NB', ntaPoints: 9,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
         dayNumber: 3, dayDate: '2026-01-12',
-        hippsCode: 'PDB11', estimatedPpd: 522,
-        nursingMainCategory: 'Reduced Physical Function', nursingPaymentGroup: 'PBC1',
+        hippsCode: 'HBB11', estimatedPpd: 522,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
         ntaLevel: 'NB', ntaPoints: 9,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
-      // Day 4: PHQ-9 done (score 11) → depression. Pneumonia+fever (J1550A)
-      //   triggers Special Care High nursing → HBC2 (function 6–10, with
-      //   depression). MDRO query back+ → +1 NTA (10 pts, still NB).
+      // Day 4: MDRO query back+ → +1 NTA (10 pts, still NB).
       {
         dayNumber: 4, dayDate: '2026-01-13',
-        hippsCode: 'HDB21', estimatedPpd: 580,
-        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        hippsCode: 'HBB11', estimatedPpd: 545,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
         ntaLevel: 'NB', ntaPoints: 10,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
       // Day 5 (RECOMMENDED): wound-infection query back+ → +2 NTA = 12 → NA.
+      //   IV fluids stopped today after the morning bag — last day on board.
       //   All time-sensitive items captured.
       {
         dayNumber: 5, dayDate: '2026-01-14',
-        hippsCode: 'HDA21', estimatedPpd: 612,
-        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
+        hippsCode: 'HBA11', estimatedPpd: 612,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
         ntaLevel: 'NA', ntaPoints: 12,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
+      // Days 6–8: IV fluids done. Lose +5 NTA. Keep DM(2)+COPD(2)+MDRO(1)+Wound(2) = 7 → NC.
       {
         dayNumber: 6, dayDate: '2026-01-15',
-        hippsCode: 'HDA21', estimatedPpd: 612,
-        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
-        ntaLevel: 'NA', ntaPoints: 12,
+        hippsCode: 'HBC11', estimatedPpd: 532,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
+        ntaLevel: 'NC', ntaPoints: 7,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
         dayNumber: 7, dayDate: '2026-01-16',
-        hippsCode: 'HDA21', estimatedPpd: 612,
-        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
-        ntaLevel: 'NA', ntaPoints: 12,
+        hippsCode: 'HBC11', estimatedPpd: 532,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
+        ntaLevel: 'NC', ntaPoints: 7,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
       {
         dayNumber: 8, dayDate: '2026-01-17',
-        hippsCode: 'HDA21', estimatedPpd: 612,
-        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC2',
-        ntaLevel: 'NA', ntaPoints: 12,
+        hippsCode: 'HBC11', estimatedPpd: 532,
+        nursingMainCategory: 'Special Care High', nursingPaymentGroup: 'HBC1',
+        ntaLevel: 'NC', ntaPoints: 7,
         slpGroup: 'SC', ptotGroup: 'TB'
       },
     ],
@@ -2426,40 +2422,24 @@ export const DEMO_API_RESPONSES = {
         solverAnswer: 'coded',
         queryPdpmImpact: ''
       },
-      // K0510B (mechanically altered diet) — SLP component, captured every day.
+      // K0510B (mechanically altered diet) — SLP component. Started at SNF on
+      // Day 2 (1/11) per Speech-Language Pathology eval; before that the
+      // resident was NPO on hospital orders. Within the 7-day K0510 lookback.
       {
         mdsItem: 'K0510',
         mdsColumn: 'B1',
-        description: 'Mechanically Altered Diet (puree)',
-        classification: 'always_captured',
+        description: 'Mechanically Altered Diet',
+        classification: 'time_sensitive_at_risk',
         ntaPoints: 0,
         pdpmComponents: ['slp'],
         nursingInfo: null,
         queryStatus: null,
-        capturedOnDays: [1,2,3,4,5,6,7,8],
+        firstAdministered: '2026-01-11',
+        lastAdministered: '2026-01-17',
+        capturedOnDays: [2,3,4,5,6,7,8],
         solverAnswer: 'coded',
-        queryPdpmImpact: ''
-      },
-
-      // ── Time-sensitive: PHQ-9 / Depression nursing end-split ─────────────
-      // D0150 must be administered during 7-day look-back before ARD. RAI
-      // convention: on this admit it isn't completed until day 4. PHQ-9 score
-      // ≥10 triggers depression end-split (CBC1 → CBC2 nursing bump).
-      {
-        mdsItem: 'D0150',
-        mdsColumn: '',
-        description: 'PHQ-9 Resident Mood Interview',
-        classification: 'time_sensitive_at_risk',
-        ntaPoints: 0,
-        pdpmComponents: ['nursing'],
-        nursingInfo: null,
-        queryStatus: null,
-        firstAdministered: '2026-01-13',
-        lastAdministered: '2026-01-13',
-        capturedOnDays: [4,5,6,7,8],
-        solverAnswer: 'yes',
         queryPdpmImpact:
-          'Administered Day 4, score 11 (≥10) — qualifies as depressed per PDPM (D0160 Total Severity Score ≥10). Triggers the depression end-split for the nursing case-mix group. ARD on Days 1–3 (before PHQ-9) misses this end-split.'
+          'Puree-consistency diet started Day 2 (1/11) post SLP swallow eval. Captured under K0510B for any ARD on Day 2+ (within the 7-day look-back). ARD on Day 1 misses this — pre-swallow-eval, NPO only.'
       },
 
       // ── Queryable NTA items (per CMS NTA Table 2) ───────────────────────
@@ -2504,18 +2484,18 @@ export const DEMO_API_RESPONSES = {
       {
         mdsItem: 'O0110',
         mdsColumn: 'H1',
-        description: 'IV Medications (post-admit, while a resident)',
+        description: 'IV Fluids',
         classification: 'time_sensitive_at_risk',
         ntaPoints: 5,
         pdpmComponents: ['nta'],
         nursingInfo: null,
         queryStatus: null,
         firstAdministered: '2026-01-11',
-        lastAdministered: '2026-01-11',
-        capturedOnDays: [2,3,4,5,6,7,8],
+        lastAdministered: '2026-01-14',
+        capturedOnDays: [2,3,4,5],
         solverAnswer: 'needs_review',
         queryPdpmImpact:
-          'IV vancomycin continued at the SNF on 1/11 (Day 2) for 1 dose before stepping down to PO. ARD on Day 2 or later keeps 1/11 inside the 7-day O0110H1 look-back → +5 NTA via O0110H1b. ARD on admit night (Day 1) captures nothing here (no SNF dose given yet).'
+          'IV fluids (NS at 75 mL/hr) ran at the SNF Day 2 through Day 5 (1/11–1/14) for hydration support. ARD on Day 2–5 captures +5 NTA via O0110H1b (post-admit, while a resident). ARD on Day 1 captures nothing (no SNF dose yet). ARD ≥ Day 6 also misses since the IV ended on Day 5.'
       },
 
       // ── Always-captured GG and SLP items (informational) ────────────────

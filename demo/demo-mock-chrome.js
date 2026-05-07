@@ -250,6 +250,119 @@ function routeApiRequest(endpoint) {
     return { success: false, error: `No assessments for patient ${patientId}` };
   }
 
+  // /api/extension/patients/{patientId}/diagnoses/status-overview
+  // Powers the medical-diagnosis page augment (shield + query chips).
+  const statusOverviewMatch = path.match(/\/api\/extension\/patients\/([^/]+)\/diagnoses\/status-overview/);
+  if (statusOverviewMatch) {
+    const daysAgo = (n) => new Date(Date.now() - n * 86400 * 1000).toISOString();
+    return {
+      success: true,
+      data: {
+        diagnoses: [
+          { code: 'J44.9', description: 'Chronic obstructive pulmonary disease, unspecified',
+            queryable: true,
+            carePlanStatus: {
+              status: 'partial',
+              matchedFocus: { focusText: 'DX: Respiratory status r/t COPD AEB use of bronchodilators',
+                              focusId: 'f-001', isResolved: false },
+              matchedInterventionId: null,
+              reason: 'Focus exists but no bronchodilator-administration intervention is linked. Consider adding albuterol q4h prn intervention.',
+            },
+            queryHistory: { hasOutstanding: false, lastSignedAt: daysAgo(45),
+                            daysSinceLastSigned: 45, totalCount: 1, recentQueries: [] },
+          },
+          { code: 'J43.1', description: 'Panlobular emphysema',
+            queryable: true,
+            carePlanStatus: {
+              status: 'covered',
+              matchedFocus: { focusText: 'DX: Respiratory status r/t COPD AEB use of bronchodilators',
+                              focusId: 'f-001', isResolved: false },
+              matchedInterventionId: 'i-101',
+              reason: 'Covered under the same Respiratory Status focus as J44.9. Bronchodilator and SpO2 monitoring interventions apply.',
+            },
+            queryHistory: { hasOutstanding: false, lastSignedAt: daysAgo(45),
+                            daysSinceLastSigned: 45, totalCount: 1, recentQueries: [] },
+          },
+          { code: 'E66.01', description: 'Morbid (severe) obesity due to excess calories',
+            queryable: true,
+            carePlanStatus: {
+              status: 'missing',
+              matchedFocus: null, matchedInterventionId: null,
+              reason: 'No focus addresses morbid obesity. NTA scoring requires BMI ≥40 documented; consider adding a nutrition focus.',
+            },
+            queryHistory: { hasOutstanding: true, pendingCount: 1, sentCount: 0, totalCount: 1,
+                            recentQueries: [{ id: 'q-100', mdsItem: 'I8000:NTA:E66', status: 'sent',
+                                              sentAt: daysAgo(2), subject: 'Confirm morbid obesity active' }] },
+          },
+          { code: 'F10.239', description: 'Alcohol dependence with withdrawal, unspecified',
+            queryable: false,
+            carePlanStatus: {
+              status: 'covered',
+              matchedFocus: { focusText: 'DX: Substance use r/t alcohol dependence AEB CIWA monitoring',
+                              focusId: 'f-002', isResolved: false },
+              matchedInterventionId: 'i-201',
+              reason: 'Active care plan with CIWA-Ar protocol q4h × 72hr.',
+            },
+            queryHistory: null,
+          },
+          { code: 'I10', description: 'Essential (primary) hypertension',
+            queryable: false,
+            carePlanStatus: {
+              status: 'covered',
+              matchedFocus: { focusText: 'DX: Cardiovascular status r/t HTN AEB lisinopril',
+                              focusId: 'f-003', isResolved: false },
+              matchedInterventionId: 'i-301',
+              reason: 'BP q-shift + lisinopril 10 mg daily intervention linked.',
+            },
+            queryHistory: null,
+          },
+          { code: 'G47.33', description: 'Obstructive sleep apnea (adult) (pediatric)',
+            queryable: true,
+            carePlanStatus: {
+              status: 'partial',
+              matchedFocus: { focusText: 'DX: Sleep r/t OSA AEB CPAP use', focusId: 'f-004', isResolved: false },
+              matchedInterventionId: null,
+              reason: 'Focus exists but no CPAP-tolerance assessment intervention.',
+            },
+            queryHistory: { hasOutstanding: false, lastSignedAt: daysAgo(85),
+                            daysSinceLastSigned: 85, totalCount: 1, recentQueries: [] },
+          },
+          { code: 'E11.9', description: 'Type 2 diabetes mellitus without complications',
+            queryable: true,
+            carePlanStatus: {
+              status: 'covered',
+              matchedFocus: { focusText: 'DX: Endocrine r/t Type 2 DM AEB metformin & A1c monitoring',
+                              focusId: 'f-005', isResolved: false },
+              matchedInterventionId: 'i-501',
+              reason: 'Comprehensive DM care plan: BG checks AC/HS, metformin 500 mg BID, dietary consult.',
+            },
+            queryHistory: { hasOutstanding: true, pendingCount: 0, sentCount: 1, totalCount: 1,
+                            recentQueries: [{ id: 'q-101', mdsItem: 'I8000:NTA:E11', status: 'sent',
+                                              sentAt: daysAgo(1), subject: 'Specify DM complications (PVD, retinopathy?)' }] },
+          },
+          { code: 'I82.513', description: 'Chronic embolism and thrombosis of femoral vein, bilateral',
+            queryable: false,
+            carePlanStatus: {
+              status: 'missing',
+              matchedFocus: null, matchedInterventionId: null,
+              reason: 'No focus addresses VTE. Consider adding anticoagulation monitoring focus.',
+            },
+            queryHistory: null,
+          },
+          { code: 'G47.00', description: 'Insomnia, unspecified',
+            queryable: false,
+            carePlanStatus: {
+              status: 'missing',
+              matchedFocus: null, matchedInterventionId: null,
+              reason: 'No focus for insomnia. Consider non-pharm sleep hygiene interventions before adding hypnotic.',
+            },
+            queryHistory: null,
+          },
+        ],
+      },
+    };
+  }
+
   // /api/extension/patients/{patientId}/coverage/summary
   const coverageSummaryMatch = path.match(/\/api\/extension\/patients\/([^/]+)\/coverage\/summary/);
   if (coverageSummaryMatch) {
@@ -318,9 +431,105 @@ function routeApiRequest(endpoint) {
     return { success: true, data: { triggered: true } };
   }
 
-  // /api/extension/compliance/dashboard family (used by Coverage tabs)
+  // /api/extension/compliance/dashboard family (used by Coverage tabs).
+  // Trending endpoint returns sparkline series; main dashboard returns the
+  // facility-wide patient list with score buckets so ComplianceView can
+  // render attention groups + drill-in.
+  if (path.startsWith('/api/extension/compliance/dashboard/trending')) {
+    return {
+      success: true,
+      data: {
+        sparklines: {
+          // 7-day score history per patient (most recent last)
+          '2657226': [62, 65, 68, 70, 73, 76, 78],
+          'p-aldridge':  [88, 88, 89, 89, 88, 87, 87],
+          'p-cho':       [55, 60, 62, 64, 66, 68, 70],
+          'p-grisham':   [82, 80, 78, 75, 72, 70, 68],  // declining
+          'p-novak':     [90, 88, 85, 82, 78, 74, 70],  // declining sharply
+          'p-reyes':     [94, 94, 95, 95, 95, 95, 95],
+        },
+      },
+    };
+  }
+  if (path.startsWith('/api/extension/compliance/dashboard/history')) {
+    return { success: true, data: { history: [] } };
+  }
   if (path.startsWith('/api/extension/compliance/dashboard')) {
-    return { success: true, data: { facilities: [], summary: { passed: 0, total: 0 } } };
+    return {
+      success: true,
+      data: {
+        summary: {
+          patientsChecked: 24,
+          totalPatients: 28,
+          patientsStale: 3,
+          avgScore: 81,
+        },
+        patients: [
+          { patientId: '2657226', patientName: 'Doe, Jane', levelOfCare: 'Skilled',
+            overallScore: 78, hasResults: true, stale: false,
+            diagnosisCovered: 9, diagnosisTotal: 12, diagnosisMissing: 2, diagnosisPartial: 1,
+            orderCovered: 18, orderTotal: 22, orderMissing: 2, orderPartial: 2,
+            lastCheckedAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString() },
+          { patientId: 'p-aldridge', patientName: 'Aldridge, Robert', levelOfCare: 'LTC',
+            overallScore: 87, hasResults: true, stale: false,
+            diagnosisCovered: 13, diagnosisTotal: 15, diagnosisMissing: 1, diagnosisPartial: 1,
+            orderCovered: 20, orderTotal: 22, orderMissing: 1, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 14 * 3600 * 1000).toISOString() },
+          { patientId: 'p-cho', patientName: 'Cho, Lillian', levelOfCare: 'Skilled',
+            overallScore: 70, hasResults: true, stale: false,
+            diagnosisCovered: 7, diagnosisTotal: 10, diagnosisMissing: 2, diagnosisPartial: 1,
+            orderCovered: 14, orderTotal: 18, orderMissing: 3, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 22 * 3600 * 1000).toISOString() },
+          { patientId: 'p-grisham', patientName: 'Grisham, Henry', levelOfCare: 'LTC',
+            overallScore: 68, hasResults: true, stale: false,
+            diagnosisCovered: 8, diagnosisTotal: 14, diagnosisMissing: 4, diagnosisPartial: 2,
+            orderCovered: 12, orderTotal: 16, orderMissing: 3, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 30 * 3600 * 1000).toISOString() },
+          { patientId: 'p-novak', patientName: 'Novak, Eleanor', levelOfCare: 'Skilled',
+            overallScore: 70, hasResults: true, stale: false,
+            diagnosisCovered: 9, diagnosisTotal: 13, diagnosisMissing: 3, diagnosisPartial: 1,
+            orderCovered: 13, orderTotal: 18, orderMissing: 4, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 8 * 3600 * 1000).toISOString() },
+          { patientId: 'p-reyes', patientName: 'Reyes, Marcus', levelOfCare: 'LTC',
+            overallScore: 95, hasResults: true, stale: false,
+            diagnosisCovered: 14, diagnosisTotal: 14, diagnosisMissing: 0, diagnosisPartial: 1,
+            orderCovered: 19, orderTotal: 20, orderMissing: 0, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 4 * 3600 * 1000).toISOString() },
+          { patientId: 'p-okafor', patientName: 'Okafor, Adaeze', levelOfCare: 'Skilled',
+            overallScore: 92, hasResults: true, stale: false,
+            diagnosisCovered: 11, diagnosisTotal: 12, diagnosisMissing: 1, diagnosisPartial: 0,
+            orderCovered: 17, orderTotal: 18, orderMissing: 0, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 11 * 3600 * 1000).toISOString() },
+          { patientId: 'p-singh', patientName: 'Singh, Pari', levelOfCare: 'LTC',
+            overallScore: 84, hasResults: true, stale: false,
+            diagnosisCovered: 11, diagnosisTotal: 13, diagnosisMissing: 1, diagnosisPartial: 1,
+            orderCovered: 17, orderTotal: 20, orderMissing: 2, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 19 * 3600 * 1000).toISOString() },
+          // Stale (haven't been checked in > 5 days)
+          { patientId: 'p-mendez', patientName: 'Mendez, Carlos', levelOfCare: 'LTC',
+            overallScore: 71, hasResults: true, stale: true,
+            diagnosisCovered: 8, diagnosisTotal: 12, diagnosisMissing: 3, diagnosisPartial: 1,
+            orderCovered: 13, orderTotal: 17, orderMissing: 3, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 7 * 86400 * 1000).toISOString() },
+          { patientId: 'p-byrd',   patientName: 'Byrd, Eunice',  levelOfCare: 'LTC',
+            overallScore: 79, hasResults: true, stale: true,
+            diagnosisCovered: 10, diagnosisTotal: 13, diagnosisMissing: 2, diagnosisPartial: 1,
+            orderCovered: 16, orderTotal: 19, orderMissing: 2, orderPartial: 1,
+            lastCheckedAt: new Date(Date.now() - 9 * 86400 * 1000).toISOString() },
+          // Unchecked (new admits, no results yet)
+          { patientId: 'p-park',   patientName: 'Park, Hyun',     levelOfCare: 'Skilled',
+            overallScore: 0, hasResults: false, stale: false,
+            diagnosisCovered: 0, diagnosisTotal: 0, diagnosisMissing: 0, diagnosisPartial: 0,
+            orderCovered: 0, orderTotal: 0, orderMissing: 0, orderPartial: 0,
+            lastCheckedAt: null },
+          { patientId: 'p-hassan', patientName: 'Hassan, Layla',  levelOfCare: 'Skilled',
+            overallScore: 0, hasResults: false, stale: false,
+            diagnosisCovered: 0, diagnosisTotal: 0, diagnosisMissing: 0, diagnosisPartial: 0,
+            orderCovered: 0, orderTotal: 0, orderMissing: 0, orderPartial: 0,
+            lastCheckedAt: null },
+        ],
+      },
+    };
   }
 
   // /api/extension/mds/items/{code}
