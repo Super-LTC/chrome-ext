@@ -105,6 +105,16 @@ startPccNavObserver();
 import { startTrackDelegate } from './utils/track-delegate.js';
 startTrackDelegate();
 
-// 11. Fire extension_loaded once at content script bootstrap
+// 11. Fire extension_loaded at most once per tab session. Content scripts
+// re-inject on every PCC top-frame navigation, so an unthrottled track() here
+// produced one event per page nav (~37K/wk).
 import { track } from './utils/analytics.js';
-track('extension_loaded');
+try {
+  if (!sessionStorage.getItem('super_ext_loaded_fired')) {
+    sessionStorage.setItem('super_ext_loaded_fired', '1');
+    track('extension_loaded');
+  }
+} catch {
+  // sessionStorage unavailable (private mode, etc.) — fall back to firing.
+  track('extension_loaded');
+}

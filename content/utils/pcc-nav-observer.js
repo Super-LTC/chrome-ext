@@ -9,6 +9,7 @@
 import { track, setPccContext } from './analytics.js';
 
 let lastPath = null;
+let lastEmittedKey = null;
 
 function detectContext() {
   const fn = typeof window !== 'undefined' && window.getMDSContext;
@@ -39,9 +40,17 @@ function emitIfChanged() {
     hasPatientContext: ctx.hasPatientContext,
   });
 
+  // Only fire pcc_page_viewed when the analytics-relevant context changes.
+  // Path-level navigations within the same page_type/section are noise — PCC
+  // SPAs route on every interaction and were generating ~37K events/wk.
+  const section = ctx.hasAssessment ? 'mds_assessment' : null;
+  const key = `${ctx.pageType}|${section || ''}|${ctx.hasPatientContext ? 1 : 0}`;
+  if (key === lastEmittedKey) return;
+  lastEmittedKey = key;
+
   track('pcc_page_viewed', {
     page_type: ctx.pageType,
-    section: ctx.hasAssessment ? 'mds_assessment' : null,
+    section,
     has_patient_context: ctx.hasPatientContext,
   });
 }

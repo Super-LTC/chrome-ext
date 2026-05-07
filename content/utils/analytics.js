@@ -181,6 +181,12 @@ export function identify(user) {
 //   ext_version          — what's currently loaded in this Chrome process
 //   ext_disk_version     — what's on disk (may be ahead if updater swapped files)
 //   ext_disk_drift       — true when disk > running (user hasn't reloaded)
+//
+// The disk check runs every 5 min — without dedup that's a $set event per
+// person every 5 min all day. Only push to PostHog when a value actually
+// changes (in-memory cache, reset on page load, which is fine: PostHog person
+// props are durable, so re-sending unchanged values is pure waste).
+let _lastVersionPropsKey = null;
 export function setVersionProperties({ runningVersion, diskVersion, driftDetected }) {
   if (!ENABLED) return;
   const props = {
@@ -188,6 +194,11 @@ export function setVersionProperties({ runningVersion, diskVersion, driftDetecte
   };
   if (diskVersion) props.ext_disk_version = String(diskVersion);
   if (typeof driftDetected === 'boolean') props.ext_disk_drift = driftDetected;
+
+  const key = `${props.ext_version}|${props.ext_disk_version || ''}|${props.ext_disk_drift ?? ''}`;
+  if (key === _lastVersionPropsKey) return;
+  _lastVersionPropsKey = key;
+
   try {
     posthog.setPersonProperties(props);
   } catch (e) {
