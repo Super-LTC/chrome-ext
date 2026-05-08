@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super LTC for Point Click Care",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "AI-powered clinical tools for PointClickCare: MDS analysis, ICD-10 lookup, documentation, and query tools.",
   "permissions": [
     "storage",
