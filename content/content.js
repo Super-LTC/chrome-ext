@@ -38,6 +38,7 @@ import './mds-overlay.js';
 import './icd10-viewer/icd10-mock-data.js';
 import './icd10-viewer/icd10-api.js';
 import './icd10-viewer/pcc-client.js';
+import './icd10-viewer/pcc-dx-scraper.js';
 import './icd10-viewer/icd10-sidebar.js';
 import './icd10-viewer/icd10-evidence-panel.js';
 import './icd10-viewer/icd10-pdf-viewer.js';
