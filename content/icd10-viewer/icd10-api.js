@@ -60,7 +60,7 @@ const ICD10API = {
    * @param {string} orgSlug - Organization slug
    * @returns {Promise<Object>} - { topRanked, flatAnnotations, counts }
    */
-  async getAnnotations(patientId, facilityName, orgSlug, mdsAssessmentId) {
+  async getAnnotations(patientId, facilityName, orgSlug, mdsAssessmentId, pccCodes) {
     const v2 = this._useV2();
 
     // Use mock data in development
@@ -79,6 +79,15 @@ const ICD10API = {
       orgSlug,
     });
     if (v2 && mdsAssessmentId) params.set('mdsAssessmentId', mdsAssessmentId);
+
+    // pccCodes: live PCC Med Diag list (override for backend's stale DB).
+    // CRITICAL: only attach when there's at least one code. Sending an empty
+    // string would tell the backend "patient has zero codes" → empty Approved
+    // bucket → every code looks like a fresh suggestion. See handoff doc.
+    if (Array.isArray(pccCodes) && pccCodes.length > 0) {
+      params.set('pccCodes', pccCodes.join(','));
+    }
+
     const endpoint = `${path}?${params}`;
 
     const response = await chrome.runtime.sendMessage({
