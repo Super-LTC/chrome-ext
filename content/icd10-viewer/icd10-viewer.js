@@ -782,17 +782,47 @@ const ICD10Viewer = {
   },
 
   /**
-   * Refetch approvedDiagnoses (with evidences + queryHistory) and push the
-   * new state into the sidebar + panel. Called after a query submit so the
-   * queryHistory chip flips immediately, without requiring a viewer reload.
+   * Refetch state after a write that changes the PCC dx list (AI Code
+   * Patient batch submit, query submit, etc.). PCC re-renders the dx
+   * table async, so we wait for the DOM to settle before scraping —
+   * otherwise we'd capture pre-submit state and the just-coded items
+   * would still show as Top Ranked suggestions.
    */
   async _refreshApprovedDiagnoses() {
     try {
-      const fresh = await ICD10API.getApprovedDiagnoses(
-        this.patientId, this.facilityName, this.orgSlug
-      );
-      this.approvedDiagnoses = fresh || [];
+      // Wait for PCC's table mutation to settle (post-submit re-render).
+      // No-op when not on the meddiag page (target absent → resolves immediately).
+      await window.PCCDxScraper?.waitForSettled?.();
+
+      const scraped = (window.PCCDxScraper?.scrape?.() || []);
+      this._pccDxList = scraped;
+      const pccCodes = scraped.map((d) => d.icd10Code);
+
+      // Re-fetch annotations (so Top Ranked drops just-coded items) AND
+      // approved diagnoses in parallel.
+      const [annotationData, fresh] = await Promise.all([
+        ICD10API.getAnnotations(
+          this.patientId,
+          this.facilityName,
+          this.orgSlug,
+          this._assessmentId,
+          pccCodes
+        ),
+        ICD10API.getApprovedDiagnoses(this.patientId, this.facilityName, this.orgSlug),
+      ]);
+
+      this.topRanked = annotationData.topRanked || [];
+      this.approved = annotationData.approved || [];
+      this.annotations = annotationData.flatAnnotations || [];
+      this.flatGroups = annotationData.flatGroups || null;
+      this.counts = annotationData.counts || {};
+      this.approvedDiagnoses = this._mergeApprovedFromPcc(fresh || [], scraped);
+
       ICD10Sidebar.updateData({
+        topRanked: this.topRanked,
+        approved: this.approved,
+        annotations: this.annotations,
+        flatGroups: this.flatGroups,
         approvedDiagnoses: this.approvedDiagnoses,
         approvedBaseCodes: this._computeApprovedBaseCodes(),
       });
@@ -803,7 +833,7 @@ const ICD10Viewer = {
         ICD10EvidencePanel.setApprovedDiagnosisMeta(this._computeApprovedDiagnosisMeta());
       }
     } catch (err) {
-      console.warn('[ICD10Viewer] Failed to refresh approved diagnoses post-query:', err);
+      console.warn('[ICD10Viewer] Failed to refresh approved diagnoses post-write:', err);
     }
   },
 
