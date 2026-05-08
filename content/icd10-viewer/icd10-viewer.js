@@ -353,9 +353,25 @@ const ICD10Viewer = {
    */
   async _loadData() {
     try {
+      // Scrape PCC's live dx list off the DOM. This is the freshest source —
+      // the backend mirrors PCC nightly so its DB lags by up to ~24h. Codes
+      // are sent to the annotations endpoint so it routes Approved vs Top
+      // Ranked correctly. Returns [] when not on the meddiag page → falls
+      // back to backend-only behavior (NOT "patient has zero codes").
+      const scraped = (window.PCCDxScraper?.scrape?.() || []);
+      this._pccDxList = scraped;
+      const pccCodes = scraped.map((d) => d.icd10Code);
+      console.log('[ICD10Viewer] Scraped PCC dx list:', pccCodes.length, 'codes');
+
       // Fetch data in parallel
       const [annotationData, approvedDiagnoses] = await Promise.all([
-        ICD10API.getAnnotations(this.patientId, this.facilityName, this.orgSlug, this._assessmentId),
+        ICD10API.getAnnotations(
+          this.patientId,
+          this.facilityName,
+          this.orgSlug,
+          this._assessmentId,
+          pccCodes
+        ),
         ICD10API.getApprovedDiagnoses(this.patientId, this.facilityName, this.orgSlug)
       ]);
 
@@ -366,7 +382,7 @@ const ICD10Viewer = {
       this.flatGroups = annotationData.flatGroups || null;
       this.counts = annotationData.counts || {};
       this.admitDate = annotationData.admitDate || null;
-      this.approvedDiagnoses = approvedDiagnoses || [];
+      this.approvedDiagnoses = this._mergeApprovedFromPcc(approvedDiagnoses || [], scraped);
 
       // Initialize components
       this._initializeComponents();
@@ -789,6 +805,54 @@ const ICD10Viewer = {
     } catch (err) {
       console.warn('[ICD10Viewer] Failed to refresh approved diagnoses post-query:', err);
     }
+  },
+
+  /**
+   * Merge backend's approvedDiagnoses (rich: id, evidences, queryHistory,
+   * PDPM badges) with the live PCC scrape so the Approved sidebar reflects
+   * what's actually on the dx sheet RIGHT NOW.
+   *
+   * Rules:
+   *   - For each scraped code: if a DB row exists for that code, keep the
+   *     DB row (it's strictly richer).
+   *   - If no DB row: emit a synthetic row from the scrape so the user
+   *     sees the just-coded item immediately. Marked `__synthetic: true`
+   *     for downstream styling. No id, no evidences, no queryHistory —
+   *     those land on the next sync.
+   *   - DB rows whose code is NOT in the scrape are dropped. That's
+   *     correct: the user struck them out in PCC since the last sync.
+   *
+   * If the scrape was empty (viewer opened from somewhere off the meddiag
+   * page), return the DB list unchanged — we have no override signal.
+   */
+  _mergeApprovedFromPcc(dbDiagnoses, scraped) {
+    if (!Array.isArray(scraped) || scraped.length === 0) {
+      return dbDiagnoses;
+    }
+    const dbByCode = new Map();
+    for (const dx of dbDiagnoses) {
+      if (dx?.icd10Code) dbByCode.set(dx.icd10Code.toUpperCase(), dx);
+    }
+
+    return scraped.map((s) => {
+      const code = s.icd10Code.toUpperCase();
+      const dbRow = dbByCode.get(code);
+      if (dbRow) return dbRow;
+      return {
+        id: null,
+        icd10Code: code,
+        description: s.description,
+        rank: s.rank,
+        classification: s.classification,
+        onsetDate: s.onsetDate,
+        // Best-effort PDPM hints from the page. Backend authoritative
+        // values land on the next sync.
+        pdpmCategory: s.pdpmComorbidity || null,
+        pdpmCategoryName: s.pdpmComorbidity || null,
+        clinicalCategory: s.clinicalCategory || null,
+        __synthetic: true,
+      };
+    });
   },
 
   /**
