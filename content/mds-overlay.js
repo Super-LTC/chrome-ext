@@ -1469,11 +1469,16 @@ function renderMedicationIndications(medicationsWithIndication) {
       ? '<span class="super-indication super-indication--yes">Has Indication</span>'
       : '<span class="super-indication super-indication--no">No Indication</span>';
 
+    const evidenceHTML = Array.isArray(med.evidence) && med.evidence.length
+      ? `<div class="super-indication-item__evidence">${med.evidence.map(ev => renderEvidenceCard(ev, -1)).join('')}</div>`
+      : '';
+
     return `
       <div class="super-indication-item">
         <div class="super-indication-item__name">${med.medicationName}</div>
         ${indicationStatus}
         ${med.rationale ? `<div class="super-indication-item__rationale">${med.rationale}</div>` : ''}
+        ${evidenceHTML}
       </div>
     `;
   }).join('');
@@ -1550,21 +1555,55 @@ function formatFallDate(dateStr) {
   }
 }
 
+function formatInjuryList(fall) {
+  // Prefer structured injuries[] (type + location); fall back to injuryTypes[]
+  if (Array.isArray(fall.injuries) && fall.injuries.length) {
+    return fall.injuries
+      .map(i => {
+        const type = escapeHTML(i.type || '');
+        const loc = i.location ? ` (${escapeHTML(i.location)})` : '';
+        return type ? `${type}${loc}` : '';
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+  if (Array.isArray(fall.injuryTypes) && fall.injuryTypes.length) {
+    return fall.injuryTypes.map(t => escapeHTML(t)).join(', ');
+  }
+  return '';
+}
+
+function truncateText(text, max = 140) {
+  if (!text) return '';
+  const clean = String(text).replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max - 1).trimEnd() + '…';
+}
+
 function renderFallRow(fall) {
   const date = formatFallDate(fall.incidentDate);
   const type = escapeHTML(fall.incidentType || 'Fall');
   const resident = escapeHTML(fall.residentName || '');
 
+  const injuryDetail = formatInjuryList(fall);
   let injuryText = 'No injury';
   if (fall.hasMajorInjury) {
-    injuryText = 'Major injury';
-    if (fall.injuryTypes?.length) injuryText += `: ${fall.injuryTypes.map(t => escapeHTML(t)).join(', ')}`;
+    injuryText = 'Major injury' + (injuryDetail ? `: ${injuryDetail}` : '');
   } else if (fall.hasInjury) {
-    injuryText = 'Minor injury';
-    if (fall.injuryTypes?.length) injuryText += `: ${fall.injuryTypes.map(t => escapeHTML(t)).join(', ')}`;
+    injuryText = 'Minor injury' + (injuryDetail ? `: ${injuryDetail}` : '');
   }
-
   const injuryClass = fall.hasMajorInjury ? 'super-fall__injury--major' : fall.hasInjury ? 'super-fall__injury--minor' : '';
+
+  const badges = [];
+  if (fall.isWitnessed === true) badges.push('<span class="super-fall__badge super-fall__badge--witnessed">Witnessed</span>');
+  else if (fall.isWitnessed === false) badges.push('<span class="super-fall__badge super-fall__badge--unwitnessed">Unwitnessed</span>');
+  if (fall.isHospitalized) badges.push('<span class="super-fall__badge super-fall__badge--hospitalized">Hospitalized</span>');
+  const badgesHTML = badges.length ? `<div class="super-fall__badges">${badges.join('')}</div>` : '';
+
+  const narrative = truncateText(fall.nursingDescription);
+  const narrativeHTML = narrative
+    ? `<div class="super-fall__narrative">“${escapeHTML(narrative)}”</div>`
+    : '';
 
   return `
     <div class="super-fall-row" data-incident-id="${fall.incidentId || ''}" role="button">
@@ -1574,6 +1613,8 @@ function renderFallRow(fall) {
       </div>
       ${resident ? `<div class="super-fall__resident">${resident}</div>` : ''}
       <div class="super-fall__injury ${injuryClass}">${injuryText}</div>
+      ${badgesHTML}
+      ${narrativeHTML}
       <div class="super-fall__action">
         <span>View Incident</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>

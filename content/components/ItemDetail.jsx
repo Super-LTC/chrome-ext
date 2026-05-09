@@ -56,20 +56,40 @@ const CATEGORY_LABELS = { orders: 'Orders', notes: 'Notes', documents: 'Document
 
 /* ── Sub-components ── */
 
+function formatFallInjuryList(fall) {
+  if (Array.isArray(fall.injuries) && fall.injuries.length) {
+    return fall.injuries
+      .map(i => (i.type ? `${i.type}${i.location ? ` (${i.location})` : ''}` : ''))
+      .filter(Boolean)
+      .join(', ');
+  }
+  if (Array.isArray(fall.injuryTypes) && fall.injuryTypes.length) {
+    return fall.injuryTypes.join(', ');
+  }
+  return '';
+}
+
+function truncateFallText(text, max = 140) {
+  if (!text) return '';
+  const clean = String(text).replace(/\s+/g, ' ').trim();
+  return clean.length <= max ? clean : clean.slice(0, max - 1).trimEnd() + '…';
+}
+
 function FallCard({ fall }) {
   const date = fall.incidentDate ? new Date(fall.incidentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
+  const injuryDetail = formatFallInjuryList(fall);
   let injuryText = 'No injury';
   let injuryClass = '';
   if (fall.hasMajorInjury) {
-    injuryText = 'Major injury';
+    injuryText = 'Major injury' + (injuryDetail ? `: ${injuryDetail}` : '');
     injuryClass = 'super-fall__injury--major';
-    if (fall.injuryTypes?.length) injuryText += `: ${fall.injuryTypes.join(', ')}`;
   } else if (fall.hasInjury) {
-    injuryText = 'Minor injury';
+    injuryText = 'Minor injury' + (injuryDetail ? `: ${injuryDetail}` : '');
     injuryClass = 'super-fall__injury--minor';
-    if (fall.injuryTypes?.length) injuryText += `: ${fall.injuryTypes.join(', ')}`;
   }
+
+  const narrative = truncateFallText(fall.nursingDescription);
 
   const handleClick = () => {
     if (fall.incidentId && window.showIncidentDetailModal) {
@@ -85,6 +105,14 @@ function FallCard({ fall }) {
       </div>
       {fall.residentName && <div class="super-fall__resident">{fall.residentName}</div>}
       <div class={`super-fall__injury ${injuryClass}`}>{injuryText}</div>
+      {(fall.isWitnessed === true || fall.isWitnessed === false || fall.isHospitalized) && (
+        <div class="super-fall__badges">
+          {fall.isWitnessed === true && <span class="super-fall__badge super-fall__badge--witnessed">Witnessed</span>}
+          {fall.isWitnessed === false && <span class="super-fall__badge super-fall__badge--unwitnessed">Unwitnessed</span>}
+          {fall.isHospitalized && <span class="super-fall__badge super-fall__badge--hospitalized">Hospitalized</span>}
+        </div>
+      )}
+      {narrative && <div class="super-fall__narrative">“{narrative}”</div>}
       {fall.incidentId && (
         <div class="super-fall__action">
           <span>View Incident</span>

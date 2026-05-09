@@ -196,6 +196,12 @@ const MedDiagAugment = {
   _renderRow(row) {
     const code = this._extractCodeFromRow(row);
     const dx = code ? this._byCode.get(code) : null;
+    // Only log when we extracted a code but couldn't find a matching dx
+    // (this is the failure mode that hides CP/Query chips). Successful
+    // renders and rows that legitimately don't match a code are quiet.
+    if (code && !dx) {
+      console.warn('[MedDiagAugment] no diagnosis for code:', code, 'known codes:', Array.from(this._byCode?.keys() || []));
+    }
     const { cpCell, qCell } = this._ensureCells(row);
     cpCell.innerHTML = '';
     qCell.innerHTML = '';
@@ -210,7 +216,7 @@ const MedDiagAugment = {
     const tds = row.querySelectorAll('td');
     for (const td of tds) {
       const txt = (td.textContent || '').trim();
-      if (/^[A-Z]\d{2}(\.\d+)?[A-Z]?$/.test(txt)) {
+      if (/^[A-Z]\d{2}(\.[A-Z0-9]+)?$/i.test(txt)) {
         return txt;
       }
     }

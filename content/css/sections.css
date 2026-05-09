@@ -294,6 +294,13 @@
   margin-top: 6px;
 }
 
+.super-indication-item__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 /* ============================================
    Section N - Order Changes
    ============================================ */
@@ -498,6 +505,53 @@
 .super-fall__injury--major {
   color: #991b1b;
   font-weight: 600;
+}
+
+.super-fall__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.super-fall__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+}
+
+.super-fall__badge--witnessed {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.super-fall__badge--unwitnessed {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.super-fall__badge--hospitalized {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.super-fall__narrative {
+  margin-top: 6px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--super-gray-700);
+  line-height: 1.4;
+  border-left: 2px solid var(--super-gray-300);
+  padding-left: 8px;
 }
 
 .super-fall__action {

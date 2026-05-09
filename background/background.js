@@ -13,13 +13,21 @@ const CONFIG = {
 };
 
 // Helper: Make authenticated API requests
+//
+// 401 handling: a single 401 used to immediately wipe the auth token and force
+// reauth. That made the extension fragile to any transient backend blip
+// (deploy in flight, momentary auth-service hiccup, network glitch) — one bad
+// response and every active user got logged out. Now we retry the same request
+// once with the same token before clearing storage. Safe because 401 means
+// the request was rejected at auth time → no side effects → retry is idempotent
+// for any HTTP method.
 async function apiRequest(endpoint, options = {}) {
   const { authToken } = await chrome.storage.local.get('authToken');
   if (!authToken) {
     throw new Error('Not authenticated');
   }
 
-  const response = await fetch(`${CONFIG.API_BASE}${endpoint}`, {
+  const doFetch = () => fetch(`${CONFIG.API_BASE}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -28,10 +36,19 @@ async function apiRequest(endpoint, options = {}) {
     },
   });
 
+  let response = await doFetch();
+
   if (response.status === 401) {
-    // Token revoked or invalid - clear storage
-    await chrome.storage.local.remove(['authToken', 'user']);
-    throw new Error('Session expired');
+    // Retry once — small backoff to ride out a transient auth blip.
+    await new Promise((r) => setTimeout(r, 300));
+    response = await doFetch();
+
+    if (response.status === 401) {
+      // Persistent 401 — token genuinely revoked/expired. Clear storage.
+      console.warn('[Auth] Token cleared:', { reason: 'persistent-401-apiRequest', endpoint, at: Date.now() });
+      await chrome.storage.local.remove(['authToken', 'user']);
+      throw new Error('Session expired');
+    }
   }
 
   if (!response.ok) {
@@ -153,22 +170,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        // Optionally validate token is still valid
+        // Optionally validate token is still valid.
+        //
+        // Only clear storage on a CONFIRMED 401 (token revoked/invalid). Any
+        // other non-2xx — 502/503 from a deploy in flight, 500 from a backend
+        // hiccup, 504 timeout — is a server problem, not an auth problem, and
+        // must NOT log the user out. Same retry-once policy as apiRequest:
+        // a single 401 could be a transient auth-service blip; require two in
+        // a row before treating it as authoritative.
         if (message.validate) {
-          try {
-            const response = await fetch(`${CONFIG.API_BASE}/api/auth/extension/validate`, {
-              headers: { 'Authorization': `Bearer ${authToken}` },
-            });
+          const validateUrl = `${CONFIG.API_BASE}/api/auth/extension/validate`;
+          const doFetch = () => fetch(validateUrl, {
+            headers: { 'Authorization': `Bearer ${authToken}` },
+          });
 
-            if (!response.ok) {
-              // Token invalid - clear storage
+          try {
+            let response = await doFetch();
+
+            if (response.status === 401) {
+              await new Promise((r) => setTimeout(r, 300));
+              response = await doFetch();
+            }
+
+            if (response.status === 401) {
+              // Persistent 401 — token genuinely revoked. Clear storage.
+              console.warn('[Auth] Token cleared:', { reason: 'persistent-401-validate', at: Date.now() });
               await chrome.storage.local.remove(['authToken', 'user']);
               sendResponse({ authenticated: false, user: null });
               return;
             }
 
+            if (!response.ok) {
+              // Server error (5xx, etc.) — keep the user logged in with
+              // cached state. They'll re-validate next time.
+              sendResponse({ authenticated: true, user });
+              return;
+            }
+
             const { user: validatedUser } = await response.json();
-            // Update stored user info
             await chrome.storage.local.set({ user: validatedUser });
             sendResponse({ authenticated: true, user: validatedUser });
           } catch {
@@ -189,6 +228,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'LOGOUT') {
     (async () => {
       try {
+        console.warn('[Auth] Token cleared:', { reason: 'explicit-logout', at: Date.now() });
         await chrome.storage.local.remove(['authToken', 'user', 'authState']);
         sendResponse({ success: true });
       } catch (error) {
