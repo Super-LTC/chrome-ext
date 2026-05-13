@@ -47,8 +47,25 @@ if not exist "%ZIP_FILE%" (
     exit /b 1
 )
 
+REM Switch CWD out of the install dir before we delete it. If the user ran
+REM this BAT from inside %INSTALL_DIR% (e.g., saved it into the extension
+REM folder), Windows refuses to delete a directory that any process is
+REM "currently in", and the rmdir below would partially succeed — wiping
+REM this script mid-execution. cmd.exe would then print "The batch file
+REM cannot be found" and exit. %USERPROFILE% is always safe and writable.
+cd /d "%USERPROFILE%"
+
 echo Clearing old files...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
+if exist "%INSTALL_DIR%" (
+    echo.
+    echo ERROR: Could not clear old install folder:
+    echo   %INSTALL_DIR%
+    echo Close Chrome/Edge and any File Explorer windows pointing at that
+    echo folder, then run this BAT again.
+    pause
+    exit /b 1
+)
 mkdir "%INSTALL_DIR%"
 
 echo Extracting new version...
