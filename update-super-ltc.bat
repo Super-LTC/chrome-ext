@@ -229,8 +229,12 @@ set "BROWSER_EXE=msedge"
 goto :open_browser
 
 :open_browser
-REM Always open Explorer at the install folder so the user can drag it.
-start "" explorer.exe "%INSTALL_DIR%"
+REM Open Explorer at the PARENT folder with the install dir pre-selected
+REM (/select,). This way the user sees the super-ltc-extension folder
+REM itself highlighted and can drag the folder onto the extensions page.
+REM Without /select, Explorer opens INSIDE the folder showing its files,
+REM and the user has to navigate up before they can drag the folder.
+start "" explorer.exe /select,"%INSTALL_DIR%"
 
 REM --new-window forces Chrome/Edge to open a fresh window with the URL.
 REM Without it, if the browser is already running, the URL is sent via IPC
