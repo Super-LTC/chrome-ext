@@ -986,6 +986,13 @@ const LibraryConfigure = ({ state, onToggleGoal, onToggleInter, onSetItemFills, 
 };
 
 const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns }) => {
+  const sectionRef = useRef(null);
+  // Snap back to top whenever the active focus changes — otherwise scroll
+  // position from the previous focus leaks over and looks broken.
+  const focusKey = rawFocus?.ruleId || rawFocus?.stdNeedId || composed?.description;
+  useEffect(() => {
+    if (sectionRef.current) sectionRef.current.scrollTop = 0;
+  }, [focusKey]);
   if (!composed) return null;
   const isCodeStatus = rawFocus?.ruleId === 'universal.code_status';
   const isDischargePlanning = rawFocus?.ruleId === 'universal.discharge_planning';
@@ -1038,7 +1045,7 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
   };
 
   return (
-    <section className="cpas-detail">
+    <section className="cpas-detail" ref={sectionRef}>
       <header className="cpas-detail__header">
         <div>
           <span className={`cpas-detail__rule ${rawFocus._isLibrary ? 'is-library' : ''}`}>
