@@ -1,5 +1,15 @@
 @echo off
 setlocal EnableExtensions
+
+REM Move out of the user's CWD before doing ANYTHING — including the
+REM PowerShell calls below that resolve the install dir. If the user
+REM launched this BAT from inside %INSTALL_DIR%, or from a deleted/broken
+REM folder left over from a previous failed run, PowerShell inherits that
+REM broken CWD and returns empty paths, which cascades into mkdir failing
+REM later with "The system cannot find the path specified." %USERPROFILE%
+REM is always present and writable.
+cd /d "%USERPROFILE%"
+
 echo ============================================
 echo   Super LTC Extension Installer / Updater
 echo ============================================
@@ -46,14 +56,6 @@ if not exist "%ZIP_FILE%" (
     pause
     exit /b 1
 )
-
-REM Switch CWD out of the install dir before we delete it. If the user ran
-REM this BAT from inside %INSTALL_DIR% (e.g., saved it into the extension
-REM folder), Windows refuses to delete a directory that any process is
-REM "currently in", and the rmdir below would partially succeed — wiping
-REM this script mid-execution. cmd.exe would then print "The batch file
-REM cannot be found" and exit. %USERPROFILE% is always safe and writable.
-cd /d "%USERPROFILE%"
 
 echo.
 echo Install target: %INSTALL_DIR%
