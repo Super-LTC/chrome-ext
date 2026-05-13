@@ -6,8 +6,27 @@ echo ============================================
 echo.
 
 REM --- Paths ---------------------------------------------------------------
-for /f "delims=" %%i in ('powershell -Command "[Environment]::GetFolderPath('Desktop')"') do set DESKTOP=%%i
-set INSTALL_DIR=%DESKTOP%\super-ltc-extension
+REM Pick the install directory dynamically:
+REM   - Default: Desktop\super-ltc-extension (easy to find).
+REM   - If Desktop is OneDrive-redirected: %LOCALAPPDATA%\SuperLTC\extension.
+REM     OneDrive sync corrupts the unpacked extension — Chrome/Edge reads
+REM     manifest.json mid-sync and disables it with "Manifest file is
+REM     missing or unreadable".
+REM   - If an install already exists at %LOCALAPPDATA%, prefer it.
+for /f "delims=" %%i in ('powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"') do set DESKTOP=%%i
+for /f "delims=" %%i in ('powershell -NoProfile -Command "$d=[Environment]::GetFolderPath('Desktop'); $la=Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'; $dd=Join-Path $d 'super-ltc-extension'; $od=$env:OneDriveCommercial; if (-not $od) { $od=$env:OneDrive }; $on=$false; try { if ($od -and $d.StartsWith($od,[StringComparison]::OrdinalIgnoreCase)) { $on=$true } } catch {}; if (-not $on -and $d -match '\\OneDrive(?:[^\\]*)?\\') { $on=$true }; if ($on) { $la; exit }; if (Test-Path (Join-Path $la 'manifest.json')) { $la; exit }; $dd"') do set INSTALL_DIR=%%i
+
+REM Defensive: if PowerShell quoting / detection blew up and INSTALL_DIR is
+REM empty, fall back to the historical Desktop path rather than failing later
+REM with cryptic "cannot find path" errors. Better to install to the old
+REM location than to nuke a random folder.
+if "%INSTALL_DIR%"=="" (
+    echo.
+    echo WARNING: Could not auto-detect install directory ^(PowerShell returned
+    echo          nothing^). Falling back to Desktop\super-ltc-extension.
+    echo.
+    set "INSTALL_DIR=%DESKTOP%\super-ltc-extension"
+)
 set ZIP_URL=https://github.com/Superjonathan123/chrome-ext/releases/latest/download/super-ltc-extension.zip
 set ZIP_FILE=%TEMP%\super-ltc-extension.zip
 set APP_DIR=%LOCALAPPDATA%\SuperLTC
@@ -90,20 +109,38 @@ echo.
 echo Extension files are in: %INSTALL_DIR%
 echo Auto-update log:        %APP_DIR%\update.log
 echo.
-echo NOW DO THIS:
-echo   1. Open Chrome
-echo   2. Go to chrome://extensions
-echo   3. Click the reload button (circular arrow)
-echo   4. Refresh your PCC page
+
+REM Heads-up if we just migrated off the Desktop because of OneDrive sync.
+if /I not "%INSTALL_DIR%"=="%DESKTOP%\super-ltc-extension" if exist "%DESKTOP%\super-ltc-extension\manifest.json" (
+    echo *** IMPORTANT — OneDrive was detected on your Desktop, so the extension
+    echo     was installed to %INSTALL_DIR% instead of the Desktop. This avoids
+    echo     a Chrome/Edge bug where OneDrive sync corrupts the extension files.
+    echo.
+    echo     Your OLD install on the Desktop is no longer being updated.
+    echo     Open chrome://extensions  ^(or edge://extensions^)  and click
+    echo     "Remove" on the old "Super LTC for Point Click Care" entry, then
+    echo     drag the new folder ^(opened below^) onto the extensions page.
+    echo.
+)
+echo If you ALREADY have the extension loaded:
+echo   - Just go to your extensions page and click the reload icon.
+echo   - Then refresh your PCC page. You're done.
 echo.
-echo If this is your FIRST TIME:
-echo   1. Open Chrome
-echo   2. Go to chrome://extensions
-echo   3. Turn on "Developer mode" (top right)
-echo   4. Click "Load unpacked"
-echo   5. Select: %INSTALL_DIR%
+echo If this is your FIRST TIME (or the extension is no longer listed):
+echo   - Two windows will open below:
+echo       (1) chrome://extensions  (or edge://extensions)
+echo       (2) The extension folder in File Explorer
+echo   - DRAG the folder from File Explorer onto the extensions page.
+echo   - Chrome/Edge will install it. Refresh your PCC page.
 echo.
 echo From now on, future updates download in the background every 30 minutes.
 echo You'll see a banner in PCC when a new version is ready to reload.
 echo.
+
+REM Open Chrome's extensions page (fallback to Edge), and the install folder
+REM in File Explorer side-by-side so users can drag the folder onto the page.
+start "" chrome.exe "chrome://extensions/" 2>nul
+if errorlevel 1 start "" msedge.exe "edge://extensions/" 2>nul
+start "" explorer.exe "%INSTALL_DIR%"
+
 pause

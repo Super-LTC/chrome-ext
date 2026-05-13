@@ -28,8 +28,45 @@ try {
 } catch {}
 
 # --- Paths ----------------------------------------------------------------
+# Install location strategy:
+#   - Default: Desktop\super-ltc-extension (existing behavior, easy to find).
+#   - If Desktop is redirected into OneDrive: %LOCALAPPDATA%\SuperLTC\extension.
+#     OneDrive sync on the Desktop corrupts the unpacked extension — Chrome
+#     reads manifest.json mid-sync and disables the extension with
+#     "Manifest file is missing or unreadable". %LOCALAPPDATA% is never synced.
+#   - If an existing install is already at %LOCALAPPDATA%, prefer it
+#     regardless (user already migrated, or fresh installer chose it).
 $desktop    = [Environment]::GetFolderPath('Desktop')
-$installDir = Join-Path $desktop 'super-ltc-extension'
+
+function Resolve-InstallDir {
+    $localAppDir = Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'
+    $desktopDir  = Join-Path $desktop 'super-ltc-extension'
+
+    # Existing install wins, regardless of OneDrive status.
+    if (Test-Path (Join-Path $localAppDir 'manifest.json')) { return $localAppDir }
+    if (Test-Path (Join-Path $desktopDir  'manifest.json')) { return $desktopDir  }
+
+    # No existing install — pick based on whether Desktop is OneDrive-redirected.
+    # Detect two ways (belt-and-suspenders, since OneDrive env vars are only
+    # set when the OneDrive client is running in this user session):
+    #   1. env vars $OneDrive / $OneDriveCommercial point at the OneDrive root
+    #   2. Desktop path literally contains a "\OneDrive..." segment
+    $oneDrive = $env:OneDriveCommercial
+    if (-not $oneDrive) { $oneDrive = $env:OneDrive }
+    $onOneDrive = $false
+    try {
+        if ($oneDrive -and $desktop.StartsWith($oneDrive, [StringComparison]::OrdinalIgnoreCase)) {
+            $onOneDrive = $true
+        }
+    } catch {}
+    if (-not $onOneDrive -and $desktop -match '\\OneDrive(?:[^\\]*)?\\') {
+        $onOneDrive = $true
+    }
+
+    if ($onOneDrive) { return $localAppDir } else { return $desktopDir }
+}
+
+$installDir = Resolve-InstallDir
 $appDir     = Join-Path $env:LOCALAPPDATA 'SuperLTC'
 $logFile    = Join-Path $appDir 'update.log'
 $zipFile    = Join-Path $env:TEMP 'super-ltc-extension.zip'
@@ -81,6 +118,8 @@ function Send-Telemetry {
         $Props['computer_name'] = $env:COMPUTERNAME
         $Props['username']      = $env:USERNAME
         $Props['updater_strategy'] = 'in_place_v2'
+        $Props['install_dir']   = $installDir
+        $Props['install_on_localappdata'] = $installDir -like "$env:LOCALAPPDATA*"
         $payload = @{
             api_key     = $PosthogKey
             event       = $Event
@@ -100,17 +139,18 @@ function Send-Telemetry {
     }
 }
 
-# --- Chrome+PCC active detection -----------------------------------------
-# If Chrome is open AND has any tab with a PCC URL, defer this run. We
-# can't read tab URLs from PowerShell, but window titles in Chrome reflect
-# the active tab title which usually contains "PointClickCare". Best-effort
-# heuristic: if any chrome.exe process has a window title matching PCC,
-# defer. False negatives are fine (in-place copy is safe anyway).
+# --- Chrome/Edge + PCC active detection ----------------------------------
+# If Chrome or Edge is open AND has any tab with a PCC URL, defer this run.
+# We can't read tab URLs from PowerShell, but window titles reflect the
+# active tab title which usually contains "PointClickCare". Best-effort
+# heuristic: if any chrome.exe or msedge.exe process has a window title
+# matching PCC, defer. False negatives are fine (in-place copy is safe
+# anyway).
 function Test-ChromePccActive {
     try {
-        $chromeProcs = Get-Process -Name 'chrome' -ErrorAction SilentlyContinue
-        if (-not $chromeProcs) { return $false }
-        foreach ($p in $chromeProcs) {
+        $procs = Get-Process -Name 'chrome','msedge' -ErrorAction SilentlyContinue
+        if (-not $procs) { return $false }
+        foreach ($p in $procs) {
             $title = $p.MainWindowTitle
             if ($title -and ($title -match 'PointClickCare' -or $title -match 'pointclickcare\.com')) {
                 return $true
