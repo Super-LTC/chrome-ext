@@ -55,6 +55,10 @@ REM this script mid-execution. cmd.exe would then print "The batch file
 REM cannot be found" and exit. %USERPROFILE% is always safe and writable.
 cd /d "%USERPROFILE%"
 
+echo.
+echo Install target: %INSTALL_DIR%
+echo.
+
 echo Clearing old files...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
 if exist "%INSTALL_DIR%" (
@@ -66,10 +70,33 @@ if exist "%INSTALL_DIR%" (
     pause
     exit /b 1
 )
-mkdir "%INSTALL_DIR%"
+
+REM Make sure the parent directory exists before we mkdir the install dir.
+REM mkdir's auto-create-intermediates only kicks in with command extensions,
+REM and even then it can fail with "system cannot find the path specified"
+REM on edge cases. PowerShell's New-Item -Force is more reliable across
+REM Windows versions and creates all missing intermediates unconditionally.
+echo Creating install folder...
+powershell -NoProfile -Command "New-Item -ItemType Directory -Path '%INSTALL_DIR%' -Force | Out-Null"
+if not exist "%INSTALL_DIR%" (
+    echo.
+    echo ERROR: Could not create install folder:
+    echo   %INSTALL_DIR%
+    echo Check that you have write permission to that location.
+    pause
+    exit /b 1
+)
 
 echo Extracting new version...
-powershell -Command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%INSTALL_DIR%' -Force"
+powershell -NoProfile -Command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%INSTALL_DIR%' -Force"
+if not exist "%INSTALL_DIR%\manifest.json" (
+    echo.
+    echo ERROR: Extraction did not produce a manifest.json in:
+    echo   %INSTALL_DIR%
+    echo The download may be corrupt. Try again.
+    pause
+    exit /b 1
+)
 
 del "%ZIP_FILE%"
 
