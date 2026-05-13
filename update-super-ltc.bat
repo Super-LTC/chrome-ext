@@ -137,10 +137,54 @@ echo From now on, future updates download in the background every 30 minutes.
 echo You'll see a banner in PCC when a new version is ready to reload.
 echo.
 
-REM Open Chrome's extensions page (fallback to Edge), and the install folder
-REM in File Explorer side-by-side so users can drag the folder onto the page.
-start "" chrome.exe "chrome://extensions/" 2>nul
-if errorlevel 1 start "" msedge.exe "edge://extensions/" 2>nul
+REM Pick the right browser and open its extensions page, plus File Explorer
+REM at the install folder. User drags the folder onto the page.
+REM
+REM Priority:
+REM   1. Whichever browser is currently running (probably the one they're using)
+REM   2. Chrome at known install paths
+REM   3. Edge at known install paths (ships with Windows 10+)
+REM   4. Bare name via App Paths registry, last resort
+REM
+REM Each candidate is checked one line at a time and jumps to :open_browser
+REM when found. This avoids batch's delayed-expansion footgun where vars set
+REM inside (parens) aren't visible to later lines in the same block.
+set "BROWSER_EXE="
+set "BROWSER_URL="
+
+REM 1. Currently-running browser wins
+tasklist /FI "IMAGENAME eq chrome.exe" 2>nul | find /I "chrome.exe" >nul && goto :pick_chrome
+tasklist /FI "IMAGENAME eq msedge.exe" 2>nul | find /I "msedge.exe" >nul && goto :pick_edge
+
+REM 2/3. No running browser — Chrome first, then Edge
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" goto :pick_chrome
+if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" goto :pick_chrome
+if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" goto :pick_chrome
+if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" goto :pick_edge
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" goto :pick_edge
+
+REM 4. Final fallback
+goto :pick_edge
+
+:pick_chrome
+set "BROWSER_URL=chrome://extensions/"
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "BROWSER_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe" & goto :open_browser
+if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "BROWSER_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" & goto :open_browser
+if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" set "BROWSER_EXE=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" & goto :open_browser
+REM Chrome was running but we can't find the .exe — fall back to bare name (App Paths)
+set "BROWSER_EXE=chrome"
+goto :open_browser
+
+:pick_edge
+set "BROWSER_URL=edge://extensions/"
+if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "BROWSER_EXE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" & goto :open_browser
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "BROWSER_EXE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" & goto :open_browser
+set "BROWSER_EXE=msedge"
+goto :open_browser
+
+:open_browser
+REM Always open Explorer at the install folder so the user can drag it.
 start "" explorer.exe "%INSTALL_DIR%"
+start "" "%BROWSER_EXE%" "%BROWSER_URL%"
 
 pause
