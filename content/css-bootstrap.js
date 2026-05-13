@@ -57,6 +57,7 @@ import qmBoard from './css/qm-board.css?inline';
 import twentyFourHourReport from './css/24hr-report.css?inline';
 import updateBanner from './css/update-banner.css?inline';
 import meddiagAugment from './css/meddiag-augment.css?inline';
+import carePlanStamp from './css/care-plan-stamp.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -92,6 +93,7 @@ const CSS_BUNDLE = [
   twentyFourHourReport,
   updateBanner,
   meddiagAugment,
+  carePlanStamp,
 ].join('\n\n');
 
 function injectCss() {

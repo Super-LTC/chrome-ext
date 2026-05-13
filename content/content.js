@@ -62,6 +62,14 @@ import './super-menu/streaming.js';
 import './super-menu/meddiag-augment.js';
 import './super-menu/init.js';
 
+// 6.4. Care Plan Auto-Pop stamping (injects button on careplandetail_rev.jsp)
+//      Modules are exposed on window globals; the modal is dynamically imported
+//      on click to keep the initial bundle small.
+import './modules/care-plan-stamp/stamp-api.js';
+import './modules/care-plan-stamp/pcc-discover.js';
+import './modules/care-plan-stamp/pcc-stamp.js';
+import './modules/care-plan-stamp/inject-button.js';
+
 // 6.5. Load PDF.js library into content script scope
 import * as pdfjsLib from 'pdfjs-dist';
 window.pdfjsLib = pdfjsLib;

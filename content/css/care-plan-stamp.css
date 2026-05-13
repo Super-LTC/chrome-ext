@@ -1,0 +1,1984 @@
+/* Care Plan Auto-Pop Stamping wizard — full-screen Preact modal */
+
+.cpas-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100010;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #111827;
+}
+.cpas-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+.cpas-modal__container {
+  position: absolute;
+  inset: 24px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100011;
+}
+
+/* --- Header --- */
+.cpas-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+}
+.cpas-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+.cpas-modal__subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.cpas-modal__close {
+  background: transparent;
+  border: none;
+  font-size: 28px;
+  line-height: 1;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.cpas-modal__close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* --- Body --- */
+.cpas-modal__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+.cpas-modal__columns {
+  flex: 1;
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 260px 1fr;
+}
+
+/* Header action cluster (Browse PCC Library button + close) */
+.cpas-modal__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cpas-modal__library-btn {
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4338ca;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s ease;
+}
+.cpas-modal__library-btn:hover {
+  background: linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%);
+  border-color: #a5b4fc;
+}
+
+/* Library browser as overlay (modal-on-modal) */
+.cpas-libbrowser-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100015;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  font-family: inherit;
+}
+.cpas-libbrowser-overlay .cpas-libbrowser {
+  width: 100%;
+  max-width: 720px;
+  /* Use the full overlay space so combobox popovers (max-height: 360px) always
+     fit below their triggers without bleeding out of the modal card. */
+  height: calc(100vh - 80px);
+  min-height: 480px;
+  border-radius: 14px;
+  background: #fff;
+  border-left: none;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.4);
+}
+.cpas-libbrowser__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cpas-libbrowser__header-text {
+  flex: 1;
+}
+.cpas-libbrowser__collapse {
+  background: transparent;
+  border: none;
+  color: #4f46e5;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.cpas-libbrowser__collapse:hover {
+  background: rgba(79, 70, 229, 0.1);
+}
+
+/* --- Focus list (left) --- */
+.cpas-list {
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.cpas-list__header {
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.cpas-list__header-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+.cpas-list__header-count {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 2px;
+}
+.cpas-list__legend {
+  padding: 8px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 11px;
+  color: #6b7280;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cpas-list__legend b {
+  font-weight: 700;
+  color: #4f46e5;
+}
+.cpas-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.cpas-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  border-left: 3px solid transparent;
+  transition: all 0.12s ease;
+}
+.cpas-list__item .cpas-list__badge {
+  margin-top: 1px;
+}
+.cpas-list__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cpas-list__row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cpas-list__row-top .cpas-list__text {
+  font-weight: 600;
+  color: #111827;
+}
+.cpas-list__preview {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #6b7280;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.cpas-list__item.is-skipped .cpas-list__preview {
+  color: #9ca3af;
+}
+.cpas-list__tag--blank {
+  background: #fde68a;
+  color: #92400e;
+}
+.cpas-list__item:hover {
+  background: #eef2ff;
+}
+.cpas-list__item.is-active {
+  background: #eef2ff;
+  border-left-color: #4f46e5;
+  color: #111827;
+  font-weight: 600;
+}
+.cpas-list__item.is-skipped {
+  opacity: 0.5;
+}
+.cpas-list__item.is-skipped .cpas-list__badge {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+.cpas-list__item.is-stamping {
+  background: #fef3c7;
+  border-left-color: #f59e0b;
+}
+.cpas-list__badge {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.cpas-list__item.is-library .cpas-list__badge {
+  background: #8b5cf6;
+}
+.cpas-list__text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Focus detail (right) --- */
+.cpas-detail {
+  padding: 24px 32px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.cpas-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.cpas-detail__rule {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4f46e5;
+  background: #eef2ff;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.cpas-detail__actions {
+  display: flex;
+  gap: 6px;
+}
+.cpas-detail__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+.cpas-detail__focus-text {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #111827;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 0 24px;
+  font-weight: 500;
+}
+.cpas-detail__focus-text.has-blank {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.cpas-detail__section {
+  margin: 20px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+.cpas-detail__list {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+}
+.cpas-detail__list li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+  padding: 8px 0 8px 22px;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+}
+.cpas-detail__list li:before {
+  content: '•';
+  color: #9ca3af;
+  position: absolute;
+  left: 6px;
+  top: 8px;
+}
+.cpas-detail__list li:last-child {
+  border-bottom: none;
+}
+.cpas-detail__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+/* --- Pills (accept/skip) --- */
+.cpas-pill {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.12s ease;
+}
+.cpas-pill:hover {
+  border-color: #9ca3af;
+  color: #111827;
+}
+.cpas-pill.is-active {
+  background: #10b981;
+  border-color: #059669;
+  color: #fff;
+}
+.cpas-pill.is-active.is-skip {
+  background: #6b7280;
+  border-color: #4b5563;
+}
+
+/* --- Code-status picker --- */
+.cpas-code-status {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin: 0 0 24px;
+}
+.cpas-code-status__options {
+  display: flex;
+  gap: 8px;
+}
+.cpas-code-status__hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #92400e;
+  font-style: italic;
+}
+.cpas-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.cpas-radio:hover {
+  border-color: #f59e0b;
+}
+.cpas-radio.is-active {
+  background: #fbbf24;
+  border-color: #d97706;
+  color: #78350f;
+  font-weight: 700;
+}
+.cpas-radio input {
+  margin: 0;
+}
+
+/* --- Footer --- */
+.cpas-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbff;
+  gap: 16px;
+}
+.cpas-modal__footer-summary {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+.cpas-modal__footer-actions {
+  display: flex;
+  gap: 10px;
+}
+.cpas-btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.cpas-btn--primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+}
+.cpas-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+}
+.cpas-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cpas-btn--ghost {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+.cpas-btn--ghost:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* --- Loading / error / drift states --- */
+.cpas-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  text-align: center;
+  color: #6b7280;
+}
+.cpas-empty h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #111827;
+}
+.cpas-empty p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 480px;
+}
+.cpas-empty--error h3 {
+  color: #b91c1c;
+}
+.cpas-empty details {
+  margin: 16px 0;
+  max-width: 600px;
+  text-align: left;
+}
+.cpas-empty summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #4f46e5;
+}
+.cpas-drift-list {
+  margin: 12px 0 0;
+  padding: 0 0 0 20px;
+  font-size: 13px;
+}
+.cpas-drift-list li {
+  margin: 6px 0;
+}
+.cpas-drift-list code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.cpas-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: cpas-spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+@keyframes cpas-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Progress bar (during stamping) --- */
+.cpas-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cpas-progress__bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.cpas-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #4f46e5);
+  transition: width 0.3s ease;
+  border-radius: 999px;
+}
+.cpas-progress__label {
+  font-size: 13px;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+/* --- Compact preview mode (default before "Customize") --- */
+.cpas-detail__preview {
+  font-size: 15px;
+  line-height: 1.55;
+  color: #111827;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  font-weight: 500;
+}
+.cpas-detail__preview.has-blank {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.cpas-detail__summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 8px;
+}
+.cpas-detail__counts {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.01em;
+}
+.cpas-detail__toggle {
+  background: transparent;
+  border: none;
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.12s ease;
+  font-family: inherit;
+}
+.cpas-detail__toggle:hover {
+  background: #eef2ff;
+}
+.cpas-detail__previews {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cpas-detail__preview-group {
+  background: #fff;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.cpas-detail__preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+.cpas-detail__preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cpas-detail__preview-list li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+  padding: 6px 0 6px 14px;
+  border-bottom: 1px solid #f9fafb;
+  position: relative;
+}
+.cpas-detail__preview-list li:before {
+  content: '•';
+  color: #d1d5db;
+  position: absolute;
+  left: 0;
+  top: 6px;
+}
+.cpas-detail__preview-list li:last-child {
+  border-bottom: none;
+}
+.cpas-row__tag--inline {
+  margin-left: 6px;
+  font-size: 10px;
+  padding: 1px 6px;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+/* ========================================================
+   COMPACT ROW DESIGN (post-redesign)
+   - Description reads like text, not a form field
+   - Kardex + Positions are pill chips, not stacked selects
+   ======================================================== */
+
+.cpas-iv-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 0;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.cpas-iv-row:hover {
+  border-color: #e5e7eb;
+  background: #fafbff;
+}
+.cpas-iv-row:focus-within {
+  border-color: #c7d2fe;
+  background: #fff;
+}
+.cpas-iv-row__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cpas-iv-row__text-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.cpas-iv-row__text {
+  flex: 1;
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #111827;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+  min-height: 22px;
+  field-sizing: content; /* progressive enhancement — modern browsers auto-grow */
+}
+.cpas-iv-row__text:hover:not(:focus):not(:disabled) {
+  background: #f9fafb;
+}
+.cpas-iv-row__text:focus {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
+}
+.cpas-iv-row__text:disabled {
+  color: #6b7280;
+}
+.cpas-iv-row__text::placeholder {
+  color: #d1d5db;
+  font-style: italic;
+}
+/* Focus statement variant — larger, slightly more emphasis */
+.cpas-iv-row__text--focus {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 10px 12px;
+  margin-bottom: 18px;
+  background: #fafbff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+}
+.cpas-iv-row__text--focus:hover:not(:focus):not(:disabled) {
+  border-color: #c7d2fe;
+  background: #fff;
+}
+.cpas-iv-row__text--focus:focus {
+  border-color: #4f46e5;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+.cpas-iv-row__text--focus.has-blank {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.cpas-iv-row__chip-add--full {
+  margin: 6px 0 18px;
+  align-self: flex-start;
+}
+.cpas-iv-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding-left: 6px;
+}
+.cpas-iv-row__delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #d1d5db;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+  transition: all 0.12s ease;
+}
+.cpas-iv-row:hover .cpas-iv-row__delete {
+  color: #9ca3af;
+}
+.cpas-iv-row__delete:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.cpas-iv-row__chip-add {
+  background: transparent;
+  border: 1px dashed #d1d5db;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s ease;
+}
+.cpas-iv-row__chip-add:hover {
+  border-color: #4f46e5;
+  color: #4f46e5;
+  border-style: solid;
+}
+
+/* Goal rows reuse the same row pattern but skip the chips */
+.cpas-iv-row--goal .cpas-iv-row__body {
+  gap: 0;
+}
+
+/* ========================================================
+   COMBOBOX (searchable popover dropdown)
+   Replaces native <select> for chips + library/category lists.
+   ======================================================== */
+.cpas-combobox {
+  position: relative;
+  display: inline-flex;
+}
+.cpas-combobox.is-full {
+  display: flex;
+  width: 100%;
+}
+.cpas-combobox__trigger {
+  /* Default trigger; chip variants override via .cpas-chip */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: all 0.12s ease;
+}
+.cpas-combobox__trigger:hover:not(:disabled) {
+  border-color: #9ca3af;
+}
+.cpas-combobox__trigger:focus,
+.cpas-combobox__trigger:focus-visible {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.cpas-combobox__trigger:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.cpas-combobox__label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cpas-combobox__caret {
+  color: #9ca3af;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.cpas-combobox__popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 260px;
+  max-width: 400px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+  z-index: 100025;
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow: hidden;
+}
+.cpas-combobox.is-full .cpas-combobox__popover {
+  left: 0;
+  right: 0;
+  min-width: 0;
+}
+.cpas-combobox__search {
+  padding: 9px 12px;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fafbff;
+}
+.cpas-combobox__search:focus {
+  background: #fff;
+}
+.cpas-combobox__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.cpas-combobox__option {
+  padding: 7px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cpas-combobox__option.is-active {
+  background: #eef2ff;
+  color: #1e1b4b;
+}
+.cpas-combobox__option.is-selected {
+  font-weight: 600;
+}
+.cpas-combobox__option.is-selected::before {
+  content: '✓';
+  color: #4f46e5;
+  font-weight: 700;
+}
+.cpas-combobox__option:not(.is-selected)::before {
+  content: '';
+  width: 12px;
+  display: inline-block;
+}
+.cpas-combobox__empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+.cpas-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.cpas-chip__remove--external {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #9ca3af;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  font-family: inherit;
+}
+.cpas-chip__remove--external:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+/* ========================================================
+   CHIP CONTROLS (Kardex / Position)
+   ======================================================== */
+.cpas-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  max-width: 220px;
+  font-family: inherit;
+  outline: none;
+}
+.cpas-chip:focus-visible {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+}
+.cpas-chip .cpas-combobox__caret {
+  font-size: 8px;
+  opacity: 0.5;
+  margin-left: 2px;
+}
+.cpas-chip:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+.cpas-chip.is-disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.cpas-chip__icon {
+  font-size: 7px;
+  line-height: 1;
+  color: #6b7280;
+}
+.cpas-chip__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.cpas-chip__select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  outline: none;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.cpas-chip__select:focus + .cpas-chip__label, .cpas-chip:focus-within {
+  /* focus ring on the chip */
+}
+.cpas-chip:focus-within {
+  outline: 2px solid #4f46e5;
+  outline-offset: 1px;
+}
+.cpas-chip__remove {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 0 0 2px;
+  margin-left: 2px;
+  line-height: 1;
+  z-index: 1; /* sit above the absolute-positioned <select> overlay */
+  position: relative;
+  font-family: inherit;
+}
+.cpas-chip__remove:hover {
+  color: #b91c1c;
+}
+
+/* Kardex chip — slightly different tint */
+.cpas-chip--kardex {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+.cpas-chip--kardex:hover {
+  background: #c7d2fe;
+}
+
+/* Position chip — green-ish */
+.cpas-chip--pos {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+.cpas-chip--pos:hover {
+  background: #a7f3d0;
+}
+.cpas-chip--pos .cpas-chip__icon {
+  color: #059669;
+}
+
+/* --- Editable textareas + list rows (legacy, still used by goal-add fallback) --- */
+.cpas-textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #111827;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: #fff;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  font-family: inherit;
+}
+.cpas-textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.cpas-textarea:disabled {
+  background: #f9fafb;
+  color: #6b7280;
+}
+.cpas-textarea--focus {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 0 18px;
+}
+.cpas-textarea--focus.has-blank {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.cpas-detail__list--editable {
+  padding: 0;
+}
+.cpas-detail__list--editable li {
+  padding: 0;
+  border-bottom: none;
+}
+.cpas-detail__list--editable li:before {
+  content: none;
+}
+.cpas-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.cpas-row__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cpas-row__meta {
+  display: flex;
+  gap: 6px;
+  padding-left: 4px;
+}
+.cpas-row__tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.cpas-row__delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #9ca3af;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 4px;
+  transition: all 0.12s ease;
+  line-height: 1;
+}
+.cpas-row__delete:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+.cpas-row .cpas-textarea {
+  flex: 1;
+}
+.cpas-btn--add {
+  margin: 4px 0 16px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: #4f46e5;
+  border-color: #c7d2fe;
+  background: #fff;
+}
+.cpas-btn--add:hover {
+  background: #eef2ff;
+  border-color: #4f46e5;
+}
+
+/* --- Library browser (right column, always visible) --- */
+.cpas-libbrowser {
+  border-left: 1px solid #e5e7eb;
+  background: #fafbff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.cpas-libbrowser__header {
+  padding: 14px 18px;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  border-bottom: 1px solid #c7d2fe;
+  font-size: 13px;
+  font-weight: 700;
+  color: #312e81;
+}
+.cpas-libbrowser__subtitle {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4f46e5;
+  margin-top: 2px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.cpas-libbrowser__body {
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.cpas-libbrowser__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cpas-libbrowser__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+.cpas-libbrowser__select {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+.cpas-libbrowser__select:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.cpas-libbrowser__combo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #111827;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+.cpas-libbrowser__combo:hover:not(:disabled) {
+  border-color: #9ca3af;
+}
+.cpas-libbrowser__combo:focus-visible {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.cpas-libbrowser__combo:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.cpas-libbrowser__error {
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.cpas-libbrowser__focuses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cpas-libbrowser__focus {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.cpas-libbrowser__focus.is-picked {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.cpas-libbrowser__focus.has-blank {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.cpas-libbrowser__focus-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cpas-libbrowser__focus-text {
+  color: #374151;
+}
+.cpas-libbrowser__blank-tag {
+  align-self: flex-start;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #92400e;
+  background: #fde68a;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.cpas-libbrowser__pick {
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: all 0.12s ease;
+}
+.cpas-libbrowser__pick:hover:not(:disabled) {
+  background: #4338ca;
+}
+.cpas-libbrowser__pick:disabled {
+  background: #10b981;
+  cursor: default;
+}
+.cpas-libbrowser__loading,
+.cpas-libbrowser__empty {
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+  padding: 6px 0;
+}
+.cpas-libbrowser__filter {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #fff;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.cpas-libbrowser__filter:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.cpas-libbrowser__hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+  background: #fff;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+/* ========================================================
+   LIBRARY CONFIGURE WIZARD (centered modal-on-modal overlay)
+   Activated when nurse clicks "Configure" on a library focus.
+   Has its own backdrop above the main modal so it can be wide
+   enough to show the goal + intervention checklists clearly.
+   ======================================================== */
+.cpas-libcfg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100020;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  font-family: inherit;
+}
+.cpas-libcfg {
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 80px);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100021;
+}
+.cpas-libcfg__header {
+  padding: 18px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, #ffffff, #fafbff);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cpas-libcfg__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4f46e5;
+  margin-bottom: 6px;
+}
+.cpas-libcfg__focus-text {
+  font-size: 16px;
+  line-height: 1.5;
+  color: #111827;
+  font-weight: 600;
+  margin: 0;
+}
+.cpas-libcfg__close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0 6px;
+  border-radius: 6px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.cpas-libcfg__close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+.cpas-libcfg__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+.cpas-libcfg__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cpas-libcfg__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.cpas-libcfg__section-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #111827;
+}
+.cpas-libcfg__count {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+.cpas-libcfg__section-actions {
+  display: flex;
+  gap: 8px;
+}
+.cpas-libcfg__bulk {
+  background: transparent;
+  border: none;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+.cpas-libcfg__bulk:hover {
+  background: #eef2ff;
+}
+.cpas-libcfg__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cpas-libcfg__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.cpas-libcfg__item:hover {
+  border-color: #c7d2fe;
+  background: #fafbff;
+}
+.cpas-libcfg__item.is-on {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.cpas-libcfg__item input[type="checkbox"] {
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  accent-color: #4f46e5;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+.cpas-libcfg__item-text {
+  flex: 1;
+  color: #374151;
+  word-break: break-word;
+}
+.cpas-libcfg__item.is-on .cpas-libcfg__item-text {
+  color: #111827;
+  font-weight: 500;
+}
+.cpas-libcfg__empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+.cpas-libcfg__footer {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbff;
+  flex-shrink: 0;
+}
+.cpas-libcfg__footer-summary {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+.cpas-libcfg__footer-summary b {
+  color: #111827;
+  font-weight: 700;
+}
+.cpas-libcfg__footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* --- Inline placeholder fills (FillableText) --- */
+.cpas-fill {
+  display: inline;
+  line-height: 1.6;
+}
+.cpas-fill__input-wrap,
+.cpas-fill__select-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  white-space: nowrap;
+}
+.cpas-fill__prefix {
+  color: #6b7280;
+  font-style: italic;
+  font-size: 0.95em;
+}
+.cpas-fill__input {
+  display: inline-block;
+  min-width: 5ch;
+  max-width: 30ch;
+  padding: 1px 6px;
+  margin: 0 1px;
+  font: inherit;
+  font-family: inherit;
+  color: #111827;
+  background: #fef9c3;
+  border: 1px solid #facc15;
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.12s ease;
+}
+.cpas-fill__input.is-filled {
+  background: #ecfdf5;
+  border-color: #34d399;
+  color: #065f46;
+  font-weight: 600;
+}
+.cpas-fill__input.is-empty:not(:focus) {
+  background: #fef9c3;
+  border-color: #facc15;
+}
+.cpas-fill__input:focus {
+  background: #fff;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+.cpas-fill__input::placeholder {
+  color: #ca8a04;
+  font-style: italic;
+  font-size: 0.9em;
+}
+.cpas-fill__select {
+  display: inline-block;
+  padding: 1px 18px 1px 8px;
+  margin: 0 1px;
+  font: inherit;
+  font-family: inherit;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #34d399;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path fill='%23059669' d='M0 2l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 8px;
+  transition: all 0.12s ease;
+}
+.cpas-fill__select:has(option[value=""]:checked) {
+  /* unfilled select — yellow tint */
+  background-color: #fef9c3;
+  border-color: #facc15;
+  color: #92400e;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path fill='%23ca8a04' d='M0 2l5 6 5-6z'/></svg>");
+}
+.cpas-fill__select:focus {
+  background-color: #fff;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+
+.cpas-list__item.is-library {
+  background: #fafbff;
+}
+.cpas-list__item.is-library.is-active {
+  background: #eef2ff;
+}
+.cpas-list__tag--lib {
+  background: #c7d2fe;
+  color: #3730a3;
+}
+.cpas-list__remove {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  margin-left: 4px;
+}
+.cpas-list__remove:hover {
+  color: #b91c1c;
+}
+
+/* --- alreadyOnPlan badges --- */
+.cpas-list__item.is-on-plan .cpas-list__badge {
+  background: #d1d5db;
+  color: #4b5563;
+}
+.cpas-list__item.is-on-plan.is-skipped {
+  opacity: 0.7;
+}
+.cpas-list__tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  background: #e5e7eb;
+  padding: 2px 6px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+.cpas-detail__match-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #92400e;
+  background: #fef3c7;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #fde68a;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.cpas-detail__rule.is-library {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+/* --- Library trim callout (when we imported a subset of std goals/interventions) --- */
+.cpas-detail__libtrim-banner {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cpas-detail__libtrim-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #3730a3;
+}
+.cpas-detail__libtrim-text b {
+  color: #1e1b4b;
+}
+.cpas-detail__libtrim-hint {
+  font-size: 12px;
+  color: #6366f1;
+  font-style: italic;
+}
+
+/* --- Already-on-plan explanation banner --- */
+.cpas-detail__on-plan-banner {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 0 0 18px;
+}
+.cpas-detail__on-plan-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400e;
+  margin-bottom: 6px;
+}
+.cpas-detail__on-plan-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #78350f;
+}
+.cpas-detail__on-plan-match {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #fff;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  font-style: italic;
+  color: #422006;
+  font-size: 13px;
+}
+
+/* --- Inline placeholder marker on goal/intervention preview rows --- */
+.cpas-detail__inline-blank-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #92400e;
+  background: #fde68a;
+  padding: 2px 6px;
+  border-radius: 999px;
+  vertical-align: 1px;
+}
+
+/* --- Multi-position editor --- */
+.cpas-row__positions {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cpas-row__positions-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+.cpas-row__positions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cpas-row__position-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cpas-row__select--position {
+  flex: 1;
+  min-width: 0;
+}
+.cpas-row__position-remove {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #9ca3af;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: all 0.12s ease;
+}
+.cpas-row__position-remove:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.cpas-row__position-add {
+  background: transparent;
+  border: 1px dashed #c7d2fe;
+  color: #4f46e5;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  align-self: flex-start;
+  margin-top: 2px;
+  transition: all 0.12s ease;
+}
+.cpas-row__position-add:hover {
+  background: #eef2ff;
+  border-style: solid;
+}
+
+/* --- Inline Kardex / Position dropdowns (expanded intervention edit) --- */
+.cpas-row__select-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.cpas-row__select-label > span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+.cpas-row__select {
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 12px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  max-width: 100%;
+}
+.cpas-row__select:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+}
+.cpas-row__meta {
+  flex-direction: row;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* --- Intervention preview row layout --- */
+.cpas-detail__preview-text {
+  display: block;
+}
+.cpas-detail__preview-meta {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* --- Done footer --- */
+.cpas-done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+.cpas-done__summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+/* --- Polish v0.6 (May 12): editable focus textarea in lib wizard,
+   no-goal interventions guardrail --- */
+
+.cpas-libcfg__focus-textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #111827;
+  resize: vertical;
+  background: #fff;
+  box-sizing: border-box;
+}
+.cpas-libcfg__focus-textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.cpas-libcfg__focus-textarea.has-blank {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.cpas-libcfg__focus-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #92400e;
+}
+
+.cpas-libcfg__section.is-disabled .cpas-libcfg__section-label {
+  color: #9ca3af;
+}
+
+.cpas-detail__interventions-locked {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
