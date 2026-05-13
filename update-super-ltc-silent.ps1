@@ -39,20 +39,25 @@ try {
 $desktop    = [Environment]::GetFolderPath('Desktop')
 
 function Resolve-InstallDir {
-    $localAppDir = Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'
+    # New "clean parent" path. Parent dir (\install\) contains ONLY the
+    # extension folder — no updater state files next to it — so when the
+    # installer opens Explorer with /select on a support call, the user
+    # sees exactly one folder and can't accidentally drag the wrong thing.
+    $localAppNew = Join-Path $env:LOCALAPPDATA 'SuperLTC\install\super-ltc-extension'
+    # Old LOCALAPPDATA path from the first iteration of the OneDrive fix
+    # — preserved so users who already migrated there don't get orphaned.
+    $localAppOld = Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'
     $desktopDir  = Join-Path $desktop 'super-ltc-extension'
 
     # Existing install wins, regardless of OneDrive status. The updater
     # must keep updating wherever the extension actually lives; forcing a
     # path change here would orphan Chrome's loaded copy.
-    if (Test-Path (Join-Path $localAppDir 'manifest.json')) { return $localAppDir }
+    if (Test-Path (Join-Path $localAppNew 'manifest.json')) { return $localAppNew }
+    if (Test-Path (Join-Path $localAppOld 'manifest.json')) { return $localAppOld }
     if (Test-Path (Join-Path $desktopDir  'manifest.json')) { return $desktopDir  }
 
-    # No existing install — prefer %LOCALAPPDATA%. Never synced by
-    # OneDrive/Dropbox/Google Drive, never affected by Desktop redirection
-    # policy. The historical default of Desktop is the source of every
-    # OneDrive-corruption issue we've been chasing.
-    return $localAppDir
+    # No existing install — use the new clean-parent LOCALAPPDATA path.
+    return $localAppNew
 }
 
 $installDir = Resolve-InstallDir

@@ -24,7 +24,7 @@ REM     manifest.json mid-sync and disables it with "Manifest file is
 REM     missing or unreadable".
 REM   - If an install already exists at %LOCALAPPDATA%, prefer it.
 for /f "delims=" %%i in ('powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"') do set DESKTOP=%%i
-for /f "delims=" %%i in ('powershell -NoProfile -Command "$d=[Environment]::GetFolderPath('Desktop'); $la=Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'; $dd=Join-Path $d 'super-ltc-extension'; $od=$env:OneDriveCommercial; if (-not $od) { $od=$env:OneDrive }; $on=$false; try { if ($od -and $d.StartsWith($od,[StringComparison]::OrdinalIgnoreCase)) { $on=$true } } catch {}; if (-not $on -and $d -match '\\OneDrive(?:[^\\]*)?\\') { $on=$true }; if ($on) { $la; exit }; if (Test-Path (Join-Path $la 'manifest.json')) { $la; exit }; if (Test-Path (Join-Path $dd 'manifest.json')) { $dd; exit }; $la"') do set INSTALL_DIR=%%i
+for /f "delims=" %%i in ('powershell -NoProfile -Command "$d=[Environment]::GetFolderPath('Desktop'); $laNew=Join-Path $env:LOCALAPPDATA 'SuperLTC\install\super-ltc-extension'; $laOld=Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'; $dd=Join-Path $d 'super-ltc-extension'; $od=$env:OneDriveCommercial; if (-not $od) { $od=$env:OneDrive }; $on=$false; try { if ($od -and $d.StartsWith($od,[StringComparison]::OrdinalIgnoreCase)) { $on=$true } } catch {}; if (-not $on -and $d -match '\\OneDrive(?:[^\\]*)?\\') { $on=$true }; if ($on) { $laNew; exit }; if (Test-Path (Join-Path $laNew 'manifest.json')) { $laNew; exit }; if (Test-Path (Join-Path $laOld 'manifest.json')) { $laOld; exit }; if (Test-Path (Join-Path $dd 'manifest.json')) { $dd; exit }; $laNew"') do set INSTALL_DIR=%%i
 
 REM Defensive: if PowerShell quoting / detection blew up and INSTALL_DIR is
 REM empty, fall back to the historical Desktop path rather than failing later
@@ -71,6 +71,19 @@ if exist "%INSTALL_DIR%" (
     echo folder, then run this BAT again.
     pause
     exit /b 1
+)
+
+REM Also clean up the legacy %LOCALAPPDATA%\SuperLTC\extension path from
+REM the first iteration of this fix. If the resolver picked the new nested
+REM "install\super-ltc-extension" path, any leftover folder at the old
+REM location is an orphan that the user might mistake for the active one.
+REM Only delete if we're NOT currently installing there.
+set "LEGACY_LA=%LOCALAPPDATA%\SuperLTC\extension"
+if /I not "%INSTALL_DIR%"=="%LEGACY_LA%" (
+    if exist "%LEGACY_LA%\manifest.json" (
+        echo Removing legacy install at %LEGACY_LA% ...
+        rmdir /s /q "%LEGACY_LA%" 2>nul
+    )
 )
 
 REM Make sure the parent directory exists before we mkdir the install dir.
