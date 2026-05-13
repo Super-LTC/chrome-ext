@@ -268,6 +268,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Make authenticated API request (for use by popup/content scripts)
+  // Save a file via chrome.downloads. Used to bypass the filename-strip that
+  // happens when content scripts trigger blob downloads from third-party
+  // origins like pointclickcare.com. Caller sends a data URL + filename.
+  if (message.type === 'DOWNLOAD_FILE' && typeof message.dataUrl === 'string') {
+    chrome.downloads.download(
+      { url: message.dataUrl, filename: message.filename, saveAs: false },
+      (downloadId) => {
+        if (chrome.runtime.lastError || !downloadId) {
+          sendResponse({ success: false, error: chrome.runtime.lastError?.message || 'Download failed' });
+        } else {
+          sendResponse({ success: true, downloadId });
+        }
+      }
+    );
+    return true;
+  }
+
   if (message.type === 'API_REQUEST') {
     (async () => {
       try {

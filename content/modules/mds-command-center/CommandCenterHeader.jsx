@@ -106,8 +106,8 @@ export function CommandCenterHeader({
         </div>
       </div>
 
-      {/* ── Stats strip (hidden on Planner — Today's Focus is its own summary) ── */}
-      {activeView !== 'planner' && (
+      {/* ── Stats strip (hidden on Planner/Rounding — they have their own summaries) ── */}
+      {activeView !== 'planner' && activeView !== 'rounding' && (
         <div class="mds-cc__stats-strip">
           <StatPill value={total} label="assessments" />
           <span class="mds-cc__stats-sep">|</span>
@@ -128,12 +128,6 @@ export function CommandCenterHeader({
 
       {/* ── View switcher ── */}
       <div class="mds-cc__view-switcher">
-        <button
-          class={`mds-cc__view-tab${activeView === 'planner' ? ' mds-cc__view-tab--active' : ''}`}
-          onClick={() => onViewChange('planner')}
-        >
-          Planner
-        </button>
         <button
           class={`mds-cc__view-tab${activeView === 'assessments' ? ' mds-cc__view-tab--active' : ''}`}
           onClick={() => onViewChange('assessments')}
@@ -162,6 +156,18 @@ export function CommandCenterHeader({
         >
           Care Plan
           {complianceGaps > 0 && <span class="mds-cc__view-tab-badge mds-cc__view-tab-badge--amber">{complianceGaps}</span>}
+        </button>
+        <button
+          class={`mds-cc__view-tab${activeView === 'rounding' ? ' mds-cc__view-tab--active' : ''}`}
+          onClick={() => onViewChange('rounding')}
+        >
+          Rounding
+        </button>
+        <button
+          class={`mds-cc__view-tab${activeView === 'planner' ? ' mds-cc__view-tab--active' : ''}`}
+          onClick={() => onViewChange('planner')}
+        >
+          Planner
         </button>
       </div>
 

@@ -22,6 +22,7 @@ import { useComplianceDashboard } from '../care-plan-coverage/hooks/useComplianc
 import { useTrending } from '../care-plan-coverage/hooks/useTrending.js';
 import { ComplianceView } from '../care-plan-coverage/ComplianceView.jsx';
 import { MdsPlanner } from '../mds-planner/MdsPlanner.jsx';
+import { RoundingReports } from '../rounding-reports/RoundingReports.jsx';
 import { track } from '../../utils/analytics.js';
 import { TrackedButton } from '../../components/TrackedButton.jsx';
 
@@ -389,7 +390,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
 // ── Main Component ──
 
 export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpandedId }) {
-  const [activeView, setActiveView] = useState('planner');
+  const [activeView, setActiveView] = useState('assessments');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'calendar' (assessments tab only)
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [payerFilter, setPayerFilter] = useState('all');
@@ -576,8 +577,13 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
         />
 
         <div class="mds-cc__list" ref={listRef}>
-          {loading && <LoadingState />}
-          {!loading && error && <ErrorState message={error} onRetry={retry} />}
+          {/* The shared `loading`/`error` from useCommandCenter only feeds the
+              assessments + queries tabs. Other tabs (certs, compliance,
+              planner, rounding) own their own load state — don't double-up. */}
+          {loading && (activeView === 'assessments' || activeView === 'queries') && <LoadingState />}
+          {!loading && error && (activeView === 'assessments' || activeView === 'queries') && (
+            <ErrorState message={error} onRetry={retry} />
+          )}
 
           {/* Assessments — List or Calendar view */}
           {!loading && !error && activeView === 'assessments' && viewMode === 'list' && (
@@ -659,6 +665,14 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
               error={complianceError}
               retry={complianceRetry}
               trendingData={trendingData}
+              facilityName={facilityName}
+              orgSlug={orgSlug}
+            />
+          )}
+
+          {/* Rounding */}
+          {activeView === 'rounding' && (
+            <RoundingReports
               facilityName={facilityName}
               orgSlug={orgSlug}
             />

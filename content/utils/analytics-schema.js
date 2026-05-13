@@ -45,6 +45,13 @@ export const EVENT_SCHEMA = {
   dx_confirmation_opened: ['source', 'dx_count'],
   cert_view_opened: ['source'],
   care_plan_coverage_opened: ['source'],
+  rounding_reports_opened: ['source'],
+  rounding_session_started: ['source'],
+  rounding_session_opened: ['session_status'],
+  rounding_qr_opened: ['source'],
+  rounding_qr_link_copied: [],
+  rounding_pdf_downloaded: ['source'],
+  rounding_session_deleted: ['source'],
   uda_viewer_opened: ['source'],
   icd10_viewer_opened: ['source'],
 

@@ -36,9 +36,12 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "pdfjs-dist": "^3.11.174",
     "posthog-js": "^1.372.1",
     "preact": "^10.28.3",
+    "qrcode": "^1.5.4",
     "zustand": "^5.0.11"
   }
 }

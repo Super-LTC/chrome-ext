@@ -58,6 +58,7 @@ import twentyFourHourReport from './css/24hr-report.css?inline';
 import updateBanner from './css/update-banner.css?inline';
 import meddiagAugment from './css/meddiag-augment.css?inline';
 import carePlanStamp from './css/care-plan-stamp.css?inline';
+import roundingReports from './css/rounding-reports.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -94,6 +95,7 @@ const CSS_BUNDLE = [
   updateBanner,
   meddiagAugment,
   carePlanStamp,
+  roundingReports,
 ].join('\n\n');
 
 function injectCss() {
