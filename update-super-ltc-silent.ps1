@@ -42,28 +42,17 @@ function Resolve-InstallDir {
     $localAppDir = Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'
     $desktopDir  = Join-Path $desktop 'super-ltc-extension'
 
-    # Existing install wins, regardless of OneDrive status.
+    # Existing install wins, regardless of OneDrive status. The updater
+    # must keep updating wherever the extension actually lives; forcing a
+    # path change here would orphan Chrome's loaded copy.
     if (Test-Path (Join-Path $localAppDir 'manifest.json')) { return $localAppDir }
     if (Test-Path (Join-Path $desktopDir  'manifest.json')) { return $desktopDir  }
 
-    # No existing install — pick based on whether Desktop is OneDrive-redirected.
-    # Detect two ways (belt-and-suspenders, since OneDrive env vars are only
-    # set when the OneDrive client is running in this user session):
-    #   1. env vars $OneDrive / $OneDriveCommercial point at the OneDrive root
-    #   2. Desktop path literally contains a "\OneDrive..." segment
-    $oneDrive = $env:OneDriveCommercial
-    if (-not $oneDrive) { $oneDrive = $env:OneDrive }
-    $onOneDrive = $false
-    try {
-        if ($oneDrive -and $desktop.StartsWith($oneDrive, [StringComparison]::OrdinalIgnoreCase)) {
-            $onOneDrive = $true
-        }
-    } catch {}
-    if (-not $onOneDrive -and $desktop -match '\\OneDrive(?:[^\\]*)?\\') {
-        $onOneDrive = $true
-    }
-
-    if ($onOneDrive) { return $localAppDir } else { return $desktopDir }
+    # No existing install — prefer %LOCALAPPDATA%. Never synced by
+    # OneDrive/Dropbox/Google Drive, never affected by Desktop redirection
+    # policy. The historical default of Desktop is the source of every
+    # OneDrive-corruption issue we've been chasing.
+    return $localAppDir
 }
 
 $installDir = Resolve-InstallDir

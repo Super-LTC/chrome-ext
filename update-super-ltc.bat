@@ -24,7 +24,7 @@ REM     manifest.json mid-sync and disables it with "Manifest file is
 REM     missing or unreadable".
 REM   - If an install already exists at %LOCALAPPDATA%, prefer it.
 for /f "delims=" %%i in ('powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"') do set DESKTOP=%%i
-for /f "delims=" %%i in ('powershell -NoProfile -Command "$d=[Environment]::GetFolderPath('Desktop'); $la=Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'; $dd=Join-Path $d 'super-ltc-extension'; $od=$env:OneDriveCommercial; if (-not $od) { $od=$env:OneDrive }; $on=$false; try { if ($od -and $d.StartsWith($od,[StringComparison]::OrdinalIgnoreCase)) { $on=$true } } catch {}; if (-not $on -and $d -match '\\OneDrive(?:[^\\]*)?\\') { $on=$true }; if ($on) { $la; exit }; if (Test-Path (Join-Path $la 'manifest.json')) { $la; exit }; $dd"') do set INSTALL_DIR=%%i
+for /f "delims=" %%i in ('powershell -NoProfile -Command "$d=[Environment]::GetFolderPath('Desktop'); $la=Join-Path $env:LOCALAPPDATA 'SuperLTC\extension'; $dd=Join-Path $d 'super-ltc-extension'; $od=$env:OneDriveCommercial; if (-not $od) { $od=$env:OneDrive }; $on=$false; try { if ($od -and $d.StartsWith($od,[StringComparison]::OrdinalIgnoreCase)) { $on=$true } } catch {}; if (-not $on -and $d -match '\\OneDrive(?:[^\\]*)?\\') { $on=$true }; if ($on) { $la; exit }; if (Test-Path (Join-Path $la 'manifest.json')) { $la; exit }; if (Test-Path (Join-Path $dd 'manifest.json')) { $dd; exit }; $la"') do set INSTALL_DIR=%%i
 
 REM Defensive: if PowerShell quoting / detection blew up and INSTALL_DIR is
 REM empty, fall back to the historical Desktop path rather than failing later
