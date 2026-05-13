@@ -124,15 +124,31 @@ echo Setting up automatic background updates...
 
 if not exist "%APP_DIR%" mkdir "%APP_DIR%"
 
-if not exist "%UPDATER_SRC%" (
+REM Fetch the latest updater PS1 + launcher VBS directly from main on
+REM GitHub, overwriting whatever the release zip provided. This decouples
+REM updater-script versioning from extension-release cadence: bug fixes
+REM to the updater ship immediately via this BAT without needing a new
+REM extension release. If the fetch fails (offline, GitHub down), fall
+REM back to the copy from the zip so the install still completes.
+echo Fetching latest updater script...
+set "RAW_BASE=https://raw.githubusercontent.com/Superjonathan123/chrome-ext/main"
+powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%RAW_BASE%/update-super-ltc-silent.ps1' -OutFile '%UPDATER_DST%' -UseBasicParsing -TimeoutSec 15 } catch { exit 1 }"
+if errorlevel 1 (
+    echo   ...fetch failed, falling back to copy from release zip.
+    if exist "%UPDATER_SRC%" copy /Y "%UPDATER_SRC%" "%UPDATER_DST%" >nul
+)
+powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%RAW_BASE%/update-super-ltc-launcher.vbs' -OutFile '%LAUNCHER_DST%' -UseBasicParsing -TimeoutSec 15 } catch { exit 1 }"
+if errorlevel 1 (
+    if exist "%LAUNCHER_SRC%" copy /Y "%LAUNCHER_SRC%" "%LAUNCHER_DST%" >nul
+)
+
+if not exist "%UPDATER_DST%" (
     echo.
-    echo WARNING: update-super-ltc-silent.ps1 not found in the extracted zip.
+    echo WARNING: Could not install the updater script — neither fetch
+    echo          from GitHub nor the zip fallback succeeded.
     echo          Auto-updates will NOT be enabled. The extension itself is fine.
     goto :skip_autoupdater
 )
-
-copy /Y "%UPDATER_SRC%" "%UPDATER_DST%" >nul
-if exist "%LAUNCHER_SRC%" copy /Y "%LAUNCHER_SRC%" "%LAUNCHER_DST%" >nul
 
 schtasks /delete /tn "%TASK_NAME%" /f >nul 2>&1
 
