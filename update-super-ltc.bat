@@ -231,6 +231,12 @@ goto :open_browser
 :open_browser
 REM Always open Explorer at the install folder so the user can drag it.
 start "" explorer.exe "%INSTALL_DIR%"
-start "" "%BROWSER_EXE%" "%BROWSER_URL%"
+
+REM --new-window forces Chrome/Edge to open a fresh window with the URL.
+REM Without it, if the browser is already running, the URL is sent via IPC
+REM to the existing process and may land in a background tab the user
+REM doesn't notice — or, on Edge's warm-but-windowless state, get lost
+REM entirely and open to the home page instead.
+start "" "%BROWSER_EXE%" --new-window "%BROWSER_URL%"
 
 pause
