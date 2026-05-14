@@ -26,7 +26,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks'
  * `null` means "no edits, use original". This keeps originals immutable.
  */
 
-export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSlug, existingFocusTexts, onClose }) => {
+export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSlug, onClose }) => {
   const [stage, setStage] = useState('loading'); // loading | ready | drift | stamping | done | error
   const [errorMsg, setErrorMsg] = useState('');
   const [driftMissing, setDriftMissing] = useState([]);
@@ -53,24 +53,72 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         const D = window.CarePlanStampDiscover;
         const A = window.CarePlanStampAPI;
 
-        const [prop, cpId] = await Promise.all([
-          A.fetchProposal({ patientId, facilityName, orgSlug, scope: 'initial', existingFocusTexts }),
-          D.discoverCarePlanId(patientId),
-        ]);
+        // Walk EVERY page of the patient's care plan first so the backend's
+        // idempotency match sees the full picture, not just the page the user
+        // happened to be looking at when they hit Auto-Pop. Without this we
+        // mis-flag focuses as "missing" whenever they live on page 2+.
+        const fullPlan = await D.scrapeFullCarePlan(patientId);
         if (cancelled) return;
+        const cpId = fullPlan.careplanId;
+        if (!cpId) throw new Error('Could not find ESOLcareplanid on careplandetail page');
 
-        const [token, dd] = await Promise.all([
-          D.discoverMiniToken(patientId, cpId),
+        // Scrape this facility's dropdown labels BEFORE firing the proposal so
+        // the backend can resolve canonical role/category names against the
+        // org's actual PCC IDs. Without this, customized facilities trip the
+        // drift validator with 50+ unknown-ID errors.
+        const [dd, token] = await Promise.all([
           D.scrapeOrgDropdowns(patientId, cpId),
+          D.discoverMiniToken(patientId, cpId),
         ]);
         if (cancelled) return;
         setDropdowns(dd);
+
+        const orgDropdowns = {
+          positions: dd.positionLabels || {},
+          kardex: dd.kardexLabels || {},
+          reviewDepts: dd.reviewDeptLabels || {},
+        };
+
+        // One-shot diagnostic dump — lets backend agent verify the canonical
+        // resolver's synonyms match real facility labels. No PHI: just role
+        // names ("RN", "Activities"), category names ("Safety", "Skin").
+        // Copy from DevTools console and paste back. Safe to leave in;
+        // single log per modal-open is cheap.
+        console.log('[CarePlanAutoPop] Org dropdowns (facility=' + (facilityName || '?') + '):', {
+          positions: Object.values(orgDropdowns.positions),
+          kardex: Object.values(orgDropdowns.kardex),
+          reviewDepts: Object.values(orgDropdowns.reviewDepts),
+          counts: {
+            positions: Object.keys(orgDropdowns.positions).length,
+            kardex: Object.keys(orgDropdowns.kardex).length,
+            reviewDepts: Object.keys(orgDropdowns.reviewDepts).length,
+          },
+        });
+
+        const prop = await A.fetchProposal({
+          patientId,
+          facilityName,
+          orgSlug,
+          scope: 'initial',
+          existingFocusTexts: fullPlan.focusTexts,
+          orgDropdowns,
+        });
+        if (cancelled) return;
 
         const validation = D.validateProposalIds(prop, dd);
         if (!validation.ok) {
           setDriftMissing(validation.missing);
           setStage('drift');
           return;
+        }
+
+        // Surface any canonicals the backend couldn't resolve against this
+        // facility's dropdowns. Affected interventions stamp without the
+        // missing field (per backend contract) — log so we can spot the
+        // pattern at new facilities, future-PR a nurse-facing warning.
+        const unresolved = prop?._diagnostics?.unresolvedCanonicals;
+        if (Array.isArray(unresolved) && unresolved.length > 0) {
+          console.warn('[CarePlanAutoPop] Unresolved canonicals (some fields will stamp without them):', unresolved);
         }
 
         setProposal(prop);
@@ -80,8 +128,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // Pre-skip if backend marked this focus as already-on-plan.
           // Nurse can override by clicking Include.
           skipped: !!f.alreadyOnPlan,
-          codeStatus: f.ruleId === 'universal.code_status' ? 'Full Code' : null,
-          dischargeDestination: f.ruleId === 'universal.discharge_planning' ? 'Undetermined' : null,
+          // No auto-selection — nurse must explicitly pick. Leaves the
+          // composed focus with its "___" placeholder so the sidebar shows
+          // "⚠ needs input" and the sort pushes it to the top.
+          codeStatus: null,
+          dischargeDestination: null,
           focusText: null,
           goals: null,
           interventions: null,
@@ -107,7 +158,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       }
     })();
     return () => { cancelled = true; };
-  }, [patientId, facilityName, orgSlug]); // existingFocusTexts intentionally omitted — captured once at modal-open
+  }, [patientId, facilityName, orgSlug]);
 
   // -------- Combined raw focuses: auto-picks + library picks --------
   const allRawFocuses = useMemo(() => {
@@ -156,6 +207,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   }, [proposal]);
 
   const includedCount = focusStates.filter((s) => !s.skipped).length;
+
+  // Count of included focuses still missing required input. Disables the
+  // sidebar Add-all button so the nurse can't submit an unfilled "___".
+  const needsInputCount = allRawFocuses.reduce((n, f, i) => {
+    const st = focusStates[i];
+    if (!st || st.skipped) return n;
+    const desc = composedFocuses?.[i]?.description || f.description || '';
+    const unfilled =
+      _detectPlaceholder(desc) ||
+      (f.ruleId === 'universal.code_status' && !st.codeStatus) ||
+      (f.ruleId === 'universal.discharge_planning' && !st.dischargeDestination);
+    return unfilled ? n + 1 : n;
+  }, 0);
 
   // -------- Stamp action --------
   const handleStamp = useCallback(async () => {
@@ -235,7 +299,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 onClick={() => setLibraryPanelOpen(true)}
                 title="Browse focuses from your facility's PCC library"
               >
-                + Browse PCC Library
+                + Add from PCC Library
               </button>
             )}
             {stage !== 'stamping' && (
@@ -259,6 +323,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 onSelect={setActiveIdx}
                 progress={progress}
                 onRemoveLibraryPick={removeLibraryPick}
+                onStamp={stage === 'ready' ? handleStamp : null}
+                stampDisabled={includedCount === 0 || needsInputCount > 0}
+                needsInputCount={needsInputCount}
               />
               <FocusDetail
                 composed={composedFocuses[activeIdx]}
@@ -283,21 +350,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         </div>
 
         {stage === 'ready' && (
-          <footer className="cpas-modal__footer">
-            <span className="cpas-modal__footer-summary">
-              {includedCount} of {focusStates.length} focuses selected to add
-            </span>
-            <div className="cpas-modal__footer-actions">
-              {/* NO_TRACK: pure-UI cancel */}
-              <button className="cpas-btn cpas-btn--ghost" onClick={onClose}>Cancel</button>
-              <button
-                className="cpas-btn cpas-btn--primary"
-                disabled={includedCount === 0}
-                onClick={handleStamp}
-              >
-                Add {includedCount} {includedCount === 1 ? 'focus' : 'focuses'} to care plan
-              </button>
-            </div>
+          <footer className="cpas-modal__footer cpas-modal__footer--minimal">
+            {/* Primary commit lives in the sidebar (spatially bound to the
+                focus list). Footer keeps just a quiet cancel. */}
+            {/* NO_TRACK: pure-UI cancel */}
+            <button className="cpas-btn cpas-btn--ghost" onClick={onClose}>Cancel</button>
           </footer>
         )}
 
@@ -388,7 +445,7 @@ const DriftState = ({ missing, onClose }) => (
   </div>
 );
 
-const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick }) => {
+const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount }) => {
   const stampCount = focusStates.filter((s) => !s.skipped).length;
   const onPlanCount = rawFocuses.filter((f) => f.alreadyOnPlan).length;
   const libCount = rawFocuses.filter((f) => f._isLibrary).length;
@@ -408,8 +465,44 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
         </div>
       )}
       <ol className="cpas-list__items">
-        {rawFocuses.map((f, i) => {
+        {rawFocuses
+          // Stable sort into three buckets:
+          //   0. To-add, needs input (act first)
+          //   1. To-add, ready
+          //   2. Skipped / already on plan
+          // Indices are preserved so focusStates[i], composedFocuses[i], and
+          // activeIdx still address the original arrays correctly.
+          .map((f, i) => ({ f, i }))
+          .sort((a, b) => {
+            const rank = (e) => {
+              const st = focusStates[e.i] || {};
+              if (st.skipped) return 2;
+              const desc = composedFocuses?.[e.i]?.description || e.f.description || '';
+              const blank = _detectPlaceholder(desc);
+              const needsInput =
+                blank ||
+                (e.f.ruleId === 'universal.code_status' && !st.codeStatus) ||
+                (e.f.ruleId === 'universal.discharge_planning' && !st.dischargeDestination);
+              return needsInput ? 0 : 1;
+            };
+            const ra = rank(a);
+            const rb = rank(b);
+            if (ra !== rb) return ra - rb;
+            return a.i - b.i; // stable within bucket
+          })
+          .map(({ f, i }) => {
           const state = focusStates[i] || {};
+          // Compute display state up-front (composedDesc + needsInput) so the
+          // class-name chain below can reference it.
+          const composedDesc = composedFocuses?.[i]?.description || f.description || '';
+          const preview = composedDesc.replace(/\s+/g, ' ').trim();
+          const hasBlank = _detectPlaceholder(composedDesc);
+          const needsInput = !state.skipped && (
+            hasBlank ||
+            (f.ruleId === 'universal.code_status' && !state.codeStatus) ||
+            (f.ruleId === 'universal.discharge_planning' && !state.dischargeDestination)
+          );
+
           let cls = 'cpas-list__item';
           let badge = '+';
           let badgeTitle = 'Will be added to the care plan';
@@ -420,17 +513,12 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           }
           if (f.alreadyOnPlan) cls += ' is-on-plan';
           if (f._isLibrary) cls += ' is-library';
+          if (needsInput) cls += ' is-needs-input';
           if (i === activeIdx) cls += ' is-active';
           const isStamping = progress && progress.focusIndex === i && !state.skipped;
           if (isStamping) { cls += ' is-stamping'; badge = '…'; badgeTitle = 'Adding now…'; }
 
           const label = f._isLibrary ? (f._libraryLabel || 'From PCC library') : _ruleIdToLabel(f.ruleId);
-
-          // Single-line preview of the focus text — uses composed (code_status
-          // substituted) version so the sidebar reflects what'll be stamped.
-          const composedDesc = composedFocuses?.[i]?.description || f.description || '';
-          const preview = composedDesc.replace(/\s+/g, ' ').trim();
-          const hasBlank = _detectPlaceholder(composedDesc);
 
           return (
             <li key={f.ruleId} className={cls} onClick={() => onSelect(i)}>
@@ -450,7 +538,16 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
                       >×</button>
                     </>
                   )}
-                  {hasBlank && <span className="cpas-list__tag cpas-list__tag--blank" title="Has a placeholder needing input">needs input</span>}
+                  {needsInput && (
+                    <span className="cpas-list__tag cpas-list__tag--blank" title="This focus needs input before stamping">
+                      ⚠ needs input
+                    </span>
+                  )}
+                  {!needsInput && (f.ruleId === 'universal.code_status' || f.ruleId === 'universal.discharge_planning') && !state.skipped && (
+                    <span className="cpas-list__tag cpas-list__tag--ready" title="Input provided">
+                      ✓ ready
+                    </span>
+                  )}
                 </div>
                 {preview && <div className="cpas-list__preview">{preview}</div>}
               </div>
@@ -458,6 +555,27 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           );
         })}
       </ol>
+      {onStamp && (
+        <div className="cpas-list__commit">
+          <button
+            className="cpas-btn cpas-btn--primary cpas-list__commit-btn"
+            disabled={stampDisabled}
+            onClick={onStamp}
+            title={needsInputCount > 0
+              ? `${needsInputCount} focus${needsInputCount === 1 ? '' : 'es'} still need input`
+              : ''}
+            data-track="care_plan_stamp_submitted"
+            data-track-prop-source="sidebar"
+          >
+            ✓ Add all {stampCount} to care plan
+          </button>
+          {needsInputCount > 0 && (
+            <div className="cpas-list__commit-warn">
+              ⚠ {needsInputCount} {needsInputCount === 1 ? 'focus needs' : 'focuses need'} input first
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 };
@@ -1054,20 +1172,32 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
         </div>
         <div className="cpas-detail__actions">
           {!readOnly && (
-            <>
-              <button
-                className={`cpas-pill ${!state.skipped ? 'is-active' : ''}`}
-                onClick={() => onUpdate({ skipped: false })}
-              >
-                + Include
-              </button>
-              <button
-                className={`cpas-pill ${state.skipped ? 'is-active is-skip' : ''}`}
-                onClick={() => onUpdate({ skipped: true })}
-              >
-                − Skip
-              </button>
-            </>
+            // Outlined toggle chip. Shows the current state clearly + the
+            // action verb. Outlined (not filled) so it reads as secondary
+            // to the primary "Add all" CTA in the sidebar.
+            <button
+              className={`cpas-state-chip ${state.skipped ? 'is-skipped' : 'is-included'}`}
+              onClick={() => onUpdate({ skipped: !state.skipped })}
+              title={state.skipped ? 'Click to include this focus' : 'Click to skip this focus'}
+            >
+              {state.skipped ? (
+                <>
+                  <span className="cpas-state-chip__state">
+                    <span className="cpas-state-chip__icon">−</span> Skipped
+                  </span>
+                  <span className="cpas-state-chip__sep">·</span>
+                  <span className="cpas-state-chip__action">Include</span>
+                </>
+              ) : (
+                <>
+                  <span className="cpas-state-chip__state">
+                    <span className="cpas-state-chip__icon">✓</span> Will be added
+                  </span>
+                  <span className="cpas-state-chip__sep">·</span>
+                  <span className="cpas-state-chip__action">Skip</span>
+                </>
+              )}
+            </button>
           )}
         </div>
       </header>
@@ -1094,7 +1224,7 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
           <div className="cpas-detail__on-plan-body">
             We detected an existing focus that overlaps:
             <blockquote className="cpas-detail__on-plan-match">
-              "{rawFocus.matchedExistingText || '(no text returned)'}"
+              "{_decodeHtmlText(rawFocus.matchedExistingText) || '(no text returned)'}"
             </blockquote>
             Matched via keyword check on this rule. Pre-skipped to avoid duplicates — click <b>+ Include</b> above to add anyway.
           </div>
@@ -1537,6 +1667,20 @@ function _detectPlaceholder(text) {
   // Ends with a colon (e.g. "Communication impaired due to:")
   if (/:\s*$/.test(text.trim()) && !/\?$/.test(text.trim())) return 'trailing colon';
   return null;
+}
+
+// Decode HTML entities in scraped PCC strings before render. PCC's care-plan
+// rows come back from the backend with raw HTML entities (e.g. "&ndash;",
+// "&#8211;") that JSX doesn't decode, so users saw mojibake like
+// "Discharge planning â?? anticipated disposition". Browser parser handles
+// every entity correctly with one round-trip through a textarea.
+function _decodeHtmlText(s) {
+  if (!s) return s;
+  // Cheap, browser-correct entity decode. textarea.innerHTML is parsed as
+  // text-content (not HTML), so no XSS risk — tags would render as text.
+  const ta = document.createElement('textarea');
+  ta.innerHTML = String(s);
+  return ta.value;
 }
 
 function _ruleIdToLabel(ruleId) {

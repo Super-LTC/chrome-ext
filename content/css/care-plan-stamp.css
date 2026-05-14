@@ -195,6 +195,53 @@
   overflow-y: auto;
   flex: 1;
 }
+
+/* Sticky commit card at the bottom of the sidebar. Houses the primary
+   "Add all N to care plan" CTA so it's spatially bound to the focus list
+   it operates on (not the detail pane on the right, which only ever
+   reflects one focus). */
+.cpas-list__commit {
+  border-top: 1px solid #e5e7eb;
+  padding: 12px 16px 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cpas-list__commit-btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 14px;
+  padding: 10px 14px;
+}
+.cpas-list__commit-hint {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+  text-align: center;
+}
+.cpas-list__commit-warn {
+  font-size: 11px;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+  font-weight: 600;
+}
+.cpas-list__commit-hint-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-weight: 700;
+  vertical-align: -2px;
+}
 .cpas-list__item {
   display: flex;
   align-items: flex-start;
@@ -240,8 +287,36 @@
   color: #9ca3af;
 }
 .cpas-list__tag--blank {
-  background: #fde68a;
-  color: #92400e;
+  background: #f59e0b;
+  color: #fff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+}
+/* Highlight the entire sidebar row when this focus needs input, so the
+   nurse can scan the list and immediately see what's blocking the Add-all
+   button. Yellow tint + amber left rail, even when the row is the active
+   selection (override the indigo active state). */
+.cpas-list__item.is-needs-input {
+  background: #fffbeb;
+  border-left-color: #f59e0b;
+}
+.cpas-list__item.is-needs-input:hover {
+  background: #fef3c7;
+}
+.cpas-list__item.is-needs-input.is-active {
+  background: #fef3c7;
+  border-left-color: #d97706;
+}
+.cpas-list__item.is-needs-input .cpas-list__badge {
+  background: #f59e0b;
+  color: #fff;
+}
+.cpas-list__tag--ready {
+  background: #d1fae5;
+  color: #065f46;
+  font-weight: 600;
 }
 .cpas-list__item:hover {
   background: #eef2ff;
@@ -300,6 +375,93 @@
   justify-content: space-between;
   margin-bottom: 16px;
 }
+.cpas-detail__label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.cpas-detail__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.02em;
+}
+.cpas-detail__state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+.cpas-detail__state--included { color: #047857; }
+.cpas-detail__state--skipped { color: #9ca3af; }
+
+.cpas-detail__toggle-link {
+  background: none;
+  border: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: inherit;
+}
+.cpas-detail__toggle-link:hover { color: #111827; }
+
+/* State + action chip in detail header. Outlined (not filled) so it reads
+   as a secondary toggle, never as the primary commit CTA. */
+.cpas-state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.12s, border-color 0.12s;
+}
+.cpas-state-chip__state { display: inline-flex; align-items: center; gap: 6px; }
+.cpas-state-chip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+}
+.cpas-state-chip__sep { color: #d1d5db; }
+.cpas-state-chip__action {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cpas-state-chip.is-included {
+  border: 1.5px solid #10b981;
+  color: #047857;
+}
+.cpas-state-chip.is-included .cpas-state-chip__icon { background: #10b981; }
+.cpas-state-chip.is-included .cpas-state-chip__action { color: #6b7280; }
+.cpas-state-chip.is-included:hover { background: #ecfdf5; }
+
+.cpas-state-chip.is-skipped {
+  border: 1.5px solid #9ca3af;
+  color: #6b7280;
+}
+.cpas-state-chip.is-skipped .cpas-state-chip__icon { background: #9ca3af; }
+.cpas-state-chip.is-skipped .cpas-state-chip__action { color: #4f46e5; }
+.cpas-state-chip.is-skipped:hover { background: #f9fafb; }
 .cpas-detail__rule {
   font-size: 11px;
   font-weight: 700;
@@ -404,6 +566,59 @@
   border-color: #4b5563;
 }
 
+/* Detail header status pill — informational, not a CTA. Replaces the
+   bright "+ Include / − Skip" dual control that users mistook for the
+   primary commit action. */
+.cpas-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 5px 14px 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.cpas-status-pill:hover { background: #e5e7eb; }
+.cpas-status-pill__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 13px;
+}
+.cpas-status-pill__hint {
+  color: #9ca3af;
+  font-weight: 500;
+  font-size: 11px;
+}
+.cpas-status-pill.is-included {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+.cpas-status-pill.is-included .cpas-status-pill__icon {
+  background: #10b981;
+  color: #fff;
+}
+.cpas-status-pill.is-included:hover { background: #d1fae5; }
+.cpas-status-pill.is-skipped {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+.cpas-status-pill.is-skipped .cpas-status-pill__icon {
+  background: #d1d5db;
+  color: #fff;
+}
+
 /* --- Code-status picker --- */
 .cpas-code-status {
   background: #fffbeb;
@@ -467,6 +682,11 @@
 .cpas-modal__footer-actions {
   display: flex;
   gap: 10px;
+}
+.cpas-modal__footer--minimal {
+  justify-content: flex-end;
+  background: #fff;
+  padding: 10px 20px;
 }
 .cpas-btn {
   padding: 9px 18px;

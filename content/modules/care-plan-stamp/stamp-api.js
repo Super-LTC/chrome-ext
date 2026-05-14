@@ -11,23 +11,31 @@
  * Printable View URL uses as ESOLclientid. It's the stable patient link.
  */
 
-async function fetchProposal({ patientId, facilityName, orgSlug, scope = 'initial', existingFocusTexts = [] }) {
-  const params = new URLSearchParams({
+async function fetchProposal({ patientId, facilityName, orgSlug, scope = 'initial', existingFocusTexts = [], orgDropdowns = null, tokenValues = null, patientName = null }) {
+  // POST body, not query string. Large facilities push the GET URL past the
+  // 8 KB nginx limit (existingFocusTexts grows linearly with plan size, plus
+  // orgDropdowns label maps). POST has no size limit. Backend accepts the
+  // same params either way (see PR #448).
+  const body = {
     patientId: String(patientId),
     facilityName: facilityName || '',
     orgSlug: orgSlug || '',
     scope,
-  });
-  // Idempotency hint: server matches by keyword and sets alreadyOnPlan on each focus.
-  // Backend silently ignores until the patch ships — safe to send now.
-  for (const t of existingFocusTexts || []) {
-    if (t) params.append('existingFocusTexts[]', t);
-  }
-  const endpoint = `/api/extension/care-plan/auto-pop?${params}`;
+    existingFocusTexts: existingFocusTexts || [],
+  };
+  if (orgDropdowns) body.orgDropdowns = orgDropdowns;
+  if (tokenValues) body.tokenValues = tokenValues;
+  if (patientName) body.patientName = patientName;
+
+  const endpoint = '/api/extension/care-plan/auto-pop';
 
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',
     endpoint,
+    options: {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
   });
 
   if (!response?.success) {

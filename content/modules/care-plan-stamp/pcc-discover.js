@@ -108,17 +108,22 @@ function validateProposalIds(proposal, dropdowns) {
   const missing = [];
   const focuses = proposal?.focuses || [];
 
+  // Backend guarantees: fields it couldn't resolve (canonical → numeric ID via
+  // the org's dropdowns) are returned as undefined/omitted, never as bad IDs.
+  // So we only validate fields that are actually present. An absent positionOne
+  // / kardexCategory just means "don't set that on the PCC POST" — PCC accepts.
   for (const focus of focuses) {
     for (const id of focus.reviewDepartments || []) {
+      if (id == null) continue;
       if (!dropdowns.reviewDepts.has(id)) {
         missing.push({ id, kind: 'reviewDepartment', where: `focus "${focus.ruleId}"` });
       }
     }
     for (const inter of focus.interventions || []) {
-      if (inter.kardexCategory && !dropdowns.kardex.has(inter.kardexCategory)) {
+      if (inter.kardexCategory != null && !dropdowns.kardex.has(inter.kardexCategory)) {
         missing.push({ id: inter.kardexCategory, kind: 'kardexCategory', where: `intervention in "${focus.ruleId}"` });
       }
-      if (inter.positionOne && !dropdowns.positions.has(inter.positionOne)) {
+      if (inter.positionOne != null && !dropdowns.positions.has(inter.positionOne)) {
         missing.push({ id: inter.positionOne, kind: 'positionOne', where: `intervention in "${focus.ruleId}"` });
       }
     }
@@ -246,6 +251,53 @@ function _parseSelectFromHtml(html, name) {
     .map((o) => ({ id: o.value, label: (o.textContent || '').trim() }));
 }
 
+/**
+ * Fetch the patient's full care plan via PCC's `careplandetail_rev.jsp` and
+ * walk every page so we capture every existing focus (not just the rows that
+ * happen to be visible in the user's current DOM).
+ *
+ * PCC paginates server-side via the `ESOLrow` query param — page 1 = ESOLrow=1,
+ * next page = ESOLrow=1 + pageSize, etc. Page size is 5 in the wild (deduced
+ * from observed referer flow: row=1 → row=6). We loop until a page adds zero
+ * new editNeed links (PCC clamps to the last page when you walk past the end,
+ * so the next request just returns the same rows again).
+ *
+ * Returns: { careplanId, focusTexts: string[] }
+ */
+async function scrapeFullCarePlan(patientId) {
+  const PAGE_SIZE = 5;
+  const MAX_PAGES = 60; // 60 * 5 = 300 focuses. More than any real care plan.
+  const seen = new Set();
+  let careplanId = null;
+  let row = 1;
+
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const url = `${CARE_PLAN_DETAIL_PATH}?ESOLclientid=${encodeURIComponent(patientId)}&ESOLrow=${row}&showresolved=N&ESOLsortby=C`;
+    const html = await _fetchText(url);
+    if (!careplanId) {
+      const m = html.match(/ESOLcareplanid=(\d+)/);
+      if (m) careplanId = m[1];
+    }
+    const beforeCount = seen.size;
+    // Each focus row contains an editNeed(...) anchor whose nearest tr → first span.text1 holds the focus statement.
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const links = doc.querySelectorAll('a[href*="editNeed("]');
+    links.forEach((a) => {
+      const tr = a.closest('tr');
+      if (!tr) return;
+      const span = tr.querySelector('span.text1');
+      if (!span) return;
+      const t = (span.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t) seen.add(t);
+    });
+    // Page added nothing new → we're past the end, PCC is repeating.
+    if (seen.size === beforeCount) break;
+    row += PAGE_SIZE;
+  }
+
+  return { careplanId, focusTexts: Array.from(seen) };
+}
+
 window.CarePlanStampDiscover = {
   discoverCarePlanId,
   discoverMiniToken,
@@ -255,4 +307,5 @@ window.CarePlanStampDiscover = {
   discoverCategoriesForLibrary,
   discoverFocusesForCategory,
   discoverFocusContents,
+  scrapeFullCarePlan,
 };

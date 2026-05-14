@@ -52,7 +52,10 @@ async function _handleClick() {
   const facilityName = typeof getChatFacilityInfo === 'function' ? (getChatFacilityInfo() || '') : '';
   const orgSlug = typeof getOrg === 'function' ? (getOrg()?.org || '') : '';
   const patientName = _scrapePatientName();
-  const existingFocusTexts = _scrapeExistingFocusTexts();
+  // Note: existing-focus discovery now lives inside the modal load (via
+  // CarePlanStampDiscover.scrapeFullCarePlan), so it walks all paginated
+  // pages instead of just whatever's in the current DOM. See below — the
+  // _scrapeExistingFocusTexts helper is retained for diagnostics only.
 
   // Check auth before opening — saves the user from seeing a useless error inside the modal.
   try {
@@ -65,7 +68,7 @@ async function _handleClick() {
     // If auth check fails (unlikely), let the modal show the actual error.
   }
 
-  await _openModal({ patientId, patientName, facilityName, orgSlug, existingFocusTexts });
+  await _openModal({ patientId, patientName, facilityName, orgSlug });
 }
 
 /**
@@ -137,7 +140,7 @@ function _scrapeExistingFocusTexts() {
   return texts;
 }
 
-async function _openModal({ patientId, patientName, facilityName, orgSlug, existingFocusTexts }) {
+async function _openModal({ patientId, patientName, facilityName, orgSlug }) {
   // Tear down any existing overlay (defensive — shouldn't happen).
   document.getElementById(OVERLAY_ID)?.remove();
 
@@ -167,7 +170,7 @@ async function _openModal({ patientId, patientName, facilityName, orgSlug, exist
   };
 
   render(
-    h(CarePlanStampModal, { patientId, patientName, facilityName, orgSlug, existingFocusTexts, onClose: handleClose }),
+    h(CarePlanStampModal, { patientId, patientName, facilityName, orgSlug, onClose: handleClose }),
     overlay
   );
 }
