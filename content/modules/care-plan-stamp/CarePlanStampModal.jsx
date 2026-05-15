@@ -18,12 +18,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks'
  * Per-focus state shape:
  *   {
  *     skipped: boolean,
- *     codeStatus: string | null,        // for universal.code_status only
- *     focusText: string | null,          // null = use original.description
- *     goals: ProposedGoal[] | null,      // null = use original.goals
+ *     focusText: string | null,           // null = use original.description (legacy textarea fallback)
+ *     goals: ProposedGoal[] | null,       // null = use original.goals
  *     interventions: ProposedIntervention[] | null,
+ *     tokenValues: { [tokenKey]: string },// inline picker/free-text selections
  *   }
  * `null` means "no edits, use original". This keeps originals immutable.
+ * Token substitution flows generically through `tokenValues` keyed by the
+ * backend's `tokenKey` (e.g. `code_status`, `discharge_destination`).
  */
 
 export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSlug, onClose }) => {
@@ -128,14 +130,18 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // Pre-skip if backend marked this focus as already-on-plan.
           // Nurse can override by clicking Include.
           skipped: !!f.alreadyOnPlan,
-          // No auto-selection — nurse must explicitly pick. Leaves the
-          // composed focus with its "___" placeholder so the sidebar shows
-          // "⚠ needs input" and the sort pushes it to the top.
-          codeStatus: null,
-          dischargeDestination: null,
           focusText: null,
           goals: null,
           interventions: null,
+          // tokenKey → string. Empty until nurse picks/types. Drives the
+          // inline picker chips + free-text inputs in the segment renderer.
+          // Unfilled tokens leave their placeholder visible ("___" /
+          // "[select …]") so the sidebar "needs input" badge surfaces them.
+          tokenValues: {},
+          // Segment indices the nurse has dismissed via the × on a factor
+          // sparkle. Stored as a Set; _renderSegmentsWithTokens skips these
+          // and cleans up the adjacent comma so the stamped text is clean.
+          removedFactors: new Set(),
           // Default to compact preview; nurse clicks "Customize" to reveal textareas.
           expanded: false,
         })));
@@ -192,7 +198,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setLibraryPicks((prev) => [...prev, pick]);
     setFocusStates((prev) => [
       ...prev,
-      { skipped: false, codeStatus: null, focusText: null, goals: null, interventions: null, expanded: false },
+      { skipped: false, focusText: null, goals: null, interventions: null, tokenValues: {}, removedFactors: new Set(), expanded: false },
     ]);
   }, []);
 
@@ -209,16 +215,18 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const includedCount = focusStates.filter((s) => !s.skipped).length;
 
   // Count of included focuses still missing required input. Disables the
-  // sidebar Add-all button so the nurse can't submit an unfilled "___".
+  // sidebar Add-all button so the nurse can't submit an unfilled slot.
+  // For segment-bearing focuses, "unfilled" = any token segment with
+  // needsFilling=true that lacks a tokenValues entry. For older proposals
+  // without descriptionSegments (and for library picks), fall back to the
+  // flat-string `___` heuristic.
   const needsInputCount = allRawFocuses.reduce((n, f, i) => {
     const st = focusStates[i];
     if (!st || st.skipped) return n;
+    const hasUnfilledToken = _focusUnfilledTokenKeys(f, st.tokenValues).length > 0;
     const desc = composedFocuses?.[i]?.description || f.description || '';
-    const unfilled =
-      _detectPlaceholder(desc) ||
-      (f.ruleId === 'universal.code_status' && !st.codeStatus) ||
-      (f.ruleId === 'universal.discharge_planning' && !st.dischargeDestination);
-    return unfilled ? n + 1 : n;
+    const flatHasBlank = !_hasSegments(f.descriptionSegments) && _detectPlaceholder(desc);
+    return (hasUnfilledToken || flatHasBlank) ? n + 1 : n;
   }, 0);
 
   // -------- Stamp action --------
@@ -236,10 +244,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
     if (toStamp.focuses.length === 0) return;
 
-    // Sanity: if any focus still has '___' (no code-status selection somehow), bail.
+    // Sanity: if any focus still has '___' (any unfilled slot), bail.
     const unsubbed = toStamp.focuses.find((f) => f.description.includes('___'));
     if (unsubbed) {
-      setErrorMsg('Please pick a code status before adding.');
+      setErrorMsg('Please fill in any blank slots before adding.');
       setStage('error');
       return;
     }
@@ -380,19 +388,55 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
 /**
  * Apply edit state to an original focus to produce the shape that will be stamped.
- * Substitutes code_status `___` (using state.codeStatus). Uses state.focusText if set.
- * Uses state.goals/interventions if set (these are full replacements, not patches).
+ *
+ * Substitution model (round-4): when `descriptionSegments` is present, tokens
+ * (picker or free-text, identified by tokenKey) are filled from
+ * `state.tokenValues` and the flat string is rebuilt segment-keyed. The old
+ * ruleId-specific special-casing for code_status / discharge_planning is gone —
+ * those keys flow through the generic path via tokenKeys `code_status` and
+ * `discharge_destination` as the backend emits them.
+ *
+ * `state.focusText` (manual edit of the focus statement) still wins when set,
+ * but the round-4 UI no longer exposes a textarea for it — kept here only for
+ * BC with proposals that lack `descriptionSegments`.
  */
 function _composeFocus(original, state) {
-  const baseDesc = state.focusText != null
-    ? state.focusText
-    : (original.ruleId === 'universal.code_status' && state.codeStatus)
-      ? original.description.replace('___', state.codeStatus)
-      : (original.ruleId === 'universal.discharge_planning' && state.dischargeDestination)
-        ? original.description.replace('___', state.dischargeDestination)
-        : original.description;
-  const goals = state.goals != null ? state.goals : original.goals;
-  const interventions = state.interventions != null ? state.interventions : original.interventions;
+  const tokenValues = state.tokenValues || {};
+  const removedFactors = state.removedFactors || null;
+
+  let baseDesc;
+  if (state.focusText != null) {
+    baseDesc = state.focusText;
+  } else if (_hasSegments(original.descriptionSegments)) {
+    baseDesc = _renderSegmentsWithTokens(original.descriptionSegments, tokenValues, removedFactors);
+  } else {
+    baseDesc = original.description;
+  }
+
+  // Goals: substitute when nurse hasn't done a full replace.
+  let goals;
+  if (state.goals != null) {
+    goals = state.goals;
+  } else {
+    goals = (original.goals || []).map((g) =>
+      _segmentsHaveAnyToken(g.descriptionSegments)
+        ? { ...g, description: _renderSegmentsWithTokens(g.descriptionSegments, tokenValues) }
+        : g
+    );
+  }
+
+  // Interventions: same pattern.
+  let interventions;
+  if (state.interventions != null) {
+    interventions = state.interventions;
+  } else {
+    interventions = (original.interventions || []).map((iv) =>
+      _segmentsHaveAnyToken(iv.descriptionSegments)
+        ? { ...iv, description: _renderSegmentsWithTokens(iv.descriptionSegments, tokenValues) }
+        : iv
+    );
+  }
+
   // Defense in depth: a focus with 0 goals has no business carrying interventions.
   const safeInterventions = (Array.isArray(goals) && goals.length === 0) ? [] : interventions;
   return {
@@ -401,6 +445,94 @@ function _composeFocus(original, state) {
     goals,
     interventions: safeInterventions,
   };
+}
+
+function _hasSegments(segments) {
+  return Array.isArray(segments) && segments.length > 0;
+}
+function _segmentsHaveAnyToken(segments) {
+  return Array.isArray(segments) && segments.some((s) => s && s.kind === 'token');
+}
+// Segment-keyed reassembly: a token's slot is replaced by the typed/picked
+// value when one exists. Unfilled tokens render their segment.value (typically
+// `___` for free-text or `[select …]` for picker), preserving the visible
+// "needs input" state in the flat description string used at stamp time.
+//
+// `removedFactors` is a Set of segment indices the nurse has dismissed. We
+// skip the factor AND clean up the adjacent comma/conjunction so the stamped
+// text reads naturally (e.g. removing "weakness" from "r/t weakness, gait
+// problems" yields "r/t gait problems", not "r/t , gait problems").
+function _renderSegmentsWithTokens(segments, tokenValues, removedFactors) {
+  const arr = segments || [];
+  const removed = removedFactors instanceof Set
+    ? removedFactors
+    : new Set(removedFactors || []);
+  const pieces = [];
+  for (let i = 0; i < arr.length; i++) {
+    const s = arr[i];
+    if (!s) continue;
+    if (s.kind === 'factor' && removed.has(i)) {
+      // Prefer consuming a leading ", " / " and " from the *next* text segment
+      // (typical mid-list removal). If no leading separator, strip a trailing
+      // one from the last emitted piece (end-of-list removal).
+      const next = arr[i + 1];
+      if (next && next.kind === 'text') {
+        const stripped = (next.value || '').replace(/^(\s*,\s*|\s+and\s+)/, '');
+        if (stripped !== (next.value || '')) {
+          pieces.push(stripped);
+          i++; // consumed next
+          continue;
+        }
+      }
+      const lastIdx = pieces.length - 1;
+      if (lastIdx >= 0) {
+        pieces[lastIdx] = pieces[lastIdx].replace(/(\s*,\s*|\s+and\s+)$/, '');
+      }
+      continue;
+    }
+    if (s.kind === 'token') {
+      const v = tokenValues?.[s.tokenKey];
+      if (v && String(v).trim()) { pieces.push(String(v).trim()); continue; }
+      if (!s.needsFilling) { pieces.push(s.value || ''); continue; }
+      pieces.push(s.value || '___');
+      continue;
+    }
+    pieces.push(s.value || '');
+  }
+  return pieces.join('');
+}
+// Unique tokenKeys still needing input across focus/goals/interventions.
+function _focusUnfilledTokenKeys(focus, tokenValues) {
+  if (!focus) return [];
+  const tv = tokenValues || {};
+  const keys = new Set();
+  const walk = (segs) => {
+    for (const s of segs || []) {
+      if (s && s.kind === 'token' && s.needsFilling) {
+        const v = tv[s.tokenKey];
+        if (!v || !String(v).trim()) keys.add(s.tokenKey);
+      }
+    }
+  };
+  walk(focus.descriptionSegments);
+  (focus.goals || []).forEach((g) => walk(g.descriptionSegments));
+  (focus.interventions || []).forEach((iv) => walk(iv.descriptionSegments));
+  return [...keys];
+}
+// JSX tooltip content for a factor segment. Bolds the dxCode / orderPattern /
+// derivedFrom values so the relevant signal pops in a quick hover.
+function _factorTooltipContent(s) {
+  if (!s) return null;
+  if (s.source === 'diagnosis' && s.dxCode) {
+    return <span>From diagnosis <strong>{s.dxCode}</strong></span>;
+  }
+  if (s.source === 'order' && s.orderPattern) {
+    return <span>From an active order matching <strong>{s.orderPattern}</strong></span>;
+  }
+  if (s.source === 'derived' && Array.isArray(s.derivedFrom) && s.derivedFrom.length) {
+    return <span>Derived from <strong>{s.derivedFrom.join(', ')}</strong></span>;
+  }
+  return <span>From clinical data</span>;
 }
 
 // -------- Subcomponents --------
@@ -478,12 +610,9 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
               const st = focusStates[e.i] || {};
               if (st.skipped) return 2;
               const desc = composedFocuses?.[e.i]?.description || e.f.description || '';
-              const blank = _detectPlaceholder(desc);
-              const needsInput =
-                blank ||
-                (e.f.ruleId === 'universal.code_status' && !st.codeStatus) ||
-                (e.f.ruleId === 'universal.discharge_planning' && !st.dischargeDestination);
-              return needsInput ? 0 : 1;
+              const flatBlank = !_hasSegments(e.f.descriptionSegments) && _detectPlaceholder(desc);
+              const tokenBlank = _focusUnfilledTokenKeys(e.f, st.tokenValues).length > 0;
+              return (flatBlank || tokenBlank) ? 0 : 1;
             };
             const ra = rank(a);
             const rb = rank(b);
@@ -496,12 +625,9 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           // class-name chain below can reference it.
           const composedDesc = composedFocuses?.[i]?.description || f.description || '';
           const preview = composedDesc.replace(/\s+/g, ' ').trim();
-          const hasBlank = _detectPlaceholder(composedDesc);
-          const needsInput = !state.skipped && (
-            hasBlank ||
-            (f.ruleId === 'universal.code_status' && !state.codeStatus) ||
-            (f.ruleId === 'universal.discharge_planning' && !state.dischargeDestination)
-          );
+          const flatHasBlank = !_hasSegments(f.descriptionSegments) && _detectPlaceholder(composedDesc);
+          const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues).length > 0;
+          const needsInput = !state.skipped && (flatHasBlank || tokenBlank);
 
           let cls = 'cpas-list__item';
           let badge = '+';
@@ -1103,6 +1229,316 @@ const LibraryConfigure = ({ state, onToggleGoal, onToggleInter, onSetItemFills, 
   );
 };
 
+// Lightweight hover tooltip — native `title` has a 1.5s delay and tiny font;
+// nurses miss it. This shows a styled popover ~200ms after mouseenter and
+// hides immediately on mouseleave. Content can be JSX (bold codes, etc.).
+const HoverTooltip = ({ content, children, side = 'top', delay = 200 }) => {
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef(null);
+  const onEnter = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setOpen(true), delay);
+  };
+  const onLeave = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    setOpen(false);
+  };
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  return (
+    <span className="cpas-tt" onMouseEnter={onEnter} onMouseLeave={onLeave} onFocusCapture={onEnter} onBlurCapture={onLeave}>
+      {children}
+      {open && content && (
+        <span className={`cpas-tt__pop cpas-tt__pop--${side}`} role="tooltip">{content}</span>
+      )}
+    </span>
+  );
+};
+
+// Inline SVG icons (no external icon lib in this extension).
+const IconChevronDown = () => (
+  <svg className="cpas-icon" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+    <path d="M2 4.5L6 8.5L10 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+const IconPencil = () => (
+  <svg className="cpas-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+    <path d="M8.5 1.5L10.5 3.5L4 10L1.5 10.5L2 8L8.5 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+
+// "Select discharge destination" reads cleanly; "[select discharge destination]"
+// looks like a literal placeholder. Also catches free-text `___`. Returns null
+// if the segment value isn't placeholder-shaped (i.e. backend already
+// substituted a real value we should preserve).
+function _isTokenPlaceholderValue(v) {
+  if (!v) return true;
+  if (v === '___' || /_{3,}/.test(v)) return true;
+  if (/^\[.*\]$/.test(v.trim())) return true;
+  return false;
+}
+function _tokenLabelFromKey(key) {
+  return String(key || '').replace(/_/g, ' ');
+}
+
+// ---------- Segment renderer (round-4) ----------
+//
+// Renders a focus/goal/intervention `descriptionSegments[]` inline:
+//   - kind:text    → plain span
+//   - kind:factor  → indigo-underlined w/ sparkle + source tooltip
+//   - kind:token   → filled spans, picker chips, or free-text inputs
+// Mirrors web/components/patients/care-plan-segment-renderer.tsx. Filled-token
+// rendering is driven by `tokenValues` (client-side state) rather than mutating
+// the segment array, so re-renders stay declarative.
+const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCommit, onToggleFactor, readOnly }) => {
+  // Per-segment-index "editing" set — lets a filled token sparkle revert to
+  // its editor on click. Keyed by index, not tokenKey, since a key can appear
+  // in multiple segment positions and we only want the clicked one to flip.
+  const [editing, setEditing] = useState(() => new Set());
+  const startEdit = (idx) => setEditing((s) => { const n = new Set(s); n.add(idx); return n; });
+  const stopEdit = (idx) => setEditing((s) => { const n = new Set(s); n.delete(idx); return n; });
+  if (!_hasSegments(segments)) return null;
+  const tv = tokenValues || {};
+  return (
+    <span className="cpas-seg">
+      {segments.map((s, i) => {
+        if (!s) return null;
+        if (s.kind === 'text') return <span key={i}>{s.value}</span>;
+        if (s.kind === 'factor') {
+          const isRemoved = removedFactors instanceof Set && removedFactors.has(i);
+          if (readOnly) {
+            return isRemoved ? null : <FactorSpan key={i} segment={s} />;
+          }
+          return (
+            <FactorSpan
+              key={i}
+              segment={s}
+              removed={isRemoved}
+              onRemove={() => onToggleFactor?.(i, true)}
+              onRestore={() => onToggleFactor?.(i, false)}
+            />
+          );
+        }
+        if (s.kind === 'token') {
+          const typed = tv[s.tokenKey];
+          const typedVal = (typed && String(typed).trim()) || '';
+          const backendFilled = !s.needsFilling && s.value;
+          const currentValue = typedVal || (backendFilled ? s.value : '');
+          const isFilled = !!currentValue;
+
+          if (readOnly) {
+            return isFilled
+              ? <FilledTokenSpan key={i} value={currentValue} tokenKey={s.tokenKey} editable={false} />
+              : <span key={i}>{s.value}</span>;
+          }
+
+          // Filled + not actively re-editing: render the sparkle span, clickable
+          // to drop back into the editor.
+          if (isFilled && !editing.has(i)) {
+            return (
+              <FilledTokenSpan
+                key={i}
+                value={currentValue}
+                tokenKey={s.tokenKey}
+                editable={true}
+                onEdit={() => startEdit(i)}
+              />
+            );
+          }
+
+          // Editor — either unfilled-from-start, or user clicked to re-edit.
+          // autoOpen / autoFocus make the click-to-edit feel single-step.
+          const reEditing = editing.has(i);
+          if (Array.isArray(s.options) && s.options.length) {
+            return (
+              <TokenPickerChip
+                key={i}
+                segment={s}
+                currentValue={isFilled ? currentValue : null}
+                autoOpen={reEditing}
+                onCommit={(v) => { onTokenCommit(s.tokenKey, v); stopEdit(i); }}
+                onDismiss={() => stopEdit(i)}
+              />
+            );
+          }
+          return (
+            <TokenFreeTextInline
+              key={i}
+              segment={s}
+              initialValue={isFilled ? currentValue : ''}
+              autoFocus={reEditing}
+              onCommit={(v) => { onTokenCommit(s.tokenKey, v); stopEdit(i); }}
+              onDismiss={() => stopEdit(i)}
+            />
+          );
+        }
+        return null;
+      })}
+    </span>
+  );
+};
+
+const FactorSpan = ({ segment, removed, onRemove, onRestore }) => {
+  const tip = removed
+    ? <span>Removed — click to restore</span>
+    : _factorTooltipContent(segment);
+  const handleX = (e) => {
+    e.stopPropagation();
+    if (removed) onRestore?.(); else onRemove?.();
+  };
+  return (
+    <HoverTooltip content={tip}>
+      <span className={`cpas-seg-factor ${removed ? 'is-removed' : ''}`}>
+        {segment.value}
+        <span className="cpas-seg-sparkle" aria-hidden="true">✨</span>
+        {(onRemove || onRestore) && (
+          <button
+            type="button"
+            className="cpas-seg-factor__x"
+            onClick={handleX}
+            aria-label={removed ? 'Restore factor' : 'Remove factor'}
+            title={removed ? 'Restore' : 'Remove'}
+          >
+            {removed ? '↺' : '×'}
+          </button>
+        )}
+      </span>
+    </HoverTooltip>
+  );
+};
+
+const FilledTokenSpan = ({ value, tokenKey, editable, onEdit }) => {
+  const tokenLabel = _tokenLabelFromKey(tokenKey);
+  const tip = editable
+    ? <span>Click to edit <strong>{tokenLabel}</strong></span>
+    : <span>Your selection for <strong>{tokenLabel}</strong></span>;
+  const handleClick = editable ? () => onEdit?.() : undefined;
+  const handleKey = editable
+    ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit?.(); } }
+    : undefined;
+  return (
+    <HoverTooltip content={tip}>
+      <span
+        className={`cpas-seg-factor ${editable ? 'is-editable' : ''}`}
+        role={editable ? 'button' : undefined}
+        tabIndex={editable ? 0 : undefined}
+        onClick={handleClick}
+        onKeyDown={handleKey}
+      >
+        {value}
+        <span className="cpas-seg-sparkle" aria-hidden="true">✨</span>
+      </span>
+    </HoverTooltip>
+  );
+};
+
+// Picker token: dashed amber chip with chevron → click → popover of options.
+// Trigger label is the action ("Select discharge destination") rather than the
+// round-trip placeholder ("[select discharge destination]") so the affordance
+// reads as a CTA, not a literal. Tooltip explains the click for nurses who
+// haven't seen this control before.
+const TokenPickerChip = ({ segment, currentValue, autoOpen, onCommit, onDismiss }) => {
+  const [open, setOpen] = useState(!!autoOpen);
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+        // Outside-click while re-editing a filled token = cancel the edit.
+        onDismiss?.();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open, onDismiss]);
+  const tokenLabel = _tokenLabelFromKey(segment.tokenKey);
+  // Re-edit shows the current selection as the trigger; initial unfilled
+  // state shows the "Select X" CTA. Either way, the chevron signals click.
+  const triggerLabel = currentValue
+    ? currentValue
+    : (_isTokenPlaceholderValue(segment.value) ? `Select ${tokenLabel}` : segment.value);
+  const tipContent = currentValue
+    ? <span>Click to change <strong>{tokenLabel}</strong></span>
+    : <span>Click to choose <strong>{tokenLabel}</strong></span>;
+  return (
+    <HoverTooltip content={tipContent}>
+      <span className="cpas-seg-picker" ref={wrapRef}>
+        <button
+          type="button"
+          className="cpas-seg-chip"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={currentValue ? `Change ${tokenLabel}` : `Select ${tokenLabel}`}
+        >
+          <span className="cpas-seg-chip__label">{triggerLabel}</span>
+          <IconChevronDown />
+        </button>
+        {open && (
+          <span className="cpas-seg-picker__pop" role="menu">
+            {segment.options.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                className={`cpas-seg-picker__opt ${opt === currentValue ? 'is-current' : ''}`}
+                onClick={() => { onCommit(opt); setOpen(false); }}
+              >
+                {opt}
+              </button>
+            ))}
+          </span>
+        )}
+      </span>
+    </HoverTooltip>
+  );
+};
+
+// Free-text token: pencil-iconed dashed amber field. Commits on blur or
+// Enter, non-empty only (per round-3 §5.4). The icon prefix + tooltip make
+// the affordance unambiguous — a bare input was mistaken for a label.
+const TokenFreeTextInline = ({ segment, initialValue, autoFocus, onCommit, onDismiss }) => {
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+      // Place caret at end so the existing value isn't selected for accidental
+      // overwrite — re-editors usually tweak, not retype.
+      const el = inputRef.current;
+      const v = el.value || '';
+      try { el.setSelectionRange(v.length, v.length); } catch (_) {}
+    }
+  }, [autoFocus]);
+  const handleBlur = (e) => {
+    const v = (e.target.value || '').trim();
+    // Commit only when changed and non-empty. Empty / unchanged blur exits
+    // edit mode without losing the prior value (handled by onDismiss).
+    if (v && v !== (initialValue || '')) onCommit(v);
+    else onDismiss?.();
+  };
+  const handleKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); onDismiss?.(); }
+  };
+  const tokenLabel = _tokenLabelFromKey(segment.tokenKey);
+  return (
+    <HoverTooltip
+      content={<span>Type to fill in <strong>{tokenLabel}</strong>; press Enter or click out to confirm.</span>}
+    >
+      <span className="cpas-seg-input-wrap">
+        <IconPencil />
+        <input
+          ref={inputRef}
+          type="text"
+          className="cpas-seg-input"
+          defaultValue={initialValue || ''}
+          placeholder={`Type ${tokenLabel} here`}
+          aria-label={`Type ${tokenLabel}`}
+          onBlur={handleBlur}
+          onKeyDown={handleKey}
+        />
+      </span>
+    </HoverTooltip>
+  );
+};
+
 const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns }) => {
   const sectionRef = useRef(null);
   // Snap back to top whenever the active focus changes — otherwise scroll
@@ -1112,9 +1548,18 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
     if (sectionRef.current) sectionRef.current.scrollTop = 0;
   }, [focusKey]);
   if (!composed) return null;
-  const isCodeStatus = rawFocus?.ruleId === 'universal.code_status';
-  const isDischargePlanning = rawFocus?.ruleId === 'universal.discharge_planning';
   const hasUnsubstituted = composed.description.includes('___');
+  const hasSegments = _hasSegments(rawFocus?.descriptionSegments);
+  const onTokenCommit = (key, value) => onUpdate({
+    tokenValues: { ...(state.tokenValues || {}), [key]: value },
+    // Clear any manual free-text edit so segment substitution is canonical.
+    focusText: null,
+  });
+  const onToggleFactor = (idx, remove) => {
+    const next = new Set(state.removedFactors || []);
+    if (remove) next.add(idx); else next.delete(idx);
+    onUpdate({ removedFactors: next, focusText: null });
+  };
   const kardexLabels = dropdowns?.kardexLabels || {};
   const positionLabels = dropdowns?.positionLabels || {};
   const kardexOptions = dropdowns?.kardexOptions || [];
@@ -1231,62 +1676,32 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
         </div>
       )}
 
-      {/* Focus statement — always inline-editable. Looks like text by default,
-          shows edit affordance on hover/focus. Locked when code_status is picked
-          since the substitution drives it. */}
-      <textarea
-        className={`cpas-iv-row__text cpas-iv-row__text--focus ${hasUnsubstituted ? 'has-blank' : ''}`}
-        value={composed.description}
-        onInput={(e) => onUpdate({ focusText: e.target.value })}
-        rows={1}
-        disabled={readOnly || (isCodeStatus && !!state.codeStatus) || (isDischargePlanning && !!state.dischargeDestination)}
-      />
-
-      {/* Code-status picker always visible (it's required, not optional editing) */}
-      {isCodeStatus && !readOnly && (
-        <div className="cpas-code-status">
-          <label className="cpas-detail__label">Code status</label>
-          <div className="cpas-code-status__options">
-            {['Full Code', 'DNR-CC', 'DNR-CCA'].map((opt) => (
-              <label key={opt} className={`cpas-radio ${state.codeStatus === opt ? 'is-active' : ''}`}>
-                <input
-                  type="radio"
-                  name="code-status"
-                  checked={state.codeStatus === opt}
-                  onChange={() => onUpdate({ codeStatus: opt, focusText: null })}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-          <p className="cpas-code-status__hint">
-            This documents the advance directive on the care plan only. To change the
-            resident's actual code status, update their chart separately.
-          </p>
+      {/* Focus statement — segment renderer when the backend ships
+          descriptionSegments (factor sparkles + inline picker chips + inline
+          free-text inputs). Falls back to the legacy editable textarea for
+          older proposals / library picks that lack segments. */}
+      {hasSegments ? (
+        <div
+          key={focusKey}
+          className={`cpas-detail__statement ${hasUnsubstituted ? 'has-blank' : ''}`}
+        >
+          <DescriptionSegments
+            segments={rawFocus.descriptionSegments}
+            tokenValues={state.tokenValues}
+            removedFactors={state.removedFactors}
+            onTokenCommit={onTokenCommit}
+            onToggleFactor={onToggleFactor}
+            readOnly={readOnly}
+          />
         </div>
-      )}
-
-      {/* Discharge-destination picker — same shape as code status */}
-      {isDischargePlanning && !readOnly && (
-        <div className="cpas-code-status">
-          <label className="cpas-detail__label">Anticipated discharge destination</label>
-          <div className="cpas-code-status__options">
-            {['Undetermined', 'Home', 'Home with home health', 'Assisted living', 'Long-term care', 'Hospice', 'SNF transfer'].map((opt) => (
-              <label key={opt} className={`cpas-radio ${state.dischargeDestination === opt ? 'is-active' : ''}`}>
-                <input
-                  type="radio"
-                  name="discharge-destination"
-                  checked={state.dischargeDestination === opt}
-                  onChange={() => onUpdate({ dischargeDestination: opt, focusText: null })}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-          <p className="cpas-code-status__hint">
-            Best current estimate. Update during stay as the plan firms up.
-          </p>
-        </div>
+      ) : (
+        <textarea
+          className={`cpas-iv-row__text cpas-iv-row__text--focus ${hasUnsubstituted ? 'has-blank' : ''}`}
+          value={composed.description}
+          onInput={(e) => onUpdate({ focusText: e.target.value })}
+          rows={1}
+          disabled={readOnly}
+        />
       )}
 
       {/* Goals — always inline-editable */}

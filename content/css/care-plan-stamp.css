@@ -664,6 +664,221 @@
   margin: 0;
 }
 
+/* --- Segment renderer (round-4) ---
+   Renders focus.descriptionSegments inline: factor sparkles + token chips +
+   token inputs. Mirrors the web wizard's care-plan-segment-renderer styling. */
+.cpas-detail__statement {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #111827;
+  margin: 0 0 16px;
+  padding: 8px 0;
+}
+.cpas-detail__statement.has-blank {
+  /* Subtle nudge that something still needs picking. */
+  background: linear-gradient(0deg, rgba(254, 243, 199, 0.35), rgba(254, 243, 199, 0));
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.cpas-seg {
+  display: inline;
+}
+/* Factor + filled-token: indigo underline + sparkle. */
+.cpas-seg-factor {
+  color: #4338ca;
+  text-decoration: underline dotted #a5b4fc;
+  text-underline-offset: 2px;
+  cursor: help;
+  border-radius: 3px;
+  transition: background 0.12s ease;
+}
+.cpas-seg-factor.is-editable {
+  cursor: pointer;
+}
+.cpas-seg-factor.is-editable:hover,
+.cpas-seg-factor.is-editable:focus-visible {
+  background: #eef2ff;
+  outline: none;
+}
+/* Dismiss × on factor sparkles — appears on hover/focus so the description
+   stays clean by default. Nurse clicks to strike out a factor they disagree
+   with; stamp output drops the factor + adjacent comma. */
+.cpas-seg-factor__x {
+  display: none;
+  margin-left: 2px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: #6366f1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.cpas-seg-factor:hover .cpas-seg-factor__x,
+.cpas-seg-factor:focus-within .cpas-seg-factor__x,
+.cpas-seg-factor.is-removed .cpas-seg-factor__x {
+  display: inline-block;
+}
+.cpas-seg-factor__x:hover {
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+}
+.cpas-seg-factor.is-removed {
+  text-decoration: line-through;
+  text-decoration-color: rgba(67, 56, 202, 0.6);
+  color: #6366f1;
+  opacity: 0.55;
+}
+.cpas-seg-factor.is-removed .cpas-seg-sparkle {
+  opacity: 0.35;
+}
+.cpas-seg-sparkle {
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 0.85em;
+  color: #818cf8;
+  transition: transform 0.15s ease;
+}
+.cpas-seg-factor:hover .cpas-seg-sparkle {
+  transform: scale(1.15);
+}
+
+/* Picker token: dashed amber chip + chevron + popover of options. */
+.cpas-seg-picker {
+  position: relative;
+  display: inline-block;
+}
+.cpas-seg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font: inherit;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+  border-radius: 6px;
+  cursor: pointer;
+  vertical-align: baseline;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.cpas-seg-chip__label { line-height: 1; }
+.cpas-seg-chip:hover { background: #fef3c7; }
+.cpas-seg-chip:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+.cpas-icon { flex: none; }
+.cpas-seg-picker__pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+.cpas-seg-picker__opt {
+  display: block;
+  padding: 7px 10px;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  color: #111827;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cpas-seg-picker__opt:hover,
+.cpas-seg-picker__opt:focus {
+  background: #fef3c7;
+  outline: none;
+}
+.cpas-seg-picker__opt.is-current {
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 600;
+}
+.cpas-seg-picker__opt.is-current:hover {
+  background: #e0e7ff;
+}
+
+/* Free-text token: pencil-icon-prefixed dashed amber field. The icon + tooltip
+   make the affordance obvious — bare inputs were getting mistaken for labels. */
+.cpas-seg-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+  border-radius: 6px;
+  vertical-align: baseline;
+  color: #b45309;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.cpas-seg-input-wrap:hover { background: #fef3c7; }
+.cpas-seg-input-wrap:focus-within {
+  background: #fff;
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+}
+.cpas-seg-input {
+  flex: 1 1 auto;
+  min-width: 10rem;
+  padding: 0;
+  font: inherit;
+  color: #78350f;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+.cpas-seg-input::placeholder {
+  color: #d97706;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* Hover tooltip — styled popover, ~200ms delay (no native title's 1.5s lag).
+   Positioned absolutely above the trigger; small font, dark surface, bold
+   highlights inside `<strong>`. */
+.cpas-tt {
+  position: relative;
+  display: inline;
+}
+.cpas-tt__pop {
+  position: absolute;
+  z-index: 50;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(100% + 6px);
+  max-width: 280px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-style: normal;
+  text-decoration: none;
+  color: #f9fafb;
+  background: #111827;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+  pointer-events: none;
+  white-space: normal;
+}
+.cpas-tt__pop strong { color: #fde68a; font-weight: 600; }
+.cpas-tt__pop--bottom { bottom: auto; top: calc(100% + 6px); }
+
 /* --- Footer --- */
 .cpas-modal__footer {
   display: flex;
