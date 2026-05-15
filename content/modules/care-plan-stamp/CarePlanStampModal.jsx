@@ -1676,33 +1676,66 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
         </div>
       )}
 
-      {/* Focus statement — segment renderer when the backend ships
-          descriptionSegments (factor sparkles + inline picker chips + inline
-          free-text inputs). Falls back to the legacy editable textarea for
-          older proposals / library picks that lack segments. */}
-      {hasSegments ? (
-        <div
-          key={focusKey}
-          className={`cpas-detail__statement ${hasUnsubstituted ? 'has-blank' : ''}`}
-        >
-          <DescriptionSegments
-            segments={rawFocus.descriptionSegments}
-            tokenValues={state.tokenValues}
-            removedFactors={state.removedFactors}
-            onTokenCommit={onTokenCommit}
-            onToggleFactor={onToggleFactor}
-            readOnly={readOnly}
-          />
-        </div>
-      ) : (
-        <textarea
-          className={`cpas-iv-row__text cpas-iv-row__text--focus ${hasUnsubstituted ? 'has-blank' : ''}`}
-          value={composed.description}
-          onInput={(e) => onUpdate({ focusText: e.target.value })}
-          rows={1}
-          disabled={readOnly}
-        />
-      )}
+      {/* Focus statement.
+          Default mode: segment renderer (sparkles, picker chips, free-text
+          inputs) — pulled from descriptionSegments.
+          Manual mode: plain textarea — used when the nurse wants to edit the
+          static preamble or add wording the segments can't express. Entered
+          by clicking the ✎ button; left by clicking "Use suggested wording".
+          Auto-enters manual mode when there are no segments at all (library
+          picks / older proposals). */}
+      {(() => {
+        const manualMode = state.focusText != null || !hasSegments;
+        if (!manualMode) {
+          return (
+            <div
+              key={focusKey}
+              className={`cpas-detail__statement ${hasUnsubstituted ? 'has-blank' : ''}`}
+            >
+              <DescriptionSegments
+                segments={rawFocus.descriptionSegments}
+                tokenValues={state.tokenValues}
+                removedFactors={state.removedFactors}
+                onTokenCommit={onTokenCommit}
+                onToggleFactor={onToggleFactor}
+                readOnly={readOnly}
+              />
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="cpas-detail__edit-toggle"
+                  onClick={() => onUpdate({ focusText: composed.description })}
+                  title="Edit the full focus statement as text"
+                >
+                  <IconPencil /> Edit text
+                </button>
+              )}
+            </div>
+          );
+        }
+        return (
+          <div className="cpas-detail__statement-manual">
+            <textarea
+              className={`cpas-iv-row__text cpas-iv-row__text--focus ${hasUnsubstituted ? 'has-blank' : ''}`}
+              value={composed.description}
+              onInput={(e) => onUpdate({ focusText: e.target.value })}
+              rows={1}
+              disabled={readOnly}
+              placeholder="Focus statement…"
+            />
+            {!readOnly && hasSegments && (
+              <button
+                type="button"
+                className="cpas-detail__edit-toggle"
+                onClick={() => onUpdate({ focusText: null, removedFactors: new Set() })}
+                title="Discard manual edits and use the suggested wording"
+              >
+                ↺ Use suggested wording
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Goals — always inline-editable */}
       <h3 className="cpas-detail__section">Goals ({goals.length})</h3>

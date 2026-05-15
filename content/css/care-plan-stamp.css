@@ -683,6 +683,34 @@
 .cpas-seg {
   display: inline;
 }
+/* Toggle between segment view (default, with sparkles/chips) and a manual
+   textarea — for editing the static preamble or adding wording the segments
+   can't express. */
+.cpas-detail__statement-manual { margin: 0 0 16px; }
+.cpas-detail__edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6366f1;
+  background: transparent;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.cpas-detail__edit-toggle:hover {
+  background: #eef2ff;
+  border-color: #a5b4fc;
+}
+.cpas-detail__statement-manual .cpas-detail__edit-toggle {
+  margin-left: 0;
+}
 /* Factor + filled-token: indigo underline + sparkle. */
 .cpas-seg-factor {
   color: #4338ca;
