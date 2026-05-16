@@ -47,6 +47,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // Tracked separately from auto-picks so the UI can label them and the nurse can pull them.
   const [libraryPicks, setLibraryPicks] = useState([]); // [{ stdNeedId, label, focusText, reviewDepartments, goals, interventions }]
 
+  // Persistent skips from prior sessions — backend filters these out of
+  // `focuses` and returns them here. Rendered in the "Previously skipped"
+  // fold; nurse can un-skip to pull them back into the active list.
+  const [skippedFocuses, setSkippedFocuses] = useState([]);
+
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +129,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         }
 
         setProposal(prop);
+        setSkippedFocuses(Array.isArray(prop.skippedFocuses) ? prop.skippedFocuses : []);
         setCareplanId(cpId);
         setMiniToken(token);
         setFocusStates((prop.focuses || []).map((f) => ({
@@ -211,6 +217,61 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       return prev.filter((_, i) => i !== idx);
     });
   }, [proposal]);
+
+  // Toggle a focus's skip flag AND persist the decision so it survives a
+  // wizard close + re-open. Library picks aren't rule-driven, so skip
+  // persistence is a no-op for them (the backend keys on ruleId).
+  const toggleFocusSkip = useCallback((idx) => {
+    const focus = allRawFocuses[idx];
+    const cur = focusStates[idx];
+    if (!focus || !cur) return;
+    const nextSkipped = !cur.skipped;
+    patchFocus(idx, { skipped: nextSkipped });
+    if (!focus._isLibrary && focus.ruleId) {
+      // Fire-and-forget: local state already reflects intent.
+      window.CarePlanStampAPI?.persistSkip?.({
+        patientId,
+        orgSlug,
+        facilityName,
+        ruleId: focus.ruleId,
+        isSkipping: nextSkipped,
+      });
+    }
+  }, [allRawFocuses, focusStates, patchFocus, patientId, orgSlug, facilityName]);
+
+  // Un-skip a focus from the "Previously skipped" fold: move it back into
+  // the active proposal list with a fresh state, and DELETE the persisted
+  // skip row. Inserts at the end of the auto-picks block so library picks
+  // stay last (matches allRawFocuses ordering).
+  const unSkipFocus = useCallback((focus) => {
+    if (!focus?.ruleId) return;
+    const insertAt = proposal?.focuses?.length || 0;
+    setProposal((prev) => ({
+      ...prev,
+      focuses: [...(prev?.focuses || []), focus],
+    }));
+    setFocusStates((prev) => {
+      const next = [...prev];
+      next.splice(insertAt, 0, {
+        skipped: false,
+        focusText: null,
+        goals: null,
+        interventions: null,
+        tokenValues: {},
+        removedFactors: new Set(),
+        expanded: false,
+      });
+      return next;
+    });
+    setSkippedFocuses((prev) => prev.filter((f) => f.ruleId !== focus.ruleId));
+    window.CarePlanStampAPI?.persistSkip?.({
+      patientId,
+      orgSlug,
+      facilityName,
+      ruleId: focus.ruleId,
+      isSkipping: false,
+    });
+  }, [proposal, patientId, orgSlug, facilityName]);
 
   const includedCount = focusStates.filter((s) => !s.skipped).length;
 
@@ -334,12 +395,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 onStamp={stage === 'ready' ? handleStamp : null}
                 stampDisabled={includedCount === 0 || needsInputCount > 0}
                 needsInputCount={needsInputCount}
+                skippedFocuses={skippedFocuses}
+                onUnSkip={stage === 'ready' ? unSkipFocus : null}
               />
               <FocusDetail
                 composed={composedFocuses[activeIdx]}
                 state={focusStates[activeIdx]}
                 rawFocus={allRawFocuses[activeIdx]}
                 onUpdate={(patch) => patchFocus(activeIdx, patch)}
+                onToggleSkip={() => toggleFocusSkip(activeIdx)}
                 readOnly={stage !== 'ready'}
                 dropdowns={dropdowns}
               />
@@ -577,7 +641,7 @@ const DriftState = ({ missing, onClose }) => (
   </div>
 );
 
-const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount }) => {
+const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip }) => {
   const stampCount = focusStates.filter((s) => !s.skipped).length;
   const onPlanCount = rawFocuses.filter((f) => f.alreadyOnPlan).length;
   const libCount = rawFocuses.filter((f) => f._isLibrary).length;
@@ -701,6 +765,37 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
             </div>
           )}
         </div>
+      )}
+      {/* Previously skipped fold — focuses the nurse dismissed in a prior
+          session. Backend filters these out of the active list and returns
+          them on `skippedFocuses`. Un-skip pulls one back into the active
+          list and DELETEs the persisted skip row. */}
+      {Array.isArray(skippedFocuses) && skippedFocuses.length > 0 && (
+        <details className="cpas-list__skipped-fold">
+          <summary className="cpas-list__skipped-fold-summary">
+            Previously skipped ({skippedFocuses.length})
+          </summary>
+          <ul className="cpas-list__skipped-fold-items">
+            {skippedFocuses.map((f) => (
+              <li key={f.ruleId} className="cpas-list__skipped-fold-item">
+                <span className="cpas-list__skipped-fold-text" title={f.description}>
+                  {_ruleIdToLabel(f.ruleId)}
+                </span>
+                {onUnSkip && (
+                  // NO_TRACK: pure-UI un-skip; persistence is fire-and-forget.
+                  <button
+                    type="button"
+                    className="cpas-list__skipped-fold-unskip"
+                    onClick={(e) => { e.stopPropagation(); onUnSkip(f); }}
+                    title="Move back into the active list"
+                  >
+                    Un-skip
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </aside>
   );
@@ -1539,7 +1634,7 @@ const TokenFreeTextInline = ({ segment, initialValue, autoFocus, onCommit, onDis
   );
 };
 
-const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns }) => {
+const FocusDetail = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns }) => {
   const sectionRef = useRef(null);
   // Snap back to top whenever the active focus changes — otherwise scroll
   // position from the previous focus leaks over and looks broken.
@@ -1622,7 +1717,7 @@ const FocusDetail = ({ composed, state, rawFocus, onUpdate, readOnly, dropdowns 
             // to the primary "Add all" CTA in the sidebar.
             <button
               className={`cpas-state-chip ${state.skipped ? 'is-skipped' : 'is-included'}`}
-              onClick={() => onUpdate({ skipped: !state.skipped })}
+              onClick={() => (onToggleSkip ? onToggleSkip() : onUpdate({ skipped: !state.skipped }))}
               title={state.skipped ? 'Click to include this focus' : 'Click to skip this focus'}
             >
               {state.skipped ? (

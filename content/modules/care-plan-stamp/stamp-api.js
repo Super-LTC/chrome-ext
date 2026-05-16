@@ -52,4 +52,40 @@ async function fetchProposal({ patientId, facilityName, orgSlug, scope = 'initia
   return data;
 }
 
-window.CarePlanStampAPI = { fetchProposal };
+/**
+ * Persist (or un-persist) a focus skip decision.
+ *
+ * Fire-and-forget — caller should NOT block UI on this. Errors are logged
+ * and swallowed: local React state already reflects the nurse's intent;
+ * this call just makes the decision survive a wizard close + re-open.
+ *
+ * Idempotent server-side (ON CONFLICT DO NOTHING on POST; DELETE on missing
+ * row is a 404 we ignore). Skipped focuses get filtered out of the next
+ * auto-pop's `focuses` and surface in `skippedFocuses` instead.
+ *
+ * Wizard-cosmetic only: coverage / dashboards do NOT read this table.
+ */
+async function persistSkip({ patientId, orgSlug, facilityName, ruleId, isSkipping }) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: '/api/extension/care-plan/skips',
+      options: {
+        method: isSkipping ? 'POST' : 'DELETE',
+        body: JSON.stringify({
+          patientId: String(patientId),
+          orgSlug: orgSlug || '',
+          facilityName: facilityName || '',
+          ruleId,
+        }),
+      },
+    });
+    if (!response?.success) {
+      console.error('[care-plan-pop] failed to persist skip', response?.error, { ruleId, isSkipping });
+    }
+  } catch (err) {
+    console.error('[care-plan-pop] failed to persist skip', err, { ruleId, isSkipping });
+  }
+}
+
+window.CarePlanStampAPI = { fetchProposal, persistSkip };
