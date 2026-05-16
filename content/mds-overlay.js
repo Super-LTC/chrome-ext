@@ -720,14 +720,27 @@ function injectBadge(questionEl, result) {
 // ============================================
 
 /**
- * Extract ICD-10 code from an I8000 question element's displayed value.
- * DOM shows e.g. "K62.1    RECTAL POLYP" or "{blank}".
+ * Extract ICD-10 code from an I8000 question element.
+ * Signed MDS: value lives in `.readonlyquestionvalue` (e.g. "K62.1    RECTAL POLYP").
+ * Open MDS: value lives in the row's `<input type="text">` (e.g. value="Z47.1").
  */
 function extractIcd10FromElement(questionEl) {
-  const val = questionEl.querySelector('.readonlyquestionvalue')?.textContent?.trim();
-  if (!val || val === '{blank}') return null;
-  const match = val.match(/^([A-Z]\d[\dA-Z]*\.?\d*)/i);
-  return match ? match[1] : null;
+  const codeRegex = /^([A-Z]\d[\dA-Z]*\.?\d*)/i;
+
+  const readonlyVal = questionEl.querySelector('.readonlyquestionvalue')?.textContent?.trim();
+  if (readonlyVal && readonlyVal !== '{blank}') {
+    const m = readonlyVal.match(codeRegex);
+    if (m) return m[1];
+  }
+
+  const input = questionEl.querySelector('input[type="text"][id^="I8000"]');
+  const inputVal = input?.value?.trim();
+  if (inputVal) {
+    const m = inputVal.match(codeRegex);
+    if (m) return m[1];
+  }
+
+  return null;
 }
 
 /**
