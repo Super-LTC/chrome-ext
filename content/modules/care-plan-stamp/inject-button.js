@@ -25,8 +25,8 @@ function _makeButton(idSuffix) {
   btn.type = 'button';
   btn.className = 'pccButton';
   btn.id = `${BTN_ID_PREFIX}${idSuffix}`;
-  btn.value = '✨ Generate Initial Care Plan';
-  btn.title = 'Generate an initial care plan based on this resident\'s diagnoses and orders';
+  btn.value = '✨ AI Care Plan';
+  btn.title = 'AI-assisted care plan: auto-populate for new admits, audit + review for established plans';
   // Style: same shape as pccButton but tinted to draw the eye without screaming.
   btn.style.cssText = `
     background: linear-gradient(135deg, #6366f1, #4f46e5);
@@ -57,6 +57,13 @@ async function _handleClick() {
   // pages instead of just whatever's in the current DOM. See below — the
   // _scrapeExistingFocusTexts helper is retained for diagnostics only.
 
+  // Pick default wizard mode based on whether the patient already has
+  // a populated care plan. Empty plan → Initial Admit auto-pop;
+  // established plan → Comprehensive Review (audit). The toggle inside
+  // the modal lets the nurse override.
+  const existingTexts = _scrapeExistingFocusTexts();
+  const defaultMode = existingTexts.length === 0 ? 'initial' : 'comprehensive';
+
   // Check auth before opening — saves the user from seeing a useless error inside the modal.
   try {
     const auth = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
@@ -68,7 +75,7 @@ async function _handleClick() {
     // If auth check fails (unlikely), let the modal show the actual error.
   }
 
-  await _openModal({ patientId, patientName, facilityName, orgSlug });
+  await _openModal({ patientId, patientName, facilityName, orgSlug, defaultMode });
 }
 
 /**
@@ -140,7 +147,7 @@ function _scrapeExistingFocusTexts() {
   return texts;
 }
 
-async function _openModal({ patientId, patientName, facilityName, orgSlug }) {
+async function _openModal({ patientId, patientName, facilityName, orgSlug, defaultMode }) {
   // Tear down any existing overlay (defensive — shouldn't happen).
   document.getElementById(OVERLAY_ID)?.remove();
 
@@ -170,7 +177,7 @@ async function _openModal({ patientId, patientName, facilityName, orgSlug }) {
   };
 
   render(
-    h(CarePlanStampModal, { patientId, patientName, facilityName, orgSlug, onClose: handleClose }),
+    h(CarePlanStampModal, { patientId, patientName, facilityName, orgSlug, defaultMode, onClose: handleClose }),
     overlay
   );
 }
