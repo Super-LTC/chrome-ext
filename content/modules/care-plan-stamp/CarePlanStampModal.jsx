@@ -150,6 +150,13 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           const firstBucket = (a.toAdd?.length ? 'add' : a.toCheck?.length ? 'verify' : a.toRemove?.length ? 'remove' : 'add');
           setAuditSelected({ bucket: firstBucket, idx: 0 });
           setStage('ready');
+          window.SuperAnalytics?.track?.('care_plan_audit_modal_opened', {
+            patient_id: patientId,
+            n_to_add: a.toAdd?.length ?? 0,
+            n_to_verify: a.toCheck?.length ?? 0,
+            n_to_remove: a.toRemove?.length ?? 0,
+            has_coverage_check_data: !!a.hasCoverageCheckData,
+          });
           return;
         }
 
@@ -648,7 +655,16 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           <div className="cpas-modal__header-actions">
             <ScopeToggle
               mode={mode}
-              onChange={setMode}
+              onChange={(next) => {
+                if (next !== mode) {
+                  window.SuperAnalytics?.track?.('care_plan_audit_scope_toggled', {
+                    patient_id: patientId,
+                    from_mode: mode,
+                    to_mode: next,
+                  });
+                }
+                setMode(next);
+              }}
               disabled={stage === 'stamping'}
             />
             {stage === 'ready' && mode === 'initial' && (

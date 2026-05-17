@@ -64,6 +64,13 @@ async function _handleClick() {
   const existingTexts = _scrapeExistingFocusTexts();
   const defaultMode = existingTexts.length === 0 ? 'initial' : 'comprehensive';
 
+  if (defaultMode === 'comprehensive') {
+    window.SuperAnalytics?.track?.('care_plan_audit_opened_from_button', {
+      patient_id: patientId,
+      n_existing_focus_texts: existingTexts.length,
+    });
+  }
+
   // Check auth before opening — saves the user from seeing a useless error inside the modal.
   try {
     const auth = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
