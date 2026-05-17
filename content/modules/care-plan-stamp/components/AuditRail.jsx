@@ -1,17 +1,16 @@
 import { h } from 'preact';
 
 /**
- * Round 9 unified rail for Comprehensive Review.
+ * Round 10 unified rail for Comprehensive Review.
  *
  * Mirrors Initial Admit's FocusList. One unified scroll containing:
- *   - Individual Add rows (sorted: AI-gap → dx → order → universal-with-AI-signal)
- *   - One grouped "💡 N standard universals" row (collapsible into per-item)
- *   - Inline Verify rows (hidden behind a "Show N to verify" fold by default)
- *   - Bottom commit button: "Stamp N focuses + M universals →"
+ *   - Individual Add rows (sorted: AI-gap → dx → order → universals)
+ *   - Remove rows (hidden if 0)
+ *   - Inline Verify rows behind a "Show N to verify" fold by default
+ *   - Bottom commit button: "Stamp N focuses →"
  *
- * Selection model: `selected` is `{ kind, key }` where:
- *   - kind: 'add' | 'verify' | 'remove' | 'universals_group'
- *   - key:  add → ruleId; verify/remove → focusId; universals_group → 'universals'
+ * Selection model: `selected` is `{ kind, key }` where key === item._rowId
+ * (synthesized at audit load — unique even when focusId is null).
  */
 export const AuditRail = ({
   audit,
@@ -23,8 +22,6 @@ export const AuditRail = ({
   dismissedVerifyIds,
   selected,
   onSelect,
-  onUniversalsExpandInline,
-  universalsExpanded,
   verifyExpanded,
   onToggleVerifyExpanded,
   onCommit,
@@ -37,20 +34,16 @@ export const AuditRail = ({
   const allAdds = (audit.toAdd || []).filter(
     (it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
   );
-  const standardUniversals = allAdds.filter(
-    (it) => it.ruleId.startsWith('universal.') && it.coverageSignal === 'no_ai_data'
-  );
-  const standardSet = new Set(standardUniversals.map((it) => it.ruleId));
-  const individualAdds = allAdds.filter((it) => !standardSet.has(it.ruleId));
 
-  // Sort individualAdds: ai_says_missing → dx.* → order.* → universal-with-AI-signal
+  // Sort: ai_says_missing → dx.* → order.* → universals (always last)
   const sortRank = (it) => {
+    if (it.ruleId.startsWith('universal.')) return 4;
     if (it.coverageSignal === 'ai_says_missing') return 0;
     if (it.ruleId.startsWith('dx.')) return 1;
     if (it.ruleId.startsWith('order.')) return 2;
     return 3;
   };
-  individualAdds.sort((a, b) => sortRank(a) - sortRank(b));
+  const sortedAdds = [...allAdds].sort((a, b) => sortRank(a) - sortRank(b));
 
   // ---- Verify items ----
   const liveChecks = (audit.toCheck || []).filter((it) => !dismissedVerifyIds.has(it.focusId));
@@ -66,16 +59,16 @@ export const AuditRail = ({
   const hasDate = (r) => /\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/.test(r || '');
   liveRemoves.sort((a, b) => Number(hasDate(b.reason)) - Number(hasDate(a.reason)));
 
-  const totalAdds = (audit.toAdd || []).filter((it) => !skippedAddIds.has(it.ruleId)).length;
+  const totalAdds = (audit.toAdd || []).length;
   const liveAddCount = allAdds.length;
 
-  const isActive = (kind, key) => selected?.kind === kind && selected.key === key;
+  const isActiveRow = (item) => selected?.key === item._rowId;
 
   const renderAddRow = (item) => (
     <li
-      key={`add:${item.ruleId}`}
-      className={`cpas-list__item ${isActive('add', item.ruleId) ? 'is-active' : ''}`}
-      onClick={() => onSelect({ kind: 'add', key: item.ruleId })}
+      key={item._rowId}
+      className={`cpas-list__item ${isActiveRow(item) ? 'is-active' : ''}`}
+      onClick={() => onSelect({ kind: 'add', key: item._rowId })}
     >
       <span className="cpas-list__badge" title="Will be added to the care plan">+</span>
       <div className="cpas-list__body">
@@ -89,15 +82,18 @@ export const AuditRail = ({
           )}
         </div>
         <div className="cpas-list__preview">{ruleIdToCAA.get(item.ruleId) || ''}</div>
+        {Array.isArray(item.evidence) && item.evidence[0] && (
+          <div className="cpas-list__evidence">↳ {_truncate(item.evidence[0], 70)}</div>
+        )}
       </div>
     </li>
   );
 
   const renderVerifyRow = (item) => (
     <li
-      key={`verify:${item.focusId}`}
-      className={`cpas-list__item cpas-list__item--verify ${isActive('verify', item.focusId) ? 'is-active' : ''}`}
-      onClick={() => onSelect({ kind: 'verify', key: item.focusId })}
+      key={item._rowId}
+      className={`cpas-list__item cpas-list__item--verify ${isActiveRow(item) ? 'is-active' : ''}`}
+      onClick={() => onSelect({ kind: 'verify', key: item._rowId })}
     >
       <span className="cpas-list__badge cpas-list__badge--verify">?</span>
       <div className="cpas-list__body">
@@ -107,15 +103,18 @@ export const AuditRail = ({
         <div className="cpas-list__preview">
           {(focusIdToCAA.get(item.focusId) || '') + ' · Partial coverage'}
         </div>
+        {item.matchedFocusText && (
+          <div className="cpas-list__evidence">↳ {_truncate(item.matchedFocusText, 70)}</div>
+        )}
       </div>
     </li>
   );
 
   const renderRemoveRow = (item) => (
     <li
-      key={`remove:${item.focusId}`}
-      className={`cpas-list__item cpas-list__item--remove ${isActive('remove', item.focusId) ? 'is-active' : ''}`}
-      onClick={() => onSelect({ kind: 'remove', key: item.focusId })}
+      key={item._rowId}
+      className={`cpas-list__item cpas-list__item--remove ${isActiveRow(item) ? 'is-active' : ''}`}
+      onClick={() => onSelect({ kind: 'remove', key: item._rowId })}
     >
       <span className="cpas-list__badge cpas-list__badge--remove">−</span>
       <div className="cpas-list__body">
@@ -138,34 +137,8 @@ export const AuditRail = ({
         </div>
       </div>
       <ol className="cpas-list__items">
-        {/* Individual Add rows */}
-        {individualAdds.map(renderAddRow)}
-
-        {/* Standard-universals group OR expanded individuals */}
-        {standardUniversals.length > 0 && !universalsExpanded && (
-          <li
-            key="universals_group"
-            className={`cpas-list__item cpas-list__item--group ${isActive('universals_group', 'universals') ? 'is-active' : ''}`}
-            onClick={() => onSelect({ kind: 'universals_group', key: 'universals' })}
-          >
-            <span className="cpas-list__badge cpas-list__badge--group">💡</span>
-            <div className="cpas-list__body">
-              <div className="cpas-list__row-top">
-                <span className="cpas-list__text">
-                  {standardUniversals.length} standard universals
-                </span>
-              </div>
-              <div className="cpas-list__preview">
-                {standardUniversals
-                  .map((u) => u.ruleId.replace('universal.', ''))
-                  .slice(0, 3)
-                  .join(' · ')}
-                {standardUniversals.length > 3 ? ` · +${standardUniversals.length - 3}` : ''}
-              </div>
-            </div>
-          </li>
-        )}
-        {standardUniversals.length > 0 && universalsExpanded && standardUniversals.map(renderAddRow)}
+        {/* Add rows (universals sorted last via sortRank) */}
+        {sortedAdds.map(renderAddRow)}
 
         {/* Remove rows */}
         {liveRemoves.map(renderRemoveRow)}
@@ -198,8 +171,7 @@ export const AuditRail = ({
           data-track="care_plan_audit_commit"
           data-track-prop-source="rail"
         >
-          ✓ Stamp {commitCount.focuses} {commitCount.focuses === 1 ? 'focus' : 'focuses'}
-          {commitCount.universals > 0 ? ` + ${commitCount.universals} universals` : ''} →
+          ✓ Stamp {commitCount.focuses} {commitCount.focuses === 1 ? 'focus' : 'focuses'} →
         </button>
         {needsInputCount > 0 && (
           <div className="cpas-list__commit-warn">
@@ -213,7 +185,6 @@ export const AuditRail = ({
 
 function _shortTitle(item) {
   const src = item?.focus?.description || item?.ruleId || '';
-  // split on , or :, take head, truncate to 60
   const head = src.split(/[,:]/)[0].trim();
   return head.length > 60 ? head.slice(0, 57) + '…' : head;
 }
@@ -221,4 +192,9 @@ function _shortTitle(item) {
 function _verifyTitle(item) {
   const src = item?.detail || item?.reason || item?.focusText || item?.kind || 'Verify item';
   return src.length > 60 ? src.slice(0, 57) + '…' : src;
+}
+
+function _truncate(str, n) {
+  if (!str) return '';
+  return str.length > n ? str.slice(0, n).trim() + '…' : str;
 }

@@ -4,8 +4,8 @@ import { ScopeToggle } from './components/ScopeToggle.jsx';
 import { FocusCard } from './components/FocusCard.jsx';
 import { AuditRail } from './components/AuditRail.jsx';
 import { AuditVerifyPane } from './components/AuditVerifyPane.jsx';
+// Round 10: universals bundle dropped — pane file deleted, no import.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
-import { AuditUniversalsPane } from './components/AuditUniversalsPane.jsx';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -69,7 +69,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [skippedAddIds, setSkippedAddIds] = useState(new Set());    // ruleIds locally skipped
   // Round 9 — rail selection + collapse state
   const [selectedRail, setSelectedRail] = useState(null);           // { kind, key } | null
-  const [universalsExpanded, setUniversalsExpanded] = useState(false);
   const [verifyExpanded, setVerifyExpanded] = useState(false);
   const [dismissedVerifyIds, setDismissedVerifyIds] = useState(new Set()); // Set<focusId>
 
@@ -159,16 +158,20 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             (bucket.toRemove || []).forEach((it) => { if (it.focusId) focusIdToCAA.set(it.focusId, bucket.displayName); });
           });
           const audit = { ...auditResp.audit, _ruleIdToCAA: ruleIdToCAA, _focusIdToCAA: focusIdToCAA };
+          // Round 10: stamp synthetic _rowId on every audit item so rail
+          // selection is unique per-row (fixes multi-highlight bug when
+          // toCheck items share a null focusId).
+          (audit.toAdd || []).forEach((it, i) => { it._rowId = `add-${i}-${it.ruleId}`; });
+          (audit.toCheck || []).forEach((it, i) => { it._rowId = `verify-${i}`; });
+          (audit.toRemove || []).forEach((it, i) => { it._rowId = `remove-${i}-${it.focusId || 'na'}`; });
           setAudit(audit);
-          const a = auditResp.audit;
-          // Default rail selection: first individual Add (non-standard-universal), else first check, else null.
-          const firstAdd = (a.toAdd || []).find((it) =>
-            !(it.ruleId.startsWith('universal.') && it.coverageSignal === 'no_ai_data')
-          );
+          const a = audit;
+          // Default rail selection: first Add (any kind), else first check, else null.
+          const firstAdd = (a.toAdd || [])[0];
           if (firstAdd) {
-            setSelectedRail({ kind: 'add', key: firstAdd.ruleId });
-          } else if ((a.toCheck || []).length > 0 && a.toCheck[0].focusId) {
-            setSelectedRail({ kind: 'verify', key: a.toCheck[0].focusId });
+            setSelectedRail({ kind: 'add', key: firstAdd._rowId });
+          } else if ((a.toCheck || []).length > 0) {
+            setSelectedRail({ kind: 'verify', key: a.toCheck[0]._rowId });
           }
           setStage('ready');
           window.SuperAnalytics?.track?.('care_plan_audit_modal_opened', {
@@ -436,17 +439,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     }));
   }, []);
 
-  const _findFocusOnPlan = useCallback((aud, focusId) => {
-    if (!aud || !focusId) return null;
-    const bucket = (aud.byCAA || []).find((b) =>
-      (b.toCheck || []).some((c) => c.focusId === focusId) ||
-      (b.toRemove || []).some((r) => r.focusId === focusId)
-    );
-    if (!bucket) return null;
-    const idx = (bucket.existingFocusIds || []).indexOf(focusId);
-    return idx >= 0 ? (bucket.existingFocusTexts?.[idx] || null) : (bucket.existingFocusTexts?.[0] || null);
-  }, []);
-
   const _commitAuditAdds = useCallback(async (overrideItems) => {
     if (!audit || !careplanId || !miniToken) return;
     const candidates = overrideItems || (audit.toAdd || []).filter((it) =>
@@ -618,8 +610,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 dismissedVerifyIds={dismissedVerifyIds}
                 selected={selectedRail}
                 onSelect={setSelectedRail}
-                universalsExpanded={universalsExpanded}
-                onUniversalsExpandInline={() => setUniversalsExpanded(true)}
                 verifyExpanded={verifyExpanded}
                 onToggleVerifyExpanded={() => setVerifyExpanded((v) => !v)}
                 onCommit={_commitAuditAdds}
@@ -630,7 +620,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               />
               <div className="cpas-detail">
                 {selectedRail?.kind === 'add' && (() => {
-                  const item = (audit.toAdd || []).find((it) => it.ruleId === selectedRail.key);
+                  const item = (audit.toAdd || []).find((it) => it._rowId === selectedRail.key);
                   if (!item?.focus) return <div className="cpas-empty"><p>Select an item</p></div>;
                   const state = auditFocusStates[item.ruleId] || _emptyFocusState();
                   const composed = _composeFocus(item.focus, state);
@@ -654,13 +644,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   );
                 })()}
                 {selectedRail?.kind === 'verify' && (() => {
-                  const item = (audit.toCheck || []).find((it) => it.focusId === selectedRail.key);
+                  const item = (audit.toCheck || []).find((it) => it._rowId === selectedRail.key);
                   if (!item) return null;
-                  const focusOnPlan = _findFocusOnPlan(audit, item.focusId);
                   return (
                     <AuditVerifyPane
                       item={item}
-                      focusOnPlanText={focusOnPlan}
                       onDismiss={() => {
                         setDismissedVerifyIds((prev) => new Set([...prev, item.focusId]));
                         window.SuperAnalytics?.track?.('care_plan_audit_verify_dismissed', {
@@ -676,7 +664,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   );
                 })()}
                 {selectedRail?.kind === 'remove' && (() => {
-                  const item = (audit.toRemove || []).find((it) => it.focusId === selectedRail.key);
+                  const item = (audit.toRemove || []).find((it) => it._rowId === selectedRail.key);
                   if (!item) return null;
                   return (
                     <AuditRemovePane
@@ -691,25 +679,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                       }}
                       resolveStatus={resolveStatus[item.focusId]}
                       errorMessage={resolveError[item.focusId]}
-                    />
-                  );
-                })()}
-                {selectedRail?.kind === 'universals_group' && (() => {
-                  const items = (audit.toAdd || []).filter((it) =>
-                    it.ruleId.startsWith('universal.') &&
-                    it.coverageSignal === 'no_ai_data' &&
-                    !stampedAddIds.has(it.ruleId) &&
-                    !skippedAddIds.has(it.ruleId)
-                  );
-                  return (
-                    <AuditUniversalsPane
-                      items={items}
-                      onStampAll={() => _commitAuditAdds(items)}
-                      onExpandInline={() => {
-                        setUniversalsExpanded(true);
-                        if (items[0]) setSelectedRail({ kind: 'add', key: items[0].ruleId });
-                      }}
-                      stamping={stage === 'stamping'}
                     />
                   );
                 })()}
@@ -776,13 +745,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
  */
 // -------- Round 9 audit commit helpers --------
 function _computeCommitCount(audit, stampedAddIds, skippedAddIds) {
+  // Round 10: universals no longer separated from focuses in the count.
   const live = (audit.toAdd || []).filter(
     (it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
   );
-  const universals = live.filter(
-    (it) => it.ruleId.startsWith('universal.') && it.coverageSignal === 'no_ai_data'
-  );
-  return { focuses: live.length - universals.length, universals: universals.length };
+  return { focuses: live.length };
 }
 function _auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusStates, stage) {
   if (stage === 'stamping') return true;

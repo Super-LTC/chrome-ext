@@ -1,16 +1,16 @@
 import { h } from 'preact';
 
-export const AuditVerifyPane = ({ item, focusOnPlanText, onDismiss, onOpenInPCC }) => {
+export const AuditVerifyPane = ({ item, onDismiss, onOpenInPCC }) => {
   return (
     <div className="cpas-detail">
       <div className="cpas-detail__header">
         <div className="cpas-detail__badge">? VERIFY</div>
       </div>
 
-      {focusOnPlanText && (
+      {item.matchedFocusText && (
         <div className="cpas-audit-section">
           <div className="cpas-audit-section__label">Existing focus on plan</div>
-          <div className="cpas-audit-section__body">{focusOnPlanText}</div>
+          <div className="cpas-audit-section__body">{item.matchedFocusText}</div>
         </div>
       )}
 
