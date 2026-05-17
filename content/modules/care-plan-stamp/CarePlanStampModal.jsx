@@ -2,6 +2,10 @@ import { h } from 'preact';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
 import { ScopeToggle } from './components/ScopeToggle.jsx';
 import { FocusCard } from './components/FocusCard.jsx';
+import { AuditFocusList } from './components/AuditFocusList.jsx';
+import { AddBucketPane } from './components/AddBucketPane.jsx';
+import { RemoveBucketPane } from './components/RemoveBucketPane.jsx';
+import { VerifyBucketPane } from './components/VerifyBucketPane.jsx';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -56,6 +60,17 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // fold; nurse can un-skip to pull them back into the active list.
   const [skippedFocuses, setSkippedFocuses] = useState([]);
 
+  // -------- Comprehensive-mode interaction state --------
+  // Keyed off the canonical (unfiltered) audit indices so filtered re-orderings
+  // don't lose per-item edits.
+  const [auditSelected, setAuditSelected] = useState({ bucket: 'add', idx: 0 });
+  const [auditFocusStates, setAuditFocusStates] = useState({});     // { [`add:${idx}`]: focusState }
+  const [resolveStatus, setResolveStatus] = useState({});           // { [focusId]: 'pending'|'done'|'error' }
+  const [resolveError, setResolveError] = useState({});             // { [focusId]: string }
+  const [verifyLocal, setVerifyLocal] = useState({});               // { [idx]: 'verified'|'kept' }
+  const [stampedAddIds, setStampedAddIds] = useState(new Set());    // ruleIds already stamped
+  const [skippedAddIds, setSkippedAddIds] = useState(new Set());    // ruleIds locally skipped
+
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +79,13 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setAudit(null);
     setProposal(null);
     setErrorMsg('');
+    setAuditSelected({ bucket: 'add', idx: 0 });
+    setAuditFocusStates({});
+    setResolveStatus({});
+    setResolveError({});
+    setVerifyLocal({});
+    setStampedAddIds(new Set());
+    setSkippedAddIds(new Set());
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -124,6 +146,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           setCareplanId(cpId);
           setMiniToken(token);
           setAudit(auditResp.audit);
+          const a = auditResp.audit;
+          const firstBucket = (a.toAdd?.length ? 'add' : a.toCheck?.length ? 'verify' : a.toRemove?.length ? 'remove' : 'add');
+          setAuditSelected({ bucket: firstBucket, idx: 0 });
           setStage('ready');
           return;
         }
@@ -375,6 +400,169 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     }
   }, [proposal, careplanId, miniToken, focusStates, patientId]);
 
+  // -------- Comprehensive-mode derived data + handlers --------
+  const displayAudit = useMemo(() => {
+    if (!audit) return null;
+    return {
+      ...audit,
+      toAdd: (audit.toAdd || []).filter((it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)),
+      toRemove: (audit.toRemove || []).filter((it) => resolveStatus[it.focusId] !== 'done'),
+      toCheck: audit.toCheck || [],
+    };
+  }, [audit, stampedAddIds, skippedAddIds, resolveStatus]);
+
+  const _patchAuditFocusState = useCallback((bucket, idx, patch) => {
+    const key = `${bucket}:${idx}`;
+    setAuditFocusStates((prev) => ({
+      ...prev,
+      [key]: { ..._emptyFocusState(), ...(prev[key] || {}), ...patch },
+    }));
+  }, []);
+
+  const _advanceAuditSelection = useCallback((nextAudit, fromBucket, fromIdx) => {
+    const order = ['add', 'verify', 'remove'];
+    const sameBucketList = (
+      fromBucket === 'add' ? nextAudit.toAdd :
+      fromBucket === 'verify' ? nextAudit.toCheck :
+      nextAudit.toRemove
+    ) || [];
+    if (fromIdx < sameBucketList.length) {
+      setAuditSelected({ bucket: fromBucket, idx: Math.min(fromIdx, sameBucketList.length - 1) });
+      return;
+    }
+    for (const b of order) {
+      const list = b === 'add' ? nextAudit.toAdd : b === 'verify' ? nextAudit.toCheck : nextAudit.toRemove;
+      if ((list || []).length > 0) {
+        setAuditSelected({ bucket: b, idx: 0 });
+        return;
+      }
+    }
+    setAuditSelected({ bucket: fromBucket, idx: 0 });
+  }, []);
+
+  const _stampAuditAddItem = useCallback(async (idx) => {
+    if (!audit || !careplanId || !miniToken) return;
+    const item = audit.toAdd?.[idx];
+    if (!item?.focus) return;
+
+    const key = `add:${idx}`;
+    const state = auditFocusStates[key] || _emptyFocusState();
+    const composed = _composeFocus(item.focus, state);
+
+    if (composed.description.includes('___')) {
+      setErrorMsg('Please fill in any blank slots before stamping.');
+      return;
+    }
+
+    setStage('stamping');
+    setProgress({ phase: 'starting', focusIndex: 0, focusTotal: 1 });
+    try {
+      const result = await window.CarePlanStampClient.orchestrateStamp({
+        proposal: { patientId, focuses: [composed] },
+        careplanId,
+        miniToken,
+        onProgress: (p) => setProgress(p),
+      });
+      setStampedAddIds((prev) => {
+        const next = new Set(prev);
+        next.add(item.ruleId);
+        return next;
+      });
+      setStage('ready');
+      window.SuperAnalytics?.track?.('care_plan_audit_item_stamped', {
+        patient_id: patientId,
+        rule_id: item.ruleId,
+        n_goals: result?.goalsStamped ?? 0,
+        n_interventions: result?.interventionsStamped ?? 0,
+      });
+      const nextAudit = {
+        ...audit,
+        toAdd: (audit.toAdd || []).filter((it, i) => i !== idx && !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)),
+        toCheck: audit.toCheck || [],
+        toRemove: (audit.toRemove || []).filter((it) => resolveStatus[it.focusId] !== 'done'),
+      };
+      _advanceAuditSelection(nextAudit, 'add', idx);
+    } catch (e) {
+      setErrorMsg(e.message || 'Stamp failed');
+      setStage('ready');
+    }
+  }, [audit, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds, resolveStatus, _advanceAuditSelection]);
+
+  const _skipAuditAddItem = useCallback(async (idx) => {
+    const item = audit?.toAdd?.[idx];
+    if (!item) return;
+    setSkippedAddIds((prev) => {
+      const next = new Set(prev);
+      next.add(item.ruleId);
+      return next;
+    });
+    try {
+      await window.CarePlanStampAPI.persistSkip({
+        patientId, orgSlug, facilityName,
+        ruleId: item.ruleId,
+        isSkipping: true,
+      });
+    } catch (_) { /* persistSkip already logs */ }
+    window.SuperAnalytics?.track?.('care_plan_audit_item_skipped', {
+      patient_id: patientId,
+      rule_id: item.ruleId,
+    });
+    const nextAudit = {
+      ...audit,
+      toAdd: (audit.toAdd || []).filter((it, i) => i !== idx && !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)),
+      toCheck: audit.toCheck || [],
+      toRemove: (audit.toRemove || []).filter((it) => resolveStatus[it.focusId] !== 'done'),
+    };
+    _advanceAuditSelection(nextAudit, 'add', idx);
+  }, [audit, patientId, orgSlug, facilityName, stampedAddIds, skippedAddIds, resolveStatus, _advanceAuditSelection]);
+
+  const _resolveAuditItem = useCallback(async (item, fromBucket, fromIdx) => {
+    if (!item?.pccFocusId || !careplanId) {
+      setResolveStatus((prev) => ({ ...prev, [item.focusId]: 'error' }));
+      setResolveError((prev) => ({ ...prev, [item.focusId]: 'Missing PCC focus ID' }));
+      return;
+    }
+    setResolveStatus((prev) => ({ ...prev, [item.focusId]: 'pending' }));
+    try {
+      await window.CarePlanResolveAPI.resolveFocus({
+        patientId, careplanId,
+        pccFocusId: item.pccFocusId,
+        pccFocusStdItemId: item.pccFocusStdItemId,
+        miniToken,
+      });
+      setResolveStatus((prev) => ({ ...prev, [item.focusId]: 'done' }));
+      window.SuperAnalytics?.track?.('care_plan_audit_item_resolved', {
+        patient_id: patientId,
+        focus_id: item.focusId,
+        from_bucket: fromBucket,
+      });
+      if (fromBucket === 'remove') {
+        const nextAudit = {
+          ...audit,
+          toRemove: (audit.toRemove || []).filter((it) => it.focusId !== item.focusId),
+          toAdd: (audit.toAdd || []).filter((it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)),
+          toCheck: audit.toCheck || [],
+        };
+        _advanceAuditSelection(nextAudit, 'remove', fromIdx);
+      }
+    } catch (e) {
+      setResolveStatus((prev) => ({ ...prev, [item.focusId]: 'error' }));
+      setResolveError((prev) => ({ ...prev, [item.focusId]: e.message || 'Resolve failed' }));
+    }
+  }, [audit, patientId, careplanId, miniToken, stampedAddIds, skippedAddIds, _advanceAuditSelection]);
+
+  const _verifyAuditItem = useCallback((idx, decision) => {
+    setVerifyLocal((prev) => ({ ...prev, [idx]: decision }));
+    const item = audit?.toCheck?.[idx];
+    if (!item) return;
+    window.SuperAnalytics?.track?.('care_plan_audit_item_verified', {
+      patient_id: patientId,
+      focus_id: item.focusId,
+      kind: item.kind,
+      decision,
+    });
+  }, [audit, patientId]);
+
   // -------- Render --------
   return (
     <div className="cpas-modal" role="dialog" aria-modal="true">
@@ -441,17 +629,57 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               />
             </div>
           )}
-          {mode === 'comprehensive' && stage === 'ready' && audit && (
-            <div style="padding: 24px; font-family: system-ui;">
-              <h3>Comprehensive audit loaded (placeholder — UI lands in Task 5+)</h3>
-              <p>To add: {audit.toAdd.length}</p>
-              <p>To verify: {audit.toCheck.length}</p>
-              <p>To remove: {audit.toRemove.length}</p>
-              <p>Has coverage check data: {String(audit.hasCoverageCheckData)}</p>
-              <details>
-                <summary>Raw audit (debug)</summary>
-                <pre style="font-size:11px; max-height:400px; overflow:auto;">{JSON.stringify(audit, null, 2)}</pre>
-              </details>
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && displayAudit && (
+            <div className="cpas-modal__columns">
+              <AuditFocusList
+                audit={displayAudit}
+                selected={auditSelected}
+                onSelect={setAuditSelected}
+                stamping={stage === 'stamping'}
+                resolveStatus={resolveStatus}
+              />
+              {auditSelected.bucket === 'add' && displayAudit.toAdd[auditSelected.idx] && (() => {
+                const item = displayAudit.toAdd[auditSelected.idx];
+                const realIdx = audit.toAdd.findIndex((it) => it.ruleId === item.ruleId);
+                const key = `add:${realIdx}`;
+                const focusState = auditFocusStates[key] || _emptyFocusState();
+                return (
+                  <AddBucketPane
+                    item={item}
+                    focusState={focusState}
+                    onPatch={(patch) => _patchAuditFocusState('add', realIdx, patch)}
+                    onStamp={() => _stampAuditAddItem(realIdx)}
+                    onSkip={() => _skipAuditAddItem(realIdx)}
+                    stamping={stage === 'stamping'}
+                    dropdowns={dropdowns}
+                  />
+                );
+              })()}
+              {auditSelected.bucket === 'remove' && displayAudit.toRemove[auditSelected.idx] && (() => {
+                const item = displayAudit.toRemove[auditSelected.idx];
+                return (
+                  <RemoveBucketPane
+                    item={item}
+                    onResolve={() => _resolveAuditItem(item, 'remove', auditSelected.idx)}
+                    status={resolveStatus[item.focusId]}
+                    errorMessage={resolveError[item.focusId]}
+                  />
+                );
+              })()}
+              {auditSelected.bucket === 'verify' && displayAudit.toCheck[auditSelected.idx] && (() => {
+                const item = displayAudit.toCheck[auditSelected.idx];
+                const idx = auditSelected.idx;
+                return (
+                  <VerifyBucketPane
+                    item={item}
+                    localState={verifyLocal[idx]}
+                    onMarkVerified={() => _verifyAuditItem(idx, 'verified')}
+                    onKeep={() => _verifyAuditItem(idx, 'kept')}
+                    onResolve={() => _resolveAuditItem(item, 'verify', idx)}
+                    resolveStatus={resolveStatus[item.focusId]}
+                  />
+                );
+              })()}
             </div>
           )}
           {stage === 'ready' && libraryPanelOpen && (
@@ -509,6 +737,18 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
  * but the round-4 UI no longer exposes a textarea for it — kept here only for
  * BC with proposals that lack `descriptionSegments`.
  */
+function _emptyFocusState() {
+  return {
+    skipped: false,
+    focusText: null,
+    goals: null,
+    interventions: null,
+    tokenValues: {},
+    removedFactors: new Set(),
+    expanded: false,
+  };
+}
+
 function _composeFocus(original, state) {
   const tokenValues = state.tokenValues || {};
   const removedFactors = state.removedFactors || null;
