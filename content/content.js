@@ -67,6 +67,7 @@ import './super-menu/init.js';
 //      on click to keep the initial bundle small.
 import './modules/care-plan-stamp/stamp-api.js';
 import './modules/care-plan-stamp/audit-api.js';
+import './modules/care-plan-stamp/pcc-resolve.js';
 import './modules/care-plan-stamp/pcc-discover.js';
 import './modules/care-plan-stamp/pcc-stamp.js';
 import './modules/care-plan-stamp/inject-button.js';
