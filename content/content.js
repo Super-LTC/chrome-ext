@@ -72,6 +72,7 @@ import './modules/care-plan-stamp/pcc-discover.js';
 import './modules/care-plan-stamp/pcc-stamp.js';
 import './modules/care-plan-stamp/inject-button.js';
 import './modules/care-plan-stamp/audit-banner.js';
+import './modules/care-plan-stamp/audit-review-button.js';
 
 // 6.5. Load PDF.js library into content script scope
 import * as pdfjsLib from 'pdfjs-dist';
