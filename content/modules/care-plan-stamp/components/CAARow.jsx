@@ -88,12 +88,12 @@ export const CAARow = ({
                 {liveAdds.length} standard universals proposed
               </div>
               <div className="super-caa-row__universals-actions">
+                {/* NO_TRACK: care_plan_audit_universals_mass_stamped fires from modal handler */}
                 <button
                   type="button"
                   className="super-btn super-btn--primary"
                   onClick={() => onUniversalsMassStamp(liveAdds)}
                   disabled={stamping}
-                  data-track="care_plan_audit_universals_mass_stamped"
                 >
                   Add all {liveAdds.length}
                 </button>
@@ -156,13 +156,13 @@ export const CAARow = ({
           {/* Per-CAA bulk buttons — only when expandedMode is individual or universals rule doesn't apply */}
           {(!isUniversalsCluster || expandedMode === 'individual') && (liveAdds.length + liveChecks.length + liveRemoves.length) > 1 && (
             <div className="super-caa-row__bulk">
+              {/* NO_TRACK: care_plan_audit_bulk_stamped (scope='caa_bulk') fires from modal handler */}
               {liveAdds.length > 1 && (
                 <button
                   type="button"
                   className="super-btn super-btn--primary"
                   onClick={() => onBulkAdd(liveAdds)}
                   disabled={stamping}
-                  data-track="care_plan_audit_caa_bulk_stamp"
                 >
                   Stamp all {liveAdds.length} adds
                 </button>
@@ -173,17 +173,18 @@ export const CAARow = ({
                   className="super-btn super-btn--danger"
                   onClick={() => onBulkResolve(liveRemoves)}
                   disabled={stamping}
-                  data-track="care_plan_audit_caa_bulk_resolve"
+                  data-track="care_plan_audit_bulk_resolved"
+                  data-track-prop-scope="caa_bulk"
                 >
                   Resolve all {liveRemoves.length}
                 </button>
               )}
+              {/* NO_TRACK: care_plan_audit_bulk_verified (with caa scope) fires from modal handler */}
               {liveChecks.length > 1 && (
                 <button
                   type="button"
                   className="super-btn super-btn--secondary"
                   onClick={() => onBulkVerify(liveChecks, bucket.caa)}
-                  data-track="care_plan_audit_caa_bulk_verify"
                 >
                   Mark all {liveChecks.length} verified
                 </button>
