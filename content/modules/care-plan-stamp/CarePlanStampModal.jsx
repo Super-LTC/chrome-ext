@@ -86,7 +86,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setStampedAddIds(new Set());
     setSkippedAddIds(new Set());
     setSelectedRail(null);
-    setUniversalsExpanded(false);
     setVerifyExpanded(false);
     setDismissedVerifyIds(new Set());
     (async () => {
