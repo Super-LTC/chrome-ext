@@ -1,13 +1,20 @@
 import { h } from 'preact';
+import { useState } from 'preact/hooks';
 
 /**
- * Round 10 unified rail for Comprehensive Review.
+ * Round 13 unified rail for Comprehensive Review.
  *
- * Mirrors Initial Admit's FocusList. One unified scroll containing:
- *   - Individual Add rows (sorted: AI-gap → dx → order → universals)
- *   - Remove rows (hidden if 0)
- *   - Inline Verify rows behind a "Show N to verify" fold by default
- *   - Bottom commit button: "Stamp N focuses →"
+ * Adds rows are split into three collapsible sections by ruleId prefix:
+ *   - "Baseline (universals)"  → universal.*
+ *   - "Diagnosis-driven"       → dx.*
+ *   - "Order-driven"           → order.*
+ * (anything else falls into "Other".)
+ *
+ * If `audit.onPlan` is populated, an "On plan" block is rendered after Adds
+ * with the same three categories; rows render with `−` and are clickable
+ * (read-only detail pane in the modal).
+ *
+ * Verify is gone entirely (backend no longer ships partial coverage).
  *
  * Selection model: `selected` is `{ kind, key }` where key === item._rowId
  * (synthesized at audit load — unique even when focusId is null).
@@ -19,39 +26,45 @@ export const AuditRail = ({
   stampedAddIds,
   skippedAddIds,
   resolveStatus,
-  dismissedVerifyIds,
   selected,
   onSelect,
-  verifyExpanded,
-  onToggleVerifyExpanded,
   onCommit,
   commitDisabled,
   commitCount,
   needsInputCount,
   stamping,
 }) => {
+  // Each section can be independently collapsed; default = all expanded.
+  const [collapsedSections, setCollapsedSections] = useState(() => new Set());
+  const toggle = (id) => setCollapsedSections((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
   // ---- Partition Add items ----
   const allAdds = (audit.toAdd || []).filter(
     (it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
   );
 
-  // Sort: ai_says_missing → dx.* → order.* → universals (always last)
-  const sortRank = (it) => {
-    if (it.ruleId.startsWith('universal.')) return 4;
-    if (it.coverageSignal === 'ai_says_missing') return 0;
-    if (it.ruleId.startsWith('dx.')) return 1;
-    if (it.ruleId.startsWith('order.')) return 2;
-    return 3;
-  };
-  const sortedAdds = [...allAdds].sort((a, b) => sortRank(a) - sortRank(b));
+  // Within a bucket, AI-gap first, then alphabetical by short title.
+  const sortBucket = (items) =>
+    [...items].sort((a, b) => {
+      const ag = a.coverageSignal === 'ai_says_missing' ? 0 : 1;
+      const bg = b.coverageSignal === 'ai_says_missing' ? 0 : 1;
+      if (ag !== bg) return ag - bg;
+      return _shortTitle(a).localeCompare(_shortTitle(b));
+    });
 
-  // ---- Verify items ----
-  const liveChecks = (audit.toCheck || []).filter((it) => !dismissedVerifyIds.has(it.focusId));
-  liveChecks.sort((a, b) => {
-    const ca = focusIdToCAA.get(a.focusId) || '';
-    const cb = focusIdToCAA.get(b.focusId) || '';
-    if (ca !== cb) return ca.localeCompare(cb);
-    return (a.detail || '').localeCompare(b.detail || '');
+  const addBuckets = partition(allAdds);
+  Object.keys(addBuckets).forEach((k) => { addBuckets[k] = sortBucket(addBuckets[k]); });
+
+  const onPlanBuckets = partition(audit.onPlan || []);
+  // onPlan: alphabetical by focusText
+  Object.keys(onPlanBuckets).forEach((k) => {
+    onPlanBuckets[k] = [...onPlanBuckets[k]].sort((a, b) =>
+      (a.focusText || a.description || '').localeCompare(b.focusText || b.description || '')
+    );
   });
 
   // ---- Remove items ----
@@ -82,30 +95,24 @@ export const AuditRail = ({
           )}
         </div>
         <div className="cpas-list__preview">{ruleIdToCAA.get(item.ruleId) || ''}</div>
-        {Array.isArray(item.evidence) && item.evidence[0] && (
-          <div className="cpas-list__evidence">↳ {_truncate(item.evidence[0], 70)}</div>
-        )}
       </div>
     </li>
   );
 
-  const renderVerifyRow = (item) => (
+  const renderOnPlanRow = (item) => (
     <li
       key={item._rowId}
-      className={`cpas-list__item cpas-list__item--verify ${isActiveRow(item) ? 'is-active' : ''}`}
-      onClick={() => onSelect({ kind: 'verify', key: item._rowId })}
+      className={`cpas-list__item cpas-list__item--onplan ${isActiveRow(item) ? 'is-active' : ''}`}
+      onClick={() => onSelect({ kind: 'on_plan', key: item._rowId })}
     >
-      <span className="cpas-list__badge cpas-list__badge--verify">?</span>
+      <span className="cpas-list__badge cpas-list__badge--onplan" title="Already on this resident's care plan">−</span>
       <div className="cpas-list__body">
         <div className="cpas-list__row-top">
-          <span className="cpas-list__text">{_verifyTitle(item)}</span>
+          <span className="cpas-list__text">{_onPlanTitle(item)}</span>
         </div>
         <div className="cpas-list__preview">
-          {(focusIdToCAA.get(item.focusId) || '') + ' · Partial coverage'}
+          {(item.caa || ruleIdToCAA.get(item.ruleId) || '') + (item.caa || ruleIdToCAA.get(item.ruleId) ? ' · ' : '') + 'On plan'}
         </div>
-        {item.matchedFocusText && (
-          <div className="cpas-list__evidence">↳ {_truncate(item.matchedFocusText, 70)}</div>
-        )}
       </div>
     </li>
   );
@@ -128,6 +135,21 @@ export const AuditRail = ({
     </li>
   );
 
+  const addSectionDefs = [
+    { id: 'add:universal', title: 'Baseline (universals)', items: addBuckets.universal },
+    { id: 'add:dx',        title: 'Diagnosis-driven',      items: addBuckets.dx },
+    { id: 'add:order',     title: 'Order-driven',          items: addBuckets.order },
+    { id: 'add:other',     title: 'Other',                 items: addBuckets.other },
+  ];
+  const onPlanSectionDefs = [
+    { id: 'on:universal',  title: 'On plan: Baseline',     items: onPlanBuckets.universal },
+    { id: 'on:dx',         title: 'On plan: Diagnosis',    items: onPlanBuckets.dx },
+    { id: 'on:order',      title: 'On plan: Order',        items: onPlanBuckets.order },
+    { id: 'on:other',      title: 'On plan: Other',        items: onPlanBuckets.other },
+  ];
+
+  const hasOnPlan = (audit.onPlan || []).length > 0;
+
   return (
     <aside className="cpas-list">
       <div className="cpas-list__header">
@@ -137,31 +159,35 @@ export const AuditRail = ({
         </div>
       </div>
       <ol className="cpas-list__items">
-        {/* Add rows (universals sorted last via sortRank) */}
-        {sortedAdds.map(renderAddRow)}
-
-        {/* Remove rows */}
+        {addSectionDefs.map((s) => (
+          <SectionGroup
+            key={s.id}
+            title={s.title}
+            items={s.items}
+            collapsed={collapsedSections.has(s.id)}
+            onToggle={() => toggle(s.id)}
+            renderRow={renderAddRow}
+          />
+        ))}
+        {/* Remove rows live in the same Add column — they're focuses being
+            actively cleaned from the plan. Render after all Add sections. */}
         {liveRemoves.map(renderRemoveRow)}
-
-        {/* Verify section — collapsed-by-default fold */}
-        {liveChecks.length > 0 && !verifyExpanded && (
-          <li
-            key="verify_fold"
-            className="cpas-list__item cpas-list__item--fold"
-            onClick={onToggleVerifyExpanded}
-          >
-            <span className="cpas-list__badge">↓</span>
-            <div className="cpas-list__body">
-              <div className="cpas-list__row-top">
-                <span className="cpas-list__text">
-                  Show {liveChecks.length} items to verify
-                </span>
-              </div>
-            </div>
-          </li>
-        )}
-        {verifyExpanded && liveChecks.map(renderVerifyRow)}
       </ol>
+
+      {hasOnPlan && (
+        <ol className="cpas-list__items cpas-list__items--onplan">
+          {onPlanSectionDefs.map((s) => (
+            <SectionGroup
+              key={s.id}
+              title={s.title}
+              items={s.items}
+              collapsed={collapsedSections.has(s.id)}
+              onToggle={() => toggle(s.id)}
+              renderRow={renderOnPlanRow}
+            />
+          ))}
+        </ol>
+      )}
 
       <div className="cpas-list__commit">
         <button
@@ -183,18 +209,45 @@ export const AuditRail = ({
   );
 };
 
+// ---------- Local components ----------
+
+const SectionGroup = ({ title, items, collapsed, onToggle, renderRow }) => {
+  if (!items || items.length === 0) return null;
+  return (
+    <>
+      <li className="cpas-list__section-head" onClick={onToggle}>
+        <span className="cpas-list__section-caret">{collapsed ? '▸' : '▾'}</span>
+        <span className="cpas-list__section-title">{title}</span>
+        <span className="cpas-list__section-count">{items.length}</span>
+      </li>
+      {!collapsed && items.map(renderRow)}
+    </>
+  );
+};
+
+// ---------- Helpers ----------
+
+function partition(items) {
+  const buckets = { universal: [], dx: [], order: [], other: [] };
+  (items || []).forEach((it) => {
+    const rid = it.ruleId || '';
+    const k = rid.startsWith('universal.') ? 'universal'
+            : rid.startsWith('dx.') ? 'dx'
+            : rid.startsWith('order.') ? 'order'
+            : 'other';
+    buckets[k].push(it);
+  });
+  return buckets;
+}
+
 function _shortTitle(item) {
   const src = item?.focus?.description || item?.ruleId || '';
   const head = src.split(/[,:]/)[0].trim();
   return head.length > 60 ? head.slice(0, 57) + '…' : head;
 }
 
-function _verifyTitle(item) {
-  const src = item?.detail || item?.reason || item?.focusText || item?.kind || 'Verify item';
-  return src.length > 60 ? src.slice(0, 57) + '…' : src;
-}
-
-function _truncate(str, n) {
-  if (!str) return '';
-  return str.length > n ? str.slice(0, n).trim() + '…' : str;
+function _onPlanTitle(item) {
+  const src = item?.focusText || item?.description || item?.focus?.description || item?.ruleId || '';
+  const head = src.split(/[,:]/)[0].trim();
+  return head.length > 60 ? head.slice(0, 57) + '…' : head;
 }

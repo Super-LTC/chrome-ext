@@ -3,8 +3,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks'
 import { ScopeToggle } from './components/ScopeToggle.jsx';
 import { FocusCard } from './components/FocusCard.jsx';
 import { AuditRail } from './components/AuditRail.jsx';
-import { AuditVerifyPane } from './components/AuditVerifyPane.jsx';
 // Round 10: universals bundle dropped — pane file deleted, no import.
+// Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
 
 /**
@@ -69,8 +69,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [skippedAddIds, setSkippedAddIds] = useState(new Set());    // ruleIds locally skipped
   // Round 9 — rail selection + collapse state
   const [selectedRail, setSelectedRail] = useState(null);           // { kind, key } | null
-  const [verifyExpanded, setVerifyExpanded] = useState(false);
-  const [dismissedVerifyIds, setDismissedVerifyIds] = useState(new Set()); // Set<focusId>
 
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
@@ -86,8 +84,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setStampedAddIds(new Set());
     setSkippedAddIds(new Set());
     setSelectedRail(null);
-    setVerifyExpanded(false);
-    setDismissedVerifyIds(new Set());
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -143,6 +139,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             orgSlug,
             patientName,
             orgDropdowns,
+            existingFocusTexts: fullPlan.focusTexts,
           });
           if (cancelled) return;
           setCareplanId(cpId);
@@ -161,16 +158,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // selection is unique per-row (fixes multi-highlight bug when
           // toCheck items share a null focusId).
           (audit.toAdd || []).forEach((it, i) => { it._rowId = `add-${i}-${it.ruleId}`; });
-          (audit.toCheck || []).forEach((it, i) => { it._rowId = `verify-${i}`; });
           (audit.toRemove || []).forEach((it, i) => { it._rowId = `remove-${i}-${it.focusId || 'na'}`; });
+          (audit.onPlan || []).forEach((it, i) => { it._rowId = `onplan-${i}-${it.ruleId || it.focusId || 'na'}`; });
           setAudit(audit);
           const a = audit;
-          // Default rail selection: first Add (any kind), else first check, else null.
+          // Default rail selection: first Add, else null.
           const firstAdd = (a.toAdd || [])[0];
           if (firstAdd) {
             setSelectedRail({ kind: 'add', key: firstAdd._rowId });
-          } else if ((a.toCheck || []).length > 0) {
-            setSelectedRail({ kind: 'verify', key: a.toCheck[0]._rowId });
           }
           setStage('ready');
           window.SuperAnalytics?.track?.('care_plan_audit_modal_opened', {
@@ -606,11 +601,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 stampedAddIds={stampedAddIds}
                 skippedAddIds={skippedAddIds}
                 resolveStatus={resolveStatus}
-                dismissedVerifyIds={dismissedVerifyIds}
                 selected={selectedRail}
                 onSelect={setSelectedRail}
-                verifyExpanded={verifyExpanded}
-                onToggleVerifyExpanded={() => setVerifyExpanded((v) => !v)}
                 onCommit={_commitAuditAdds}
                 commitCount={_computeCommitCount(audit, stampedAddIds, skippedAddIds)}
                 commitDisabled={_auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusStates, stage)}
@@ -624,42 +616,55 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   const state = auditFocusStates[item.ruleId] || _emptyFocusState();
                   const composed = _composeFocus(item.focus, state);
                   return (
-                    <FocusCard
-                      composed={composed}
-                      rawFocus={item.focus}
-                      state={state}
-                      onUpdate={(patch) => _patchAuditFocusStateByRuleId(item.ruleId, patch)}
-                      onToggleSkip={() => {
-                        if (state.skipped) {
-                          setSkippedAddIds((prev) => { const n = new Set(prev); n.delete(item.ruleId); return n; });
-                          _patchAuditFocusStateByRuleId(item.ruleId, { skipped: false });
-                        } else {
-                          _skipAuditAddItem(item);
-                          _patchAuditFocusStateByRuleId(item.ruleId, { skipped: true });
-                        }
-                      }}
-                      dropdowns={dropdowns}
-                    />
+                    <>
+                      {Array.isArray(item.evidence) && item.evidence.length > 0 && (
+                        <div className="cpas-audit-evidence">
+                          <div className="cpas-audit-evidence__label">Why this is proposed</div>
+                          <ul className="cpas-audit-evidence__list">
+                            {item.evidence.map((e, i) => <li key={i}>{e}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      <FocusCard
+                        composed={composed}
+                        rawFocus={item.focus}
+                        state={state}
+                        onUpdate={(patch) => _patchAuditFocusStateByRuleId(item.ruleId, patch)}
+                        onToggleSkip={() => {
+                          if (state.skipped) {
+                            setSkippedAddIds((prev) => { const n = new Set(prev); n.delete(item.ruleId); return n; });
+                            _patchAuditFocusStateByRuleId(item.ruleId, { skipped: false });
+                          } else {
+                            _skipAuditAddItem(item);
+                            _patchAuditFocusStateByRuleId(item.ruleId, { skipped: true });
+                          }
+                        }}
+                        dropdowns={dropdowns}
+                      />
+                    </>
                   );
                 })()}
-                {selectedRail?.kind === 'verify' && (() => {
-                  const item = (audit.toCheck || []).find((it) => it._rowId === selectedRail.key);
+                {selectedRail?.kind === 'on_plan' && (() => {
+                  const item = (audit.onPlan || []).find((it) => it._rowId === selectedRail.key);
                   if (!item) return null;
                   return (
-                    <AuditVerifyPane
-                      item={item}
-                      onDismiss={() => {
-                        setDismissedVerifyIds((prev) => new Set([...prev, item.focusId]));
-                        window.SuperAnalytics?.track?.('care_plan_audit_verify_dismissed', {
-                          patient_id: patientId,
-                          focus_id: item.focusId,
-                          kind: item.kind,
-                        });
-                      }}
-                      onOpenInPCC={item.pccFocusId ? () => {
-                        window.open(`/care/chart/cp/editNeed.jsp?ESOLneedid=${item.pccFocusId}&ESOLclientid=${patientId}`, '_blank');
-                      } : null}
-                    />
+                    <div className="cpas-detail">
+                      <div className="cpas-detail__header">
+                        <div className="cpas-detail__badge">− ON PLAN</div>
+                      </div>
+                      <div className="cpas-audit-section">
+                        <div className="cpas-audit-section__label">Existing focus</div>
+                        <div className="cpas-audit-section__body">
+                          {item.focusText || item.description || item.focus?.description || '—'}
+                        </div>
+                      </div>
+                      {item.caa && (
+                        <div className="cpas-audit-section">
+                          <div className="cpas-audit-section__label">CAA</div>
+                          <div className="cpas-audit-section__body">{item.caa}</div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })()}
                 {selectedRail?.kind === 'remove' && (() => {

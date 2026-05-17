@@ -11,7 +11,7 @@
  * in care-plan-stamp.
  */
 
-async function fetchAudit({ patientId, facilityName, orgSlug, patientName = null, orgDropdowns = null, tokenValues = null }) {
+async function fetchAudit({ patientId, facilityName, orgSlug, patientName = null, orgDropdowns = null, tokenValues = null, existingFocusTexts = null }) {
   const body = {
     patientId: String(patientId),
     facilityName: facilityName || '',
@@ -20,6 +20,7 @@ async function fetchAudit({ patientId, facilityName, orgSlug, patientName = null
   if (patientName) body.patientName = patientName;
   if (orgDropdowns) body.orgDropdowns = orgDropdowns;
   if (tokenValues) body.tokenValues = tokenValues;
+  if (Array.isArray(existingFocusTexts)) body.existingFocusTexts = existingFocusTexts;
 
   const endpoint = '/api/extension/care-plan/audit';
 
