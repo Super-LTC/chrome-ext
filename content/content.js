@@ -66,6 +66,7 @@ import './super-menu/init.js';
 //      Modules are exposed on window globals; the modal is dynamically imported
 //      on click to keep the initial bundle small.
 import './modules/care-plan-stamp/stamp-api.js';
+import './modules/care-plan-stamp/audit-api.js';
 import './modules/care-plan-stamp/pcc-discover.js';
 import './modules/care-plan-stamp/pcc-stamp.js';
 import './modules/care-plan-stamp/inject-button.js';
