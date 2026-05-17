@@ -2624,3 +2624,51 @@
 
 .super-audit-row.is-done { opacity: 0.55; }
 .super-audit-row.is-pending { background: #f8fafc; }
+
+/* Comprehensive Review — right pane (Add/Verify/Remove shared) */
+
+.super-audit-pane {
+  display: flex; flex-direction: column;
+  padding: 20px 24px; overflow-y: auto;
+  flex: 1;
+}
+
+.super-audit-reason {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.super-audit-reason--add { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
+.super-audit-reason--verify { background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; }
+.super-audit-reason--remove { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.super-audit-reason__label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  opacity: 0.75;
+}
+.super-audit-reason__text { flex: 1; line-height: 1.4; }
+.super-audit-reason__signal {
+  font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px;
+}
+.super-audit-reason__signal.is-red { background: #fee2e2; color: #b91c1c; }
+.super-audit-reason__signal.is-amber { background: #fed7aa; color: #9a3412; }
+
+.super-audit-pane__actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 20px; padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.super-btn {
+  padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: 1px solid transparent;
+  transition: background 120ms, border-color 120ms;
+}
+.super-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.super-btn--primary { background: #4338ca; color: #fff; }
+.super-btn--primary:hover:not(:disabled) { background: #3730a3; }
+.super-btn--secondary { background: #fff; color: #334155; border-color: #cbd5e1; }
+.super-btn--secondary:hover:not(:disabled) { background: #f1f5f9; }
+.super-btn--danger { background: #e11d48; color: #fff; }
+.super-btn--danger:hover:not(:disabled) { background: #be123c; }
