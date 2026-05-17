@@ -1,5 +1,6 @@
 import { h } from 'preact';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
+import { ScopeToggle } from './components/ScopeToggle.jsx';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -28,11 +29,13 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks'
  * backend's `tokenKey` (e.g. `code_status`, `discharge_destination`).
  */
 
-export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSlug, onClose }) => {
+export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSlug, defaultMode, onClose }) => {
   const [stage, setStage] = useState('loading'); // loading | ready | drift | stamping | done | error
   const [errorMsg, setErrorMsg] = useState('');
   const [driftMissing, setDriftMissing] = useState([]);
   const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
+  const [mode, setMode] = useState(defaultMode === 'comprehensive' ? 'comprehensive' : 'initial');
+  const [audit, setAudit] = useState(null);
   const [proposal, setProposal] = useState(null);
   const [careplanId, setCareplanId] = useState(null);
   const [miniToken, setMiniToken] = useState(null);
@@ -55,6 +58,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
     let cancelled = false;
+    // Reset on mode flip so the UI doesn't show stale data from the other scope.
+    setStage('loading');
+    setAudit(null);
+    setProposal(null);
+    setErrorMsg('');
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -102,6 +110,24 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           },
         });
 
+        if (mode === 'comprehensive') {
+          // Comprehensive Review path — full audit of the existing plan.
+          const auditResp = await window.CarePlanAuditAPI.fetchAudit({
+            patientId,
+            facilityName,
+            orgSlug,
+            patientName,
+            orgDropdowns,
+          });
+          if (cancelled) return;
+          setCareplanId(cpId);
+          setMiniToken(token);
+          setAudit(auditResp.audit);
+          setStage('ready');
+          return;
+        }
+
+        // -------- Initial Admit path (unchanged below) --------
         const prop = await A.fetchProposal({
           patientId,
           facilityName,
@@ -170,7 +196,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       }
     })();
     return () => { cancelled = true; };
-  }, [patientId, facilityName, orgSlug]);
+  }, [patientId, facilityName, orgSlug, mode]);
 
   // -------- Combined raw focuses: auto-picks + library picks --------
   const allRawFocuses = useMemo(() => {
@@ -361,7 +387,12 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             </p>
           </div>
           <div className="cpas-modal__header-actions">
-            {stage === 'ready' && (
+            <ScopeToggle
+              mode={mode}
+              onChange={setMode}
+              disabled={stage === 'stamping'}
+            />
+            {stage === 'ready' && mode === 'initial' && (
               // NO_TRACK: pure-UI open of library overlay
               <button
                 className="cpas-modal__library-btn"
@@ -382,7 +413,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           {stage === 'loading' && <LoadingState />}
           {stage === 'error' && <ErrorState message={errorMsg} onClose={onClose} />}
           {stage === 'drift' && <DriftState missing={driftMissing} onClose={onClose} />}
-          {(stage === 'ready' || stage === 'stamping' || stage === 'done') && proposal && (
+          {mode === 'initial' && (stage === 'ready' || stage === 'stamping' || stage === 'done') && proposal && (
             <div className="cpas-modal__columns">
               <FocusList
                 rawFocuses={allRawFocuses}
@@ -407,6 +438,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 readOnly={stage !== 'ready'}
                 dropdowns={dropdowns}
               />
+            </div>
+          )}
+          {mode === 'comprehensive' && stage === 'ready' && audit && (
+            <div style="padding: 24px; font-family: system-ui;">
+              <h3>Comprehensive audit loaded (placeholder — UI lands in Task 5+)</h3>
+              <p>To add: {audit.toAdd.length}</p>
+              <p>To verify: {audit.toCheck.length}</p>
+              <p>To remove: {audit.toRemove.length}</p>
+              <p>Has coverage check data: {String(audit.hasCoverageCheckData)}</p>
+              <details>
+                <summary>Raw audit (debug)</summary>
+                <pre style="font-size:11px; max-height:400px; overflow:auto;">{JSON.stringify(audit, null, 2)}</pre>
+              </details>
             </div>
           )}
           {stage === 'ready' && libraryPanelOpen && (
