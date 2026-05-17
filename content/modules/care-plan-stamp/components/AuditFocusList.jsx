@@ -118,6 +118,7 @@ export const AuditFocusList = ({
 
 const Section = ({ title, tone, count, expanded, onToggle, children }) => (
   <div className={`super-audit-section super-audit-section--${tone} ${expanded ? 'is-open' : ''}`}>
+    {/* NO_TRACK: pure-UI section expand/collapse */}
     <button type="button" className="super-audit-section__head" onClick={onToggle} aria-expanded={expanded}>
       <span className="super-audit-section__caret">{expanded ? '▾' : '▸'}</span>
       <span className="super-audit-section__title">{title}</span>

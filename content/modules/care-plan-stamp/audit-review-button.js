@@ -64,6 +64,7 @@ async function _renderBanner() {
     banner.innerHTML = `
       <span class="super-audit-banner__icon">⚠</span>
       <span class="super-audit-banner__text">Audit failed to load.</span>
+      <!-- NO_TRACK: pure-UI retry of failed audit fetch -->
       <button type="button" class="super-audit-banner__retry">Retry</button>
     `;
     banner.querySelector('.super-audit-banner__retry')?.addEventListener('click', () => {
@@ -97,6 +98,7 @@ function _paint(banner, audit, ctx) {
   banner.innerHTML = `
     <span class="super-audit-banner__icon">🔍</span>
     <span class="super-audit-banner__text">SuperLTC Audit · ${parts.join(' · ')}</span>
+    <!-- NO_TRACK: opened_from_review_page tracked in _openWizard click handler -->
     <button type="button" class="super-audit-banner__cta">Open audit →</button>
   `;
   banner.querySelector('.super-audit-banner__cta').addEventListener('click', () => _openWizard(ctx));

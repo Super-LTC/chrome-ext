@@ -65,6 +65,7 @@ const _renderActions = (item, { localState, onMarkVerified, onKeep, onResolve, r
 
   if (item.kind === 'unrecognized_focus') {
     return (
+      // NO_TRACK: care_plan_audit_item_verified tracked in modal _verifyAuditItem
       <button type="button" className="super-btn super-btn--secondary" onClick={onKeep}>
         Keep on plan
       </button>
@@ -73,6 +74,7 @@ const _renderActions = (item, { localState, onMarkVerified, onKeep, onResolve, r
 
   if (item.kind === 'partial_coverage') {
     return (
+      // NO_TRACK: care_plan_audit_item_verified tracked in modal _verifyAuditItem
       <button type="button" className="super-btn super-btn--primary" onClick={onMarkVerified}>
         Mark verified
       </button>
@@ -83,6 +85,7 @@ const _renderActions = (item, { localState, onMarkVerified, onKeep, onResolve, r
   const canResolve = !!item.pccFocusId;
   return (
     <>
+      {/* NO_TRACK: care_plan_audit_item_verified tracked in modal _verifyAuditItem */}
       <button type="button" className="super-btn super-btn--secondary" onClick={onKeep}>
         Keep
       </button>
