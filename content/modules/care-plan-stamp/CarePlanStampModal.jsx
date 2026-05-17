@@ -576,9 +576,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       <div className="cpas-modal__container">
         <header className="cpas-modal__header">
           <div>
-            <h1 className="cpas-modal__title">Auto-Populate Care Plan</h1>
+            <h1 className="cpas-modal__title">{mode === 'comprehensive' ? 'Care Plan Audit' : 'Auto-Populate Care Plan'}</h1>
             <p className="cpas-modal__subtitle">
-              {patientName || 'Resident'} · Initial care plan
+              {patientName || 'Resident'} · {mode === 'comprehensive' ? 'Comprehensive review' : 'Initial care plan'}
             </p>
           </div>
           <div className="cpas-modal__header-actions">

@@ -2681,6 +2681,8 @@
   padding: 12px 20px 80px;
   overflow-y: auto;
   height: 100%;
+  flex: 1;
+  min-width: 0;
   background: #f8fafc;
 }
 
