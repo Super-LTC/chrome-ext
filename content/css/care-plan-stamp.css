@@ -2545,7 +2545,7 @@
 
 .super-audit-rail {
   display: flex; flex-direction: column;
-  height: 100%; overflow-y: auto;
+  height: 100%; overflow: hidden;
   background: #f8fafc;
   border-right: 1px solid #e2e8f0;
 }
@@ -2715,4 +2715,30 @@
 }
 .super-audit-verifycard__text {
   font-size: 14px; line-height: 1.5; color: #1f2937;
+}
+
+/* Bulk CTA footer */
+.super-audit-rail__sections { flex: 1; overflow-y: auto; }
+.super-audit-rail__footer {
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.super-audit-bulk-btn {
+  width: 100%; padding: 10px 14px;
+  border: 0; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+  color: #fff; cursor: pointer;
+  transition: opacity 120ms, background 120ms;
+}
+.super-audit-bulk-btn--add { background: #4338ca; }
+.super-audit-bulk-btn--add:hover:not(:disabled) { background: #3730a3; }
+.super-audit-bulk-btn--remove { background: #e11d48; }
+.super-audit-bulk-btn--remove:hover:not(:disabled) { background: #be123c; }
+.super-audit-bulk-btn--verify { background: #d97706; }
+.super-audit-bulk-btn--verify:hover:not(:disabled) { background: #b45309; }
+.super-audit-bulk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.super-audit-bulk-hint {
+  font-size: 11px; color: #64748b; text-align: center;
 }

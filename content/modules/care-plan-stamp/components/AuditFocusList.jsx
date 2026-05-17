@@ -22,6 +22,7 @@ export const AuditFocusList = ({
   initiallyExpanded,  // 'add' | 'verify' | 'remove' — auto-open this bucket
   stamping,           // boolean — disable interactions during stamp/resolve
   resolveStatus,      // { [focusId]: 'pending' | 'done' | 'error' }
+  footer,             // optional ReactNode — pinned to bottom of rail
 }) => {
   const toAdd = audit?.toAdd || [];
   const toCheck = audit?.toCheck || [];
@@ -53,6 +54,7 @@ export const AuditFocusList = ({
 
   return (
     <div className="super-audit-rail">
+      <div className="super-audit-rail__sections">
       <Section
         title="Add" tone="add" count={toAdd.length}
         expanded={expanded.add} onToggle={() => toggle('add')}
@@ -108,6 +110,8 @@ export const AuditFocusList = ({
           />
         ))}
       </Section>
+      </div>
+      {footer && <div className="super-audit-rail__footer">{footer}</div>}
     </div>
   );
 };

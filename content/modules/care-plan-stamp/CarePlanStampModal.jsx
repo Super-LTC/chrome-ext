@@ -563,6 +563,76 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     });
   }, [audit, patientId]);
 
+  // -------- Bulk handlers --------
+  const _bulkAddAll = useCallback(async () => {
+    if (!audit || !careplanId || !miniToken) return;
+    const candidates = (audit.toAdd || []).map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => !stampedAddIds.has(item.ruleId) && !skippedAddIds.has(item.ruleId))
+      .filter(({ item, idx }) => {
+        if (!item.focus) return false;
+        const state = auditFocusStates[`add:${idx}`] || _emptyFocusState();
+        const composed = _composeFocus(item.focus, state);
+        return !composed.description.includes('___');
+      });
+
+    if (candidates.length === 0) return;
+    setStage('stamping');
+    setProgress({ phase: 'starting', focusIndex: 0, focusTotal: candidates.length });
+    try {
+      const focuses = candidates.map(({ item, idx }) => {
+        const state = auditFocusStates[`add:${idx}`] || _emptyFocusState();
+        return _composeFocus(item.focus, state);
+      });
+      const result = await window.CarePlanStampClient.orchestrateStamp({
+        proposal: { patientId, focuses },
+        careplanId,
+        miniToken,
+        onProgress: (p) => setProgress(p),
+      });
+      setStampedAddIds((prev) => {
+        const next = new Set(prev);
+        candidates.forEach(({ item }) => next.add(item.ruleId));
+        return next;
+      });
+      setStage('ready');
+      window.SuperAnalytics?.track?.('care_plan_audit_bulk_stamped', {
+        patient_id: patientId,
+        n_stamped: result?.focusesStamped ?? candidates.length,
+      });
+    } catch (e) {
+      setErrorMsg(e.message || 'Bulk stamp failed');
+      setStage('ready');
+    }
+  }, [audit, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
+
+  const _bulkResolveAll = useCallback(async () => {
+    if (!audit) return;
+    const candidates = (audit.toRemove || []).filter(
+      (it) => resolveStatus[it.focusId] !== 'done' && resolveStatus[it.focusId] !== 'pending' && it.pccFocusId
+    );
+    for (const item of candidates) {
+      // eslint-disable-next-line no-await-in-loop
+      await _resolveAuditItem(item, 'remove', 0);
+    }
+    window.SuperAnalytics?.track?.('care_plan_audit_bulk_resolved', {
+      patient_id: patientId,
+      n_resolved: candidates.length,
+    });
+  }, [audit, resolveStatus, _resolveAuditItem, patientId]);
+
+  const _bulkVerifyAll = useCallback(() => {
+    if (!audit) return;
+    const next = { ...verifyLocal };
+    (audit.toCheck || []).forEach((_, idx) => {
+      if (!next[idx]) next[idx] = 'verified';
+    });
+    setVerifyLocal(next);
+    window.SuperAnalytics?.track?.('care_plan_audit_bulk_verified', {
+      patient_id: patientId,
+      n_verified: (audit.toCheck || []).length,
+    });
+  }, [audit, verifyLocal, patientId]);
+
   // -------- Render --------
   return (
     <div className="cpas-modal" role="dialog" aria-modal="true">
@@ -631,13 +701,93 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           )}
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && displayAudit && (
             <div className="cpas-modal__columns">
-              <AuditFocusList
-                audit={displayAudit}
-                selected={auditSelected}
-                onSelect={setAuditSelected}
-                stamping={stage === 'stamping'}
-                resolveStatus={resolveStatus}
-              />
+              {(() => {
+                const bucket = auditSelected.bucket;
+                if (bucket === 'add') {
+                  const eligible = (displayAudit.toAdd || []).filter((item) => {
+                    if (!item.focus) return false;
+                    const realIdx = audit.toAdd.findIndex((it) => it.ruleId === item.ruleId);
+                    const state = auditFocusStates[`add:${realIdx}`] || _emptyFocusState();
+                    const composed = _composeFocus(item.focus, state);
+                    return !composed.description.includes('___');
+                  }).length;
+                  const blocked = (displayAudit.toAdd?.length || 0) - eligible;
+                  return (
+                    <AuditFocusList
+                      audit={displayAudit}
+                      selected={auditSelected}
+                      onSelect={setAuditSelected}
+                      stamping={stage === 'stamping'}
+                      resolveStatus={resolveStatus}
+                      footer={
+                        (displayAudit.toAdd?.length || 0) > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              className="super-audit-bulk-btn super-audit-bulk-btn--add"
+                              disabled={stage === 'stamping' || eligible === 0}
+                              onClick={_bulkAddAll}
+                            >
+                              {eligible > 0 ? `Add all ${eligible} to care plan` : 'Resolve blank slots first'}
+                            </button>
+                            {blocked > 0 && (
+                              <div className="super-audit-bulk-hint">⚠ {blocked} {blocked === 1 ? 'item needs' : 'items need'} input first</div>
+                            )}
+                          </>
+                        )
+                      }
+                    />
+                  );
+                }
+                if (bucket === 'remove') {
+                  const eligible = (displayAudit.toRemove || []).filter(
+                    (it) => resolveStatus[it.focusId] !== 'pending' && it.pccFocusId
+                  ).length;
+                  return (
+                    <AuditFocusList
+                      audit={displayAudit}
+                      selected={auditSelected}
+                      onSelect={setAuditSelected}
+                      stamping={stage === 'stamping'}
+                      resolveStatus={resolveStatus}
+                      footer={
+                        (displayAudit.toRemove?.length || 0) > 0 && (
+                          <button
+                            type="button"
+                            className="super-audit-bulk-btn super-audit-bulk-btn--remove"
+                            disabled={eligible === 0}
+                            onClick={_bulkResolveAll}
+                          >
+                            Resolve all {eligible}
+                          </button>
+                        )
+                      }
+                    />
+                  );
+                }
+                // verify
+                const unresolved = (displayAudit.toCheck || []).filter((_, idx) => !verifyLocal[idx]).length;
+                return (
+                  <AuditFocusList
+                    audit={displayAudit}
+                    selected={auditSelected}
+                    onSelect={setAuditSelected}
+                    stamping={stage === 'stamping'}
+                    resolveStatus={resolveStatus}
+                    footer={
+                      unresolved > 0 && (
+                        <button
+                          type="button"
+                          className="super-audit-bulk-btn super-audit-bulk-btn--verify"
+                          onClick={_bulkVerifyAll}
+                        >
+                          Mark all {unresolved} verified
+                        </button>
+                      )
+                    }
+                  />
+                );
+              })()}
               {auditSelected.bucket === 'add' && displayAudit.toAdd[auditSelected.idx] && (() => {
                 const item = displayAudit.toAdd[auditSelected.idx];
                 const realIdx = audit.toAdd.findIndex((it) => it.ruleId === item.ruleId);
