@@ -12,3 +12,4 @@ store/
 
 # Root-level screenshots
 /*.png
+.claude/scheduled_tasks.lock
