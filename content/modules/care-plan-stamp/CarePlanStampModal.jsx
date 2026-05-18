@@ -748,6 +748,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   if (item.kind === 'partial_coverage') {
                     return (
                       <AuditPartialCoveragePane
+                        key={item._rowId}
                         item={item}
                         onStamp={(checked) => _stampPartialCoverage(item, checked)}
                         onSkip={() => _dismissVerifyItem(item)}
