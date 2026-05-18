@@ -756,24 +756,62 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                       />
                     );
                   }
+                  // For history_focus / unrecognized_focus / soft_remove the
+                  // focus text ships in `item.detail` (the truncated focus
+                  // text). matchedFocusText is null for these. Prefer
+                  // matchedFocusText if populated, else fall back to detail.
+                  const focusBody = item.matchedFocusText || item.detail || '';
+                  const caaLabel = focusIdToCAA?.get?.(item.focusId) || item.caa || '';
+                  const focusLabel =
+                    item.kind === 'unrecognized_focus' ? 'Custom focus on plan' :
+                    item.kind === 'history_focus' ? 'Historical focus on plan' :
+                    item.kind === 'soft_remove' ? 'Focus on plan' :
+                    'Existing focus on plan';
+                  const dismissLabel =
+                    item.kind === 'unrecognized_focus' ? 'OK, understood' :
+                    item.kind === 'history_focus' ? 'Keep — still relevant' :
+                    item.kind === 'soft_remove' ? 'Keep' :
+                    'Dismiss';
                   return (
                     <div className="cpas-detail">
                       <div className="cpas-detail__header">
                         <div className="cpas-detail__badge">? VERIFY · {String(item.kind || '').replace(/_/g, ' ').toUpperCase()}</div>
                       </div>
-                      {item.matchedFocusText && (
+                      {focusBody && (
                         <div className="cpas-audit-section">
-                          <div className="cpas-audit-section__label">Existing focus on plan</div>
-                          <div className="cpas-audit-section__body">{item.matchedFocusText}</div>
+                          <div className="cpas-audit-section__label">{focusLabel}</div>
+                          <div className="cpas-audit-section__body">{focusBody}</div>
                         </div>
                       )}
                       <div className="cpas-audit-section">
-                        <div className="cpas-audit-section__label">Reason</div>
+                        <div className="cpas-audit-section__label">Why this is flagged</div>
                         <div className="cpas-audit-section__body">{item.reason || '—'}</div>
                       </div>
+                      {caaLabel && (
+                        <div className="cpas-audit-section">
+                          <div className="cpas-audit-section__label">CAA</div>
+                          <div className="cpas-audit-section__body">{caaLabel}</div>
+                        </div>
+                      )}
+                      {Array.isArray(item.sourceDxCodes) && item.sourceDxCodes.length > 0 && (
+                        <div className="cpas-audit-section">
+                          <div className="cpas-audit-section__label">Triggered by</div>
+                          <div className="cpas-audit-section__body">{item.sourceDxCodes.join(', ')}</div>
+                        </div>
+                      )}
                       <div className="cpas-audit-actions">
+                        {item.pccFocusId && (
+                          <button
+                            type="button"
+                            className="cpas-btn cpas-btn--ghost"
+                            onClick={() => window.open(`/care/chart/cp/editNeed.jsp?ESOLneedid=${item.pccFocusId}&ESOLclientid=${patientId}`, '_blank')}
+                            data-track="care_plan_audit_verify_open_in_pcc"
+                          >
+                            Open focus in PCC ↗
+                          </button>
+                        )}
                         <button type="button" className="cpas-btn cpas-btn--primary" onClick={() => _dismissVerifyItem(item)} data-track="care_plan_audit_verify_dismissed_click">
-                          Dismiss
+                          {dismissLabel}
                         </button>
                       </div>
                     </div>
