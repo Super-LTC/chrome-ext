@@ -6,6 +6,7 @@ import { AuditRail } from './components/AuditRail.jsx';
 // Round 10: universals bundle dropped — pane file deleted, no import.
 // Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
+import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.jsx';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -69,6 +70,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [skippedAddIds, setSkippedAddIds] = useState(new Set());    // ruleIds locally skipped
   // Round 9 — rail selection + collapse state
   const [selectedRail, setSelectedRail] = useState(null);           // { kind, key } | null
+  // Round 14 — verify (partial_coverage + informational) state
+  const [dismissedVerifyIds, setDismissedVerifyIds] = useState(new Set());
+  const [partialStampStatus, setPartialStampStatus] = useState({});   // { [_rowId]: 'pending'|'done'|'error' }
+  const [partialStampError, setPartialStampError] = useState({});     // { [_rowId]: string }
 
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
@@ -84,6 +89,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setStampedAddIds(new Set());
     setSkippedAddIds(new Set());
     setSelectedRail(null);
+    setDismissedVerifyIds(new Set());
+    setPartialStampStatus({});
+    setPartialStampError({});
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -517,6 +525,50 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     }
   }, [patientId, careplanId, miniToken]);
 
+  // Round 14 — stamp a set of checked interventions onto an existing focus.
+  const _stampPartialCoverage = useCallback(async (item, checkedInterventions) => {
+    if (!item || !checkedInterventions?.length) return;
+    if (!careplanId || !miniToken) return;
+
+    setPartialStampStatus((s) => ({ ...s, [item._rowId]: 'pending' }));
+    try {
+      const orgDropdowns = {
+        positions: dropdowns?.positionLabels || {},
+        kardex: dropdowns?.kardexLabels || {},
+        reviewDepts: dropdowns?.reviewDeptLabels || {},
+      };
+      await window.CarePlanAddInterventionAPI.addInterventions({
+        patientId,
+        careplanId,
+        miniToken,
+        pccFocusId: item.pccFocusId,
+        pccFocusStdItemId: item.pccFocusStdItemId,
+        interventions: checkedInterventions,
+        orgDropdowns,
+      });
+      setPartialStampStatus((s) => ({ ...s, [item._rowId]: 'done' }));
+      window.SuperAnalytics?.track?.('care_plan_audit_partial_stamped', {
+        patient_id: patientId,
+        detail: item.detail,
+        source: item.suggestionSource,
+        n_interventions: checkedInterventions.length,
+        caa: item.caa,
+      });
+    } catch (e) {
+      setPartialStampStatus((s) => ({ ...s, [item._rowId]: 'error' }));
+      setPartialStampError((s) => ({ ...s, [item._rowId]: e.message || 'Add failed' }));
+    }
+  }, [careplanId, miniToken, dropdowns, patientId]);
+
+  const _dismissVerifyItem = useCallback((item) => {
+    setDismissedVerifyIds((s) => new Set([...s, item._rowId]));
+    window.SuperAnalytics?.track?.('care_plan_audit_verify_dismissed', {
+      patient_id: patientId,
+      detail: item.detail,
+      kind: item.kind,
+    });
+  }, [patientId]);
+
   // -------- Render --------
   return (
     <div className="cpas-modal" role="dialog" aria-modal="true">
@@ -601,6 +653,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 stampedAddIds={stampedAddIds}
                 skippedAddIds={skippedAddIds}
                 resolveStatus={resolveStatus}
+                toCheck={audit.toCheck || []}
+                dismissedVerifyIds={dismissedVerifyIds}
                 selected={selectedRail}
                 onSelect={setSelectedRail}
                 onCommit={_commitAuditAdds}
@@ -684,6 +738,43 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                       resolveStatus={resolveStatus[item.focusId]}
                       errorMessage={resolveError[item.focusId]}
                     />
+                  );
+                })()}
+                {selectedRail?.kind === 'verify' && (() => {
+                  const item = (audit.toCheck || []).find((it) => it._rowId === selectedRail.key);
+                  if (!item) return null;
+                  if (item.kind === 'partial_coverage') {
+                    return (
+                      <AuditPartialCoveragePane
+                        item={item}
+                        onStamp={(checked) => _stampPartialCoverage(item, checked)}
+                        onSkip={() => _dismissVerifyItem(item)}
+                        stampStatus={partialStampStatus[item._rowId]}
+                        errorMessage={partialStampError[item._rowId]}
+                      />
+                    );
+                  }
+                  return (
+                    <div className="cpas-detail">
+                      <div className="cpas-detail__header">
+                        <div className="cpas-detail__badge">? VERIFY · {String(item.kind || '').replace(/_/g, ' ').toUpperCase()}</div>
+                      </div>
+                      {item.matchedFocusText && (
+                        <div className="cpas-audit-section">
+                          <div className="cpas-audit-section__label">Existing focus on plan</div>
+                          <div className="cpas-audit-section__body">{item.matchedFocusText}</div>
+                        </div>
+                      )}
+                      <div className="cpas-audit-section">
+                        <div className="cpas-audit-section__label">Reason</div>
+                        <div className="cpas-audit-section__body">{item.reason || '—'}</div>
+                      </div>
+                      <div className="cpas-audit-actions">
+                        <button type="button" className="cpas-btn cpas-btn--primary" onClick={() => _dismissVerifyItem(item)} data-track="care_plan_audit_verify_dismissed_click">
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
                   );
                 })()}
                 {!selectedRail && (

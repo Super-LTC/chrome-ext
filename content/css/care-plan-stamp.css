@@ -2763,3 +2763,49 @@
 .cpas-list__items--onplan { border-top: 1px solid #e2e8f0; opacity: 0.7; }
 .cpas-list__badge--onplan { background: #e2e8f0; color: #475569; }
 .cpas-list__item--onplan .cpas-list__text { color: #475569; }
+
+/* Round 14 — partial-coverage pane + verify section */
+
+.cpas-list__badge--verify { background: #fef3c7; color: #92400e; }
+.cpas-list__tag--source-library {
+  background: #dbeafe; color: #1e40af;
+  text-transform: lowercase; letter-spacing: 0;
+}
+.cpas-list__tag--source-ai {
+  background: #fef3c7; color: #92400e;
+  text-transform: lowercase; letter-spacing: 0;
+}
+
+.cpas-audit-ai-warn {
+  margin: 10px 18px;
+  padding: 8px 12px;
+  background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px;
+  font-size: 12px; color: #92400e;
+}
+
+.cpas-partial-interventions {
+  list-style: none;
+  margin: 0; padding: 0;
+}
+.cpas-partial-intervention {
+  display: grid;
+  grid-template-columns: 22px auto 1fr;
+  gap: 8px; align-items: start;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px; line-height: 1.5;
+}
+.cpas-partial-intervention:last-child { border-bottom: 0; }
+.cpas-partial-intervention.is-checked { background: #f0fdf4; }
+.cpas-partial-intervention input[type="checkbox"] {
+  margin: 2px 0 0; cursor: pointer;
+}
+.cpas-partial-intervention__cat {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; color: #4338ca;
+  background: #eef2ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.cpas-partial-intervention__text { color: #1f2937; }

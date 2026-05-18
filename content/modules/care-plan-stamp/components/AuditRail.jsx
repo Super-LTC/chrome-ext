@@ -26,6 +26,8 @@ export const AuditRail = ({
   stampedAddIds,
   skippedAddIds,
   resolveStatus,
+  toCheck,
+  dismissedVerifyIds,
   selected,
   onSelect,
   onCommit,
@@ -117,6 +119,51 @@ export const AuditRail = ({
     </li>
   );
 
+  // ---- Verify items (Round 14) ----
+  const liveVerifies = (toCheck || []).filter((it) => !(dismissedVerifyIds && dismissedVerifyIds.has(it._rowId)));
+
+  const renderVerifyRow = (item) => {
+    if (item.kind === 'partial_coverage') {
+      return (
+        <li
+          key={item._rowId}
+          className={`cpas-list__item cpas-list__item--verify ${isActiveRow(item) ? 'is-active' : ''}`}
+          onClick={() => onSelect({ kind: 'verify', key: item._rowId })}
+        >
+          <span className="cpas-list__badge cpas-list__badge--verify">?</span>
+          <div className="cpas-list__body">
+            <div className="cpas-list__row-top">
+              <span className="cpas-list__text">{_partialTitle(item)}</span>
+              <span className={`cpas-list__tag cpas-list__tag--source-${item.suggestionSource || 'library'}`}>
+                {item.suggestionSource === 'ai' ? 'AI' : 'library'}
+              </span>
+            </div>
+            <div className="cpas-list__preview">
+              {(focusIdToCAA.get(item.focusId) || item.caa || '') + ' · Partial coverage'}
+            </div>
+          </div>
+        </li>
+      );
+    }
+    return (
+      <li
+        key={item._rowId}
+        className={`cpas-list__item cpas-list__item--verify ${isActiveRow(item) ? 'is-active' : ''}`}
+        onClick={() => onSelect({ kind: 'verify', key: item._rowId })}
+      >
+        <span className="cpas-list__badge cpas-list__badge--verify">?</span>
+        <div className="cpas-list__body">
+          <div className="cpas-list__row-top">
+            <span className="cpas-list__text">{item.detail || item.kind}</span>
+          </div>
+          <div className="cpas-list__preview">
+            {(focusIdToCAA.get(item.focusId) || '') + ' · ' + (item.kind || '').replace(/_/g, ' ')}
+          </div>
+        </div>
+      </li>
+    );
+  };
+
   const renderRemoveRow = (item) => (
     <li
       key={item._rowId}
@@ -172,6 +219,15 @@ export const AuditRail = ({
         {/* Remove rows live in the same Add column — they're focuses being
             actively cleaned from the plan. Render after all Add sections. */}
         {liveRemoves.map(renderRemoveRow)}
+        {liveVerifies.length > 0 && (
+          <SectionGroup
+            title={`Verify (${liveVerifies.length})`}
+            items={liveVerifies}
+            collapsed={collapsedSections.has('verify')}
+            onToggle={() => toggle('verify')}
+            renderRow={renderVerifyRow}
+          />
+        )}
       </ol>
 
       {hasOnPlan && (
@@ -244,6 +300,18 @@ function _shortTitle(item) {
   const src = item?.focus?.description || item?.ruleId || '';
   const head = src.split(/[,:]/)[0].trim();
   return head.length > 60 ? head.slice(0, 57) + '…' : head;
+}
+
+function _partialTitle(item) {
+  const detail = item?.detail || '';
+  if (detail.startsWith('dx.')) {
+    const stripped = detail.slice(3).replace(/_/g, ' ');
+    return stripped.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  if (detail === 'ai-suggested' && Array.isArray(item.sourceDxCodes) && item.sourceDxCodes.length > 0) {
+    return item.sourceDxCodes[0];
+  }
+  return detail || item?.kind || '';
 }
 
 function _onPlanTitle(item) {

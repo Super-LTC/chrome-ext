@@ -68,6 +68,7 @@ import './super-menu/init.js';
 import './modules/care-plan-stamp/stamp-api.js';
 import './modules/care-plan-stamp/audit-api.js';
 import './modules/care-plan-stamp/pcc-resolve.js';
+import './modules/care-plan-stamp/pcc-add-intervention.js';
 import './modules/care-plan-stamp/pcc-discover.js';
 import './modules/care-plan-stamp/pcc-stamp.js';
 import './modules/care-plan-stamp/inject-button.js';
