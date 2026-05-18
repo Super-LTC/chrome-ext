@@ -2850,3 +2850,85 @@
 .cpas-partial-intervention__chip--position {
   background: #f0fdf4; color: #166534;
 }
+
+/* Editable intervention rows (Round 14b) */
+.cpas-partial-intervention {
+  grid-template-columns: 22px 1fr auto;  /* override prior 22px 1fr — checkbox / body / delete */
+}
+.cpas-partial-intervention__text-edit {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color: #1f2937;
+  background: transparent;
+  resize: vertical;
+  min-height: 38px;
+  line-height: 1.5;
+  transition: border-color 120ms, background 120ms;
+}
+.cpas-partial-intervention__text-edit:hover,
+.cpas-partial-intervention__text-edit:focus {
+  border-color: #c7d2fe;
+  background: #fff;
+  outline: none;
+}
+
+.cpas-partial-intervention__chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: border-color 120ms, background 120ms;
+}
+.cpas-partial-intervention__chip:hover { border-color: rgba(0,0,0,0.1); }
+.cpas-partial-intervention__chip.is-empty {
+  background: #f3f4f6; color: #6b7280;
+  border: 1px dashed #d1d5db;
+}
+.cpas-partial-intervention__chip-caret {
+  font-size: 9px; opacity: 0.6;
+}
+.cpas-partial-intervention__chip-select {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  opacity: 0; cursor: pointer;
+  border: 0; padding: 0;
+}
+
+.cpas-partial-intervention__delete {
+  border: 0; background: transparent;
+  color: #9ca3af; font-size: 18px; line-height: 1;
+  cursor: pointer; padding: 4px 6px;
+  border-radius: 4px;
+  align-self: start;
+  transition: background 120ms, color 120ms;
+}
+.cpas-partial-intervention__delete:hover {
+  background: #fee2e2; color: #b91c1c;
+}
+.cpas-partial-intervention.is-custom {
+  background: #fffbeb;
+}
+
+.cpas-partial-intervention__add {
+  margin: 8px 12px 4px;
+  border: 1px dashed #c7d2fe;
+  background: transparent;
+  color: #4338ca;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 120ms, border-color 120ms;
+}
+.cpas-partial-intervention__add:hover {
+  background: #eef2ff; border-color: #4338ca;
+}
+.cpas-partial-intervention__add:disabled { opacity: 0.5; cursor: not-allowed; }

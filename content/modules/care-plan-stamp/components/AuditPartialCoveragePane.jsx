@@ -4,21 +4,35 @@ import { useState, useMemo } from 'preact/hooks';
 /**
  * Right pane for a `partial_coverage` toCheck item.
  *
- * Default-checks every suggested intervention; nurse can untick individuals.
- * Primary CTA stamps the checked interventions onto the existing PCC focus
- * via window.CarePlanAddInterventionAPI.addInterventions (currently a stub —
- * see content/modules/care-plan-stamp/pcc-add-intervention.js).
+ * Default-checks every suggested intervention; nurse can untick individuals,
+ * edit description/kardex/position inline, delete rows, or add custom ones.
+ * Primary CTA stamps the resulting edited+checked interventions onto the
+ * existing PCC focus via window.CarePlanAddInterventionAPI.addInterventions
+ * (see content/modules/care-plan-stamp/pcc-add-intervention.js).
  */
-// Resolve a kardex/position field to a human label using the facility's
-// PCC dropdowns. Backend now ships numeric PCC IDs (see commit 24cdc7348);
-// canonicals are still accepted as a defense-in-depth fallback.
-function _labelFor(value, labelsById) {
-  if (value == null) return '';
-  const s = String(value);
-  if (/^\d+$/.test(s) && labelsById && labelsById[s]) return labelsById[s];
-  // Canonical fallback — humanize the snake_case canonical
-  return s.replace(/_/g, ' ');
-}
+
+const ChipSelect = ({ kind, value, options, labels, onChange, placeholder, disabled }) => {
+  const currentLabel = value != null ? (labels[String(value)] || '') : '';
+  return (
+    <label className={`cpas-partial-intervention__chip cpas-partial-intervention__chip--${kind} ${value == null ? 'is-empty' : ''}`}>
+      <span className="cpas-partial-intervention__chip-text">
+        {currentLabel || placeholder}
+      </span>
+      <span className="cpas-partial-intervention__chip-caret">▾</span>
+      <select
+        className="cpas-partial-intervention__chip-select"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.currentTarget.value === '' ? null : e.currentTarget.value)}
+        disabled={disabled}
+      >
+        <option value="">{placeholder}</option>
+        {(options || []).map((opt) => (
+          <option key={opt.id} value={opt.id}>{opt.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+};
 
 export const AuditPartialCoveragePane = ({
   item,                  // partial_coverage toCheck item
@@ -28,18 +42,43 @@ export const AuditPartialCoveragePane = ({
   errorMessage,
   dropdowns,             // org dropdowns for resolving kardex/position IDs to labels
 }) => {
-  const total = item.suggestedInterventions?.length || 0;
-  const [checked, setChecked] = useState(() => new Set(Array.from({ length: total }, (_, i) => i)));
+  const [rows, setRows] = useState(() =>
+    (item.suggestedInterventions || []).map((iv) => ({
+      description: iv.description || '',
+      kardexCategory: iv.kardexCategory ?? null,
+      positionOne: iv.positionOne ?? null,
+      checked: true,
+      _custom: false,
+    }))
+  );
 
-  const toggle = (i) => setChecked((s) => {
-    const n = new Set(s);
-    if (n.has(i)) n.delete(i); else n.add(i);
-    return n;
-  });
+  const patchRow = (idx, patch) =>
+    setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
+  const deleteRow = (idx) =>
+    setRows((rs) => rs.filter((_, i) => i !== idx));
+
+  const addCustom = () =>
+    setRows((rs) => [...rs, {
+      description: '',
+      kardexCategory: null,
+      positionOne: null,
+      checked: true,
+      _custom: true,
+    }]);
 
   const checkedItems = useMemo(
-    () => (item.suggestedInterventions || []).filter((_, i) => checked.has(i)),
-    [item.suggestedInterventions, checked]
+    () => rows.filter((r) => r.checked).map(({ description, kardexCategory, positionOne }) => ({
+      description, kardexCategory, positionOne,
+    })),
+    [rows]
+  );
+
+  const invalidCount = useMemo(
+    () => rows.filter(r => r.checked && (
+      r.description.trim() === '' || r.kardexCategory == null || r.positionOne == null
+    )).length,
+    [rows]
   );
 
   const isAi = item.suggestionSource === 'ai';
@@ -56,6 +95,8 @@ export const AuditPartialCoveragePane = ({
       </div>
     );
   }
+
+  const ctaDisabled = stampStatus === 'pending' || checkedItems.length === 0 || invalidCount > 0;
 
   return (
     <div className="cpas-detail">
@@ -85,33 +126,70 @@ export const AuditPartialCoveragePane = ({
       </div>
 
       <div className="cpas-audit-section">
-        <div className="cpas-audit-section__label">Suggested interventions ({total})</div>
+        <div className="cpas-audit-section__label">Suggested interventions ({rows.length})</div>
         <ul className="cpas-partial-interventions">
-          {(item.suggestedInterventions || []).map((iv, i) => {
-            const kardexLabel = _labelFor(iv.kardexCategory, dropdowns?.kardexLabels);
-            const positionLabel = _labelFor(iv.positionOne, dropdowns?.positionLabels);
-            return (
-              <li key={i} className={`cpas-partial-intervention ${checked.has(i) ? 'is-checked' : ''}`}>
-                {/* NO_TRACK: pure-UI checkbox toggle */}
-                <input
-                  type="checkbox"
-                  checked={checked.has(i)}
-                  onChange={() => toggle(i)}
+          {rows.map((row, idx) => (
+            <li key={idx} className={`cpas-partial-intervention ${row.checked ? 'is-checked' : ''} ${row._custom ? 'is-custom' : ''}`}>
+              {/* NO_TRACK: pure-UI checkbox toggle */}
+              <input
+                type="checkbox"
+                checked={row.checked}
+                onChange={() => patchRow(idx, { checked: !row.checked })}
+                disabled={stampStatus === 'pending'}
+              />
+              <div className="cpas-partial-intervention__body">
+                <textarea
+                  className="cpas-partial-intervention__text-edit"
+                  value={row.description}
+                  onInput={(e) => patchRow(idx, { description: e.currentTarget.value })}
+                  placeholder="Intervention description"
+                  rows={2}
                   disabled={stampStatus === 'pending'}
                 />
-                <div className="cpas-partial-intervention__body">
-                  <div className="cpas-partial-intervention__text">{iv.description}</div>
-                  {(kardexLabel || positionLabel) && (
-                    <div className="cpas-partial-intervention__meta">
-                      {kardexLabel && <span className="cpas-partial-intervention__chip cpas-partial-intervention__chip--kardex">{kardexLabel}</span>}
-                      {positionLabel && <span className="cpas-partial-intervention__chip cpas-partial-intervention__chip--position">{positionLabel}</span>}
-                    </div>
-                  )}
+                <div className="cpas-partial-intervention__meta">
+                  <ChipSelect
+                    kind="kardex"
+                    value={row.kardexCategory}
+                    options={dropdowns?.kardexOptions || []}
+                    labels={dropdowns?.kardexLabels || {}}
+                    onChange={(v) => patchRow(idx, { kardexCategory: v })}
+                    placeholder="Choose category"
+                    disabled={stampStatus === 'pending'}
+                  />
+                  <ChipSelect
+                    kind="position"
+                    value={row.positionOne}
+                    options={dropdowns?.positionOptions || []}
+                    labels={dropdowns?.positionLabels || {}}
+                    onChange={(v) => patchRow(idx, { positionOne: v })}
+                    placeholder="Choose team"
+                    disabled={stampStatus === 'pending'}
+                  />
                 </div>
-              </li>
-            );
-          })}
+              </div>
+              {/* NO_TRACK: row-level delete is local-state UI */}
+              <button
+                type="button"
+                className="cpas-partial-intervention__delete"
+                onClick={() => deleteRow(idx)}
+                title="Remove this intervention"
+                aria-label="Remove intervention"
+                disabled={stampStatus === 'pending'}
+              >
+                ×
+              </button>
+            </li>
+          ))}
         </ul>
+        {/* NO_TRACK: appending a custom row is local-state UI */}
+        <button
+          type="button"
+          className="cpas-partial-intervention__add"
+          onClick={addCustom}
+          disabled={stampStatus === 'pending'}
+        >
+          + Add intervention
+        </button>
       </div>
 
       {stampStatus === 'error' && (
@@ -127,7 +205,7 @@ export const AuditPartialCoveragePane = ({
           type="button"
           className="cpas-btn cpas-btn--primary"
           onClick={() => onStamp(checkedItems)}
-          disabled={stampStatus === 'pending' || checkedItems.length === 0}
+          disabled={ctaDisabled}
           data-track="care_plan_audit_partial_stamped"
         >
           {stampStatus === 'pending'
@@ -135,6 +213,11 @@ export const AuditPartialCoveragePane = ({
             : `+ Add ${checkedItems.length} ${checkedItems.length === 1 ? 'intervention' : 'interventions'} to this focus`}
         </button>
       </div>
+      {invalidCount > 0 && (
+        <div className="cpas-list__commit-warn">
+          ⚠ {invalidCount} {invalidCount === 1 ? 'row needs' : 'rows need'} description, category, and team
+        </div>
+      )}
     </div>
   );
 };
