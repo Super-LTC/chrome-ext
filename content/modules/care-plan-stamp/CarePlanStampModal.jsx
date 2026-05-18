@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks'
 import { ScopeToggle } from './components/ScopeToggle.jsx';
 import { FocusCard } from './components/FocusCard.jsx';
 import { AuditRail } from './components/AuditRail.jsx';
+import { AuditDashboard } from './components/AuditDashboard.jsx';
 // Round 10: universals bundle dropped — pane file deleted, no import.
 // Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
@@ -74,6 +75,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [dismissedVerifyIds, setDismissedVerifyIds] = useState(new Set());
   const [partialStampStatus, setPartialStampStatus] = useState({});   // { [_rowId]: 'pending'|'done'|'error' }
   const [partialStampError, setPartialStampError] = useState({});     // { [_rowId]: string }
+  // Dashboard-first flow: 'dashboard' is the overview step, others are drill-ins.
+  const [comprehensiveStep, setComprehensiveStep] = useState('dashboard'); // 'dashboard' | 'add' | 'verify' | 'on_plan'
 
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
@@ -92,6 +95,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setDismissedVerifyIds(new Set());
     setPartialStampStatus({});
     setPartialStampError({});
+    setComprehensiveStep('dashboard');
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -472,6 +476,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         return n;
       });
       setStage('ready');
+      setComprehensiveStep('dashboard');
+      setSelectedRail(null);
       window.SuperAnalytics?.track?.('care_plan_audit_commit_stamped', {
         patient_id: patientId,
         n_focuses: result?.focusesStamped ?? eligible.length,
@@ -576,6 +582,21 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       <div className="cpas-modal__backdrop" onClick={stage === 'stamping' ? null : onClose} />
       <div className="cpas-modal__container">
         <header className="cpas-modal__header">
+          {mode === 'comprehensive' && comprehensiveStep !== 'dashboard' && stage !== 'stamping' && (
+            // NO_TRACK: explicit track event fired in onClick below
+            <button
+              type="button"
+              className="cpas-modal__back"
+              onClick={() => {
+                window.SuperAnalytics?.track?.('care_plan_audit_step_exited', { from_step: comprehensiveStep });
+                setComprehensiveStep('dashboard');
+                setSelectedRail(null);
+              }}
+              title="Back to overview"
+            >
+              ← Overview
+            </button>
+          )}
           <div>
             <h1 className="cpas-modal__title">{mode === 'comprehensive' ? 'Care Plan Audit' : 'Auto-Populate Care Plan'}</h1>
             <p className="cpas-modal__subtitle">
@@ -645,7 +666,28 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               />
             </div>
           )}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && (
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
+            <AuditDashboard
+              audit={audit}
+              stampedAddIds={stampedAddIds}
+              dismissedVerifyIds={dismissedVerifyIds}
+              onEnterStep={(step) => {
+                setComprehensiveStep(step);
+                window.SuperAnalytics?.track?.('care_plan_audit_step_entered', { step });
+                if (step === 'add') {
+                  const firstAdd = (audit.toAdd || []).find((it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId));
+                  if (firstAdd) setSelectedRail({ kind: 'add', key: firstAdd._rowId });
+                } else if (step === 'verify') {
+                  const firstVerify = (audit.toCheck || []).find((it) => !dismissedVerifyIds.has(it._rowId));
+                  if (firstVerify) setSelectedRail({ kind: 'verify', key: firstVerify._rowId });
+                } else if (step === 'on_plan') {
+                  const firstOnPlan = (audit.onPlan || [])[0];
+                  if (firstOnPlan) setSelectedRail({ kind: 'on_plan', key: firstOnPlan._rowId });
+                }
+              }}
+            />
+          )}
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
             <div className="cpas-modal__columns">
               <AuditRail
                 audit={audit}
@@ -654,7 +696,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 stampedAddIds={stampedAddIds}
                 skippedAddIds={skippedAddIds}
                 resolveStatus={resolveStatus}
-                toCheck={audit.toCheck || []}
+                toCheck={comprehensiveStep === 'verify' ? (audit.toCheck || []) : []}
                 dismissedVerifyIds={dismissedVerifyIds}
                 addNeedsInputByRowId={_auditNeedsInputByRowId(audit, auditFocusStates)}
                 selected={selectedRail}
@@ -664,6 +706,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 commitDisabled={_auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusStates, stage)}
                 needsInputCount={_auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusStates)}
                 stamping={stage === 'stamping'}
+                step={comprehensiveStep}
               />
               <div className="cpas-detail">
                 {selectedRail?.kind === 'add' && (() => {

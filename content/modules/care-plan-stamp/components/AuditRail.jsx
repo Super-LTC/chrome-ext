@@ -36,11 +36,15 @@ export const AuditRail = ({
   commitCount,
   needsInputCount,
   stamping,
+  step = 'add', // 'add' | 'verify' | 'on_plan' — controls which sections + header render
 }) => {
   // Each section can be independently collapsed. Default: Add sections open,
   // On Plan sections collapsed (they're informational, shouldn't dominate).
+  // On Plan sections default collapsed only when not in the on_plan step;
+  // when the rail is dedicated to On Plan, we want them open so the list
+  // isn't empty on entry.
   const [collapsedSections, setCollapsedSections] = useState(
-    () => new Set(['on:universal', 'on:dx', 'on:order', 'on:other'])
+    () => step === 'on_plan' ? new Set() : new Set(['on:universal', 'on:dx', 'on:order', 'on:other'])
   );
   const toggle = (id) => setCollapsedSections((prev) => {
     const n = new Set(prev);
@@ -207,42 +211,50 @@ export const AuditRail = ({
     { id: 'on:other',      title: 'On plan: Other',        items: onPlanBuckets.other },
   ];
 
-  const hasOnPlan = (audit.onPlan || []).length > 0;
+  const onPlanCount = (audit.onPlan || []).length;
+
+  let headerTitle = 'ADD';
+  let headerCount = `${liveAddCount} of ${totalAdds}`;
+  if (step === 'verify') {
+    headerTitle = 'VERIFY';
+    headerCount = `${liveVerifies.length} ${liveVerifies.length === 1 ? 'suggestion' : 'suggestions'}`;
+  } else if (step === 'on_plan') {
+    headerTitle = 'ON PLAN';
+    headerCount = `${onPlanCount} ${onPlanCount === 1 ? 'focus' : 'focuses'}`;
+  }
 
   return (
     <aside className="cpas-list">
       <div className="cpas-list__header">
-        <div className="cpas-list__header-title">ADD</div>
-        <div className="cpas-list__header-count">
-          {liveAddCount} of {totalAdds}
-        </div>
+        <div className="cpas-list__header-title">{headerTitle}</div>
+        <div className="cpas-list__header-count">{headerCount}</div>
       </div>
-      <ol className="cpas-list__items">
-        {addSectionDefs.map((s) => (
-          <SectionGroup
-            key={s.id}
-            title={s.title}
-            items={s.items}
-            collapsed={collapsedSections.has(s.id)}
-            onToggle={() => toggle(s.id)}
-            renderRow={renderAddRow}
-          />
-        ))}
-        {/* Remove rows live in the same Add column — they're focuses being
-            actively cleaned from the plan. Render after all Add sections. */}
-        {liveRemoves.map(renderRemoveRow)}
-        {liveVerifies.length > 0 && (
-          <SectionGroup
-            title={`Add interventions to existing focuses (${liveVerifies.length})`}
-            items={liveVerifies}
-            collapsed={collapsedSections.has('verify')}
-            onToggle={() => toggle('verify')}
-            renderRow={renderVerifyRow}
-          />
-        )}
-      </ol>
 
-      {hasOnPlan && (
+      {step === 'add' && (
+        <ol className="cpas-list__items">
+          {addSectionDefs.map((s) => (
+            <SectionGroup
+              key={s.id}
+              title={s.title}
+              items={s.items}
+              collapsed={collapsedSections.has(s.id)}
+              onToggle={() => toggle(s.id)}
+              renderRow={renderAddRow}
+            />
+          ))}
+          {/* Remove rows live in the same Add column — they're focuses being
+              actively cleaned from the plan. Render after all Add sections. */}
+          {liveRemoves.map(renderRemoveRow)}
+        </ol>
+      )}
+
+      {step === 'verify' && liveVerifies.length > 0 && (
+        <ol className="cpas-list__items">
+          {liveVerifies.map(renderVerifyRow)}
+        </ol>
+      )}
+
+      {step === 'on_plan' && onPlanCount > 0 && (
         <ol className="cpas-list__items cpas-list__items--onplan">
           {onPlanSectionDefs.map((s) => (
             <SectionGroup
@@ -257,22 +269,24 @@ export const AuditRail = ({
         </ol>
       )}
 
-      <div className="cpas-list__commit">
-        <button
-          className="cpas-btn cpas-btn--primary cpas-list__commit-btn"
-          disabled={commitDisabled}
-          onClick={onCommit}
-          data-track="care_plan_audit_commit"
-          data-track-prop-source="rail"
-        >
-          ✓ Stamp {commitCount.focuses} {commitCount.focuses === 1 ? 'focus' : 'focuses'} →
-        </button>
-        {needsInputCount > 0 && (
-          <div className="cpas-list__commit-warn">
-            ⚠ {needsInputCount} {needsInputCount === 1 ? 'focus needs' : 'focuses need'} input first
-          </div>
-        )}
-      </div>
+      {step === 'add' && (
+        <div className="cpas-list__commit">
+          <button
+            className="cpas-btn cpas-btn--primary cpas-list__commit-btn"
+            disabled={commitDisabled}
+            onClick={onCommit}
+            data-track="care_plan_audit_commit"
+            data-track-prop-source="rail"
+          >
+            ✓ Stamp {commitCount.focuses} {commitCount.focuses === 1 ? 'focus' : 'focuses'} →
+          </button>
+          {needsInputCount > 0 && (
+            <div className="cpas-list__commit-warn">
+              ⚠ {needsInputCount} {needsInputCount === 1 ? 'focus needs' : 'focuses need'} input first
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 };
