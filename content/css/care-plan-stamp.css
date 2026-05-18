@@ -416,10 +416,18 @@
   text-overflow: ellipsis;
 }
 /* When a row is the active selection OR flagged needs-input, the title
-   wraps to two lines instead of truncating. Tags still sit beside the
-   title via flex-wrap, but now they drop below if space is tight. */
+   wraps to two lines instead of truncating, and any tag sits BELOW the
+   title rather than fighting for horizontal space. The orange badge + bg
+   already signal needs-input visually; the pill is just confirmation. */
+.cpas-list__item.is-active .cpas-list__row-top,
+.cpas-list__item.is-needs-input .cpas-list__row-top {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
 .cpas-list__item.is-active .cpas-list__text,
 .cpas-list__item.is-needs-input .cpas-list__text {
+  flex: 1 1 100%;
   white-space: normal;
   text-overflow: clip;
   display: -webkit-box;
