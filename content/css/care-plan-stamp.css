@@ -415,6 +415,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* When a row is the active selection OR flagged needs-input, the title
+   wraps to two lines instead of truncating. Tags still sit beside the
+   title via flex-wrap, but now they drop below if space is tight. */
+.cpas-list__item.is-active .cpas-list__text,
+.cpas-list__item.is-needs-input .cpas-list__text {
+  white-space: normal;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  line-height: 1.35;
+}
 
 /* --- Focus detail (right) --- */
 .cpas-detail {
