@@ -2780,8 +2780,17 @@
   background: #e2e8f0; color: #334155;
 }
 
-/* Round 13 — onPlan block (visually de-emphasized) */
-.cpas-list__items--onplan { border-top: 1px solid #e2e8f0; opacity: 0.7; }
+/* Round 13 — onPlan block (visually de-emphasized).
+   flex: 0 0 auto so this list only takes the height of its content
+   (collapsed sections are short). Otherwise it shares the parent's
+   remaining space with the Add list and leaves dead space below. */
+.cpas-list__items--onplan {
+  border-top: 1px solid #e2e8f0;
+  opacity: 0.7;
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
+}
 .cpas-list__badge--onplan { background: #e2e8f0; color: #475569; }
 .cpas-list__item--onplan .cpas-list__text { color: #475569; }
 
