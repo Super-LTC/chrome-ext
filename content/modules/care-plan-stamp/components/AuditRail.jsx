@@ -233,7 +233,7 @@ export const AuditRail = ({
         {liveRemoves.map(renderRemoveRow)}
         {liveVerifies.length > 0 && (
           <SectionGroup
-            title={`Verify (${liveVerifies.length})`}
+            title={`Add interventions to existing focuses (${liveVerifies.length})`}
             items={liveVerifies}
             collapsed={collapsedSections.has('verify')}
             onToggle={() => toggle('verify')}

@@ -758,62 +758,22 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                       />
                     );
                   }
-                  // For history_focus / unrecognized_focus / soft_remove the
-                  // focus text ships in `item.detail` (the truncated focus
-                  // text). matchedFocusText is null for these. Prefer
-                  // matchedFocusText if populated, else fall back to detail.
-                  const focusBody = item.matchedFocusText || item.detail || '';
-                  const caaLabel = focusIdToCAA?.get?.(item.focusId) || item.caa || '';
-                  const focusLabel =
-                    item.kind === 'unrecognized_focus' ? 'Custom focus on plan' :
-                    item.kind === 'history_focus' ? 'Historical focus on plan' :
-                    item.kind === 'soft_remove' ? 'Focus on plan' :
-                    'Existing focus on plan';
-                  const dismissLabel =
-                    item.kind === 'unrecognized_focus' ? 'OK, understood' :
-                    item.kind === 'history_focus' ? 'Keep — still relevant' :
-                    item.kind === 'soft_remove' ? 'Keep' :
-                    'Dismiss';
+                  // Verify is monomorphic on backend (partial_coverage only).
+                  // This is a thin defensive fallback in case the response
+                  // shape regresses or backward-compatibility breaks.
                   return (
                     <div className="cpas-detail">
                       <div className="cpas-detail__header">
                         <div className="cpas-detail__badge">? VERIFY · {String(item.kind || '').replace(/_/g, ' ').toUpperCase()}</div>
                       </div>
-                      {focusBody && (
-                        <div className="cpas-audit-section">
-                          <div className="cpas-audit-section__label">{focusLabel}</div>
-                          <div className="cpas-audit-section__body">{focusBody}</div>
-                        </div>
-                      )}
                       <div className="cpas-audit-section">
-                        <div className="cpas-audit-section__label">Why this is flagged</div>
-                        <div className="cpas-audit-section__body">{item.reason || '—'}</div>
+                        <div className="cpas-audit-section__label">Detail</div>
+                        <div className="cpas-audit-section__body">{item.detail || item.reason || '—'}</div>
                       </div>
-                      {caaLabel && (
-                        <div className="cpas-audit-section">
-                          <div className="cpas-audit-section__label">CAA</div>
-                          <div className="cpas-audit-section__body">{caaLabel}</div>
-                        </div>
-                      )}
-                      {Array.isArray(item.sourceDxCodes) && item.sourceDxCodes.length > 0 && (
-                        <div className="cpas-audit-section">
-                          <div className="cpas-audit-section__label">Triggered by</div>
-                          <div className="cpas-audit-section__body">{item.sourceDxCodes.join(', ')}</div>
-                        </div>
-                      )}
                       <div className="cpas-audit-actions">
-                        {item.pccFocusId && (
-                          <button
-                            type="button"
-                            className="cpas-btn cpas-btn--ghost"
-                            onClick={() => window.open(`/care/chart/cp/editNeed.jsp?ESOLneedid=${item.pccFocusId}&ESOLclientid=${patientId}`, '_blank')}
-                            data-track="care_plan_audit_verify_open_in_pcc"
-                          >
-                            Open focus in PCC ↗
-                          </button>
-                        )}
-                        <button type="button" className="cpas-btn cpas-btn--primary" onClick={() => _dismissVerifyItem(item)} data-track="care_plan_audit_verify_dismissed_click">
-                          {dismissLabel}
+                        {/* NO_TRACK: defensive dismiss for non-partial kinds (should not normally render) */}
+                        <button type="button" className="cpas-btn cpas-btn--primary" onClick={() => _dismissVerifyItem(item)}>
+                          Dismiss
                         </button>
                       </div>
                     </div>

@@ -2932,3 +2932,23 @@
   background: #eef2ff; border-color: #4338ca;
 }
 .cpas-partial-intervention__add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cpas-audit-existing {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.cpas-audit-existing__block {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+.cpas-audit-existing__heading {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+.cpas-audit-existing__list {
+  margin: 0; padding-left: 18px;
+  font-size: 13px; line-height: 1.5; color: #1f2937;
+}
+.cpas-audit-existing__list li { margin: 3px 0; }

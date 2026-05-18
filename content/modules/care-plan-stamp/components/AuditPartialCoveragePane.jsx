@@ -125,6 +125,34 @@ export const AuditPartialCoveragePane = ({
         <div className="cpas-audit-section__body">{item.matchedFocusText || '—'}</div>
       </div>
 
+      {item.existingFocus && (Array.isArray(item.existingFocus.goals) || Array.isArray(item.existingFocus.interventions)) && (
+        <div className="cpas-audit-section">
+          <div className="cpas-audit-section__label">Existing on this focus</div>
+          <div className="cpas-audit-existing">
+            {Array.isArray(item.existingFocus.goals) && item.existingFocus.goals.length > 0 && (
+              <div className="cpas-audit-existing__block">
+                <div className="cpas-audit-existing__heading">Goals ({item.existingFocus.goals.length})</div>
+                <ul className="cpas-audit-existing__list">
+                  {item.existingFocus.goals.map((g, i) => (
+                    <li key={g.pccGoalId || i}>{g.description}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {Array.isArray(item.existingFocus.interventions) && item.existingFocus.interventions.length > 0 && (
+              <div className="cpas-audit-existing__block">
+                <div className="cpas-audit-existing__heading">Interventions ({item.existingFocus.interventions.length})</div>
+                <ul className="cpas-audit-existing__list">
+                  {item.existingFocus.interventions.map((iv, i) => (
+                    <li key={iv.pccInterventionId || i}>{iv.description}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="cpas-audit-section">
         <div className="cpas-audit-section__label">Suggested interventions ({rows.length})</div>
         <ul className="cpas-partial-interventions">
