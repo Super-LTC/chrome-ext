@@ -166,6 +166,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // selection is unique per-row (fixes multi-highlight bug when
           // toCheck items share a null focusId).
           (audit.toAdd || []).forEach((it, i) => { it._rowId = `add-${i}-${it.ruleId}`; });
+          (audit.toCheck || []).forEach((it, i) => { it._rowId = `verify-${i}-${it.focusId || it.detail || 'na'}`; });
           (audit.toRemove || []).forEach((it, i) => { it._rowId = `remove-${i}-${it.focusId || 'na'}`; });
           (audit.onPlan || []).forEach((it, i) => { it._rowId = `onplan-${i}-${it.ruleId || it.focusId || 'na'}`; });
           setAudit(audit);
@@ -655,6 +656,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 resolveStatus={resolveStatus}
                 toCheck={audit.toCheck || []}
                 dismissedVerifyIds={dismissedVerifyIds}
+                addNeedsInputByRowId={_auditNeedsInputByRowId(audit, auditFocusStates)}
                 selected={selectedRail}
                 onSelect={setSelectedRail}
                 onCommit={_commitAuditAdds}
@@ -867,6 +869,20 @@ function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusSt
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     return _composeFocus(it.focus, state).description.includes('___');
   }).length;
+}
+// Per-row needs-input map for the rail. Mirrors Initial Admit's needsInput
+// computation in FocusList — flat `___` placeholder OR any unfilled token key.
+function _auditNeedsInputByRowId(audit, auditFocusStates) {
+  const m = new Map();
+  (audit?.toAdd || []).forEach((it) => {
+    if (!it.focus) { m.set(it._rowId, false); return; }
+    const state = auditFocusStates[it.ruleId] || _emptyFocusState();
+    const composed = _composeFocus(it.focus, state);
+    const flatBlank = !_hasSegments(it.focus.descriptionSegments) && composed.description.includes('___');
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    m.set(it._rowId, flatBlank || tokenBlank);
+  });
+  return m;
 }
 
 function _emptyFocusState() {

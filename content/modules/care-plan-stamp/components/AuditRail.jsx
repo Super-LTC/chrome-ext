@@ -28,6 +28,7 @@ export const AuditRail = ({
   resolveStatus,
   toCheck,
   dismissedVerifyIds,
+  addNeedsInputByRowId,
   selected,
   onSelect,
   onCommit,
@@ -36,8 +37,11 @@ export const AuditRail = ({
   needsInputCount,
   stamping,
 }) => {
-  // Each section can be independently collapsed; default = all expanded.
-  const [collapsedSections, setCollapsedSections] = useState(() => new Set());
+  // Each section can be independently collapsed. Default: Add sections open,
+  // On Plan sections collapsed (they're informational, shouldn't dominate).
+  const [collapsedSections, setCollapsedSections] = useState(
+    () => new Set(['on:universal', 'on:dx', 'on:order', 'on:other'])
+  );
   const toggle = (id) => setCollapsedSections((prev) => {
     const n = new Set(prev);
     if (n.has(id)) n.delete(id); else n.add(id);
@@ -79,27 +83,35 @@ export const AuditRail = ({
 
   const isActiveRow = (item) => selected?.key === item._rowId;
 
-  const renderAddRow = (item) => (
-    <li
-      key={item._rowId}
-      className={`cpas-list__item ${isActiveRow(item) ? 'is-active' : ''}`}
-      onClick={() => onSelect({ kind: 'add', key: item._rowId })}
-    >
-      <span className="cpas-list__badge" title="Will be added to the care plan">+</span>
-      <div className="cpas-list__body">
-        <div className="cpas-list__row-top">
-          <span className="cpas-list__text">{_shortTitle(item)}</span>
-          {item.coverageSignal === 'ai_says_missing' && (
-            <span className="cpas-list__tag cpas-list__tag--ai-gap">AI gap</span>
-          )}
-          {item.coverageSignal === 'ai_says_partial' && (
-            <span className="cpas-list__tag cpas-list__tag--ai-partial">AI partial</span>
-          )}
+  const renderAddRow = (item) => {
+    const needsInput = !!addNeedsInputByRowId?.get(item._rowId);
+    return (
+      <li
+        key={item._rowId}
+        className={`cpas-list__item ${isActiveRow(item) ? 'is-active' : ''} ${needsInput ? 'is-needs-input' : ''}`}
+        onClick={() => onSelect({ kind: 'add', key: item._rowId })}
+      >
+        <span className="cpas-list__badge" title="Will be added to the care plan">+</span>
+        <div className="cpas-list__body">
+          <div className="cpas-list__row-top">
+            <span className="cpas-list__text">{_shortTitle(item)}</span>
+            {needsInput && (
+              <span className="cpas-list__tag cpas-list__tag--blank" title="This focus needs input before stamping">
+                ⚠ needs input
+              </span>
+            )}
+            {!needsInput && item.coverageSignal === 'ai_says_missing' && (
+              <span className="cpas-list__tag cpas-list__tag--ai-gap">AI gap</span>
+            )}
+            {!needsInput && item.coverageSignal === 'ai_says_partial' && (
+              <span className="cpas-list__tag cpas-list__tag--ai-partial">AI partial</span>
+            )}
+          </div>
+          <div className="cpas-list__preview">{ruleIdToCAA.get(item.ruleId) || ''}</div>
         </div>
-        <div className="cpas-list__preview">{ruleIdToCAA.get(item.ruleId) || ''}</div>
-      </div>
-    </li>
-  );
+      </li>
+    );
+  };
 
   const renderOnPlanRow = (item) => (
     <li
