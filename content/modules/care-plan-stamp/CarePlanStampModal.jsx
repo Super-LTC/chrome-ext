@@ -753,6 +753,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                         onSkip={() => _dismissVerifyItem(item)}
                         stampStatus={partialStampStatus[item._rowId]}
                         errorMessage={partialStampError[item._rowId]}
+                        dropdowns={dropdowns}
                       />
                     );
                   }

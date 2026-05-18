@@ -9,12 +9,24 @@ import { useState, useMemo } from 'preact/hooks';
  * via window.CarePlanAddInterventionAPI.addInterventions (currently a stub —
  * see content/modules/care-plan-stamp/pcc-add-intervention.js).
  */
+// Resolve a kardex/position field to a human label using the facility's
+// PCC dropdowns. Backend now ships numeric PCC IDs (see commit 24cdc7348);
+// canonicals are still accepted as a defense-in-depth fallback.
+function _labelFor(value, labelsById) {
+  if (value == null) return '';
+  const s = String(value);
+  if (/^\d+$/.test(s) && labelsById && labelsById[s]) return labelsById[s];
+  // Canonical fallback — humanize the snake_case canonical
+  return s.replace(/_/g, ' ');
+}
+
 export const AuditPartialCoveragePane = ({
   item,                  // partial_coverage toCheck item
   onStamp,               // (checkedInterventions: array) => Promise<void>
   onSkip,                // () => void
   stampStatus,           // 'idle' | 'pending' | 'done' | 'error'
   errorMessage,
+  dropdowns,             // org dropdowns for resolving kardex/position IDs to labels
 }) => {
   const total = item.suggestedInterventions?.length || 0;
   const [checked, setChecked] = useState(() => new Set(Array.from({ length: total }, (_, i) => i)));
@@ -75,21 +87,30 @@ export const AuditPartialCoveragePane = ({
       <div className="cpas-audit-section">
         <div className="cpas-audit-section__label">Suggested interventions ({total})</div>
         <ul className="cpas-partial-interventions">
-          {(item.suggestedInterventions || []).map((iv, i) => (
-            <li key={i} className={`cpas-partial-intervention ${checked.has(i) ? 'is-checked' : ''}`}>
-              {/* NO_TRACK: pure-UI checkbox toggle */}
-              <input
-                type="checkbox"
-                checked={checked.has(i)}
-                onChange={() => toggle(i)}
-                disabled={stampStatus === 'pending'}
-              />
-              <span className="cpas-partial-intervention__cat">
-                [{iv.kardexCategory}/{iv.positionOne}]
-              </span>
-              <span className="cpas-partial-intervention__text">{iv.description}</span>
-            </li>
-          ))}
+          {(item.suggestedInterventions || []).map((iv, i) => {
+            const kardexLabel = _labelFor(iv.kardexCategory, dropdowns?.kardexLabels);
+            const positionLabel = _labelFor(iv.positionOne, dropdowns?.positionLabels);
+            return (
+              <li key={i} className={`cpas-partial-intervention ${checked.has(i) ? 'is-checked' : ''}`}>
+                {/* NO_TRACK: pure-UI checkbox toggle */}
+                <input
+                  type="checkbox"
+                  checked={checked.has(i)}
+                  onChange={() => toggle(i)}
+                  disabled={stampStatus === 'pending'}
+                />
+                <div className="cpas-partial-intervention__body">
+                  <div className="cpas-partial-intervention__text">{iv.description}</div>
+                  {(kardexLabel || positionLabel) && (
+                    <div className="cpas-partial-intervention__meta">
+                      {kardexLabel && <span className="cpas-partial-intervention__chip cpas-partial-intervention__chip--kardex">{kardexLabel}</span>}
+                      {positionLabel && <span className="cpas-partial-intervention__chip cpas-partial-intervention__chip--position">{positionLabel}</span>}
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
