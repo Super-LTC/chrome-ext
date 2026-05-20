@@ -285,6 +285,62 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Fetch the unsigned print-preview PDF for a diagnosis query and hand it to
+  // chrome.downloads. PDF bytes can't be passed across the runtime boundary, so
+  // we do the auth+fetch+save here in one shot.
+  if (message.type === 'PRINT_QUERY_PDF' && typeof message.queryId === 'string') {
+    (async () => {
+      try {
+        const { authToken } = await chrome.storage.local.get('authToken');
+        if (!authToken) throw new Error('Not authenticated');
+
+        const endpoint = `/api/extension/diagnosis-queries/${message.queryId}/print`;
+        const res = await fetch(`${CONFIG.API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            selectedIcd10Code: message.selectedIcd10Code,
+            selectedIcd10Description: message.selectedIcd10Description,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(errText || `Print failed (${res.status})`);
+        }
+
+        // Convert binary → base64 data URL in chunks so large PDFs don't blow
+        // the call stack via String.fromCharCode(...spread).
+        const buf = await res.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        const CHUNK = 0x8000;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+        }
+        const dataUrl = `data:application/pdf;base64,${btoa(binary)}`;
+
+        const filename = message.filename || `query-${message.queryId.slice(0, 8)}.pdf`;
+        chrome.downloads.download(
+          { url: dataUrl, filename, saveAs: true },
+          (downloadId) => {
+            if (chrome.runtime.lastError || !downloadId) {
+              sendResponse({ success: false, error: chrome.runtime.lastError?.message || 'Download failed' });
+            } else {
+              sendResponse({ success: true, downloadId });
+            }
+          }
+        );
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'API_REQUEST') {
     (async () => {
       try {

@@ -127,6 +127,36 @@ const QueryAPI = {
   },
 
   /**
+   * Generate the unsigned print-preview PDF for a query and trigger a
+   * download via the background service worker. The background does the
+   * authenticated POST, base64-encodes the bytes, and hands the data URL to
+   * chrome.downloads — content scripts can't ferry binary across runtime.
+   * @param {string} queryId
+   * @param {{code: string, description: string, filename?: string}} selected
+   * @returns {Promise<{downloadId: number}>}
+   */
+  async printQueryPdf(queryId, { code, description, filename } = {}) {
+    if (!code || !description) {
+      throw new Error('selectedIcd10Code and selectedIcd10Description are required');
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'PRINT_QUERY_PDF',
+      queryId,
+      selectedIcd10Code: code,
+      selectedIcd10Description: description,
+      filename,
+    });
+
+    if (!response?.success) {
+      _trackApiFail('/api/extension/diagnosis-queries/:id/print', response || {});
+      throw new Error(response?.error || 'Failed to print query');
+    }
+
+    return { downloadId: response.downloadId };
+  },
+
+  /**
    * Create a new diagnosis query
    * @param {Object} queryData - Query data
    * @returns {Promise<{query: Object}>}

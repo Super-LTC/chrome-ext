@@ -28,7 +28,8 @@ const QuerySendModal = {
     practitioners: [],
     selectedPractitionerId: null,
     noteText: '',
-    urgent: false
+    urgent: false,
+    selectedIcd10: null
   },
 
   /**
@@ -56,7 +57,8 @@ const QuerySendModal = {
       practitioners: [],
       selectedPractitionerId: null,
       noteText: '',
-      urgent: false
+      urgent: false,
+      selectedIcd10: null
     };
 
     // Track open + track dismissed-via-X/ESC/backdrop close path. _suppressClose
@@ -123,6 +125,9 @@ const QuerySendModal = {
                                this._state.existingQuery.aiGeneratedNote || '';
       }
 
+      // Seed selected ICD-10 from noteData (or existing query's recommended set)
+      this._state.selectedIcd10 = this._resolveInitialIcd10();
+
       // Render step 1
       this._renderStep1();
 
@@ -174,6 +179,20 @@ const QuerySendModal = {
           this._state.noteText = e.target.value;
         });
       }
+
+      // Track ICD-10 select changes so Print/Send use the nurse's pick
+      const icd10Select = document.querySelector('#super-query-icd10-select');
+      if (icd10Select) {
+        icd10Select.addEventListener('change', (e) => {
+          const code = e.target.value;
+          const opt = (this._state.noteData?.icd10Options || []).find(o => {
+            const c = typeof o === 'object' ? o.code : o;
+            return c === code;
+          });
+          const description = opt && typeof opt === 'object' ? (opt.description || '') : '';
+          this._state.selectedIcd10 = { code, description };
+        });
+      }
     }, 50);
   },
 
@@ -189,6 +208,11 @@ const QuerySendModal = {
         label: 'Back',
         variant: 'secondary',
         action: () => this._renderStep1()
+      },
+      {
+        label: 'Print',
+        variant: 'secondary',
+        action: (btn) => this._handlePrint(btn)
       },
       {
         label: 'Send Query',
@@ -361,6 +385,116 @@ const QuerySendModal = {
       track('error_shown', { surface: 'query_send', error_code: toErrorCode(error), error_type: 'api_error' });
       console.error('Super LTC: Failed to send query', error);
       SuperToast.error(`Failed to send: ${error.message}`);
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  },
+
+  /**
+   * Resolve the initial ICD-10 selection from generated note data or an
+   * existing query's recommendedIcd10 list. Returns `{ code, description }`
+   * or null if nothing usable is available.
+   */
+  _resolveInitialIcd10() {
+    const nd = this._state.noteData;
+    if (nd?.preferredIcd10?.code) {
+      return {
+        code: nd.preferredIcd10.code,
+        description: nd.preferredIcd10.description || ''
+      };
+    }
+    const first = nd?.icd10Options?.[0];
+    if (first) {
+      const code = typeof first === 'object' ? first.code : first;
+      const description = typeof first === 'object' ? (first.description || '') : '';
+      if (code) return { code, description };
+    }
+    const existing = this._state.existingQuery?.recommendedIcd10?.[0];
+    if (existing?.code) {
+      return { code: existing.code, description: existing.description || '' };
+    }
+    return null;
+  },
+
+  /**
+   * Ensure a persisted query exists so we have an ID to print against.
+   * Mirrors the create branch of _handleSend, but never sends to a practitioner.
+   * Returns the query ID.
+   */
+  async _ensureQueryCreated() {
+    if (this._state.existingQuery?.id) return this._state.existingQuery.id;
+    if (!this._state.result) throw new Error('Nothing to print');
+
+    const ai = this._state.result.aiAnswer || {};
+    const selected = this._state.selectedIcd10;
+
+    const createData = {
+      patientId: this._state.context.patientId,
+      facilityName: this._state.context.facilityName,
+      orgSlug: this._state.context.orgSlug,
+      mdsAssessmentId: this._state.context.assessmentId,
+      mdsItem: this._state.result.mdsItem,
+      mdsItemName: ai.mdsItemName || this._state.result.description,
+      queryReason: ai.rationale || ai.queryReason || '',
+      keyFindings: ai.keyFindings || [],
+      queryEvidence: ai.evidence || ai.queryEvidence || [],
+      recommendedIcd10: selected?.code ? [{ code: selected.code, description: selected.description || '' }] : [],
+      aiGeneratedNote: this._state.noteText
+    };
+
+    const { query } = await QueryAPI.createQuery(createData);
+    QueryState.addQuery(query);
+    // Cache so a subsequent Send/Print in this same modal session reuses it.
+    this._state.existingQuery = query;
+    return query.id;
+  },
+
+  /**
+   * Handle Print button click. Persists the query if not yet created, then
+   * triggers a download of the unsigned print-preview PDF via the background
+   * service worker.
+   */
+  async _handlePrint(btn) {
+    const selected = this._state.selectedIcd10;
+    if (!selected?.code || !selected?.description) {
+      track('error_shown', { surface: 'query_print', error_code: 'no_icd10', error_type: 'validation' });
+      SuperToast.warning('Pick a recommended code to print');
+      return;
+    }
+
+    const originalText = btn.textContent;
+    btn.textContent = 'Preparing...';
+    btn.disabled = true;
+
+    const printStart = Date.now();
+    track('query_print_started', {
+      item_code: this._state.result?.mdsItem || this._state.existingQuery?.mdsItem || ''
+    });
+
+    try {
+      const queryId = await this._ensureQueryCreated();
+
+      // Build a stable filename: topic-id8.pdf
+      const topic = (this._state.result?.mdsItem || this._state.existingQuery?.mdsItem || 'query')
+        .toString()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      const filename = `query-${topic}-${queryId.slice(0, 8)}.pdf`;
+
+      await QueryAPI.printQueryPdf(queryId, {
+        code: selected.code,
+        description: selected.description,
+        filename
+      });
+
+      track('query_print_succeeded', { duration_ms: Date.now() - printStart });
+      SuperToast.success('Print preview downloaded');
+    } catch (error) {
+      track('query_print_failed', { error_code: toErrorCode(error) });
+      console.error('Super LTC: Failed to print query', error);
+      SuperToast.error(`Failed to print: ${error.message}`);
+    } finally {
       btn.textContent = originalText;
       btn.disabled = false;
     }
