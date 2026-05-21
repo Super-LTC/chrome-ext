@@ -80,6 +80,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [partialStampError, setPartialStampError] = useState({});     // { [_rowId]: string }
   // Dashboard-first flow: 'dashboard' is the overview step, others are drill-ins.
   const [comprehensiveStep, setComprehensiveStep] = useState('dashboard'); // 'dashboard' | 'add' | 'verify' | 'on_plan'
+  // Optional bucket filter for the Add step — set when the nurse clicks a
+  // dashboard tile (universal / order / dx). Null means "show all toAdd".
+  const [addBucketFilter, setAddBucketFilter] = useState(null);
 
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
@@ -100,6 +103,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setPartialStampStatus({});
     setPartialStampError({});
     setComprehensiveStep('dashboard');
+    setAddBucketFilter(null);
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -483,7 +487,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
   const _commitAuditAdds = useCallback(async (overrideItems) => {
     if (!audit || !careplanId || !miniToken) return;
-    const candidates = overrideItems || (audit.toAdd || []).filter((it) =>
+    // When the nurse is drilled into a specific bucket from the dashboard,
+    // "Add all" should only stamp items from that bucket — not the other
+    // buckets they haven't reviewed yet.
+    const scopedAudit = _filterAuditToAddByBucket(audit, addBucketFilter);
+    const candidates = overrideItems || (scopedAudit.toAdd || []).filter((it) =>
       !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
     );
     const eligible = candidates.filter((it) => {
@@ -513,6 +521,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       setStage('ready');
       setComprehensiveStep('dashboard');
       setSelectedRail(null);
+      setAddBucketFilter(null);
       window.SuperAnalytics?.track?.('care_plan_audit_commit_stamped', {
         patient_id: patientId,
         n_focuses: result?.focusesStamped ?? eligible.length,
@@ -523,7 +532,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       setErrorMsg(e.message || 'Stamp failed');
       setStage('ready');
     }
-  }, [audit, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
+  }, [audit, addBucketFilter, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
 
   const _skipAuditAddItem = useCallback(async (item) => {
     if (!item) return;
@@ -627,6 +636,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 window.SuperAnalytics?.track?.('care_plan_audit_step_exited', { from_step: comprehensiveStep });
                 setComprehensiveStep('dashboard');
                 setSelectedRail(null);
+                setAddBucketFilter(null);
               }}
               title="Back to overview"
             >
@@ -707,17 +717,23 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               audit={audit}
               stampedAddIds={stampedAddIds}
               skippedAddIds={skippedAddIds}
-              dismissedVerifyIds={dismissedVerifyIds}
-              stampedVerifyIds={stampedVerifyIds}
-              onEnterStep={(step) => {
+              onEnterStep={(step, opts) => {
                 setComprehensiveStep(step);
-                window.SuperAnalytics?.track?.('care_plan_audit_step_entered', { step });
+                const bucket = opts?.bucket || null;
+                setAddBucketFilter(step === 'add' ? bucket : null);
+                window.SuperAnalytics?.track?.('care_plan_audit_step_entered', { step, bucket });
                 if (step === 'add') {
-                  const firstAdd = (audit.toAdd || []).find((it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId));
+                  const matchBucket = (it) => {
+                    if (!bucket) return true;
+                    const id = it.ruleId || '';
+                    if (bucket === 'order') return id.startsWith('order.');
+                    if (bucket === 'dx') return id.startsWith('dx.');
+                    return !id.startsWith('order.') && !id.startsWith('dx.');
+                  };
+                  const firstAdd = (audit.toAdd || []).find(
+                    (it) => matchBucket(it) && !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
+                  );
                   if (firstAdd) setSelectedRail({ kind: 'add', key: firstAdd._rowId });
-                } else if (step === 'verify') {
-                  const firstVerify = (audit.toCheck || []).find((it) => !dismissedVerifyIds.has(it._rowId) && !stampedVerifyIds.has(it._rowId));
-                  if (firstVerify) setSelectedRail({ kind: 'verify', key: firstVerify._rowId });
                 } else if (step === 'on_plan') {
                   const firstOnPlan = (audit.onPlan || [])[0];
                   if (firstOnPlan) setSelectedRail({ kind: 'on_plan', key: firstOnPlan._rowId });
@@ -728,7 +744,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
             <div className="cpas-modal__columns">
               <AuditRail
-                audit={audit}
+                audit={_filterAuditToAddByBucket(audit, addBucketFilter)}
                 ruleIdToCAA={audit._ruleIdToCAA || new Map()}
                 focusIdToCAA={audit._focusIdToCAA || new Map()}
                 stampedAddIds={stampedAddIds}
@@ -736,13 +752,13 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 resolveStatus={resolveStatus}
                 toCheck={comprehensiveStep === 'verify' ? (audit.toCheck || []) : []}
                 dismissedVerifyIds={dismissedVerifyIds}
-                addNeedsInputByRowId={_auditNeedsInputByRowId(audit, auditFocusStates)}
+                addNeedsInputByRowId={_auditNeedsInputByRowId(_filterAuditToAddByBucket(audit, addBucketFilter), auditFocusStates)}
                 selected={selectedRail}
                 onSelect={setSelectedRail}
                 onCommit={_commitAuditAdds}
-                commitCount={_computeCommitCount(audit, stampedAddIds, skippedAddIds)}
-                commitDisabled={_auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusStates, stage)}
-                needsInputCount={_auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusStates)}
+                commitCount={_computeCommitCount(_filterAuditToAddByBucket(audit, addBucketFilter), stampedAddIds, skippedAddIds)}
+                commitDisabled={_auditCommitDisabled(_filterAuditToAddByBucket(audit, addBucketFilter), stampedAddIds, skippedAddIds, auditFocusStates, stage)}
+                needsInputCount={_auditNeedsInputCount(_filterAuditToAddByBucket(audit, addBucketFilter), stampedAddIds, skippedAddIds, auditFocusStates)}
                 stamping={stage === 'stamping'}
                 step={comprehensiveStep}
               />
@@ -922,6 +938,21 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
  * BC with proposals that lack `descriptionSegments`.
  */
 // -------- Round 9 audit commit helpers --------
+// Filter audit.toAdd by ruleId-prefix bucket so the rail only shows items
+// belonging to the tile the nurse clicked on the dashboard. Returns a shallow
+// clone with toAdd narrowed; other fields (toCheck, onPlan, byCAA, lookup
+// maps) pass through untouched so downstream code keeps working.
+function _filterAuditToAddByBucket(audit, bucket) {
+  if (!bucket || !audit) return audit;
+  const match = (it) => {
+    const id = it.ruleId || '';
+    if (bucket === 'order') return id.startsWith('order.');
+    if (bucket === 'dx') return id.startsWith('dx.');
+    return !id.startsWith('order.') && !id.startsWith('dx.');
+  };
+  return { ...audit, toAdd: (audit.toAdd || []).filter(match) };
+}
+
 function _computeCommitCount(audit, stampedAddIds, skippedAddIds) {
   // Round 10: universals no longer separated from focuses in the count.
   const live = (audit.toAdd || []).filter(

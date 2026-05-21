@@ -11,112 +11,125 @@ export const AuditDashboard = ({
   audit,
   stampedAddIds,
   skippedAddIds,
-  dismissedVerifyIds,
-  stampedVerifyIds,
   onEnterStep,
 }) => {
   useEffect(() => {
     window.SuperAnalytics?.track?.('care_plan_audit_dashboard_viewed', {});
   }, []);
 
-  const stampedVerifySet = stampedVerifyIds || new Set();
   const skippedSet = skippedAddIds || new Set();
+  const stampedSet = stampedAddIds || new Set();
 
-  const totalAdds = (audit.toAdd || []).length;
-  const stampedCount = stampedAddIds.size;
-  const remainingAdds = (audit.toAdd || []).filter(it => !stampedAddIds.has(it.ruleId) && !skippedSet.has(it.ruleId)).length;
+  // Bucket toAdd items by ruleId prefix into three groups so the dashboard
+  // tiles map 1:1 to clinical sources (baseline UCAs, MD orders, diagnoses).
+  // Items that don't fit any bucket fall into baseline as a catch-all rather
+  // than disappearing — keeps the dashboard total honest.
+  const bucketOf = (it) => {
+    const id = it.ruleId || '';
+    if (id.startsWith('order.')) return 'order';
+    if (id.startsWith('dx.')) return 'dx';
+    return 'universal';
+  };
 
-  const addBuckets = { universal: 0, dx: 0, order: 0 };
+  const grouped = { universal: [], order: [], dx: [] };
   (audit.toAdd || []).forEach((it) => {
-    if (stampedAddIds.has(it.ruleId)) return;
-    if (it.ruleId?.startsWith('universal.')) addBuckets.universal += 1;
-    else if (it.ruleId?.startsWith('dx.')) addBuckets.dx += 1;
-    else if (it.ruleId?.startsWith('order.')) addBuckets.order += 1;
+    grouped[bucketOf(it)].push(it);
   });
-  const addSubParts = [];
-  if (addBuckets.universal) addSubParts.push(`${addBuckets.universal} baseline`);
-  if (addBuckets.dx) addSubParts.push(`${addBuckets.dx} diagnosis-driven`);
-  if (addBuckets.order) addSubParts.push(`${addBuckets.order} order-driven`);
 
-  const addPreview = (audit.toAdd || [])
-    .filter((it) => !stampedAddIds.has(it.ruleId))
-    .slice(0, 3)
-    .map((it) => focusLabel(it));
-
-  const totalVerify = (audit.toCheck || []).length;
-  const liveVerifies = (audit.toCheck || []).filter((it) => !dismissedVerifyIds.has(it._rowId) && !stampedVerifySet.has(it._rowId));
-  const uniqueFocuses = new Set(liveVerifies.map((it) => it.focusId).filter(Boolean)).size;
-  const totalVerifyInterventions = liveVerifies.reduce(
-    (sum, it) => sum + (it.suggestedInterventions?.length || 0), 0
-  );
-  const verifyPreview = liveVerifies.slice(0, 3).map(verifyLabel);
+  const bucketSpec = [
+    {
+      key: 'universal',
+      kind: 'baseline',
+      title: 'Baseline focuses',
+      sublineSingular: 'baseline (universal) focus to add',
+      sublinePlural: 'baseline (universal) focuses to add',
+      doneSingular: 'baseline focus added',
+      donePlural: 'baseline focuses added',
+      icon: <IconBaseline />,
+    },
+    {
+      key: 'order',
+      kind: 'order',
+      title: 'Order-driven focuses',
+      sublineSingular: 'order-driven focus to add',
+      sublinePlural: 'order-driven focuses to add',
+      doneSingular: 'order-driven focus added',
+      donePlural: 'order-driven focuses added',
+      icon: <IconOrder />,
+    },
+    {
+      key: 'dx',
+      kind: 'dx',
+      title: 'Diagnosis-driven focuses',
+      sublineSingular: 'diagnosis-driven focus to add',
+      sublinePlural: 'diagnosis-driven focuses to add',
+      doneSingular: 'diagnosis-driven focus added',
+      donePlural: 'diagnosis-driven focuses added',
+      icon: <IconDx />,
+    },
+  ];
 
   const onPlanCount = (audit.onPlan || []).length;
-  const addComplete = totalAdds > 0 && remainingAdds === 0;
-  const verifyComplete = totalVerify > 0 && liveVerifies.length === 0;
-  const showAdd = totalAdds > 0;
-  const showVerify = totalVerify > 0;
-
-  const totalActionable = remainingAdds + liveVerifies.length;
-  const totalAuditItems = totalAdds + totalVerify + onPlanCount;
-  const totalCompletedThisSession = stampedCount + stampedVerifySet.size;
+  const totalAdds = (audit.toAdd || []).length;
+  const totalRemaining = (audit.toAdd || []).filter(
+    (it) => !stampedSet.has(it.ruleId) && !skippedSet.has(it.ruleId)
+  ).length;
+  const totalStamped = (audit.toAdd || []).filter((it) => stampedSet.has(it.ruleId)).length;
+  const totalAuditItems = totalAdds + onPlanCount;
 
   return (
     <div className="cpas-dashboard">
       <div className="cpas-dashboard__summary">
         <div className="cpas-dashboard__summary-headline">
-          {totalActionable > 0
-            ? <><strong>{totalActionable}</strong> {totalActionable === 1 ? 'item needs' : 'items need'} your review</>
+          {totalRemaining > 0
+            ? <><strong>{totalRemaining}</strong> {totalRemaining === 1 ? 'focus needs' : 'focuses need'} your review</>
             : <>✓ Care plan is up to date</>}
         </div>
         <div className="cpas-dashboard__summary-sub">
-          {totalCompletedThisSession > 0
-            ? <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} · <strong>{totalCompletedThisSession}</strong> handled this session</>
+          {totalStamped > 0
+            ? <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} · <strong>{totalStamped}</strong> added this session</>
             : <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} in this audit</>}
         </div>
       </div>
 
-      <div className="cpas-dashboard__tiles">
-        {showAdd && (
-          <Tile
-            kind="add"
-            count={addComplete ? stampedCount : remainingAdds}
-            label={
-              addComplete
-                ? `${stampedCount === 1 ? 'focus' : 'focuses'} added`
-                : (remainingAdds === 1 ? 'new focus to add' : 'new focuses to add')
-            }
-            subline={addComplete ? null : addSubParts.join(' · ')}
-            preview={addComplete ? null : addPreview}
-            complete={addComplete}
-            completeLabel={addComplete ? `All ${stampedCount} stamped` : null}
-            onEnter={() => onEnterStep('add')}
-            icon={addComplete ? <IconCheck /> : <IconPlus />}
-            ctaLabel={addComplete ? 'Review again' : 'Review & stamp'}
-          />
-        )}
-        {showVerify && (
-          <Tile
-            kind="verify"
-            count={verifyComplete ? stampedVerifySet.size : liveVerifies.length}
-            label={
-              verifyComplete
-                ? `${stampedVerifySet.size === 1 ? 'focus' : 'focuses'} verified`
-                : (liveVerifies.length === 1 ? 'existing focus to verify' : 'existing focuses to verify')
-            }
-            subline={
-              verifyComplete
-                ? null
-                : `${totalVerifyInterventions} suggested ${totalVerifyInterventions === 1 ? 'intervention' : 'interventions'} across ${uniqueFocuses} ${uniqueFocuses === 1 ? 'focus' : 'focuses'}`
-            }
-            preview={verifyComplete ? null : verifyPreview}
-            complete={verifyComplete}
-            completeLabel={verifyComplete ? `All ${stampedVerifySet.size} verified` : null}
-            onEnter={() => onEnterStep('verify')}
-            icon={<IconCheck />}
-            ctaLabel={verifyComplete ? 'Review again' : 'Review & stamp'}
-          />
-        )}
+      <div className="cpas-dashboard__tiles cpas-dashboard__tiles--three">
+        {bucketSpec.map((spec) => {
+          const items = grouped[spec.key];
+          const remaining = items.filter((it) => !stampedSet.has(it.ruleId) && !skippedSet.has(it.ruleId)).length;
+          const stampedHere = items.filter((it) => stampedSet.has(it.ruleId)).length;
+          const isEmpty = items.length === 0;
+          const isComplete = !isEmpty && remaining === 0;
+
+          const displayCount = isComplete ? stampedHere : remaining;
+          const label = isComplete
+            ? (stampedHere === 1 ? spec.doneSingular : spec.donePlural)
+            : (remaining === 1 ? spec.sublineSingular : spec.sublinePlural);
+
+          const preview = isComplete || isEmpty
+            ? null
+            : items
+                .filter((it) => !stampedSet.has(it.ruleId) && !skippedSet.has(it.ruleId))
+                .slice(0, 3)
+                .map(focusLabel);
+
+          return (
+            <Tile
+              key={spec.key}
+              kind={spec.kind}
+              count={isEmpty ? 0 : displayCount}
+              label={isEmpty ? `No ${spec.title.toLowerCase()} to add` : label}
+              preview={preview}
+              complete={isComplete}
+              empty={isEmpty}
+              completeLabel={isComplete ? `All ${stampedHere} stamped` : null}
+              onEnter={() => !isEmpty && onEnterStep('add', { bucket: spec.key })}
+              icon={isComplete ? <IconCheck /> : spec.icon}
+              ctaLabel={
+                isEmpty ? null : (isComplete ? 'Review again' : 'Review & stamp')
+              }
+            />
+          );
+        })}
       </div>
 
       {onPlanCount > 0 && (
@@ -189,18 +202,14 @@ const focusLabel = (item) => {
   return _truncate(item.description || item.detail, 60) || 'Focus';
 };
 
-const verifyLabel = (item) => {
-  if (item.matchedFocusText) return _truncate(item.matchedFocusText, 70);
-  if (item.detail) return _truncate(item.detail, 70);
-  return 'Existing focus';
-};
-
-const Tile = ({ kind, count, label, subline, preview, complete, completeLabel, onEnter, icon, ctaLabel }) => (
+const Tile = ({ kind, count, label, preview, complete, empty, completeLabel, onEnter, icon, ctaLabel }) => (
   /* NO_TRACK: navigation only, telemetry fires at the modal level via onEnterStep */
   <button
     type="button"
-    className={`cpas-dashboard__tile cpas-dashboard__tile--${kind} ${complete ? 'is-complete' : ''}`}
-    onClick={onEnter}
+    className={`cpas-dashboard__tile cpas-dashboard__tile--${kind} ${complete ? 'is-complete' : ''} ${empty ? 'is-empty' : ''}`}
+    onClick={empty ? undefined : onEnter}
+    disabled={empty}
+    aria-disabled={empty}
   >
     <span className={`cpas-dashboard__tile-icon cpas-dashboard__tile-icon--${kind}`}>{icon}</span>
 
@@ -209,7 +218,6 @@ const Tile = ({ kind, count, label, subline, preview, complete, completeLabel, o
         <span className="cpas-dashboard__tile-count">{count}</span>
         <span className="cpas-dashboard__tile-label">{label}</span>
       </span>
-      {subline && <span className="cpas-dashboard__tile-subline">{subline}</span>}
       {preview && preview.length > 0 && (
         <ul className="cpas-dashboard__tile-preview">
           {preview.map((p, i) => (
@@ -225,26 +233,46 @@ const Tile = ({ kind, count, label, subline, preview, complete, completeLabel, o
       )}
     </span>
 
-    <span className="cpas-dashboard__tile-cta">
-      <span className="cpas-dashboard__tile-cta-text">{ctaLabel}</span>
-      <span className="cpas-dashboard__tile-chevron" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-          <path d="M7 4l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+    {ctaLabel && (
+      <span className="cpas-dashboard__tile-cta">
+        <span className="cpas-dashboard__tile-cta-text">{ctaLabel}</span>
+        <span className="cpas-dashboard__tile-chevron" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+            <path d="M7 4l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
       </span>
-    </span>
+    )}
   </button>
-);
-
-const IconPlus = () => (
-  <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
-    <path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-  </svg>
 );
 
 const IconCheck = () => (
   <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
     <path d="M4 10l4 4 8-9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+);
+
+// Three bucket icons — kept simple/abstract so they don't compete with the
+// big count number. Indigo (baseline), amber (orders), teal (diagnoses).
+const IconBaseline = () => (
+  <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
+    <rect x="3" y="6" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M3 9h14" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M7 4v3M13 4v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  </svg>
+);
+
+const IconOrder = () => (
+  <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
+    <rect x="3" y="7.5" width="14" height="5" rx="2.5" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M10 7.5v5" stroke="currentColor" stroke-width="1.8"/>
+  </svg>
+);
+
+const IconDx = () => (
+  <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
+    <path d="M6 3v4a3 3 0 003 3v4a3 3 0 006 0v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="15" cy="11" r="1.7" stroke="currentColor" stroke-width="1.8"/>
   </svg>
 );
 

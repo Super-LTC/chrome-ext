@@ -3194,6 +3194,40 @@
 .cpas-dashboard__tile-icon--verify {
   background: #fef3c7; color: #b45309;
 }
+.cpas-dashboard__tile-icon--baseline {
+  background: #eef2ff; color: #4338ca;
+}
+.cpas-dashboard__tile-icon--order {
+  background: #fef3c7; color: #b45309;
+}
+.cpas-dashboard__tile-icon--dx {
+  background: #ccfbf1; color: #0f766e;
+}
+.cpas-dashboard__tile--order .cpas-dashboard__tile-cta { color: #b45309; }
+.cpas-dashboard__tile--order:hover .cpas-dashboard__tile-cta { background: #fef3c7; }
+.cpas-dashboard__tile--dx .cpas-dashboard__tile-cta { color: #0f766e; }
+.cpas-dashboard__tile--dx:hover .cpas-dashboard__tile-cta { background: #ccfbf1; }
+
+/* Empty (no items in this bucket) — flattened, non-interactive */
+.cpas-dashboard__tile.is-empty {
+  background: #f9fafb;
+  border-style: dashed;
+  cursor: default;
+  box-shadow: none;
+}
+.cpas-dashboard__tile.is-empty:hover {
+  border-color: #e5e7eb;
+  box-shadow: none;
+}
+.cpas-dashboard__tile.is-empty .cpas-dashboard__tile-icon {
+  background: #f3f4f6; color: #9ca3af;
+}
+.cpas-dashboard__tile.is-empty .cpas-dashboard__tile-count {
+  color: #9ca3af;
+}
+.cpas-dashboard__tile.is-empty .cpas-dashboard__tile-label {
+  color: #9ca3af; font-weight: 500;
+}
 
 .cpas-dashboard__tile-body {
   flex: 1; min-width: 0;
