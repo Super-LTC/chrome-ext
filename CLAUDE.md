@@ -459,6 +459,14 @@ chrome.storage.local.get(['key'], (result) => {
 - Keep this vanilla - no UI, no reason to migrate
 - Preact is only for content scripts (UI)
 
+### Analytics
+
+- Single funnel: every event goes through `content/utils/analytics.js` (PHI guardrails, schema validation, super props)
+- Dev/internal builds (`npm run build`, `npm run build:prod`) use `posthog-js` directly → `us.i.posthog.com`
+- Store builds (`npm run build:store`) replace `posthog-js` (via vite alias) with `content/utils/analytics-superltc.js`, a shim that batches events and forwards them through the background worker → `POST /api/v1/analytics/events` on superltc.com → PostHog server-side
+- Store-build chain is best-effort: 2s/50-event batching, no retries, errors swallowed. Never break the app for analytics
+- Reviewers / users on the store build see only `superltc.com` traffic — no third-party tracking code in the bundle
+
 ---
 
 ## 📋 Migration Roadmap
