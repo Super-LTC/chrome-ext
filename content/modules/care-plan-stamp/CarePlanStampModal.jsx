@@ -75,6 +75,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [selectedRail, setSelectedRail] = useState(null);           // { kind, key } | null
   // Round 14 — verify (partial_coverage + informational) state
   const [dismissedVerifyIds, setDismissedVerifyIds] = useState(new Set());
+  const [stampedVerifyIds, setStampedVerifyIds] = useState(new Set());  // verify rows successfully stamped
   const [partialStampStatus, setPartialStampStatus] = useState({});   // { [_rowId]: 'pending'|'done'|'error' }
   const [partialStampError, setPartialStampError] = useState({});     // { [_rowId]: string }
   // Dashboard-first flow: 'dashboard' is the overview step, others are drill-ins.
@@ -95,6 +96,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setSkippedAddIds(new Set());
     setSelectedRail(null);
     setDismissedVerifyIds(new Set());
+    setStampedVerifyIds(new Set());
     setPartialStampStatus({});
     setPartialStampError({});
     setComprehensiveStep('dashboard');
@@ -570,6 +572,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         orgDropdowns,
       });
       setPartialStampStatus((s) => ({ ...s, [item._rowId]: 'done' }));
+      setStampedVerifyIds((s) => new Set([...s, item._rowId]));
       window.SuperAnalytics?.track?.('care_plan_audit_partial_stamped', {
         patient_id: patientId,
         detail: item.detail,
@@ -686,7 +689,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             <AuditDashboard
               audit={audit}
               stampedAddIds={stampedAddIds}
+              skippedAddIds={skippedAddIds}
               dismissedVerifyIds={dismissedVerifyIds}
+              stampedVerifyIds={stampedVerifyIds}
               onEnterStep={(step) => {
                 setComprehensiveStep(step);
                 window.SuperAnalytics?.track?.('care_plan_audit_step_entered', { step });
@@ -694,7 +699,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   const firstAdd = (audit.toAdd || []).find((it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId));
                   if (firstAdd) setSelectedRail({ kind: 'add', key: firstAdd._rowId });
                 } else if (step === 'verify') {
-                  const firstVerify = (audit.toCheck || []).find((it) => !dismissedVerifyIds.has(it._rowId));
+                  const firstVerify = (audit.toCheck || []).find((it) => !dismissedVerifyIds.has(it._rowId) && !stampedVerifyIds.has(it._rowId));
                   if (firstVerify) setSelectedRail({ kind: 'verify', key: firstVerify._rowId });
                 } else if (step === 'on_plan') {
                   const firstOnPlan = (audit.onPlan || [])[0];
