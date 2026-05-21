@@ -10,7 +10,7 @@
 // lost. analytics() callers never see errors.
 
 const FLUSH_MS = 2000;
-const MAX_BATCH = 50;
+const FLUSH_THRESHOLD = 50;
 
 let distinctId = null;
 let superProps = {};
@@ -19,7 +19,7 @@ let queue = [];
 let timer = null;
 
 function schedule() {
-  if (queue.length >= MAX_BATCH) {
+  if (queue.length >= FLUSH_THRESHOLD) {
     flush();
   } else if (!timer) {
     timer = setTimeout(flush, FLUSH_MS);
@@ -117,5 +117,13 @@ const shim = {
   get_session_id() { return null; },
   sessionRecording: null,
 };
+
+// Flush trailing in-flight batch on page navigation. PCC is a SPA that tears
+// down content scripts on every nav, so the debounced 2s flush would otherwise
+// drop the last batch. `pagehide` fires reliably across nav (incl. bfcache),
+// unlike `beforeunload`. `capture: true` runs before other teardown listeners.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flush, { capture: true });
+}
 
 export default shim;
