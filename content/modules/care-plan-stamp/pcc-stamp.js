@@ -211,7 +211,7 @@ async function createCustomIntervention({ patientId, focusId, miniToken, descrip
     date_initiated_dummy: dateDummy,
     cp_description: description,
     instruction: instruction || '',
-    category_id: String(kardexCategory),
+    category_id: kardexCategory != null ? String(kardexCategory) : '-1',
     fsttype_id: '-1',
     oldfsstype_id: '-1',
     position_id: slot(0),

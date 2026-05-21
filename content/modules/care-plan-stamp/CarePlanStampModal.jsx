@@ -41,7 +41,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [errorMsg, setErrorMsg] = useState('');
   const [driftMissing, setDriftMissing] = useState([]);
   const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
-  const [mode, setMode] = useState(defaultMode === 'comprehensive' ? 'comprehensive' : 'initial');
+  // Force initial mode for now — Comprehensive Review is being reworked and
+  // will be re-enabled once the new flow ships. The ScopeToggle still surfaces
+  // the option, but selecting Comprehensive lands on a "Coming soon" screen.
+  const [mode, setMode] = useState('initial');
   const [audit, setAudit] = useState(null);
   const [proposal, setProposal] = useState(null);
   const [careplanId, setCareplanId] = useState(null);
@@ -144,6 +147,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         });
 
         if (mode === 'comprehensive') {
+          // Comprehensive Review is temporarily disabled — render the "Coming
+          // soon" screen and skip the audit fetch entirely.
+          setStage('ready');
+          return;
+        }
+        // Dead branch kept for the upcoming Comprehensive re-enable.
+        // eslint-disable-next-line no-unreachable
+        if (mode === 'comprehensive') {
           // Comprehensive Review path — full audit of the existing plan.
           const auditResp = await window.CarePlanAuditAPI.fetchAudit({
             patientId,
@@ -218,7 +229,21 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           console.warn('[CarePlanAutoPop] Unresolved canonicals (some fields will stamp without them):', unresolved);
         }
 
-        setProposal(prop);
+        // Treat the backend's kardex pick as a per-intervention recommendation,
+        // not a default. Every chip starts as None; the suggestion shows up
+        // inside the dropdown as "✨ Recommended". Nurses opt in deliberately.
+        const propWithRecs = {
+          ...prop,
+          focuses: (prop.focuses || []).map((f) => ({
+            ...f,
+            interventions: (f.interventions || []).map((iv) => ({
+              ...iv,
+              _recKardex: iv.kardexCategory ?? null,
+              kardexCategory: null,
+            })),
+          })),
+        };
+        setProposal(propWithRecs);
         setSkippedFocuses(Array.isArray(prop.skippedFocuses) ? prop.skippedFocuses : []);
         setCareplanId(cpId);
         setMiniToken(token);
@@ -666,7 +691,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               />
             </div>
           )}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
+          {mode === 'comprehensive' && stage === 'ready' && (
+            <ComprehensiveComingSoon />
+          )}
+          {false && mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
             <AuditDashboard
               audit={audit}
               stampedAddIds={stampedAddIds}
@@ -687,7 +715,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               }}
             />
           )}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
+          {false && mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
             <div className="cpas-modal__columns">
               <AuditRail
                 audit={audit}
@@ -1070,6 +1098,18 @@ const LoadingState = () => (
   </div>
 );
 
+const ComprehensiveComingSoon = () => (
+  <div className="cpas-empty cpas-empty--coming-soon">
+    <div className="cpas-coming-soon__icon" aria-hidden="true">🛠️</div>
+    <h3>Comprehensive Review is getting an upgrade</h3>
+    <p>
+      We're reworking the audit flow with the new MDS coordinator workflow.
+      Flip back to <strong>Initial care plan</strong> to keep going for now —
+      Comprehensive Review will return shortly.
+    </p>
+  </div>
+);
+
 const ErrorState = ({ message, onClose }) => (
   <div className="cpas-empty cpas-empty--error">
     <h3>Something went wrong</h3>
@@ -1395,10 +1435,15 @@ const LibraryBrowser = ({ patientId, careplanId, miniToken, onAddPick, pickedIds
     const filledGoals = pickedGoals.map((g) => ({
       description: _renderFilledText(_parsePlaceholderSegments(g.text), fills?.[g.stdId]),
     }));
+    // Library picks have no backend kardex recommendation — leave the chip
+    // empty so nurses pick deliberately (per "don't stamp everything onto
+    // Kardex" feedback). Safety (66) used to be the default and that's the
+    // exact behavior we're moving away from.
     const filledInters = pickedInters.map((iv) => ({
       description: _renderFilledText(_parsePlaceholderSegments(iv.text), fills?.[iv.stdId]),
       instruction: '',
-      kardexCategory: 66,
+      kardexCategory: null,
+      _recKardex: null,
       positions: [9897],
     }));
 
@@ -1446,9 +1491,11 @@ const LibraryBrowser = ({ patientId, careplanId, miniToken, onAddPick, pickedIds
         interventions: contents.interventions.slice(0, INTER_DEFAULT_LIMIT).map((iv) => ({
           description: iv.text,
           instruction: '',
-          // PCC's std interventions don't have Kardex/Position bound until save —
-          // use safe defaults; nurse can adjust on expand.
-          kardexCategory: 66,  // Safety
+          // PCC's std interventions don't have Kardex/Position bound until save.
+          // Leave Kardex unset — nurses opt in deliberately (per "stop stamping
+          // everything onto the Kardex" feedback).
+          kardexCategory: null,
+          _recKardex: null,
           positions: [9897],   // RN
         })),
         _meta: {
@@ -1791,7 +1838,11 @@ const LibraryConfigure = ({ state, onToggleGoal, onToggleInter, onSetItemFills, 
  * Trigger: a chip-style button showing the current value.
  * Popover: search input + filtered list. ESC closes, arrows navigate, enter picks.
  */
-export const Combobox = ({ value, labels, options, onChange, disabled, variant, ariaLabel, triggerClass, placeholder, fullWidth }) => {
+export const Combobox = ({
+  value, labels, options, onChange, disabled, variant, ariaLabel,
+  triggerClass, placeholder, fullWidth,
+  recommendedId, kindBadge, allowClear,
+}) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
@@ -1799,13 +1850,20 @@ export const Combobox = ({ value, labels, options, onChange, disabled, variant, 
   const inputRef = useRef(null);
 
   const label = (value != null && labels[value]) ? labels[value] : (value != null ? `(${value})` : (placeholder || 'Select…'));
+  const isOnRecommendation = recommendedId != null && value != null && Number(value) === Number(recommendedId);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = options || [];
-    if (!q) return list;
-    return list.filter((o) => o.label.toLowerCase().includes(q));
-  }, [options, query]);
+    const base = q ? list.filter((o) => o.label.toLowerCase().includes(q)) : list;
+    // Pin the recommended option to the top so nurses see the suggestion first.
+    if (recommendedId == null) return base;
+    const recIdx = base.findIndex((o) => Number(o.id) === Number(recommendedId));
+    if (recIdx <= 0) return base;
+    const copy = base.slice();
+    const [rec] = copy.splice(recIdx, 1);
+    return [rec, ...copy];
+  }, [options, query, recommendedId]);
 
   useEffect(() => {
     if (!open) return;
@@ -1821,7 +1879,7 @@ export const Combobox = ({ value, labels, options, onChange, disabled, variant, 
   }, [open]);
 
   const choose = (opt) => {
-    onChange(Number(opt.id));
+    onChange(opt == null ? null : Number(opt.id));
     setOpen(false);
   };
 
@@ -1833,7 +1891,7 @@ export const Combobox = ({ value, labels, options, onChange, disabled, variant, 
   };
 
   return (
-    <span className={`cpas-combobox ${variant ? `cpas-combobox--${variant}` : ''} ${fullWidth ? 'is-full' : ''}`} ref={rootRef}>
+    <span className={`cpas-combobox ${variant ? `cpas-combobox--${variant}` : ''} ${fullWidth ? 'is-full' : ''} ${isOnRecommendation ? 'is-recommended' : ''}`} ref={rootRef}>
       {/* NO_TRACK: pure-UI open of combobox popover */}
       <button
         type="button"
@@ -1843,8 +1901,10 @@ export const Combobox = ({ value, labels, options, onChange, disabled, variant, 
         aria-label={ariaLabel}
         aria-expanded={open}
       >
+        {kindBadge && <span className="cpas-combobox__badge" aria-hidden="true">{kindBadge}</span>}
         {variant === 'pos' && <span className="cpas-chip__icon" aria-hidden="true">●</span>}
         <span className="cpas-combobox__label">{label}</span>
+        {isOnRecommendation && <span className="cpas-combobox__sparkle" aria-hidden="true">✨</span>}
         <span className="cpas-combobox__caret" aria-hidden="true">▾</span>
       </button>
       {open && (
@@ -1859,17 +1919,36 @@ export const Combobox = ({ value, labels, options, onChange, disabled, variant, 
             onKeyDown={handleKey}
           />
           <ul className="cpas-combobox__list">
+            {allowClear && (
+              <>
+                <li
+                  className={`cpas-combobox__option cpas-combobox__option--none ${value == null ? 'is-selected' : ''}`}
+                  onClick={() => choose(null)}
+                >
+                  <span className="cpas-combobox__option-none-label">None</span>
+                </li>
+                <li className="cpas-combobox__divider" aria-hidden="true" />
+              </>
+            )}
             {filtered.length === 0 && <li className="cpas-combobox__empty">No matches.</li>}
-            {filtered.map((o, i) => (
-              <li
-                key={o.id}
-                className={`cpas-combobox__option ${i === activeIdx ? 'is-active' : ''} ${Number(o.id) === Number(value) ? 'is-selected' : ''}`}
-                onMouseEnter={() => setActiveIdx(i)}
-                onClick={() => choose(o)}
-              >
-                {o.label}
-              </li>
-            ))}
+            {filtered.map((o, i) => {
+              const rec = recommendedId != null && Number(o.id) === Number(recommendedId);
+              return (
+                <li
+                  key={o.id}
+                  className={`cpas-combobox__option ${i === activeIdx ? 'is-active' : ''} ${Number(o.id) === Number(value) ? 'is-selected' : ''} ${rec ? 'is-recommended' : ''}`}
+                  onMouseEnter={() => setActiveIdx(i)}
+                  onClick={() => choose(o)}
+                >
+                  <span className="cpas-combobox__option-label">{o.label}</span>
+                  {rec && (
+                    <span className="cpas-combobox__option-rec">
+                      <span aria-hidden="true">✨</span> Recommended
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

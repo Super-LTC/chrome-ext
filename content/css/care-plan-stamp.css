@@ -1065,6 +1065,16 @@
 .cpas-empty--error h3 {
   color: #b91c1c;
 }
+.cpas-empty--coming-soon {
+  padding: 56px 32px;
+}
+.cpas-coming-soon__icon {
+  font-size: 48px; line-height: 1; margin-bottom: 16px;
+}
+.cpas-empty--coming-soon h3 {
+  color: #1f2937; font-size: 18px;
+}
+.cpas-empty--coming-soon p { color: #4b5563; max-width: 520px; }
 .cpas-empty details {
   margin: 16px 0;
   max-width: 600px;
@@ -1427,18 +1437,18 @@
 }
 .cpas-combobox__popover {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
-  min-width: 260px;
-  max-width: 400px;
+  min-width: 300px;
+  max-width: 440px;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.06);
   z-index: 100025;
   display: flex;
   flex-direction: column;
-  max-height: 360px;
+  max-height: 380px;
   overflow: hidden;
 }
 .cpas-combobox.is-full .cpas-combobox__popover {
@@ -1498,6 +1508,85 @@
   color: #9ca3af;
   font-style: italic;
 }
+/* Badge + sparkle on the trigger (Kardex "K", ✨ when on recommendation) */
+.cpas-combobox__badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  margin-right: 4px;
+  border-radius: 3px;
+  background: rgba(79, 70, 229, 0.18);
+  color: #3730a3;
+  font-size: 9px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.04em;
+}
+.cpas-combobox--pos .cpas-combobox__badge {
+  background: rgba(22, 163, 74, 0.18); color: #166534;
+}
+.cpas-combobox__sparkle {
+  margin: 0 2px 0 4px;
+  font-size: 10px; line-height: 1;
+}
+.cpas-combobox.is-recommended .cpas-combobox__trigger {
+  border-color: rgba(180, 83, 9, 0.45);
+}
+/* Empty-state chip (no Kardex selected) */
+.cpas-chip.is-empty {
+  background: #f3f4f6; color: #6b7280;
+  border: 1px dashed #d1d5db;
+}
+/* Dropdown option styling — "None" + recommended */
+.cpas-combobox__option--none {
+  padding: 8px 12px;
+}
+.cpas-combobox__option--none .cpas-combobox__option-none-label {
+  color: #6b7280; font-style: italic;
+}
+.cpas-combobox__option--none::before {
+  content: '∅' !important;
+  color: #9ca3af !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+}
+.cpas-combobox__option--none.is-selected .cpas-combobox__option-none-label {
+  color: #111827; font-style: normal; font-weight: 600;
+}
+.cpas-combobox__divider {
+  list-style: none;
+  height: 1px; margin: 4px 12px;
+  background: #f3f4f6;
+}
+.cpas-combobox__option.is-recommended {
+  background: #fffbeb;
+  position: relative;
+}
+.cpas-combobox__option.is-recommended::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 3px;
+  background: #f59e0b;
+  border-radius: 0 2px 2px 0;
+}
+.cpas-combobox__option.is-recommended.is-active,
+.cpas-combobox__option.is-recommended.is-selected {
+  background: #fef3c7;
+}
+.cpas-combobox__option-rec {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fde68a;
+  font-size: 10px; font-weight: 700;
+  color: #92400e;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.cpas-combobox__option {
+  display: flex; align-items: center; gap: 8px;
+}
+.cpas-combobox__option-label { flex: 1; }
 .cpas-chip-wrap {
   display: inline-flex;
   align-items: center;
@@ -2932,6 +3021,87 @@
   background: #eef2ff; border-color: #4338ca;
 }
 .cpas-partial-intervention__add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- Recommendable chip dropdown (Kardex / Team) --- */
+.cpas-partial-intervention__chip { position: relative; padding: 0; }
+.cpas-partial-intervention__chip-trigger {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: inherit; font-size: 11px; font-weight: 500;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cpas-partial-intervention__chip-trigger:disabled { cursor: not-allowed; opacity: 0.6; }
+.cpas-partial-intervention__chip-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.08);
+  font-size: 9px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.04em;
+  color: inherit;
+}
+.cpas-partial-intervention__chip--kardex .cpas-partial-intervention__chip-badge {
+  background: #c7d2fe; color: #3730a3;
+}
+.cpas-partial-intervention__chip--position .cpas-partial-intervention__chip-badge {
+  background: #bbf7d0; color: #166534;
+}
+.cpas-partial-intervention__chip-sparkle {
+  font-size: 10px; line-height: 1;
+}
+.cpas-partial-intervention__chip.is-recommended {
+  outline: 1px dashed currentColor;
+  outline-offset: -1px;
+}
+
+.cpas-partial-intervention__chip-pop {
+  position: absolute; top: calc(100% + 4px); left: 0;
+  z-index: 50;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.cpas-partial-intervention__chip-search {
+  width: 100%; box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font: inherit; font-size: 12px;
+  outline: none;
+}
+.cpas-partial-intervention__chip-search:focus { border-color: #6366f1; }
+.cpas-partial-intervention__chip-list {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 220px; overflow-y: auto;
+}
+.cpas-partial-intervention__chip-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px; color: #1f2937;
+  cursor: pointer;
+}
+.cpas-partial-intervention__chip-option:hover { background: #f3f4f6; }
+.cpas-partial-intervention__chip-option.is-selected { background: #eef2ff; color: #3730a3; font-weight: 600; }
+.cpas-partial-intervention__chip-option.is-recommended { background: #fffbeb; }
+.cpas-partial-intervention__chip-option.is-recommended.is-selected { background: #fef3c7; }
+.cpas-partial-intervention__chip-option-label.is-none { color: #6b7280; font-style: italic; }
+.cpas-partial-intervention__chip-option-rec {
+  font-size: 10px; font-weight: 600;
+  color: #b45309;
+  white-space: nowrap;
+}
+.cpas-partial-intervention__chip-empty {
+  padding: 8px; font-size: 12px; color: #9ca3af; text-align: center;
+}
 
 .cpas-audit-existing {
   display: flex; flex-direction: column; gap: 12px;

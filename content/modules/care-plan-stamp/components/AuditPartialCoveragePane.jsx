@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useMemo } from 'preact/hooks';
+import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
 
 /**
  * Right pane for a `partial_coverage` toCheck item.
@@ -9,28 +9,118 @@ import { useState, useMemo } from 'preact/hooks';
  * Primary CTA stamps the resulting edited+checked interventions onto the
  * existing PCC focus via window.CarePlanAddInterventionAPI.addInterventions
  * (see content/modules/care-plan-stamp/pcc-add-intervention.js).
+ *
+ * Kardex/Position from the backend are treated as RECOMMENDATIONS — rows
+ * default to "None", and the recommended option is decorated with a ✨ inside
+ * the dropdown. Nurses opt in instead of nurses opting out (filling the Kardex
+ * indiscriminately makes them very angry).
  */
 
-const ChipSelect = ({ kind, value, options, labels, onChange, placeholder, disabled }) => {
+const KIND_LABEL = { kardex: 'K', position: 'Team' };
+
+const RecommendableChipSelect = ({
+  kind, value, options, labels,
+  onChange, placeholder, disabled, recommendedId,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
   const currentLabel = value != null ? (labels[String(value)] || '') : '';
+  const isRecommended = recommendedId != null && value != null && Number(value) === Number(recommendedId);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery('');
+    requestAnimationFrame(() => inputRef.current?.focus());
+    const onDocClick = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const list = options || [];
+    const q = query.trim().toLowerCase();
+    const base = q ? list.filter((o) => o.label.toLowerCase().includes(q)) : list;
+    // Pin the recommended option to the top if it matches the current filter.
+    if (recommendedId == null) return base;
+    const recIdx = base.findIndex((o) => Number(o.id) === Number(recommendedId));
+    if (recIdx <= 0) return base;
+    const copy = base.slice();
+    const [rec] = copy.splice(recIdx, 1);
+    return [rec, ...copy];
+  }, [options, query, recommendedId]);
+
+  const choose = (id) => {
+    onChange(id);
+    setOpen(false);
+  };
+
   return (
-    <label className={`cpas-partial-intervention__chip cpas-partial-intervention__chip--${kind} ${value == null ? 'is-empty' : ''}`}>
-      <span className="cpas-partial-intervention__chip-text">
-        {currentLabel || placeholder}
-      </span>
-      <span className="cpas-partial-intervention__chip-caret">▾</span>
-      <select
-        className="cpas-partial-intervention__chip-select"
-        value={value ?? ''}
-        onChange={(e) => onChange(e.currentTarget.value === '' ? null : e.currentTarget.value)}
+    <span
+      className={`cpas-partial-intervention__chip cpas-partial-intervention__chip--${kind} ${value == null ? 'is-empty' : ''} ${isRecommended ? 'is-recommended' : ''}`}
+      ref={rootRef}
+    >
+      {/* NO_TRACK: pure-UI dropdown toggle */}
+      <button
+        type="button"
+        className="cpas-partial-intervention__chip-trigger"
+        onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
+        aria-expanded={open}
+        aria-label={`${kind === 'kardex' ? 'Kardex category' : 'Team'} (optional)`}
       >
-        <option value="">{placeholder}</option>
-        {(options || []).map((opt) => (
-          <option key={opt.id} value={opt.id}>{opt.label}</option>
-        ))}
-      </select>
-    </label>
+        <span className="cpas-partial-intervention__chip-badge" aria-hidden="true">{KIND_LABEL[kind] || ''}</span>
+        <span className="cpas-partial-intervention__chip-text">
+          {currentLabel || placeholder}
+        </span>
+        {isRecommended && <span className="cpas-partial-intervention__chip-sparkle" aria-hidden="true">✨</span>}
+        <span className="cpas-partial-intervention__chip-caret" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="cpas-partial-intervention__chip-pop" role="listbox">
+          <input
+            ref={inputRef}
+            type="text"
+            className="cpas-partial-intervention__chip-search"
+            placeholder="Search…"
+            value={query}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+          />
+          <ul className="cpas-partial-intervention__chip-list">
+            <li
+              className={`cpas-partial-intervention__chip-option ${value == null ? 'is-selected' : ''}`}
+              onClick={() => choose(null)}
+            >
+              <span className="cpas-partial-intervention__chip-option-label is-none">None</span>
+            </li>
+            {filtered.length === 0 && (
+              <li className="cpas-partial-intervention__chip-empty">No matches.</li>
+            )}
+            {filtered.map((opt) => {
+              const rec = recommendedId != null && Number(opt.id) === Number(recommendedId);
+              const selected = value != null && Number(opt.id) === Number(value);
+              return (
+                <li
+                  key={opt.id}
+                  className={`cpas-partial-intervention__chip-option ${selected ? 'is-selected' : ''} ${rec ? 'is-recommended' : ''}`}
+                  onClick={() => choose(opt.id)}
+                >
+                  <span className="cpas-partial-intervention__chip-option-label">{opt.label}</span>
+                  {rec && (
+                    <span className="cpas-partial-intervention__chip-option-rec">
+                      <span aria-hidden="true">✨</span> Recommended
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </span>
   );
 };
 
@@ -42,11 +132,16 @@ export const AuditPartialCoveragePane = ({
   errorMessage,
   dropdowns,             // org dropdowns for resolving kardex/position IDs to labels
 }) => {
+  // Backend kardex/position are RECOMMENDATIONS, not defaults. Stamping rows
+  // wholesale to the Kardex makes nurses very angry, so leave them as None
+  // until the nurse explicitly picks one.
   const [rows, setRows] = useState(() =>
     (item.suggestedInterventions || []).map((iv) => ({
       description: iv.description || '',
-      kardexCategory: iv.kardexCategory ?? null,
-      positionOne: iv.positionOne ?? null,
+      kardexCategory: null,
+      positionOne: null,
+      _recKardex: iv.kardexCategory ?? null,
+      _recPosition: iv.positionOne ?? null,
       checked: true,
       _custom: false,
     }))
@@ -63,6 +158,8 @@ export const AuditPartialCoveragePane = ({
       description: '',
       kardexCategory: null,
       positionOne: null,
+      _recKardex: null,
+      _recPosition: null,
       checked: true,
       _custom: true,
     }]);
@@ -74,10 +171,9 @@ export const AuditPartialCoveragePane = ({
     [rows]
   );
 
+  // Only the description is required — Kardex/Team are optional recommendations.
   const invalidCount = useMemo(
-    () => rows.filter(r => r.checked && (
-      r.description.trim() === '' || r.kardexCategory == null || r.positionOne == null
-    )).length,
+    () => rows.filter((r) => r.checked && r.description.trim() === '').length,
     [rows]
   );
 
@@ -175,22 +271,24 @@ export const AuditPartialCoveragePane = ({
                   disabled={stampStatus === 'pending'}
                 />
                 <div className="cpas-partial-intervention__meta">
-                  <ChipSelect
+                  <RecommendableChipSelect
                     kind="kardex"
                     value={row.kardexCategory}
                     options={dropdowns?.kardexOptions || []}
                     labels={dropdowns?.kardexLabels || {}}
+                    recommendedId={row._recKardex}
                     onChange={(v) => patchRow(idx, { kardexCategory: v })}
-                    placeholder="Choose category"
+                    placeholder="Select Kardex (none)"
                     disabled={stampStatus === 'pending'}
                   />
-                  <ChipSelect
+                  <RecommendableChipSelect
                     kind="position"
                     value={row.positionOne}
                     options={dropdowns?.positionOptions || []}
                     labels={dropdowns?.positionLabels || {}}
+                    recommendedId={row._recPosition}
                     onChange={(v) => patchRow(idx, { positionOne: v })}
-                    placeholder="Choose team"
+                    placeholder="Select team (none)"
                     disabled={stampStatus === 'pending'}
                   />
                 </div>
@@ -243,7 +341,7 @@ export const AuditPartialCoveragePane = ({
       </div>
       {invalidCount > 0 && (
         <div className="cpas-list__commit-warn">
-          ⚠ {invalidCount} {invalidCount === 1 ? 'row needs' : 'rows need'} description, category, and team
+          ⚠ {invalidCount} {invalidCount === 1 ? 'row needs' : 'rows need'} a description
         </div>
       )}
     </div>

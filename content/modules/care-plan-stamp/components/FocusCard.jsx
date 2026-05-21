@@ -70,8 +70,9 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
     onUpdate({ interventions: next });
   };
   const addIntervention = () => {
-    // Inherit kardex + positions from the first existing intervention if any,
-    // else fall back to Safety (66) + RN (9897) — common nursing defaults.
+    // Inherit positions from the first existing intervention if any (default
+    // to RN). Kardex is left unset — nurses opt in deliberately rather than
+    // having "Safety" stamped on every Kardex item.
     const seed = interventions[0] || (rawFocus.interventions || [])[0];
     const seedPositions = _normalizePositions(seed || {});
     onUpdate({
@@ -80,7 +81,8 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
         {
           description: '',
           instruction: '',
-          kardexCategory: seed?.kardexCategory ?? 66,
+          kardexCategory: null,
+          _recKardex: null,
           positions: seedPositions.length > 0 ? seedPositions : [9897],
         },
       ],
@@ -292,6 +294,10 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                         onChange={(v) => editIntervention(i, { kardexCategory: v })}
                         disabled={readOnly}
                         variant="kardex"
+                        recommendedId={iv._recKardex}
+                        kindBadge="K"
+                        allowClear
+                        placeholder="Select Kardex (none)"
                       />
                       {posList.map((p, j) => (
                         <PositionChip
@@ -635,7 +641,7 @@ const IconPencil = () => (
 
 // ---------- Kardex / Position chips ----------
 
-const ChipSelect = ({ value, labels, options, onChange, disabled, variant }) => (
+const ChipSelect = ({ value, labels, options, onChange, disabled, variant, recommendedId, kindBadge, allowClear, placeholder }) => (
   <Combobox
     value={value}
     labels={labels}
@@ -644,7 +650,11 @@ const ChipSelect = ({ value, labels, options, onChange, disabled, variant }) => 
     disabled={disabled}
     variant={variant === 'kardex' ? 'kardex' : variant}
     ariaLabel={variant === 'kardex' ? 'Kardex category' : 'Select'}
-    triggerClass={`cpas-chip cpas-chip--${variant || 'default'}`}
+    triggerClass={`cpas-chip cpas-chip--${variant || 'default'} ${value == null ? 'is-empty' : ''}`}
+    recommendedId={recommendedId}
+    kindBadge={kindBadge}
+    allowClear={allowClear}
+    placeholder={placeholder}
   />
 );
 
