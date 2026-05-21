@@ -73,6 +73,7 @@ export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss
             decision: 'disagree',
             note: reason || '',
             mdsColumn,
+            ...(window.getMDSContextBodyFields?.() || {}),
           }),
         },
       });

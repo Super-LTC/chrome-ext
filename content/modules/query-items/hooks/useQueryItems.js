@@ -28,6 +28,7 @@ export function useQueryItems({ patientId, facilityName, orgSlug, assessmentId }
         orgSlug
       });
       if (assessmentId) qiParams.set('externalAssessmentId', assessmentId);
+      window.appendMDSContextParams?.(qiParams);
 
       // Fetch queryable-items first
       const qiResponse = await chrome.runtime.sendMessage({
@@ -54,6 +55,7 @@ export function useQueryItems({ patientId, facilityName, orgSlug, assessmentId }
           orgSlug,
           externalAssessmentId: resolvedAssessmentId
         });
+        window.appendMDSContextParams?.(pdpmParams);
 
         const pdpmResponse = await chrome.runtime.sendMessage({
           type: 'API_REQUEST',

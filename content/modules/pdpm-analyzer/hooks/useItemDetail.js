@@ -29,8 +29,14 @@ export function useItemDetail(mdsItem, categoryKey, context) {
         const derivedCategoryKey = colonIdx >= 0 ? mdsItem.slice(colonIdx + 1) : null;
         const finalCategoryKey = categoryKey || derivedCategoryKey;
 
-        let endpoint = `/api/extension/mds/items/${encodeURIComponent(apiCode)}?externalAssessmentId=${context.assessmentId}&facilityName=${encodeURIComponent(facilityName)}&orgSlug=${encodeURIComponent(orgSlug)}`;
-        if (finalCategoryKey) endpoint += `&categoryKey=${encodeURIComponent(finalCategoryKey)}`;
+        const itemParams = new URLSearchParams({
+          externalAssessmentId: context.assessmentId,
+          facilityName,
+          orgSlug,
+        });
+        if (finalCategoryKey) itemParams.set('categoryKey', finalCategoryKey);
+        window.appendMDSContextParams?.(itemParams);
+        const endpoint = `/api/extension/mds/items/${encodeURIComponent(apiCode)}?${itemParams}`;
 
         console.log('[useItemDetail] fetch', {
           mdsItem,

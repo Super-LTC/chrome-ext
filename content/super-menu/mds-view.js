@@ -114,6 +114,7 @@ async function loadMDSData(context, forceRefresh = false) {
       facilityName,
       orgSlug
     });
+    window.appendMDSContextParams?.(params);
 
     const result = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
@@ -1303,6 +1304,7 @@ async function fetchMDSItem(itemCode, categoryKey) {
   if (resolvedCategoryKey) {
     params.set('categoryKey', resolvedCategoryKey);
   }
+  window.appendMDSContextParams?.(params);
   console.log('Super Menu: fetchMDSItem itemCode:', itemCode, 'categoryKey:', categoryKey, 'resolvedCategoryKey:', resolvedCategoryKey, 'apiItemCode:', apiItemCode, 'url:', `/api/extension/mds/items/${apiItemCode}?${params}`);
 
   const result = await chrome.runtime.sendMessage({

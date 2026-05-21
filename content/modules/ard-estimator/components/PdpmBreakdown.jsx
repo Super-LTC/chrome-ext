@@ -16,6 +16,7 @@ export async function fetchItemDetail(itemCode, assessmentId, facilityName, orgS
   // I8000 (and similar bucket items) require categoryKey to disambiguate
   // multiple sub-items that share the same MDS code (e.g. NTA:18 vs NTA:26).
   if (categoryKey) params.set('categoryKey', categoryKey);
+  window.appendMDSContextParams?.(params);
 
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',

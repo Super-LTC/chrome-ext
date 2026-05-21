@@ -60,6 +60,7 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
         if (context.scope === 'mds' && context.assessmentId) {
           // Single assessment — fetch detail directly
           const params = new URLSearchParams({ externalAssessmentId: context.assessmentId, facilityName, orgSlug });
+          window.appendMDSContextParams?.(params);
           const result = await chrome.runtime.sendMessage({
             type: 'API_REQUEST',
             endpoint: `/api/extension/mds/pdpm-potential?${params}`,
@@ -117,6 +118,7 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
       try {
         const { orgSlug, facilityName } = await getApiContext();
         const params = new URLSearchParams({ externalAssessmentId: selectedAssessmentId, facilityName, orgSlug });
+        window.appendMDSContextParams?.(params);
         const result = await chrome.runtime.sendMessage({
           type: 'API_REQUEST',
           endpoint: `/api/extension/mds/pdpm-potential?${params}`,

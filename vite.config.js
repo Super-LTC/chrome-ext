@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { crx } from '@crxjs/vite-plugin';
-import { copyFileSync, mkdirSync, readdirSync } from 'fs';
+import { copyFileSync, mkdirSync, readdirSync, renameSync, readFileSync, writeFileSync } from 'fs';
 import manifest from './manifest.json';
 
 // Plugin to copy content CSS into dist (crx plugin doesn't handle static CSS in content_scripts)
@@ -40,6 +40,63 @@ function copyStaticAssets(outDir) {
   };
 }
 
+// The crx plugin emits the content-script loader with a hashed filename
+// (content.js-loader-<hash>.js) and writes that hashed name into the
+// manifest. That breaks the auto-updater flow: after the updater swaps
+// files on disk, Chrome's loaded manifest still references the OLD
+// hashed loader name — every new PCC navigation 404s on the loader fetch
+// until the user clicks the banner and the extension fully reloads.
+// Renaming the loader to a stable name after build means each new
+// navigation reads the latest loader from disk and silently picks up the
+// newly-hashed inner bundle. The inner content.js bundle stays hashed
+// for cache-busting; only the thin shim is renamed.
+function stableLoaderName(outDir) {
+  return {
+    name: 'stable-loader-name',
+    writeBundle: {
+      sequential: true,
+      order: 'post',
+      handler() {
+        const assetsDir = `${outDir}/assets`;
+        const loaders = readdirSync(assetsDir).filter(f => /^content\.js-loader.*\.js$/.test(f));
+        if (loaders.length !== 1) {
+          console.warn(`[stable-loader-name] expected 1 loader file, found ${loaders.length}; skipping`);
+          return;
+        }
+        const oldName = loaders[0];
+        const stableName = 'content-loader.js';
+        renameSync(`${assetsDir}/${oldName}`, `${assetsDir}/${stableName}`);
+        const manifestPath = `${outDir}/manifest.json`;
+        const updated = readFileSync(manifestPath, 'utf-8').split(`assets/${oldName}`).join(`assets/${stableName}`);
+        writeFileSync(manifestPath, updated);
+      }
+    }
+  };
+}
+
+// Plugin to replace the posthog-js import with an empty stub for Chrome
+// Web Store builds. analytics.js already early-returns when ENABLED is
+// false, so every posthog.* call site is dead code under the placeholder
+// key — stubbing the import lets Rollup tree-shake the entire library
+// out of the bundle so reviewers see no third-party tracking code.
+function stubPosthogInStore(mode) {
+  const isStore = mode === 'store';
+  return {
+    name: 'stub-posthog',
+    enforce: 'pre',
+    resolveId(source) {
+      if (isStore && source.startsWith('posthog-js')) {
+        return '\0empty-posthog';
+      }
+    },
+    load(id) {
+      if (id === '\0empty-posthog') {
+        return 'export default {};';
+      }
+    }
+  };
+}
+
 // Plugin to strip mock data files from production builds
 function stripMocksInProduction(mode) {
   const mockFiles = ['mockData.js', 'icd10-mock-data.js'];
@@ -62,6 +119,7 @@ function stripMocksInProduction(mode) {
 
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
+  const isStore = mode === 'store';
 
   // Customize manifest per environment
   const buildManifest = JSON.parse(JSON.stringify(manifest));
@@ -78,14 +136,30 @@ export default defineConfig(({ mode }) => {
     }));
   }
 
-  const outDir = isDev ? 'dist' : 'dist-prod';
+  // Chrome Web Store build: strip permissions reviewers scrutinize and
+  // narrow <all_urls> down to the hosts the extension actually touches.
+  // PostHog disables itself when POSTHOG_KEY is the placeholder (see
+  // content/utils/analytics.js).
+  if (isStore) {
+    buildManifest.permissions = (buildManifest.permissions || []).filter(
+      p => p !== 'tabs'
+    );
+    buildManifest.host_permissions = [
+      '*://*.pointclickcare.com/*',
+      'https://superltc.com/*',
+    ];
+  }
+
+  const outDir = isDev ? 'dist' : isStore ? 'dist-store' : 'dist-prod';
 
   return {
     plugins: [
+      stubPosthogInStore(mode),
       stripMocksInProduction(mode),
       preact(),
       crx({ manifest: buildManifest }),
-      copyStaticAssets(outDir)
+      copyStaticAssets(outDir),
+      stableLoaderName(outDir)
     ],
     define: {
       // Replaced at build time in background.js

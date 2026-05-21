@@ -23,6 +23,7 @@ export function useArdEstimator({ patientId, facilityName, orgSlug, assessmentId
       const params = new URLSearchParams({ facilityName, orgSlug });
       if (assessmentId) params.set('externalAssessmentId', assessmentId);
       if (patientId) params.set('patientExternalId', patientId);
+      window.appendMDSContextParams?.(params);
 
       const response = await chrome.runtime.sendMessage({
         type: 'API_REQUEST',

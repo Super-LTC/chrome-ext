@@ -140,10 +140,13 @@ async function fetchItemEvidence(section, itemCode) {
   const cacheKey = `${section}:${itemCode}`;
   if (EvidenceCache.has(cacheKey)) return EvidenceCache.get(cacheKey);
 
-  const endpoint = `/api/extension/mds/sections/${section}/items/${encodeURIComponent(itemCode)}/evidence` +
-    `?externalAssessmentId=${SuperOverlay.assessmentId}` +
-    `&facilityName=${encodeURIComponent(SuperOverlay.facilityName)}` +
-    `&orgSlug=${SuperOverlay.orgSlug}`;
+  const params = new URLSearchParams({
+    externalAssessmentId: SuperOverlay.assessmentId,
+    facilityName: SuperOverlay.facilityName,
+    orgSlug: SuperOverlay.orgSlug,
+  });
+  window.appendMDSContextParams?.(params);
+  const endpoint = `/api/extension/mds/sections/${section}/items/${encodeURIComponent(itemCode)}/evidence?${params}`;
 
   const response = await chrome.runtime.sendMessage({ type: 'API_REQUEST', endpoint });
   if (!response.success) throw new Error(response.error || 'Failed to fetch evidence');
@@ -253,10 +256,13 @@ window.getCurrentParams = getAPIParams;
 async function fetchSectionData(params) {
   const { assessmentId, section, orgSlug, facilityName } = params;
 
-  const endpoint = `/api/extension/mds/sections/${section}?` +
-    `externalAssessmentId=${assessmentId}` +
-    `&facilityName=${encodeURIComponent(facilityName)}` +
-    `&orgSlug=${orgSlug}`;
+  const sectionParams = new URLSearchParams({
+    externalAssessmentId: assessmentId,
+    facilityName,
+    orgSlug,
+  });
+  window.appendMDSContextParams?.(sectionParams);
+  const endpoint = `/api/extension/mds/sections/${section}?${sectionParams}`;
 
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',
@@ -277,10 +283,13 @@ async function fetchSectionData(params) {
 async function fetchDecisions(params) {
   const { assessmentId, orgSlug, facilityName } = params;
 
-  const endpoint = `/api/extension/mds/decisions?` +
-    `externalAssessmentId=${assessmentId}` +
-    `&facilityName=${encodeURIComponent(facilityName)}` +
-    `&orgSlug=${orgSlug}`;
+  const decisionParams = new URLSearchParams({
+    externalAssessmentId: assessmentId,
+    facilityName,
+    orgSlug,
+  });
+  window.appendMDSContextParams?.(decisionParams);
+  const endpoint = `/api/extension/mds/decisions?${decisionParams}`;
 
   const response = await chrome.runtime.sendMessage({ type: 'API_REQUEST', endpoint });
   if (!response.success) {
@@ -352,8 +361,18 @@ async function initSuperOverlay() {
       return;
     }
 
-    // Store context for query features and lazy evidence loading
-    SuperOverlay.assessmentId = params.assessmentId;
+    // Store context for query features and lazy evidence loading.
+    // If the backend's ARD-fallback resolver matched a different row (e.g. PCC
+    // issued a new externalAssessmentId after the nurse edited ARD/type), prefer
+    // the server-returned authoritative id so subsequent calls hit it directly.
+    const resolvedId = apiResponse.assessment?.externalAssessmentId;
+    const resolvedVia = apiResponse.assessment?.resolvedVia;
+    if (resolvedId && resolvedVia && resolvedVia !== 'none' && resolvedId !== params.assessmentId) {
+      console.log('Super LTC: ARD-fallback resolver matched via', resolvedVia, '— updating assessmentId', params.assessmentId, '→', resolvedId);
+      SuperOverlay.assessmentId = resolvedId;
+    } else {
+      SuperOverlay.assessmentId = params.assessmentId;
+    }
     SuperOverlay.facilityName = params.facilityName;
     SuperOverlay.orgSlug = params.orgSlug;
     SuperOverlay.section = params.section;
@@ -4252,6 +4271,7 @@ async function postItemDecision(result, decision, note) {
     decision,
     note: note || '',
     mdsColumn,
+    ...(window.getMDSContextBodyFields?.() || {}),
   };
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',

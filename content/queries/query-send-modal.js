@@ -698,6 +698,7 @@ const QuerySendModal = {
       orgSlug: ctx.orgSlug,
     });
     if (ctx.assessmentId) params.set('externalAssessmentId', ctx.assessmentId);
+    window.appendMDSContextParams?.(params);
     const endpoint = `/api/extension/mds/sections/${section}/items/${encodeURIComponent(result.mdsItem)}/evidence?${params}`;
 
     try {

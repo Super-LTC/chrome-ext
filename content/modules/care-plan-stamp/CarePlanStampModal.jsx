@@ -257,14 +257,39 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             })),
           })),
         };
-        setProposal(propWithRecs);
-        setSkippedFocuses(Array.isArray(prop.skippedFocuses) ? prop.skippedFocuses : []);
+        // Merge previously-skipped focuses (backend returned them on a
+        // separate `skippedFocuses` array) into the main proposal list so
+        // they render inline as dimmed rows, not buried in a collapsed
+        // fold. They get `skipped: true` in focusStates from the start;
+        // nurse can un-skip by selecting the row and toggling.
+        const prevSkipped = Array.isArray(prop.skippedFocuses) ? prop.skippedFocuses : [];
+        const mergedFocuses = [...(propWithRecs.focuses || []), ...prevSkipped];
+        console.log('[care-plan-stamp] proposal loaded', {
+          rawFocusesFromBackend: (prop.focuses || []).map((f) => ({
+            ruleId: f.ruleId,
+            alreadyOnPlan: !!f.alreadyOnPlan,
+            description: f.description?.slice(0, 80),
+          })),
+          previouslySkipped: prevSkipped.map((f) => ({
+            ruleId: f.ruleId,
+            description: f.description?.slice(0, 80),
+          })),
+          totalRawFromBackend: (prop.focuses || []).length,
+          totalAlreadyOnPlan: (prop.focuses || []).filter((f) => f.alreadyOnPlan).length,
+          totalPreviouslySkipped: prevSkipped.length,
+          totalAfterMerge: mergedFocuses.length,
+          // Anything the backend tells us about what it filtered:
+          backendDiagnostics: prop?._diagnostics || null,
+        });
+        const mergedProposal = { ...propWithRecs, focuses: mergedFocuses };
+        setProposal(mergedProposal);
+        setSkippedFocuses([]);
         setCareplanId(cpId);
         setMiniToken(token);
-        setFocusStates((prop.focuses || []).map((f) => ({
-          // Pre-skip if backend marked this focus as already-on-plan.
-          // Nurse can override by clicking Include.
-          skipped: !!f.alreadyOnPlan,
+        setFocusStates(mergedFocuses.map((f, i) => ({
+          // Pre-skip if backend marked this focus as already-on-plan OR
+          // if it came from the previously-skipped tail of the list.
+          skipped: !!f.alreadyOnPlan || i >= (propWithRecs.focuses?.length || 0),
           focusText: null,
           goals: null,
           interventions: null,
@@ -281,8 +306,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           expanded: false,
         })));
 
-        // Auto-jump active to first non-skipped focus so user lands on the meaningful work
-        const firstActive = (prop.focuses || []).findIndex((f) => !f.alreadyOnPlan);
+        // Auto-jump active to first non-skipped, non-on-plan focus.
+        const firstActive = mergedFocuses.findIndex((f) => !f.alreadyOnPlan);
         if (firstActive > 0) setActiveIdx(firstActive);
 
         setStage('ready');
@@ -366,6 +391,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         isSkipping: nextSkipped,
       });
     }
+    // After skipping, jump the active selection to the next non-skipped
+    // focus so the nurse can keep working without having to click the
+    // next row. Search forward from idx, then wrap to the start. If
+    // every remaining focus is skipped, leave activeIdx alone.
+    if (nextSkipped) {
+      const total = allRawFocuses.length;
+      for (let step = 1; step < total; step++) {
+        const cand = (idx + step) % total;
+        if (cand === idx) break;
+        const st = focusStates[cand];
+        if (st && !st.skipped) { setActiveIdx(cand); return; }
+      }
+    }
   }, [allRawFocuses, focusStates, patchFocus, patientId, orgSlug, facilityName]);
 
   // Un-skip a focus from the "Previously skipped" fold: move it back into
@@ -434,12 +472,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
     if (toStamp.focuses.length === 0) return;
 
-    // Sanity: if any focus still has '___' (any unfilled slot), bail.
+    // Note: previously bailed here if any composed description still
+    // contained '___'. Removed because the gate kept tripping on tokens
+    // that aren't actually nurse-fillable (e.g. kardex). PCC accepts
+    // placeholder text in stamped descriptions — the nurse can edit
+    // after-the-fact if needed. The button-gate warning ("N focuses need
+    // input first") still surfaces visually; this just stops it from being
+    // a hard block.
     const unsubbed = toStamp.focuses.find((f) => f.description.includes('___'));
     if (unsubbed) {
-      setErrorMsg('Please fill in any blank slots before adding.');
-      setStage('error');
-      return;
+      console.warn('[care-plan-stamp] stamping with unfilled placeholder(s) — proceeding anyway', {
+        ruleId: unsubbed.ruleId,
+        composedDescription: unsubbed.description,
+      });
     }
 
     setStage('stamping');
@@ -494,12 +539,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     const candidates = overrideItems || (scopedAudit.toAdd || []).filter((it) =>
       !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
     );
-    const eligible = candidates.filter((it) => {
-      if (!it.focus) return false;
-      const state = auditFocusStates[it.ruleId] || _emptyFocusState();
-      const composed = _composeFocus(it.focus, state);
-      return !composed.description.includes('___');
-    });
+    // Used to drop items whose composed description still had '___' — removed
+    // for the same reason as the Initial-flow bail: kardex-style tokens
+    // aren't nurse-fillable and PCC accepts placeholder text. Stamp them all.
+    const eligible = candidates.filter((it) => !!it.focus);
     if (eligible.length === 0) return;
     setStage('stamping');
     setProgress({ phase: 'starting', focusIndex: 0, focusTotal: eligible.length });
@@ -536,7 +579,30 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
   const _skipAuditAddItem = useCallback(async (item) => {
     if (!item) return;
-    setSkippedAddIds((prev) => new Set([...prev, item.ruleId]));
+    const nextSkipped = new Set([...skippedAddIds, item.ruleId]);
+    setSkippedAddIds(nextSkipped);
+    // Advance to the next still-live toAdd item so the nurse keeps moving.
+    // "Live" = not stamped AND not skipped (including the one we just
+    // skipped). Iterate audit.toAdd in its natural order; if nothing's
+    // left, clear the selection so the bucket dashboard reads "done".
+    const toAdd = audit?.toAdd || [];
+    const startIdx = toAdd.findIndex((it) => it._rowId === item._rowId);
+    let next = null;
+    if (startIdx >= 0) {
+      for (let step = 1; step <= toAdd.length; step++) {
+        const cand = toAdd[(startIdx + step) % toAdd.length];
+        if (!cand || cand._rowId === item._rowId) continue;
+        if (stampedAddIds.has(cand.ruleId)) continue;
+        if (nextSkipped.has(cand.ruleId)) continue;
+        next = cand;
+        break;
+      }
+    }
+    if (next) {
+      setSelectedRail({ kind: 'add', key: next._rowId });
+    } else {
+      setSelectedRail(null);
+    }
     try {
       await window.CarePlanStampAPI.persistSkip({
         patientId, orgSlug, facilityName,
@@ -548,7 +614,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       patient_id: patientId,
       rule_id: item.ruleId,
     });
-  }, [patientId, orgSlug, facilityName]);
+  }, [audit, patientId, orgSlug, facilityName, skippedAddIds, stampedAddIds]);
 
   const _resolveAuditItem = useCallback(async (item, fromBucket) => {
     if (!item?.pccFocusId || !careplanId) {
@@ -696,7 +762,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 progress={progress}
                 onRemoveLibraryPick={removeLibraryPick}
                 onStamp={stage === 'ready' ? handleStamp : null}
-                stampDisabled={includedCount === 0 || needsInputCount > 0}
+                stampDisabled={includedCount === 0}
                 needsInputCount={needsInputCount}
                 skippedFocuses={skippedFocuses}
                 onUnSkip={stage === 'ready' ? unSkipFocus : null}
@@ -966,21 +1032,42 @@ function _auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusSta
     (it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
   );
   if (live.length === 0) return true;
+  // Disable only when there's an item the nurse can actually act on —
+  // matches _auditNeedsInputByRowId / _auditNeedsInputCount so the gate
+  // and the rail badges stay in sync.
   return live.some((it) => {
     if (!it.focus) return false;
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
-    return _composeFocus(it.focus, state).description.includes('___');
+    const composed = _composeFocus(it.focus, state);
+    const flatBlank = !_hasSegments(it.focus.descriptionSegments) && composed.description.includes('___');
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    return flatBlank || tokenBlank;
   });
 }
 function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusStates) {
   const live = (audit.toAdd || []).filter(
     (it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
   );
-  return live.filter((it) => {
+  const flagged = live.filter((it) => {
     if (!it.focus) return false;
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
-    return _composeFocus(it.focus, state).description.includes('___');
-  }).length;
+    const composed = _composeFocus(it.focus, state);
+    const flatBlank = !_hasSegments(it.focus.descriptionSegments) && composed.description.includes('___');
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    return flatBlank || tokenBlank;
+  });
+  if (flagged.length > 0) {
+    console.log('[care-plan-stamp] audit needs-input count flagged items', flagged.map((it) => {
+      const state = auditFocusStates[it.ruleId] || _emptyFocusState();
+      return {
+        ruleId: it.ruleId,
+        composedDescription: _composeFocus(it.focus, state).description,
+        unfilledTokenKeys: _focusUnfilledTokenKeys(it.focus, state.tokenValues),
+        hasSegments: _hasSegments(it.focus.descriptionSegments),
+      };
+    }));
+  }
+  return flagged.length;
 }
 // Per-row needs-input map for the rail. Mirrors Initial Admit's needsInput
 // computation in FocusList — flat `___` placeholder OR any unfilled token key.
@@ -1297,37 +1384,10 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           )}
         </div>
       )}
-      {/* Previously skipped fold — focuses the nurse dismissed in a prior
-          session. Backend filters these out of the active list and returns
-          them on `skippedFocuses`. Un-skip pulls one back into the active
-          list and DELETEs the persisted skip row. */}
-      {Array.isArray(skippedFocuses) && skippedFocuses.length > 0 && (
-        <details className="cpas-list__skipped-fold">
-          <summary className="cpas-list__skipped-fold-summary">
-            Previously skipped ({skippedFocuses.length})
-          </summary>
-          <ul className="cpas-list__skipped-fold-items">
-            {skippedFocuses.map((f) => (
-              <li key={f.ruleId} className="cpas-list__skipped-fold-item">
-                <span className="cpas-list__skipped-fold-text" title={f.description}>
-                  {_ruleIdToLabel(f.ruleId)}
-                </span>
-                {onUnSkip && (
-                  // NO_TRACK: pure-UI un-skip; persistence is fire-and-forget.
-                  <button
-                    type="button"
-                    className="cpas-list__skipped-fold-unskip"
-                    onClick={(e) => { e.stopPropagation(); onUnSkip(f); }}
-                    title="Move back into the active list"
-                  >
-                    Un-skip
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      {/* Previously-skipped focuses are now merged inline into the main
+          list with `skipped: true`, so the dedicated fold is gone — they
+          render dimmed in place. Nurse selects the row and uses the skip
+          toggle inside FocusCard to un-skip. */}
     </aside>
   );
 };

@@ -129,6 +129,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// Scrape ARD date + assessment type from the live PCC assessment proptable.
+// Landmarks (present on section.xhtml and similar pages):
+//   #assessArdId                           → ARD in YYYY-MM-DD
+//   table.proptable tr > td.label "OBRA Reason:" / "PPS Reason:" /
+//     "PPS OMRA:" / "Entry/Discharge:"     → type rows; pick first non-blank,
+//                                            non-"None of the above" value.
+// Returns { ardDate: 'YYYY-MM-DD'|null, assessmentType: string|null }.
+// IMPORTANT: read from DOM (not cached/API values) so the backend's
+// ARD-fallback resolver fires when PCC issues a fresh externalAssessmentId
+// after the nurse edits ARD or assessment type.
+function getPCCAssessmentMetaFromDOM() {
+  const ardRaw = document.getElementById('assessArdId')?.textContent?.trim() || '';
+  const ardDate = /^\d{4}-\d{2}-\d{2}$/.test(ardRaw) ? ardRaw : null;
+
+  let assessmentType = null;
+  const TYPE_LABELS = new Set(['OBRA Reason:', 'PPS Reason:', 'PPS OMRA:', 'Entry/Discharge:']);
+  const rows = document.querySelectorAll('table.proptable tr');
+  for (const row of rows) {
+    const labelEl = row.querySelector('td.label');
+    if (!labelEl) continue;
+    const label = labelEl.textContent.trim();
+    if (!TYPE_LABELS.has(label)) continue;
+    const valueEl = labelEl.nextElementSibling;
+    const value = valueEl?.textContent?.trim() || '';
+    if (!value) continue;
+    if (value.toLowerCase() === 'none of the above') continue;
+    assessmentType = value;
+    break;
+  }
+  return { ardDate, assessmentType };
+}
+
+// Resolve externalPatientId from current PCC page state (URL first, fall back
+// to SuperOverlay's resolved id on MDS section pages where URL lacks ESOLclientid).
+function getMDSResolverPatientId() {
+  const fromUrl = getChatPatientId();
+  if (fromUrl) return fromUrl;
+  const fromOverlay = window.SuperOverlay?.patientId;
+  return fromOverlay ? String(fromOverlay) : null;
+}
+
+// Append the three MDS-resolver context fields to a URLSearchParams.
+// Safe to call when fields are missing — only sets what it can read.
+function appendMDSContextParams(params) {
+  const meta = getPCCAssessmentMetaFromDOM();
+  const externalPatientId = getMDSResolverPatientId();
+  if (externalPatientId) params.set('externalPatientId', externalPatientId);
+  if (meta.assessmentType) params.set('assessmentType', meta.assessmentType);
+  if (meta.ardDate) params.set('ardDate', meta.ardDate);
+  return params;
+}
+
+// Same fields, but for POST JSON bodies. Returns a plain object — caller
+// spreads it into the body.
+function getMDSContextBodyFields() {
+  const meta = getPCCAssessmentMetaFromDOM();
+  const externalPatientId = getMDSResolverPatientId();
+  const out = {};
+  if (externalPatientId) out.externalPatientId = externalPatientId;
+  if (meta.assessmentType) out.assessmentType = meta.assessmentType;
+  if (meta.ardDate) out.ardDate = meta.ardDate;
+  return out;
+}
+
 // Shared helper: get orgSlug + facilityName for API calls
 // Used by evidence-viewers.js, icd10-viewer.js, etc.
 function getCurrentParams() {
@@ -180,3 +244,6 @@ window.getChatFacilityInfo = getChatFacilityInfo;
 window.getOrg = getOrg;
 window.getCurrentParams = getCurrentParams;
 window.getChatContext = getChatContext;
+window.getPCCAssessmentMetaFromDOM = getPCCAssessmentMetaFromDOM;
+window.appendMDSContextParams = appendMDSContextParams;
+window.getMDSContextBodyFields = getMDSContextBodyFields;
