@@ -341,13 +341,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Analytics batch forwarding for store builds. Shim in content scripts
-  // (analytics-superltc.js) sends batches here; we hand them to superltc
-  // via apiRequest so we reuse 401 retry / persistent-401 logout. Backend
-  // acks 204 immediately and forwards to PostHog out-of-band — so this
-  // resolves fast even when PostHog is slow.
-  //
-  // Best-effort: errors are swallowed. Analytics must never break the app.
+  // Store-build analytics batches from analytics-superltc.js. Routed through
+  // apiRequest for 401 retry + persistent-401 logout. Best-effort: errors swallowed.
   if (message.type === 'analyticsBatch') {
     (async () => {
       try {

@@ -23,7 +23,7 @@
 POST /api/v1/analytics/events
 auth:  Bearer <authToken>
 body:  { batch: Event[] }   // batch ≤ 100, event ≤ 32KB
-resp:  204 No Content (ack first, forward async, never block)
+resp:  200 {} (ack first, forward async, never block)
 ```
 Server enriches with `surface: 'extension-store'`, applies sampling, forwards to `https://us.i.posthog.com/batch/` with the server-held project key.
 
@@ -328,7 +328,7 @@ The existing message handlers live in `background/background.js`. Look for the p
 // Analytics batch forwarding for store builds. Shim in content scripts
 // (analytics-superltc.js) sends batches here; we hand them to superltc
 // via apiRequest so we reuse 401 retry / persistent-401 logout. Backend
-// acks 204 immediately and forwards to PostHog out-of-band — so this
+// acks 200 {} immediately and forwards to PostHog out-of-band — so this
 // resolves fast even when PostHog is slow.
 //
 // Best-effort: errors are swallowed. Analytics must never break the app.
