@@ -1065,16 +1065,6 @@
 .cpas-empty--error h3 {
   color: #b91c1c;
 }
-.cpas-empty--coming-soon {
-  padding: 56px 32px;
-}
-.cpas-coming-soon__icon {
-  font-size: 48px; line-height: 1; margin-bottom: 16px;
-}
-.cpas-empty--coming-soon h3 {
-  color: #1f2937; font-size: 18px;
-}
-.cpas-empty--coming-soon p { color: #4b5563; max-width: 520px; }
 .cpas-empty details {
   margin: 16px 0;
   max-width: 600px;

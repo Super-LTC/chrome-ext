@@ -41,9 +41,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [errorMsg, setErrorMsg] = useState('');
   const [driftMissing, setDriftMissing] = useState([]);
   const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
-  // Force initial mode for now — Comprehensive Review is being reworked and
-  // will be re-enabled once the new flow ships. The ScopeToggle still surfaces
-  // the option, but selecting Comprehensive lands on a "Coming soon" screen.
+  // Always boot into Initial mode regardless of `defaultMode` — Comprehensive
+  // Review is still reachable via the ScopeToggle in the header.
   const [mode, setMode] = useState('initial');
   const [audit, setAudit] = useState(null);
   const [proposal, setProposal] = useState(null);
@@ -146,14 +145,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           },
         });
 
-        if (mode === 'comprehensive') {
-          // Comprehensive Review is temporarily disabled — render the "Coming
-          // soon" screen and skip the audit fetch entirely.
-          setStage('ready');
-          return;
-        }
-        // Dead branch kept for the upcoming Comprehensive re-enable.
-        // eslint-disable-next-line no-unreachable
         if (mode === 'comprehensive') {
           // Comprehensive Review path — full audit of the existing plan.
           const auditResp = await window.CarePlanAuditAPI.fetchAudit({
@@ -691,10 +682,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               />
             </div>
           )}
-          {mode === 'comprehensive' && stage === 'ready' && (
-            <ComprehensiveComingSoon />
-          )}
-          {false && mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
             <AuditDashboard
               audit={audit}
               stampedAddIds={stampedAddIds}
@@ -715,7 +703,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               }}
             />
           )}
-          {false && mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
             <div className="cpas-modal__columns">
               <AuditRail
                 audit={audit}
@@ -1095,18 +1083,6 @@ const LoadingState = () => (
   <div className="cpas-empty">
     <div className="cpas-spinner" />
     <p>Reading patient context from PCC…</p>
-  </div>
-);
-
-const ComprehensiveComingSoon = () => (
-  <div className="cpas-empty cpas-empty--coming-soon">
-    <div className="cpas-coming-soon__icon" aria-hidden="true">🛠️</div>
-    <h3>Comprehensive Review is getting an upgrade</h3>
-    <p>
-      We're reworking the audit flow with the new MDS coordinator workflow.
-      Flip back to <strong>Initial care plan</strong> to keep going for now —
-      Comprehensive Review will return shortly.
-    </p>
   </div>
 );
 
