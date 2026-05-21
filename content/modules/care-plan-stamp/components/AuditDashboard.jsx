@@ -49,7 +49,7 @@ export const AuditDashboard = ({
   const totalVerifyInterventions = liveVerifies.reduce(
     (sum, it) => sum + (it.suggestedInterventions?.length || 0), 0
   );
-  const verifyPreview = liveVerifies.slice(0, 3).map((it) => it.matchedFocusText || it.detail || 'focus');
+  const verifyPreview = liveVerifies.slice(0, 3).map(verifyLabel);
 
   const onPlanCount = (audit.onPlan || []).length;
   const addComplete = totalAdds > 0 && remainingAdds === 0;
@@ -66,13 +66,13 @@ export const AuditDashboard = ({
       <div className="cpas-dashboard__summary">
         <div className="cpas-dashboard__summary-headline">
           {totalActionable > 0
-            ? <>We found <strong>{totalActionable}</strong> {totalActionable === 1 ? 'item' : 'items'} to review</>
-            : <>✓ Care plan looks complete</>}
+            ? <><strong>{totalActionable}</strong> {totalActionable === 1 ? 'item needs' : 'items need'} your review</>
+            : <>✓ Care plan is up to date</>}
         </div>
         <div className="cpas-dashboard__summary-sub">
           {totalCompletedThisSession > 0
-            ? <>Audited {totalAuditItems} {totalAuditItems === 1 ? 'item' : 'items'} · <strong>{totalCompletedThisSession}</strong> handled this session</>
-            : <>Audited {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'}</>}
+            ? <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} · <strong>{totalCompletedThisSession}</strong> handled this session</>
+            : <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} in this audit</>}
         </div>
       </div>
 
@@ -137,12 +137,62 @@ export const AuditDashboard = ({
   );
 };
 
+// Map a backend ruleId (e.g. "universal.communication") to a short, nurse-
+// friendly label. Mirrors FocusCard's _ruleIdToLabel so the preview list on
+// the dashboard reads as English, not as developer IDs.
+const RULE_ID_LABELS = {
+  'universal.fall_risk': 'Falls',
+  'universal.skin_integrity': 'Skin integrity',
+  'universal.adl': 'ADLs',
+  'universal.nutrition': 'Nutrition',
+  'universal.hydration': 'Hydration',
+  'universal.pain': 'Pain',
+  'universal.code_status': 'Code status',
+  'universal.cognition': 'Cognition',
+  'universal.mood': 'Mood',
+  'universal.communication': 'Communication',
+  'universal.trauma_informed': 'Trauma-informed care',
+  'universal.discharge_planning': 'Discharge planning',
+  'order.anticoag': 'Anticoagulant therapy',
+  'order.opioid': 'Opioid therapy',
+  'order.insulin': 'Insulin / diabetes management',
+  'order.antibiotic': 'Antibiotic therapy',
+  'order.psychotropic': 'Psychotropic medication',
+  'order.oxygen': 'Oxygen therapy',
+};
+
+const _ruleIdLabel = (ruleId) => {
+  if (!ruleId) return null;
+  if (RULE_ID_LABELS[ruleId]) return RULE_ID_LABELS[ruleId];
+  const tail = String(ruleId).split('.').pop() || ruleId;
+  return tail.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const _truncate = (s, n) => {
+  if (!s) return s;
+  const trimmed = String(s).replace(/\s+/g, ' ').trim();
+  return trimmed.length > n ? trimmed.slice(0, n - 1).trimEnd() + '…' : trimmed;
+};
+
 const focusLabel = (item) => {
-  if (item.title) return item.title;
+  // Prefer a human label by ruleId — segment/description fields on audit items
+  // are often verbose clinical paragraphs that don't belong in a peek preview.
+  const fromRule = _ruleIdLabel(item.ruleId);
+  if (fromRule) return fromRule;
+  if (item.title) return _truncate(item.title, 60);
   if (Array.isArray(item.descriptionSegments) && item.descriptionSegments.length) {
-    return item.descriptionSegments.map(s => typeof s === 'string' ? s : (s.label || s.value || '')).join(' ').trim();
+    const text = item.descriptionSegments
+      .map((s) => typeof s === 'string' ? s : (s.label || s.value || ''))
+      .join(' ');
+    return _truncate(text, 60);
   }
-  return item.description || item.detail || item.ruleId || 'Focus';
+  return _truncate(item.description || item.detail, 60) || 'Focus';
+};
+
+const verifyLabel = (item) => {
+  if (item.matchedFocusText) return _truncate(item.matchedFocusText, 70);
+  if (item.detail) return _truncate(item.detail, 70);
+  return 'Existing focus';
 };
 
 const Tile = ({ kind, count, label, subline, preview, complete, completeLabel, onEnter, icon, ctaLabel }) => (

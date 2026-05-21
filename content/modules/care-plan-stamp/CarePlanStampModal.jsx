@@ -170,6 +170,23 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             (bucket.toRemove || []).forEach((it) => { if (it.focusId) focusIdToCAA.set(it.focusId, bucket.displayName); });
           });
           const audit = { ...auditResp.audit, _ruleIdToCAA: ruleIdToCAA, _focusIdToCAA: focusIdToCAA };
+          // Treat the backend's kardex pick as a per-intervention recommendation
+          // across the Comprehensive Review path too — every Add-bucket focus
+          // intervention starts as None with the original pick stashed in
+          // `_recKardex` for the dropdown's "✨ Recommended" badge. Mirrors the
+          // Initial path's behavior (don't stamp things onto the Kardex
+          // automatically — nurses opt in).
+          (audit.toAdd || []).forEach((it) => {
+            if (!it?.focus) return;
+            it.focus = {
+              ...it.focus,
+              interventions: (it.focus.interventions || []).map((iv) => ({
+                ...iv,
+                _recKardex: iv.kardexCategory ?? null,
+                kardexCategory: null,
+              })),
+            };
+          });
           // Round 10: stamp synthetic _rowId on every audit item so rail
           // selection is unique per-row (fixes multi-highlight bug when
           // toCheck items share a null focusId).
