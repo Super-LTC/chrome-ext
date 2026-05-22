@@ -170,6 +170,7 @@ export const QueryItemsPage = ({
           onUpdateNote={batch.updateNote}
           onUpdateIcd10={batch.updateIcd10}
           onSend={batch.sendAll}
+          onPrint={batch.printAll}
           onBack={batch.backToSelection}
           isSending={batch.state === 'sending'}
           progress={batch.progress}

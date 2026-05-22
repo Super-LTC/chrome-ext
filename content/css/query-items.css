@@ -984,6 +984,28 @@
 .qr__send-btn:hover:not(:disabled) { background: var(--super-primary-dark); box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35); }
 .qr__send-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
+/* Print All — secondary action, sits next to Send All */
+.qr__print-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: white;
+  color: var(--super-gray-700, #344054);
+  border: 1px solid var(--super-gray-200, #d0d5dd);
+  padding: 8px 16px;
+  border-radius: var(--super-radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-right: 8px;
+}
+.qr__print-btn:hover:not(:disabled) {
+  background: var(--super-gray-50, #f9fafb);
+  border-color: var(--super-gray-300, #9aa3b2);
+}
+.qr__print-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* ── Physician bar ── */
 
 .qr__physician-bar {

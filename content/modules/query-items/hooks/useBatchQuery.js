@@ -213,6 +213,84 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
   }, [patientId, facilityName, orgSlug, assessmentId, generatedQueries, selectedPractitionerId, practitioners, onComplete]);
 
   /**
+   * Create queries (without sending) and download a print-preview PDF for each.
+   * Mirrors sendAll but swaps the send step for printQueryPdf.
+   */
+  const printAll = useCallback(async () => {
+    if (generatedQueries.length === 0) return;
+
+    setState('sending'); // reuse sending state so the progress UI shows
+    setError(null);
+    setProgress({ current: 0, total: generatedQueries.length });
+    abortRef.current = false;
+
+    try {
+      for (let i = 0; i < generatedQueries.length; i++) {
+        if (abortRef.current) break;
+
+        const { item, noteText, selectedIcd10, preferredIcd10 } = generatedQueries[i];
+        setProgress({ current: i, total: generatedQueries.length });
+
+        const icd10Code = selectedIcd10 || preferredIcd10?.code || null;
+        const icd10Description = preferredIcd10?.description
+          || (item.recommendedIcd10 || []).find(x => x.code === icd10Code)?.description
+          || '';
+        const recommendedIcd10 = icd10Code
+          ? [{ code: icd10Code, description: icd10Description }]
+          : (item.recommendedIcd10 || []);
+
+        try {
+          // Step 1: create the query so we have an id
+          const { query } = await window.QueryAPI.createQuery({
+            patientId,
+            facilityName,
+            orgSlug,
+            mdsAssessmentId: assessmentId,
+            mdsItem: item.mdsItem,
+            mdsItemName: item.pdpmCategoryName || item.mdsItemName || item.mdsItem,
+            queryReason: item.rationale || '',
+            keyFindings: item.keyFindings || [],
+            queryEvidence: item.queryEvidence || item.evidence || [],
+            recommendedIcd10,
+            aiGeneratedNote: noteText
+          });
+
+          // Step 2: trigger the print-preview PDF download
+          const topic = String(item.mdsItem || 'query')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, '');
+          const filename = `query-${topic}-${String(query.id).slice(0, 8)}.pdf`;
+
+          await window.QueryAPI.printQueryPdf(query.id, {
+            code: icd10Code || '',
+            description: icd10Description,
+            filename
+          });
+        } catch (err) {
+          console.error(`[BatchQuery] Failed to print query for ${item.mdsItem}:`, err);
+          window.SuperAnalytics?.track?.('error_caught', {
+            surface: 'batch_query_print_item',
+            error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+          });
+        }
+      }
+
+      setProgress({ current: generatedQueries.length, total: generatedQueries.length });
+      setState('reviewing'); // return to review state — user may still want to send
+    } catch (err) {
+      console.error('[BatchQuery] Print failed:', err);
+      window.SuperAnalytics?.track?.('error_shown', {
+        surface: 'batch_query_print',
+        error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+        error_type: 'api_error',
+      });
+      setError(err.message);
+      setState('reviewing');
+    }
+  }, [patientId, facilityName, orgSlug, assessmentId, generatedQueries]);
+
+  /**
    * Go back from reviewing to idle
    */
   const backToSelection = useCallback(() => {
@@ -253,6 +331,7 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
     updateNote,
     updateIcd10,
     sendAll,
+    printAll,
     backToSelection,
     reset,
     abort

@@ -13,6 +13,7 @@ export const BatchReviewPage = ({
   onUpdateNote,
   onUpdateIcd10,
   onSend,
+  onPrint,
   onBack,
   isSending,
   progress
@@ -72,6 +73,7 @@ export const BatchReviewPage = ({
   }, [practitioners, onSelectPractitioner]);
 
   const canSend = selectedPractitionerId && generatedQueries.length > 0 && !isSending;
+  const canPrint = generatedQueries.length > 0 && !isSending;
 
   return (
     <div className="qr">
@@ -94,6 +96,19 @@ export const BatchReviewPage = ({
               Sending {progress.current + 1}/{progress.total}
             </div>
           )}
+          <button
+            className="qr__print-btn"
+            disabled={!canPrint}
+            onClick={onPrint}
+            data-track="query_print_started"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            {isSending ? 'Printing...' : 'Print All'}
+          </button>
           <button
             className="qr__send-btn"
             disabled={!canSend}

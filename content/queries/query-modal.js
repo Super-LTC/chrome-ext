@@ -159,6 +159,11 @@ const QueryDetailModal = {
             QuerySendModal.show(result, query);
           }
         });
+        actions.push({
+          label: 'Print Preview',
+          variant: 'secondary',
+          action: (btn) => this._handlePrintPreview(query, btn)
+        });
         break;
 
       case 'sent':
@@ -167,6 +172,11 @@ const QueryDetailModal = {
           label: 'Resend SMS',
           variant: 'primary',
           action: (btn) => this._handleResend(query, btn)
+        });
+        actions.push({
+          label: 'Print Preview',
+          variant: 'secondary',
+          action: (btn) => this._handlePrintPreview(query, btn)
         });
         break;
 
@@ -211,6 +221,11 @@ const QueryDetailModal = {
             }
           });
         }
+        actions.push({
+          label: 'Print Preview',
+          variant: 'secondary',
+          action: (btn) => this._handlePrintPreview(query, btn)
+        });
         break;
     }
 
@@ -252,6 +267,48 @@ const QueryDetailModal = {
       console.error('Super LTC: Failed to resend query', error);
       track('error_shown', { surface: 'query_resend', error_code: toErrorCode(error), error_type: 'api_error' });
       SuperToast.error(`Failed to resend: ${error.message}`);
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  },
+
+  /**
+   * Handle print-preview action — downloads the unsigned print PDF
+   * for the current query. Mirrors the printQueryPdf flow from QuerySendModal,
+   * but pulls code/description from the persisted query rather than the form.
+   * @param {Object} query - Query object
+   * @param {HTMLElement} btn - Button element
+   */
+  async _handlePrintPreview(query, btn) {
+    const originalText = btn.textContent;
+    btn.textContent = 'Preparing...';
+    btn.disabled = true;
+
+    const printStart = Date.now();
+    track('query_print_started', {
+      item_code: String(query.mdsItem || '')
+    });
+
+    try {
+      const code = query.selectedIcd10Code || '';
+      const description = query.selectedIcd10Description || '';
+
+      // Stable filename: topic-id8.pdf
+      const topic = String(query.mdsItem || 'query')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      const filename = `query-${topic}-${String(query.id).slice(0, 8)}.pdf`;
+
+      await QueryAPI.printQueryPdf(query.id, { code, description, filename });
+
+      track('query_print_succeeded', { duration_ms: Date.now() - printStart });
+      SuperToast.success('Print preview downloaded');
+    } catch (error) {
+      console.error('Super LTC: Failed to print query', error);
+      track('query_print_failed', { error_code: toErrorCode(error) });
+      SuperToast.error(`Failed to print: ${error.message}`);
+    } finally {
       btn.textContent = originalText;
       btn.disabled = false;
     }
