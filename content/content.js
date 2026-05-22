@@ -34,6 +34,9 @@ import './queries/query-send-modal.js';
 // 4.5. Import MDS overlay (depends on queries, evidence-viewers, section-transformers)
 import './mds-overlay.js';
 
+// 4.6. Super MDS Mode — full-screen one-item-at-a-time blitz overlay
+import './modules/super-mds-mode/SuperMDSMode.jsx';
+
 // 5. Import ICD-10 viewer
 import './icd10-viewer/icd10-mock-data.js';
 import './icd10-viewer/icd10-api.js';

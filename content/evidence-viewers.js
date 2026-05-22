@@ -115,6 +115,10 @@ function parseEvidenceForViewer(ev) {
  * appear on top. Otherwise fall back to document.body.
  */
 function getModalMountPoint() {
+  // Super Review mode hosts inline source viewing in its right panel
+  const smmHost = document.querySelector('.smm-source-host');
+  if (smmHost) return smmHost;
+
   // Check for open ICD10 viewer container first
   const icd10Container = document.querySelector('.icd10-viewer-modal__container');
   if (icd10Container) return icd10Container;

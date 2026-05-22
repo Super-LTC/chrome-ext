@@ -185,6 +185,7 @@ async function fetchItemEvidence(section, itemCode) {
 
 // Expose on window for other content scripts (query-send-modal.js, etc.)
 window.SuperOverlay = SuperOverlay;
+window.fetchItemEvidence = fetchItemEvidence;
 window.showIncidentDetailModal = showIncidentDetailModal;
 window.renderSplitAdministrations = renderSplitAdministrations;
 window.renderSplitNote = renderSplitNote;
@@ -4140,6 +4141,8 @@ function buildPanelHTML(counts, itemsToReview) {
         <span class="super-panel-count super-panel-count--mismatch">${counts.mismatch} &#10007;</span>
         <span class="super-panel-count super-panel-count--review">${counts.review} &#9888;</span>
       </div>
+      <!-- NO_TRACK: pure-UI button to launch Super MDS Mode -->
+      <button class="super-panel-blitz" title="Walk every item one at a time">&#9889; Super Mode</button>
       <!-- NO_TRACK: pure-UI navigation between review items in legacy MDS overlay panel -->
       <button class="super-panel-next" ${!hasItemsToReview ? 'disabled' : ''}>
         Next &rarr;
@@ -4197,6 +4200,12 @@ function setupPanelListeners(panel) {
   // Next button
   panel.querySelector('.super-panel-next').addEventListener('click', () => {
     navigateToNext();
+  });
+
+  // Super MDS Mode launcher
+  panel.querySelector('.super-panel-blitz')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.openSuperMDSMode?.();
   });
 
   // Item clicks
