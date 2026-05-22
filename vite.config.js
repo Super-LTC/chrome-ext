@@ -2,7 +2,11 @@ import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { crx } from '@crxjs/vite-plugin';
 import { copyFileSync, mkdirSync, readdirSync, renameSync, readFileSync, writeFileSync } from 'fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import manifest from './manifest.json';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Plugin to copy content CSS into dist (crx plugin doesn't handle static CSS in content_scripts)
 function copyStaticAssets(outDir) {
@@ -74,11 +78,10 @@ function stableLoaderName(outDir) {
   };
 }
 
-// Plugin to replace the posthog-js import with an empty stub for Chrome
-// Web Store builds. analytics.js already early-returns when ENABLED is
-// false, so every posthog.* call site is dead code under the placeholder
-// key — stubbing the import lets Rollup tree-shake the entire library
-// out of the bundle so reviewers see no third-party tracking code.
+// Plugin to redirect the posthog-js import to our own shim for Chrome
+// Web Store builds. The shim batches events and hands off to the
+// background worker (which forwards through superltc.com to PostHog).
+// Reviewers see only superltc.com traffic; no third-party tracking code.
 function stubPosthogInStore(mode) {
   const isStore = mode === 'store';
   return {
@@ -86,14 +89,9 @@ function stubPosthogInStore(mode) {
     enforce: 'pre',
     resolveId(source) {
       if (isStore && source.startsWith('posthog-js')) {
-        return '\0empty-posthog';
+        return path.resolve(__dirname, 'content/utils/analytics-superltc.js');
       }
     },
-    load(id) {
-      if (id === '\0empty-posthog') {
-        return 'export default {};';
-      }
-    }
   };
 }
 
@@ -165,6 +163,7 @@ export default defineConfig(({ mode }) => {
       // Replaced at build time in background.js
       // dev → true (localhost), prod → false (superltc.com)
       __DEV_MODE__: isDev,
+      __ANALYTICS_FORCE_ON__: isStore,
       // PostHog public project key (project 247257, Super LTC org).
       // Public client key — designed to ship in extension bundles, not a
       // secret. Hardcoded so it's preserved across builds without depending

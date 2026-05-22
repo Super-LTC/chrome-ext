@@ -341,6 +341,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Store-build analytics batches from analytics-superltc.js. Routed through
+  // apiRequest for 401 retry + persistent-401 logout. Best-effort: errors swallowed.
+  if (message.type === 'analyticsBatch') {
+    (async () => {
+      try {
+        await apiRequest('/api/v1/analytics/events', {
+          method: 'POST',
+          body: JSON.stringify({ batch: message.batch }),
+        });
+      } catch {
+        // No auth, network error, 5xx — drop. apiRequest already handles
+        // persistent-401 token clear.
+      }
+      sendResponse({ ok: true });
+    })();
+    return true;  // async response
+  }
+
   if (message.type === 'API_REQUEST') {
     (async () => {
       try {

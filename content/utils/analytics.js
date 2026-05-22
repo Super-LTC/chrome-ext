@@ -16,7 +16,10 @@ import {
 } from './analytics-schema.js';
 
 const KEY = __POSTHOG_KEY__;
-const ENABLED = KEY && KEY !== 'phc_PLACEHOLDER';
+// Dev/internal builds: enabled when a real PostHog key is in the bundle.
+// Store builds: always enabled, because the shim routes through our own
+// backend (no PostHog key shipped to the client).
+const ENABLED = __ANALYTICS_FORCE_ON__ || (KEY && KEY !== 'phc_PLACEHOLDER');
 
 const PHI_PATTERNS = [
   { name: 'digits_6plus', re: /\b\d{6,}\b/ },                    // potential MRN
