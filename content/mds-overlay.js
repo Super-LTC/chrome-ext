@@ -1370,7 +1370,9 @@ function formatSourceType(type) {
     'lab-result': 'Lab',
     'progress-note': 'Progress Note',
     'nursing-note': 'Nursing Note',
-    'vital-signs': 'Vitals'
+    'vital-signs': 'Vitals',
+    'wound-assessment': 'Wound Assessment',
+    'uda': 'Assessment'
   };
   return labels[type] || type;
 }

@@ -49,7 +49,7 @@ function parseEvidenceForViewer(ev) {
   if (sourceType === 'document' && sourceId) {
     return { viewerType: 'document', id: sourceId };
   }
-  if (sourceType === 'uda') {
+  if (sourceType === 'uda' || sourceType === 'wound-assessment') {
     const udaId = (sourceId || evidenceId || '').replace(/^uda-/, '');
     if (udaId) return { viewerType: 'uda', id: udaId };
   }
@@ -1692,7 +1692,7 @@ window.SuperDocViewer = {
       window.showDocumentModal(id, evidence.wordBlocks || []);
       return;
     }
-    if (type === 'uda') {
+    if (type === 'uda' || type === 'wound-assessment') {
       const rawId = evidence.viewerId || evidence.sourceId || evidence.evidenceId || evidence.id || '';
       const id = String(rawId).replace(/^uda-/, '');
       const quote = evidence.quoteText || evidence.quote || '';

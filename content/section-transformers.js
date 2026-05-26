@@ -551,6 +551,22 @@ function transformSectionM(results) {
   const comparisons = results.comparisons || [];
 
   comparisons.forEach(comparison => {
+    const supporting = Array.isArray(comparison.supportingWounds) ? comparison.supportingWounds : [];
+    const evidence = supporting.map(sw => {
+      const woundDescriptor = [sw.woundType, sw.location && `at ${sw.location}`, sw.stage && `Stage ${sw.stage}`]
+        .filter(Boolean).join(' ');
+      return {
+        quote: sw.quote || woundDescriptor || '',
+        displayName: sw.sourceDescription || 'Supporting documentation',
+        sourceDate: sw.sourceDate || null,
+        sourceType: sw.sourceType || undefined,
+        sourceId: sw.sourceId || undefined
+      };
+    }).filter(ev => ev.quote || ev.displayName);
+
+    const rationale = comparison.rationale
+      || `AI recommends: ${comparison.solvedValue}, Currently coded: ${comparison.codedValue || 'not coded'}`;
+
     items.push({
       mdsItem: comparison.mdsItem,
       description: comparison.mdsLabel || getSectionMDescription(comparison.mdsItem),
@@ -558,8 +574,9 @@ function transformSectionM(results) {
         '': {
           answer: comparison.solvedValue,
           confidence: comparison.status === 'match' ? 'high' : 'medium',
-          rationale: `AI recommends: ${comparison.solvedValue}, Currently coded: ${comparison.codedValue || 'not coded'}`,
-          evidenceCount: 0,
+          rationale,
+          evidence,
+          evidenceCount: evidence.length,
           comparisonStatus: comparison.status, // match, mismatch, not_coded, needs_review
           userDecision: comparison.userDecision || null
         }

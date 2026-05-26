@@ -51,7 +51,7 @@ export function parseViewer(ev) {
   if (sourceType === 'progress-note' && sourceId) return { viewerType: 'clinical-note', id: sourceId };
   if (sourceType === 'therapy-doc' && sourceId) return { viewerType: 'therapy-document', id: sourceId };
   if (sourceType === 'document' && sourceId) return { viewerType: 'document', id: sourceId };
-  if (sourceType === 'uda') {
+  if (sourceType === 'uda' || sourceType === 'wound-assessment') {
     const udaId = (sourceId || evidenceId || '').replace(/^uda-/, '');
     if (udaId) return { viewerType: 'uda', id: udaId };
   }
