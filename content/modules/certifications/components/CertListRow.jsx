@@ -66,6 +66,16 @@ function SendHistoryExpanded({ sends }) {
   );
 }
 
+function handleViewDocument(cert) {
+  const pid = cert.patientExternalId;
+  if (!pid) {
+    window.SuperToast?.error?.('Patient ID unavailable — refresh after backend update');
+    return;
+  }
+  const url = `${window.location.origin}/upload/filesdisplay.xhtml?ESOLclientid=${encodeURIComponent(pid)}`;
+  window.location.href = url;
+}
+
 export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, onEditReason, onViewPractitioner }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sendsExpanded, setSendsExpanded] = useState(false);
@@ -89,6 +99,8 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
   const showDelay = cert.status === 'pending' && !cert.isDelayed && cert.status !== 'signed';
   const showEditReason = isRecert && cert.status !== 'signed';
   const hasSends = cert.sends?.length > 0;
+  const hasPdf = !!(cert.pdfS3Key || cert.delayedPdfS3Key);
+  const showViewPdf = hasPdf;
 
   // Urgency class for row accent styling — driven by backend-computed urgency
   const { urgency } = getCertUrgency(cert);
@@ -110,6 +122,57 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
     if (action === 'skip') onSkip?.(cert);
     if (action === 'delay') onDelay?.(cert);
     if (action === 'editReason') onEditReason?.(cert);
+  }
+
+  // Quiet single-line layout for signed certs — drops the "Due / Sent X times" meta strip
+  // and the loud status pill in favor of inline check + "Signed <date> · <signer>".
+  if (urgency === 'signed') {
+    return (
+      <div class={`cert__row cert__row--quiet${urgencyClass}`}>
+        <div class="cert__row-top">
+          <div class="cert__row-left">
+            <CertTypeBadge type={cert.type} />
+            {!compact && <span class="cert__row-patient">{cert.patientName}</span>}
+            {!compact && <MAPayerBadge payerType={cert.payerType} />}
+            <span class="cert__row-quiet-status">
+              <svg class="cert__row-quiet-check" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="7" fill="#dcfce7"/>
+                <path d="M5 8.25L7 10.25L11 6.25" stroke="#16a34a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Signed {formatShortDate(cert.signedAt)}</span>
+              {cert.signedByName && (
+                <>
+                  <span class="cert__row-quiet-sep">·</span>
+                  <span
+                    class={cert.signedByPractitionerId && onViewPractitioner ? 'cert__row-meta--link' : ''}
+                    onClick={cert.signedByPractitionerId && onViewPractitioner ? (e) => { e.stopPropagation(); onViewPractitioner(cert.signedByPractitionerId); } : undefined}
+                  >
+                    {cert.signedByName}{cert.signedByTitle ? `, ${cert.signedByTitle}` : ''}
+                  </span>
+                </>
+              )}
+            </span>
+          </div>
+          <div class="cert__row-right">
+            {showViewPdf && (
+              <button
+                class="cert__row-action cert__row-action--ghost cert__row-action--icon"
+                onClick={(e) => { e.stopPropagation(); handleViewDocument(cert); }}
+                data-track="cert_view_document"
+                data-track-prop-cert-type={cert.type}
+                title="Open patient documents in PointClickCare"
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2.5 4a1.5 1.5 0 011.5-1.5h5L13 7v5a1.5 1.5 0 01-1.5 1.5h-7.5A1.5 1.5 0 012.5 12V4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                  <path d="M9 2.5V6a1 1 0 001 1h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                </svg>
+                <span>View Document</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -139,7 +202,17 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
               {primaryAction.label}
             </button>
           )}
-          {(showSkip || showDelay || showEditReason) && (
+          {!primaryAction && showViewPdf && (
+            <button
+              class="cert__row-action cert__row-action--outline"
+              onClick={(e) => { e.stopPropagation(); handleViewDocument(cert); }}
+              data-track="cert_view_document"
+              data-track-prop-cert-type={cert.type}
+            >
+              View Document
+            </button>
+          )}
+          {(showSkip || showDelay || showEditReason || (primaryAction && showViewPdf)) && (
             <div class="cert__row-menu-container" ref={menuRef}>
               {/* NO_TRACK */}
               <button
@@ -155,6 +228,12 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
               </button>
               {menuOpen && (
                 <div class="cert__row-menu">
+                  {primaryAction && showViewPdf && (
+                    // NO_TRACK
+                    <button class="cert__row-menu-item" onClick={() => { setMenuOpen(false); handleViewDocument(cert); }}>
+                      View Document
+                    </button>
+                  )}
                   {showSkip && (
                     // NO_TRACK
                     <button class="cert__row-menu-item" onClick={() => handleMenuAction('skip')}>

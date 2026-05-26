@@ -18,6 +18,7 @@ import { QMBoard } from '../../content/modules/qm-board/QMBoard.jsx';
 import { TwentyFourHourReport } from '../../content/modules/twenty-four-hour-report/TwentyFourHourReport.jsx';
 import { FeedbackModal } from '../../content/modules/feedback/FeedbackModal.jsx';
 import { CoveragePanel } from '../../content/modules/care-plan-coverage/CoveragePanel.jsx';
+import { CarePlanStampModal } from '../../content/modules/care-plan-stamp/CarePlanStampModal.jsx';
 import { DemoQueryModal } from './DemoQueryModal.jsx';
 import { DemoChatOverlay } from './DemoChatOverlay.jsx';
 import { SuperDemoFab } from './SuperDemoFab.jsx';
@@ -95,6 +96,9 @@ export function PCCDemoApp() {
       '#super-chat-panel', '.super-chat-panel',
       '#super-menu-panel', '.super-menu-panel',
       '#notesModal',
+      // Captured care plan HTML ships with the baked-in vanilla FAB markup
+      // — hide it so only the Preact <SuperDemoFab> shows.
+      '#super-bubbles-container',
       // NOTE: do NOT hide .super-modal here — the Preact FeedbackModal uses
       // that class. Vanilla legacy modals attached before mount have their
       // own ids (#superModal, #notesModal) which we hide above.
@@ -210,6 +214,59 @@ export function PCCDemoApp() {
 
     return () => {
       badges.forEach(b => b.remove());
+    };
+  }, []);
+
+  // ── Inject the Care Plan Audit banner above the action row, demo-only. ──
+  //
+  // Real prod path (audit-banner.js) gates on careplandetail_rev.jsp in the
+  // URL, which the demo page won't match. We replicate the banner here against
+  // the same anchor (#idNewCustomFocusBtn) so the captured care plan page
+  // shows the audit CTA exactly like prod.
+  useEffect(() => {
+    // Run after a tick so any banner injected by the user's *installed*
+    // SuperLTC extension (which content-scripts onto localhost too) is
+    // already in the DOM and we can swap it out for the demo one.
+    let cancelled = false;
+    let banner, cta, dismiss;
+    const inject = () => {
+      if (cancelled) return;
+      const anchor = document.getElementById('idNewCustomFocusBtn');
+      if (!anchor) return;
+      const actionRow = anchor.closest('tr, div');
+      if (!actionRow?.parentNode) return;
+      // Yank any banner the installed extension already injected — the demo
+      // banner has to win or its Review button won't open the demo modal.
+      document.querySelectorAll('#super-audit-banner, .super-audit-banner').forEach((el) => el.remove());
+
+      banner = document.createElement('div');
+      banner.id = 'super-audit-banner';
+      banner.className = 'super-audit-banner is-actionable';
+      // Use HTML entities (&middot;, &rarr;, &times;) — the captured PCC page
+      // declares charset=windows-1252, which can mangle inline non-ASCII bytes.
+      banner.innerHTML =
+        '<span class="super-audit-banner__icon">🔍</span>' +
+        '<span class="super-audit-banner__text">SuperLTC Audit &middot; <strong>5</strong> to add &middot; <strong>2</strong> to remove &middot; <strong>3</strong> to verify</span>' +
+        '<button type="button" class="super-audit-banner__cta">Review &rarr;</button>' +
+        '<button type="button" class="super-audit-banner__dismiss" aria-label="Dismiss">&times;</button>';
+      actionRow.parentNode.insertBefore(banner, actionRow);
+
+      cta = banner.querySelector('.super-audit-banner__cta');
+      dismiss = banner.querySelector('.super-audit-banner__dismiss');
+      cta.addEventListener('click', openAudit);
+      dismiss.addEventListener('click', () => banner.remove());
+    };
+    const openAudit = () => setOverlay('audit');
+    inject();
+    // Re-inject once more after a short delay so we beat the prod extension's
+    // polling injector that fires up to 10 retries over ~2.5s.
+    const tid = setTimeout(inject, 800);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(tid);
+      cta?.removeEventListener('click', openAudit);
+      banner?.remove();
     };
   }, []);
 
@@ -337,6 +394,18 @@ export function PCCDemoApp() {
       {/* ── Feedback Modal ── */}
       {overlay === 'feedback' && (
         <FeedbackModal onClose={handleClose} />
+      )}
+
+      {/* ── Care Plan Audit (Comprehensive Review) ── */}
+      {overlay === 'audit' && (
+        <CarePlanStampModal
+          patientId="2657226"
+          patientName="Doe, Jane"
+          facilityName={FACILITY_NAME}
+          orgSlug={ORG_SLUG}
+          defaultMode="comprehensive"
+          onClose={handleClose}
+        />
       )}
 
       {/* ── Care Plan Coverage ── */}

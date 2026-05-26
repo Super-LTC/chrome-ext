@@ -3,15 +3,14 @@
  * Shows trend chart, summary cards, smart "needs attention" sections,
  * and full patient list with sparklines and PCC navigation.
  */
-import { useState, useMemo, useEffect } from 'preact/hooks';
+import { useState, useMemo /*, useEffect */ } from 'preact/hooks';
 import { TrendChart } from './components/TrendChart.jsx';
-import { Sparkline } from './components/Sparkline.jsx';
 import { ScoreBar } from './components/ScoreBar.jsx';
 import { ChangesList } from './components/ChangesList.jsx';
 import { GapsList } from './components/GapsList.jsx';
 import { CoveredList } from './components/CoveredList.jsx';
 import { useCoverage } from './hooks/useCoverage.js';
-import { fetchPatientHistories } from './hooks/usePatientHistory.js';
+// import { fetchPatientHistories } from './hooks/usePatientHistory.js';
 
 // ── Helpers ──
 
@@ -89,12 +88,7 @@ function AttentionCard({ patient, histories, onOpenCoverage }) {
       </div>
       <div class="cpc-cv__acard-bottom">
         {patient.hasResults ? (
-          <>
-            <span class="cpc-cv__mini-bar" style={{ width: 60 }}>
-              <span class="cpc-cv__mini-fill" style={{ width: `${patient.overallScore}%`, background: TIER_COLORS[tier] }} />
-            </span>
-            <span class={`cpc-cv__acard-pct cpc-cv__acard-pct--${tier}`}>{patient.overallScore}%</span>
-          </>
+          <span class={`cpc-cv__acard-pct cpc-cv__acard-pct--${tier}`}>{patient.overallScore}%</span>
         ) : (
           <span class="cpc-cv__row-unchecked">Not checked</span>
         )}
@@ -167,7 +161,7 @@ function AttentionGroup({ label, accent, patients, histories, historiesLoading, 
 
 // ── Patient Row ──
 
-function PatientRow({ patient, sparklineScores, onOpenCoverage }) {
+function PatientRow({ patient, onOpenCoverage }) {
   const tier = scoreTier(patient.overallScore ?? 0);
   const dxGaps = (patient.diagnosisMissing || 0) + (patient.diagnosisPartial || 0);
   const orderGaps = (patient.orderMissing || 0) + (patient.orderPartial || 0);
@@ -183,22 +177,11 @@ function PatientRow({ patient, sparklineScores, onOpenCoverage }) {
       </div>
       <div class="cpc-cv__row-score">
         {patient.hasResults ? (
-          <>
-            <span class="cpc-cv__mini-bar">
-              <span
-                class="cpc-cv__mini-fill"
-                style={{ width: `${patient.overallScore}%`, background: TIER_COLORS[tier] }}
-              />
-            </span>
-            <span class={`cpc-cv__row-pct cpc-cv__row-pct--${tier}`}>{patient.overallScore}%</span>
-          </>
+          <span class={`cpc-cv__row-pct cpc-cv__row-pct--${tier}`}>{patient.overallScore}%</span>
         ) : (
           <span class="cpc-cv__row-unchecked">Not checked</span>
         )}
       </div>
-      {sparklineScores && sparklineScores.length > 1 && (
-        <Sparkline scores={sparklineScores} />
-      )}
       <div class="cpc-cv__row-gaps">
         {totalGaps > 0 ? (
           <span class="cpc-cv__gap-badge">{totalGaps} gap{totalGaps !== 1 ? 's' : ''}</span>
@@ -458,42 +441,46 @@ function PatientDetail({ patient, facilityName, orgSlug, onBack }) {
 
 export function ComplianceView({ data, loading, error, retry, trendingData, facilityName, orgSlug, onOpenCoverage }) {
   const [filter, setFilter] = useState('all');
-  const [histories, setHistories] = useState(null);
-  const [historiesLoading, setHistoriesLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
 
-  // Fetch sparkline data — single batch request
-  const resolvedFacility = facilityName || data?.facilityName || '';
-  const resolvedOrg = orgSlug || data?.orgSlug || '';
-  useEffect(() => {
-    if (!data?.patients?.length) return;
-    setHistoriesLoading(true);
-    fetchPatientHistories(resolvedFacility, resolvedOrg)
-      .then(setHistories)
-      .finally(() => setHistoriesLoading(false));
-  }, [data?.patients, resolvedFacility, resolvedOrg]);
-
-  // Smart groups for "Needs Attention"
-  const { stalePatients, decliningPatients, uncheckedPatients } = useMemo(() => {
-    if (!data?.patients) return { stalePatients: [], decliningPatients: [], uncheckedPatients: [] };
-
-    const stale = data.patients.filter(p => p.stale);
-    const unchecked = data.patients.filter(p => !p.hasResults);
-
-    // Declining: patients whose sparkline trends down
-    let declining = [];
-    if (histories) {
-      declining = data.patients.filter(p => {
-        const scores = histories.get(p.patientId);
-        if (!scores || scores.length < 2) return false;
-        return scores[scores.length - 1].score < scores[0].score;
-      });
-    }
-
-    return { stalePatients: stale, decliningPatients: declining, uncheckedPatients: unchecked };
-  }, [data, histories]);
-
-  const hasAttention = stalePatients.length > 0 || decliningPatients.length > 0 || uncheckedPatients.length > 0;
+  // ── "Needs Attention" (Stale / Declining / Never Checked) — disabled, may resurrect later ──
+  // const [histories, setHistories] = useState(null);
+  // const [historiesLoading, setHistoriesLoading] = useState(false);
+  // const resolvedFacility = facilityName || data?.facilityName || '';
+  // const resolvedOrg = orgSlug || data?.orgSlug || '';
+  // useEffect(() => {
+  //   if (!data?.patients?.length) return;
+  //   setHistoriesLoading(true);
+  //   fetchPatientHistories(resolvedFacility, resolvedOrg)
+  //     .then(setHistories)
+  //     .finally(() => setHistoriesLoading(false));
+  // }, [data?.patients, resolvedFacility, resolvedOrg]);
+  //
+  // const { stalePatients, decliningPatients, uncheckedPatients } = useMemo(() => {
+  //   if (!data?.patients) return { stalePatients: [], decliningPatients: [], uncheckedPatients: [] };
+  //   const stale = data.patients.filter(p => p.stale);
+  //   const unchecked = data.patients.filter(p => !p.hasResults);
+  //   let declining = [];
+  //   if (histories) {
+  //     declining = data.patients.filter(p => {
+  //       const scores = histories.get(p.patientId);
+  //       if (!scores || scores.length < 2) return false;
+  //       return scores[scores.length - 1].score < scores[0].score;
+  //     });
+  //   }
+  //   return { stalePatients: stale, decliningPatients: declining, uncheckedPatients: unchecked };
+  // }, [data, histories]);
+  // const hasAttention = stalePatients.length > 0 || decliningPatients.length > 0 || uncheckedPatients.length > 0;
+  //
+  // Render block (paste below SummaryCards when re-enabling):
+  // {hasAttention && (
+  //   <div class="cpc-cv__attention">
+  //     <div class="cpc-cv__attention-title">Needs Attention</div>
+  //     <AttentionGroup label="New Gaps / Stale Data" accent="red" patients={stalePatients} histories={histories} historiesLoading={historiesLoading} onOpenCoverage={setSelectedPatient} defaultOpen={true} />
+  //     <AttentionGroup label="Declining Coverage" accent="orange" patients={decliningPatients} histories={histories} historiesLoading={historiesLoading} onOpenCoverage={setSelectedPatient} defaultOpen={true} />
+  //     <AttentionGroup label="Never Checked" accent="gray" patients={uncheckedPatients} histories={histories} historiesLoading={historiesLoading} onOpenCoverage={setSelectedPatient} defaultOpen={false} />
+  //   </div>
+  // )}
 
   // Filtered patient list
   const patients = useMemo(() => {
@@ -552,40 +539,6 @@ export function ComplianceView({ data, loading, error, retry, trendingData, faci
       {/* Summary cards */}
       <SummaryCards summary={data.summary} />
 
-      {/* Needs Attention */}
-      {hasAttention && (
-        <div class="cpc-cv__attention">
-          <div class="cpc-cv__attention-title">Needs Attention</div>
-          <AttentionGroup
-            label="New Gaps / Stale Data"
-            accent="red"
-            patients={stalePatients}
-            histories={histories}
-            historiesLoading={historiesLoading}
-            onOpenCoverage={setSelectedPatient}
-            defaultOpen={true}
-          />
-          <AttentionGroup
-            label="Declining Coverage"
-            accent="orange"
-            patients={decliningPatients}
-            histories={histories}
-            historiesLoading={historiesLoading}
-            onOpenCoverage={setSelectedPatient}
-            defaultOpen={true}
-          />
-          <AttentionGroup
-            label="Never Checked"
-            accent="gray"
-            patients={uncheckedPatients}
-            histories={histories}
-            historiesLoading={historiesLoading}
-            onOpenCoverage={setSelectedPatient}
-            defaultOpen={false}
-          />
-        </div>
-      )}
-
       {/* Filter pills */}
       <div class="cpc-cv__filters">
         {[
@@ -616,7 +569,6 @@ export function ComplianceView({ data, loading, error, retry, trendingData, faci
             <PatientRow
               key={p.patientId}
               patient={p}
-              sparklineScores={histories?.get(p.patientId)}
               onOpenCoverage={setSelectedPatient}
             />
           ))

@@ -1,7 +1,9 @@
 node_modules/
 dist/
 dist-prod/
+dist-store/
 demo-dist/
+installed-users.csv
 .env
 *.log
 .playwright-mcp

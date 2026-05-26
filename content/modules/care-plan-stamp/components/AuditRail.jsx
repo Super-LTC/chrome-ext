@@ -274,11 +274,11 @@ export const AuditRail = ({
           <button
             className="cpas-btn cpas-btn--primary cpas-list__commit-btn"
             disabled={commitDisabled}
-            onClick={onCommit}
+            onClick={() => onCommit()}
             data-track="care_plan_audit_commit"
             data-track-prop-source="rail"
           >
-            ✓ Stamp {commitCount.focuses} {commitCount.focuses === 1 ? 'focus' : 'focuses'} →
+            ✓ Add {commitCount.focuses} {commitCount.focuses === 1 ? 'focus' : 'focuses'} →
           </button>
           {needsInputCount > 0 && (
             <div className="cpas-list__commit-warn">

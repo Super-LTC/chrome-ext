@@ -455,13 +455,92 @@ const ICD10API = {
       return wordBlocks;
     }
 
-    const endpoint = `/api/extension/documents/${encodeURIComponent(documentId)}/word-blocks?` +
+    // v2 returns a short-lived presigned S3 URL instead of the blob, which
+    // dodges Lambda's 6 MB sync payload cap + 23 s timeout. Big documents
+    // (~20 MB / ~60k blocks) only work on v2. v1 is kept as fallback for
+    // the brief window where v2 isn't deployed everywhere.
+    const v2Endpoint = `/api/extension/documents/${encodeURIComponent(documentId)}/word-blocks/v2?` +
+      `facilityName=${encodeURIComponent(facilityName)}` +
+      `&orgSlug=${encodeURIComponent(orgSlug)}`;
+
+    const t0 = performance.now();
+    const v2Resp = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: v2Endpoint
+    });
+    const tV2 = performance.now() - t0;
+    console.log('[ICD10API/word-blocks v2] presign response', {
+      documentId,
+      ms: Math.round(tV2),
+      success: v2Resp?.success,
+      hasUrl: !!v2Resp?.data?.url,
+      error: v2Resp?.error || null,
+      dataKeys: v2Resp?.data ? Object.keys(v2Resp.data) : null,
+    });
+
+    if (v2Resp?.success && v2Resp.data?.url) {
+      try {
+        const tS3 = performance.now();
+        // Presigned URL is self-authenticated — no Authorization header.
+        const blobRes = await fetch(v2Resp.data.url);
+        if (!blobRes.ok) throw new Error(`s3 ${blobRes.status}`);
+        const raw = await blobRes.json();
+        const sample = Array.isArray(raw) ? raw[0] : null;
+        console.log('[ICD10API/word-blocks v2] s3 fetch', {
+          documentId,
+          ms: Math.round(performance.now() - tS3),
+          httpStatus: blobRes.status,
+          rawCount: Array.isArray(raw) ? raw.length : 'not-array',
+          sampleKeys: sample ? Object.keys(sample) : null,
+          sampleHasIndex: sample ? typeof sample.index : null,
+          sampleHasText: sample ? typeof sample.text : null,
+        });
+        // Project to the lean shape the viewer actually uses. Raw entries
+        // include the full Textract Block (heavy); we keep `index` because
+        // the renderer matches annotations to blocks via wb.index === idx.
+        const wordBlocks = (Array.isArray(raw) ? raw : []).map((wb) => ({
+          index: wb.index,
+          page: wb.page,
+          x: wb.x,
+          y: wb.y,
+          width: wb.width,
+          height: wb.height,
+          text: wb.text ?? wb.blockInfo?.Text ?? '',
+        }));
+        const withIndex = wordBlocks.filter((wb) => typeof wb.index === 'number').length;
+        console.log('[ICD10API/word-blocks v2] projected', {
+          documentId,
+          projectedCount: wordBlocks.length,
+          withIndex,
+          sample: wordBlocks[0] || null,
+        });
+        this.wordBlocksCache.set(documentId, wordBlocks);
+        return wordBlocks;
+      } catch (e) {
+        console.warn('[ICD10API/word-blocks v2] s3 fetch failed, falling back to v1', e);
+        _trackIcd10ApiFail('/api/extension/documents/:id/word-blocks/v2', { error: e.message });
+        // fall through to v1
+      }
+    } else if (v2Resp && !v2Resp.success && !/404|not found/i.test(v2Resp.error || '')) {
+      // v2 reachable but errored for a non-404 reason — track and fall back.
+      console.warn('[ICD10API/word-blocks v2] presign error, falling back to v1', v2Resp.error);
+      _trackIcd10ApiFail('/api/extension/documents/:id/word-blocks/v2', v2Resp);
+    } else {
+      console.log('[ICD10API/word-blocks v2] not available, falling back to v1', {
+        documentId,
+        error: v2Resp?.error,
+      });
+    }
+
+    // v1 fallback (small docs still work here; large docs will return empty
+    // or time out, which is the bug v2 was built to fix).
+    const v1Endpoint = `/api/extension/documents/${encodeURIComponent(documentId)}/word-blocks?` +
       `facilityName=${encodeURIComponent(facilityName)}` +
       `&orgSlug=${encodeURIComponent(orgSlug)}`;
 
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
-      endpoint
+      endpoint: v1Endpoint
     });
 
     if (!response.success) {

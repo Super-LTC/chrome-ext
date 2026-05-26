@@ -70,7 +70,17 @@ async function _renderBanner() {
   const orgSlug = typeof getOrg === 'function' ? (getOrg()?.org || '') : '';
 
   try {
-    const resp = await window.CarePlanAuditAPI.fetchAudit({ patientId, facilityName, orgSlug });
+    // Scrape the existing plan so the server can dedupe. Without this, the
+    // banner over-reports (rule engine fires N rules, but the modal would
+    // collapse the matches into onPlan and show a smaller toAdd count).
+    let existingFocusTexts = [];
+    try {
+      const fullPlan = await window.CarePlanStampDiscover?.scrapeFullCarePlan?.(patientId);
+      existingFocusTexts = fullPlan?.focusTexts || [];
+    } catch (_) { /* scrape best-effort; server still returns un-deduped audit */ }
+    const resp = await window.CarePlanAuditAPI.fetchAudit({
+      patientId, facilityName, orgSlug, existingFocusTexts,
+    });
     const audit = resp.audit || resp;
     _paint(banner, audit, { patientId, facilityName, orgSlug });
   } catch (e) {

@@ -70,7 +70,7 @@ export const AddBucketPane = ({
           onClick={onStamp}
           disabled={stamping}
         >
-          Stamp focus
+          Add focus
         </button>
       </div>
     </div>

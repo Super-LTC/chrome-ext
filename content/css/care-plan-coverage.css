@@ -642,30 +642,16 @@
 .cpc-cv__row-score {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100px;
+  justify-content: flex-end;
+  width: 56px;
   flex-shrink: 0;
 }
 
-.cpc-cv__mini-bar {
-  width: 48px;
-  height: 4px;
-  background: var(--super-gray-100, #f3f4f6);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.cpc-cv__mini-fill {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s;
-}
-
 .cpc-cv__row-pct {
-  font-size: 12px;
-  font-weight: 700;
-  min-width: 32px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .cpc-cv__row-pct--green { color: #16a34a; }

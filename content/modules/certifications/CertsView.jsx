@@ -141,9 +141,15 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       groupMap[key].displayCerts.push(cert);
     }
 
-    // 3. For non-signed tabs, find signed certs from same stays for history
+    // 3. For non-signed tabs, find signed certs from same stays for history.
+    //    Skip any cert already in displayCerts to avoid double-rendering.
     if (activeSubTab !== 'signed') {
+      const displayedIds = new Set();
+      for (const group of Object.values(groupMap)) {
+        for (const cert of group.displayCerts) displayedIds.add(cert.id);
+      }
       for (const cert of filteredSigned) {
+        if (displayedIds.has(cert.id)) continue;
         const key = cert.partAStayId;
         if (key && groupMap[key]) {
           groupMap[key].historyCerts.push(cert);
@@ -167,8 +173,11 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       group.allCerts.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
     }
 
-    // 5. Sort groups by most urgent cert
+    // 5. Sort groups: newest Part A stay first, with urgency as tiebreaker
     groups.sort((a, b) => {
+      const aStart = a.displayCerts[0]?.partAStartDate || a.historyCerts[0]?.partAStartDate || '';
+      const bStart = b.displayCerts[0]?.partAStartDate || b.historyCerts[0]?.partAStartDate || '';
+      if (aStart !== bStart) return bStart.localeCompare(aStart); // newest first
       const aMin = Math.min(...a.displayCerts.map(getCertSortKey));
       const bMin = Math.min(...b.displayCerts.map(getCertSortKey));
       return aMin - bMin;
@@ -216,6 +225,8 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       <div class="cert__view">
         <PractitionerWorkloadView
           practitionerId={workloadPractitionerId}
+          facilityName={facilityName}
+          orgSlug={orgSlug}
           onBack={() => setWorkloadPractitionerId(null)}
         />
       </div>

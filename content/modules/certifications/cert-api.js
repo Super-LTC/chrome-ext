@@ -216,10 +216,14 @@ const CertAPI = {
    * @param {string} practitionerId
    * @returns {Promise<{practitioner, queue, recentlySigned}>}
    */
-  async fetchPractitionerWorkload(practitionerId) {
+  async fetchPractitionerWorkload(practitionerId, facilityName, orgSlug) {
+    const params = new URLSearchParams();
+    if (facilityName) params.set('facilityName', facilityName);
+    if (orgSlug) params.set('orgSlug', orgSlug);
+    const qs = params.toString();
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
-      endpoint: `/api/extension/certifications/practitioners/${practitionerId}`,
+      endpoint: `/api/extension/certifications/practitioners/${practitionerId}${qs ? `?${qs}` : ''}`,
       options: { method: 'GET' }
     });
 
@@ -228,6 +232,27 @@ const CertAPI = {
     }
 
     return response.data;
+  },
+
+  /**
+   * Get a short-lived signed URL to view a cert's PDF.
+   * @param {string} certId
+   * @param {{delayed?: boolean}} [opts] - delayed=true returns the delay-letter variant
+   * @returns {Promise<{url: string}>}
+   */
+  async viewSignedPdf(certId, { delayed } = {}) {
+    const path = delayed ? 'delayed-pdf' : 'pdf';
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/${certId}/${path}`,
+      options: { method: 'GET' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch certification PDF');
+    }
+
+    return { url: response.data?.url };
   },
 
   /**

@@ -216,28 +216,15 @@
 
 /* ── Chain indicator (always visible in header) ── */
 .cert__chain-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin-left: 4px;
-}
-
-.cert__chain-item {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-}
-
-.cert__chain-line {
-  width: 6px;
-  height: 1.5px;
-  background: #d1d5db;
-  margin-right: 3px;
+  gap: 4px;
+  margin-left: 6px;
 }
 
 .cert__chain-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -430,14 +417,80 @@
 }
 
 .cert__row-meta--link {
-  color: #2563eb;
+  color: #4b5563;
   cursor: pointer;
   transition: color 0.1s ease;
 }
 
 .cert__row-meta--link:hover {
-  color: #1d4ed8;
+  color: #111827;
   text-decoration: underline;
+}
+
+/* ── Quiet (signed) cert row ── */
+.cert__row--quiet {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  transition: background 0.12s ease;
+}
+
+.cert__row--quiet:hover {
+  background: #f8fafc;
+}
+
+.cert__row--quiet .cert__row-top {
+  align-items: center;
+}
+
+.cert__row-quiet-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+  white-space: nowrap;
+  margin-left: 6px;
+  letter-spacing: -0.005em;
+}
+
+.cert__row-quiet-check {
+  flex-shrink: 0;
+}
+
+.cert__row-quiet-sep {
+  color: #cbd5e1;
+}
+
+.cert__row--quiet .cert__row-action--ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 9px;
+  height: auto;
+  transition: all 0.12s ease;
+}
+
+.cert__row--quiet .cert__row-action--ghost:hover {
+  color: #0f172a;
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  text-decoration: none;
+}
+
+.cert__row--quiet .cert__row-action--ghost svg {
+  opacity: 0.7;
+}
+
+.cert__row--quiet .cert__row-action--ghost:hover svg {
+  opacity: 1;
 }
 
 /* ─────────────────────────────────────────────

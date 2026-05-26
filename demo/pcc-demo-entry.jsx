@@ -7,9 +7,11 @@
 // ── Step 1: Install mocks SYNCHRONOUSLY before anything else ──
 import { createMockChrome } from './demo-mock-chrome.js';
 import { installGlobalMocks } from './demo-mock-globals.js';
+import { installCarePlanAuditMocks } from './demo-care-plan-audit-fixtures.js';
 
 createMockChrome();
 installGlobalMocks();
+installCarePlanAuditMocks();
 window.__DEMO_MODE = true;
 
 // ── Step 2: Import CSS (Vite will bundle these) ──
@@ -33,6 +35,7 @@ import '../content/css/admin-modal.css';
 import '../content/css/mds-planner.css';
 import '../content/css/uda-modal.css';
 import '../content/css/care-plan-coverage.css';
+import '../content/css/care-plan-stamp.css';
 import '../content/css/clinical-notes-modal.css';
 import '../content/css/diagnosis-query-modal.css';
 import '../content/css/ard-estimator.css';

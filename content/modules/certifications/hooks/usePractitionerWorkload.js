@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
  * @param {string|null} practitionerId
  * @returns {{ data: {practitioner, queue, recentlySigned}|null, loading: boolean, error: string|null, retry: Function }}
  */
-export function usePractitionerWorkload(practitionerId) {
+export function usePractitionerWorkload(practitionerId, facilityName, orgSlug) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -28,7 +28,7 @@ export function usePractitionerWorkload(practitionerId) {
     setLoading(true);
     setError(null);
 
-    window.CertAPI.fetchPractitionerWorkload(practitionerId)
+    window.CertAPI.fetchPractitionerWorkload(practitionerId, facilityName, orgSlug)
       .then(result => {
         if (!cancelled) setData(result);
       })
@@ -40,7 +40,7 @@ export function usePractitionerWorkload(practitionerId) {
       });
 
     return () => { cancelled = true; };
-  }, [practitionerId, fetchCount]);
+  }, [practitionerId, facilityName, orgSlug, fetchCount]);
 
   return { data, loading, error, retry };
 }

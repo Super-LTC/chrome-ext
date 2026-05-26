@@ -160,7 +160,7 @@ function sortByArd(queries) {
   });
 }
 
-function QueryCard({ q, expanded, onToggle, onOpenAssessment, assessmentCtx, isPending }) {
+function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, assessmentCtx, isPending }) {
   const delta = formatPaymentDelta(q.assessmentPayment);
   const sentTo = q.sentTo?.[0] || q.practitioner;
   const practName = sentTo ? `${sentTo.firstName || ''} ${sentTo.lastName || ''}`.trim() : null;
@@ -225,6 +225,16 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, assessmentCtx, isP
                 Resend SMS
               </TrackedButton>
             )}
+            {onViewPdf && (q.hasPdf || q.status === 'signed') && (
+              <TrackedButton
+                track="mds_cc_item_actioned"
+                trackProps={{ item_code: (q.mdsItem || '').includes(':') ? q.mdsItem.split(':')[0] : (q.mdsItem || ''), action: 'view_signed_pdf' }}
+                class="mds-cc__qcard-btn mds-cc__qcard-btn--secondary"
+                onClick={(e) => { e.stopPropagation(); onViewPdf(q.id); }}
+              >
+                View Signed PDF
+              </TrackedButton>
+            )}
           </div>
         </div>
       )}
@@ -250,11 +260,31 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
 
   async function handleViewPdf(queryId) {
     try {
-      const resp = await fetch(`/api/extension/diagnosis-queries/${queryId}/pdf`);
-      const { pdfUrl } = await resp.json();
+      const { pdfUrl } = await window.QueryAPI.getQueryPdf(queryId);
       if (pdfUrl) window.open(pdfUrl, '_blank');
+      else window.SuperToast?.error?.('No PDF available');
     } catch (e) {
       console.warn('[Super] PDF fetch failed', e);
+      window.SuperToast?.error?.('Failed to load PDF');
+    }
+  }
+
+  async function handlePrintQuery(q) {
+    const code = q.selectedIcd10Code || q.icd10Code || q.suggestedIcd10Code;
+    const description = q.selectedIcd10Description || q.icd10Description || q.suggestedIcd10Description || q.mdsItemName;
+    if (!code || !description) {
+      window.SuperToast?.error?.('Missing ICD-10 selection — open in Analyzer to print');
+      return;
+    }
+    try {
+      await window.QueryAPI.printQueryPdf(q.id, {
+        code,
+        description,
+        filename: `query-${(q.patientName || 'patient').replace(/[^a-z0-9]/gi, '-')}-${code}.pdf`,
+      });
+    } catch (e) {
+      console.warn('[Super] Print query failed', e);
+      window.SuperToast?.error?.('Failed to print query');
     }
   }
 
@@ -276,6 +306,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
               expanded={expandedId === q.id}
               onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
               onOpenAssessment={() => onOpenAssessment?.(findAssessmentId(q))}
+              onViewPdf={handleViewPdf}
               assessmentCtx={findAssessmentContext(q)}
               isPending={false}
             />
@@ -297,6 +328,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
               expanded={expandedId === q.id}
               onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
               onOpenAssessment={() => onOpenAssessment?.(findAssessmentId(q))}
+              onViewPdf={handleViewPdf}
               assessmentCtx={findAssessmentContext(q)}
               isPending={true}
             />
@@ -366,6 +398,16 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
                           onClick={(e) => { e.stopPropagation(); handleViewPdf(q.id); }}
                         >
                           View Signed PDF
+                        </TrackedButton>
+                      )}
+                      {isSigned && (
+                        <TrackedButton
+                          track="mds_cc_item_actioned"
+                          trackProps={{ item_code: (q.mdsItem || '').includes(':') ? q.mdsItem.split(':')[0] : (q.mdsItem || ''), action: 'print_query' }}
+                          class="mds-cc__qcard-btn mds-cc__qcard-btn--secondary"
+                          onClick={(e) => { e.stopPropagation(); handlePrintQuery(q); }}
+                        >
+                          Print
                         </TrackedButton>
                       )}
                     </div>

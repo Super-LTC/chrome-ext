@@ -56,7 +56,16 @@ async function _renderBanner() {
   const orgSlug = typeof getOrg === 'function' ? (getOrg()?.org || '') : '';
 
   try {
-    const resp = await window.CarePlanAuditAPI.fetchAudit({ patientId, facilityName, orgSlug });
+    // Scrape existing plan so server can dedupe; without it the banner
+    // reports the raw rule-engine count and disagrees with the modal.
+    let existingFocusTexts = [];
+    try {
+      const fullPlan = await window.CarePlanStampDiscover?.scrapeFullCarePlan?.(patientId);
+      existingFocusTexts = fullPlan?.focusTexts || [];
+    } catch (_) { /* best-effort */ }
+    const resp = await window.CarePlanAuditAPI.fetchAudit({
+      patientId, facilityName, orgSlug, existingFocusTexts,
+    });
     const audit = resp.audit || resp;
     _paint(banner, audit, { patientId, facilityName, orgSlug });
   } catch (e) {

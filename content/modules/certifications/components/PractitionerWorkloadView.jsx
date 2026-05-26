@@ -81,8 +81,8 @@ function SignedRow({ item }) {
   );
 }
 
-export function PractitionerWorkloadView({ practitionerId, onBack }) {
-  const { data, loading, error, retry } = usePractitionerWorkload(practitionerId);
+export function PractitionerWorkloadView({ practitionerId, facilityName, orgSlug, onBack }) {
+  const { data, loading, error, retry } = usePractitionerWorkload(practitionerId, facilityName, orgSlug);
 
   if (loading) {
     return (
@@ -118,7 +118,22 @@ export function PractitionerWorkloadView({ practitionerId, onBack }) {
 
   if (!data) return null;
 
-  const { practitioner, queue = [], recentlySigned = [] } = data;
+  const { practitioner } = data;
+  // Backend returns queue/recentlySigned as { certifications: [], diagnosisQueries: [] }
+  const queueRaw = data.queue || {};
+  const signedRaw = data.recentlySigned || {};
+  const queue = Array.isArray(queueRaw)
+    ? queueRaw
+    : [
+        ...(queueRaw.certifications || []).map(c => ({ ...c, _kind: 'cert' })),
+        ...(queueRaw.diagnosisQueries || []).map(q => ({ ...q, _kind: 'query' })),
+      ];
+  const recentlySigned = Array.isArray(signedRaw)
+    ? signedRaw
+    : [
+        ...(signedRaw.certifications || []).map(c => ({ ...c, _kind: 'cert' })),
+        ...(signedRaw.diagnosisQueries || []).map(q => ({ ...q, _kind: 'query' })),
+      ];
 
   return (
     <div class="cert__workload">

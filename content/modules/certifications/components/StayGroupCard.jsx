@@ -33,18 +33,16 @@ function ChainIndicator({ allCerts }) {
   }
 
   return (
-    <div class="cert__chain-indicator">
-      {CHAIN_TYPES.map((type, i) => {
+    <div class="cert__chain-indicator" aria-label="Certification chain status">
+      {CHAIN_TYPES.map((type) => {
         const cert = certByType[type];
         const variant = getChainDotVariant(cert);
         return (
-          <span key={type} class="cert__chain-item">
-            {i > 0 && <span class="cert__chain-line" />}
-            <span class={`cert__chain-dot cert__chain-dot--${variant}`} />
-            <span class={`cert__chain-label cert__chain-label--${variant}`}>
-              {CHAIN_LABELS[type]}
-            </span>
-          </span>
+          <span
+            key={type}
+            class={`cert__chain-dot cert__chain-dot--${variant}`}
+            title={`${CHAIN_LABELS[type]}: ${variant}`}
+          />
         );
       })}
     </div>

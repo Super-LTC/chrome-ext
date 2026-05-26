@@ -536,9 +536,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     // "Add all" should only stamp items from that bucket — not the other
     // buckets they haven't reviewed yet.
     const scopedAudit = _filterAuditToAddByBucket(audit, addBucketFilter);
-    const candidates = overrideItems || (scopedAudit.toAdd || []).filter((it) =>
-      !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
-    );
+    const candidates = Array.isArray(overrideItems)
+      ? overrideItems
+      : (scopedAudit.toAdd || []).filter((it) =>
+          !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
+        );
     // Used to drop items whose composed description still had '___' — removed
     // for the same reason as the Initial-flow bail: kardex-style tokens
     // aren't nurse-fillable and PCC accepts placeholder text. Stamp them all.
@@ -572,7 +574,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         n_interventions: result?.interventionsStamped ?? 0,
       });
     } catch (e) {
-      setErrorMsg(e.message || 'Stamp failed');
+      setErrorMsg(e.message || 'Add failed');
       setStage('ready');
     }
   }, [audit, addBucketFilter, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
