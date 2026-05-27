@@ -341,18 +341,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Store-build analytics batches from analytics-superltc.js. Routed through
-  // apiRequest for 401 retry + persistent-401 logout. Best-effort: errors swallowed.
+  // Store-build analytics batches from analytics-superltc.js.
+  //
+  // Deliberately NOT routed through apiRequest: telemetry is best-effort and
+  // must never be able to log a clinical user out. apiRequest clears authToken
+  // on a persistent 401, so a 401 from the analytics endpoint (which fires every
+  // 2s/50 events) was silently logging store-build users out mid-shift. Here we
+  // do a standalone fetch and drop the batch on ANY failure — including 401 —
+  // without ever touching auth storage.
   if (message.type === 'analyticsBatch') {
     (async () => {
       try {
-        await apiRequest('/api/v1/analytics/events', {
-          method: 'POST',
-          body: JSON.stringify({ batch: message.batch }),
-        });
+        const { authToken } = await chrome.storage.local.get('authToken');
+        if (authToken) {
+          await fetch(`${CONFIG.API_BASE}/api/v1/analytics/events`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ batch: message.batch }),
+          });
+          // Response status is ignored on purpose: a non-2xx (incl. 401) just
+          // means this batch is dropped. Never clear auth for telemetry.
+        }
       } catch {
-        // No auth, network error, 5xx — drop. apiRequest already handles
-        // persistent-401 token clear.
+        // No auth or network error — drop the batch.
       }
       sendResponse({ ok: true });
     })();
