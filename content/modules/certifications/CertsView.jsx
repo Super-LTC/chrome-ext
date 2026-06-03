@@ -3,6 +3,7 @@ import { useCertifications } from './hooks/useCertifications.js';
 import { StayGroupCard } from './components/StayGroupCard.jsx';
 import { SendCertModal } from './components/SendCertModal.jsx';
 import { SkipCertModal } from './components/SkipCertModal.jsx';
+import { RevokeCertModal } from './components/RevokeCertModal.jsx';
 import { EditClinicalReasonModal } from './components/EditClinicalReasonModal.jsx';
 import { DelayCertModal } from './components/DelayCertModal.jsx';
 import { PractitionerWorkloadView } from './components/PractitionerWorkloadView.jsx';
@@ -58,6 +59,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
   // Modal state
   const [sendCert, setSendCert] = useState(null);
   const [skipCert, setSkipCert] = useState(null);
+  const [revokeCert, setRevokeCert] = useState(null);
   const [delayCert, setDelayCert] = useState(null);
   const [editCert, setEditCert] = useState(null);
 
@@ -173,14 +175,23 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       group.allCerts.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
     }
 
-    // 5. Sort groups: newest Part A stay first, with urgency as tiebreaker
+    // 5. Sort groups.
+    //    Actionable tabs → MOST URGENT FIRST: order by each group's soonest-due
+    //    (most-overdue) cert so the nurse always works top-down by deadline.
+    //    `getCertSortKey` returns a negative number for overdue certs and the
+    //    days-until-due otherwise, so the group minimum = its most urgent cert.
+    //    Newest Part A stay is only a tiebreaker.
+    //    Signed tab → keep newest-stay-first (due dates are meaningless there).
     groups.sort((a, b) => {
       const aStart = a.displayCerts[0]?.partAStartDate || a.historyCerts[0]?.partAStartDate || '';
       const bStart = b.displayCerts[0]?.partAStartDate || b.historyCerts[0]?.partAStartDate || '';
-      if (aStart !== bStart) return bStart.localeCompare(aStart); // newest first
+      if (activeSubTab === 'signed') {
+        return bStart.localeCompare(aStart); // newest first
+      }
       const aMin = Math.min(...a.displayCerts.map(getCertSortKey));
       const bMin = Math.min(...b.displayCerts.map(getCertSortKey));
-      return aMin - bMin;
+      if (aMin !== bMin) return aMin - bMin; // due soonest / most overdue first
+      return bStart.localeCompare(aStart); // tiebreak: newest stay first
     });
 
     return groups;
@@ -214,6 +225,42 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       console.error('[Certifications] Failed to unskip:', err);
       window.SuperToast?.error?.('Failed to restore certification');
     }
+  }
+
+  // Revoke an outstanding (sent) cert. On success, show an Undo toast wired to
+  // the un-revoke (DELETE) endpoint — the only revoked-state UI for v1, since
+  // revoked certs drop off the actionable lists. `cert` is captured from the
+  // modal's context (the closed-over `revokeCert` is null by the time the
+  // promise resolves), so we pass it through.
+  async function handleRevokeCert(reason) {
+    const cert = revokeCert;
+    try {
+      await window.CertAPI.revokeCert(cert.id, reason);
+    } catch (err) {
+      console.error('[Certifications] Failed to revoke:', err);
+      // Surface the backend's domain message (e.g. "Cannot revoke a signed
+      // certification") and re-throw so the modal re-enables its button.
+      window.SuperToast?.error?.(err?.message || 'Failed to revoke certification');
+      throw err;
+    }
+    refetchAll();
+    window.SuperToast?.show?.({
+      type: 'success',
+      icon: '↩',
+      message: `Revoked certification for ${cert?.patientName || 'patient'}`,
+      duration: 8000,
+      action: 'Undo',
+      onAction: async () => {
+        try {
+          await window.CertAPI.unrevokeCert(cert.id);
+          window.SuperToast?.success?.('Revoke undone — back to awaiting signature');
+          refetchAll();
+        } catch (err) {
+          console.error('[Certifications] Failed to un-revoke:', err);
+          window.SuperToast?.error?.('Failed to undo revoke');
+        }
+      },
+    });
   }
 
   const loading = activeSubTab === 'signed' ? signedLoading : activeLoading;
@@ -318,6 +365,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
             onSkip={(c) => setSkipCert(c)}
             onDelay={(c) => setDelayCert(c)}
             onUnskip={handleUnskip}
+            onRevoke={(c) => setRevokeCert(c)}
             onEditReason={(c) => setEditCert(c)}
             onViewPractitioner={(practId) => setWorkloadPractitionerId(practId)}
           />
@@ -339,6 +387,13 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
         onClose={() => setSkipCert(null)}
         cert={skipCert}
         onSkipped={handleSkipCert}
+      />
+
+      <RevokeCertModal
+        isOpen={!!revokeCert}
+        onClose={() => setRevokeCert(null)}
+        cert={revokeCert}
+        onRevoked={handleRevokeCert}
       />
 
       <DelayCertModal

@@ -23,10 +23,21 @@ import { useTrending } from '../care-plan-coverage/hooks/useTrending.js';
 import { ComplianceView } from '../care-plan-coverage/ComplianceView.jsx';
 import { MdsPlanner } from '../mds-planner/MdsPlanner.jsx';
 import { RoundingReports } from '../rounding-reports/RoundingReports.jsx';
+import { RevokeQueryModal } from './RevokeQueryModal.jsx';
 import { track } from '../../utils/analytics.js';
 import { TrackedButton } from '../../components/TrackedButton.jsx';
 
 // ── Helpers ──
+
+// True if an ISO timestamp is within the last `days` days. Used to scope the
+// "recently signed" FYI window client-side (the certs route returns all signed
+// certs; we only dot the last 7 days, matching the badge summary's window).
+function _withinDays(iso, days) {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  return (Date.now() - t) <= days * 24 * 60 * 60 * 1000;
+}
 
 function getUrgency(assessment) {
   return assessment.deadlines?.urgency || assessment.urgency || 'on_track';
@@ -160,7 +171,7 @@ function sortByArd(queries) {
   });
 }
 
-function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, assessmentCtx, isPending }) {
+function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, onRevoke, assessmentCtx, isPending }) {
   const delta = formatPaymentDelta(q.assessmentPayment);
   const sentTo = q.sentTo?.[0] || q.practitioner;
   const practName = sentTo ? `${sentTo.firstName || ''} ${sentTo.lastName || ''}`.trim() : null;
@@ -235,6 +246,18 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf
                 View Signed PDF
               </TrackedButton>
             )}
+            {/* Revoke — only for an outstanding (sent) query. Pulls back the
+                doctor's live signing link; reversible via the Undo toast. */}
+            {!isPending && onRevoke && (
+              <TrackedButton
+                track="mds_cc_item_actioned"
+                trackProps={{ item_code: (q.mdsItem || '').includes(':') ? q.mdsItem.split(':')[0] : (q.mdsItem || ''), action: 'revoke_query' }}
+                class="mds-cc__qcard-btn mds-cc__qcard-btn--danger"
+                onClick={(e) => { e.stopPropagation(); onRevoke(q); }}
+              >
+                Revoke
+              </TrackedButton>
+            )}
           </div>
         </div>
       )}
@@ -242,10 +265,46 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf
   );
 }
 
-function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAssessment }) {
+function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAssessment, onRefetch }) {
   const [expandedId, setExpandedId] = useState(null);
+  const [revokeTarget, setRevokeTarget] = useState(null);
   const pending = sortByArd((outstandingQueries || []).filter(q => q.status === 'pending'));
   const sent = sortByArd((outstandingQueries || []).filter(q => q.status === 'sent' || q.status === 'awaiting_response'));
+
+  // Revoke an outstanding (sent) query, then show an Undo toast wired to the
+  // un-revoke (DELETE) endpoint — the only revoked-state UI for v1, since a
+  // revoked query drops off the outstanding list. `q` is captured in the
+  // closure so Undo still works after the modal closes.
+  async function handleRevokeQuery(reason) {
+    const q = revokeTarget;
+    try {
+      await window.QueryAPI.revokeQuery(q.id, reason);
+    } catch (err) {
+      console.error('[Super] Failed to revoke query:', err);
+      // Surface the backend's domain message and re-throw so the modal
+      // re-enables its button instead of closing.
+      window.SuperToast?.error?.(err?.message || 'Failed to revoke query');
+      throw err;
+    }
+    onRefetch?.();
+    window.SuperToast?.show?.({
+      type: 'success',
+      icon: '↩',
+      message: `Revoked query for ${q?.patientName || 'patient'}`,
+      duration: 8000,
+      action: 'Undo',
+      onAction: async () => {
+        try {
+          await window.QueryAPI.unrevokeQuery(q.id);
+          window.SuperToast?.success?.('Revoke undone — back to awaiting doctor');
+          onRefetch?.();
+        } catch (err) {
+          console.error('[Super] Failed to un-revoke query:', err);
+          window.SuperToast?.error?.('Failed to undo revoke');
+        }
+      },
+    });
+  }
 
   function findAssessmentId(q) {
     const match = (assessments || []).find(a => a.id === q.mdsAssessmentId);
@@ -307,6 +366,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
               onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
               onOpenAssessment={() => onOpenAssessment?.(findAssessmentId(q))}
               onViewPdf={handleViewPdf}
+              onRevoke={(query) => setRevokeTarget(query)}
               assessmentCtx={findAssessmentContext(q)}
               isPending={false}
             />
@@ -425,6 +485,13 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
           <p class="mds-cc__state-text">No outstanding queries.</p>
         </div>
       )}
+
+      <RevokeQueryModal
+        isOpen={!!revokeTarget}
+        query={revokeTarget}
+        onClose={() => setRevokeTarget(null)}
+        onRevoked={handleRevokeQuery}
+      />
     </div>
   );
 }
@@ -442,10 +509,17 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
   const [expandedId, setExpandedId] = useState(initialExpandedId || null);
   const [selectedItem, setSelectedItem] = useState(null); // { item, assessmentId }
 
-  // Mount-only: fire mds_command_center_opened exactly once.
+  // Mount-only: fire mds_command_center_opened exactly once. On unmount, refresh
+  // the FAB "S" badge — action items may have been worked and FYI items viewed
+  // while the center was open.
   useEffect(() => {
     track('mds_command_center_opened', { source: 'fab' });
+    return () => window.updateMDSBadge?.();
   }, []);
+
+  // Populated each render (below) so this stable callback always sees the
+  // latest unseen keys + refetchers without re-creating on every data change.
+  const fyiRef = useRef({ certKeys: [], queryKeys: [], refetchCerts: null, refetchData: null });
 
   const handleViewChange = useCallback((next) => {
     setActiveView(prev => {
@@ -454,6 +528,20 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
       }
       return next;
     });
+    // Per-tab clear: entering Certs/Queries marks all unseen recently-signed
+    // items seen, then refreshes the FAB badge + refetches so the dots clear.
+    const fyi = fyiRef.current;
+    if (next === 'certs' && fyi.certKeys.length) {
+      window.NotificationsAPI?.markSeen(fyi.certKeys).then(() => {
+        window.updateMDSBadge?.();
+        fyi.refetchCerts?.();
+      });
+    } else if (next === 'queries' && fyi.queryKeys.length) {
+      window.NotificationsAPI?.markSeen(fyi.queryKeys).then(() => {
+        window.updateMDSBadge?.();
+        fyi.refetchData?.();
+      });
+    }
   }, []);
 
   const handleItemSelect = useCallback((item, assessmentId) => {
@@ -478,6 +566,34 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
   // Full cert list (for calendar layer) — same data CertsView fetches.
   // Hoisted here so the calendar can plot certs alongside assessments and queries.
   const { certs: allCerts } = useCertifications({ facilityName, orgSlug });
+
+  // ── Notification FYI "seen" state ──
+  // Recently-signed certs/queries the current user hasn't viewed yet. Drives the
+  // red dots on the Certs/Queries tabs; opening the tab marks them all seen
+  // (per-tab clear) and decrements the FAB "S" badge.
+  const { certs: signedCerts, refetch: refetchSignedCerts } = useCertifications({
+    facilityName, orgSlug, status: 'signed',
+  });
+  const certUnseenKeys = useMemo(
+    () => (signedCerts || [])
+      .filter((c) => c.seenByMe === false && _withinDays(c.signedAt, 7))
+      .map((c) => window.NOTIFICATION_KEYS.certSigned(c.id)),
+    [signedCerts]
+  );
+  const queryUnseenKeys = useMemo(
+    () => (data?.recentlySigned || [])
+      .filter((q) => q.seenByMe === false)
+      .map((q) => window.NOTIFICATION_KEYS.querySigned(q.id)),
+    [data]
+  );
+  const certHasUnseen = certUnseenKeys.length > 0;
+  const queryHasUnseen = queryUnseenKeys.length > 0;
+  fyiRef.current = {
+    certKeys: certUnseenKeys,
+    queryKeys: queryUnseenKeys,
+    refetchCerts: refetchSignedCerts,
+    refetchData: retry,
+  };
 
   // Compliance dashboard (care plan coverage)
   const {
@@ -605,7 +721,9 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => setIsFullscreen(v => !v)}
           queryCount={(data?.outstandingQueries || []).length}
+          queryHasUnseen={queryHasUnseen}
           certCount={certCount}
+          certHasUnseen={certHasUnseen}
           certsEnabled={certsEnabled}
           complianceGaps={complianceGaps}
           payerFilter={payerFilter}
@@ -688,6 +806,7 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
               recentlySigned={data?.recentlySigned || []}
               assessments={assessments}
               onOpenAssessment={handleOpenAssessmentById}
+              onRefetch={retry}
             />
           )}
 

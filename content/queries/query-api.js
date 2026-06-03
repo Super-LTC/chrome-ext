@@ -293,6 +293,57 @@ const QueryAPI = {
     }
 
     return response.data?.query || response.data;
+  },
+
+  /**
+   * Revoke an outstanding (sent) diagnosis query — invalidates the
+   * practitioner's live signing link so the signature can no longer be
+   * completed. Reversible via unrevokeQuery. `reason` is required (non-empty).
+   * @param {string} queryId
+   * @param {string} reason
+   * @returns {Promise<Object>} the updated query
+   */
+  async revokeQuery(queryId, reason) {
+    const endpoint = `/api/extension/diagnosis-queries/${queryId}/revoke`;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint,
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      }
+    });
+
+    if (!response.success) {
+      _trackApiFail('/api/extension/diagnosis-queries/:id/revoke', response);
+      throw new Error(response.error || 'Failed to revoke query');
+    }
+
+    return response.data?.query || response.data;
+  },
+
+  /**
+   * Un-revoke a diagnosis query — restores it to its prior `sent` status.
+   * No request body.
+   * @param {string} queryId
+   * @returns {Promise<Object>} the updated query
+   */
+  async unrevokeQuery(queryId) {
+    const endpoint = `/api/extension/diagnosis-queries/${queryId}/revoke`;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint,
+      options: { method: 'DELETE' }
+    });
+
+    if (!response.success) {
+      _trackApiFail('/api/extension/diagnosis-queries/:id/revoke', response);
+      throw new Error(response.error || 'Failed to un-revoke query');
+    }
+
+    return response.data?.query || response.data;
   }
 };
 

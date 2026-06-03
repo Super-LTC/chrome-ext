@@ -76,7 +76,7 @@ function handleViewDocument(cert) {
   window.location.href = url;
 }
 
-export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, onEditReason, onViewPractitioner }) {
+export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onRevoke, onDelay, onEditReason, onViewPractitioner }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sendsExpanded, setSendsExpanded] = useState(false);
   const menuRef = useRef(null);
@@ -96,6 +96,9 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
   const primaryAction = getPrimaryAction(cert);
   const isRecert = cert.type === 'day_14_recert' || cert.type === 'day_30_recert';
   const showSkip = cert.status !== 'skipped' && cert.status !== 'signed';
+  // Revoke only applies to an outstanding (sent) cert — it pulls back the
+  // practitioner's live signing link. Reversible via the Undo toast.
+  const showRevoke = cert.status === 'sent';
   const showDelay = cert.status === 'pending' && !cert.isDelayed && cert.status !== 'signed';
   const showEditReason = isRecert && cert.status !== 'signed';
   const hasSends = cert.sends?.length > 0;
@@ -122,6 +125,7 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
     if (action === 'skip') onSkip?.(cert);
     if (action === 'delay') onDelay?.(cert);
     if (action === 'editReason') onEditReason?.(cert);
+    if (action === 'revoke') onRevoke?.(cert);
   }
 
   // Quiet single-line layout for signed certs — drops the "Due / Sent X times" meta strip
@@ -212,7 +216,7 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
               View Document
             </button>
           )}
-          {(showSkip || showDelay || showEditReason || (primaryAction && showViewPdf)) && (
+          {(showSkip || showRevoke || showDelay || showEditReason || (primaryAction && showViewPdf)) && (
             <div class="cert__row-menu-container" ref={menuRef}>
               {/* NO_TRACK */}
               <button
@@ -232,6 +236,12 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onDelay, 
                     // NO_TRACK
                     <button class="cert__row-menu-item" onClick={() => { setMenuOpen(false); handleViewDocument(cert); }}>
                       View Document
+                    </button>
+                  )}
+                  {showRevoke && (
+                    // NO_TRACK
+                    <button class="cert__row-menu-item cert__row-menu-item--danger" onClick={() => handleMenuAction('revoke')}>
+                      Revoke Certification
                     </button>
                   )}
                   {showSkip && (

@@ -239,6 +239,16 @@
   background: var(--super-primary, #6366f1);
   color: #fff;
 }
+/* "New to view" dot — recently-signed FYI items the nurse hasn't seen.
+   Distinct from the count badge; clears when the tab is opened. */
+.mds-cc__view-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  flex-shrink: 0;
+}
 
 /* ============================================================
    Urgency Filter Pills
@@ -2377,6 +2387,45 @@
 }
 .mds-cc__qcard-btn--secondary:hover {
   background: var(--super-gray-200, #e5e7eb);
+}
+.mds-cc__qcard-btn--danger {
+  background: #fff;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+.mds-cc__qcard-btn--danger:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+/* ── Revoke query modal ── */
+.mds-cc__revoke-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--super-gray-600, #4b5563);
+}
+.mds-cc__revoke-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--super-gray-700, #374151);
+}
+.mds-cc__revoke-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--super-font, sans-serif);
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--super-gray-300, #d1d5db);
+  border-radius: 6px;
+  resize: vertical;
+}
+.mds-cc__revoke-textarea:focus {
+  outline: none;
+  border-color: var(--super-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
 }
 
 /* ── Estimated badge (compact for preview cards) ── */

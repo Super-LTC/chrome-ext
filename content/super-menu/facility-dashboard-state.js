@@ -47,6 +47,14 @@ const FacilityDashboardState = {
         throw new Error('Could not determine organization or facility');
       }
 
+      // Persist the resolved facility/org on the state object so other callers
+      // (e.g. fab.js updateMDSBadge → NotificationsAPI.fetchSummary, and the
+      // cert badge) can read them. Previously these were local-only, so those
+      // `if (FacilityDashboardState.facilityName && orgSlug)` guards silently
+      // never fired.
+      this.facilityName = facilityName;
+      this.orgSlug = orgSlug;
+
       const params = new URLSearchParams({
         facilityName,
         orgSlug,

@@ -93,6 +93,19 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
     track('report_24hr_opened', { source: 'fab' });
   }, []);
 
+  // Mark today's report seen the moment the nurse views it (FYI notification).
+  // Keyed on reportDateLocal (facility-local date), NOT the UTC reportDate.
+  // Best-effort; clears the report's contribution from the FAB "S" badge.
+  const seenReportDateRef = useRef(null);
+  useEffect(() => {
+    const dateLocal = currentReport?.reportDateLocal;
+    if (!dateLocal || currentReport?.seenByMe !== false) return;
+    if (seenReportDateRef.current === dateLocal) return;
+    seenReportDateRef.current = dateLocal;
+    window.NotificationsAPI?.markSeen([window.NOTIFICATION_KEYS.report24h(dateLocal)])
+      .then(() => window.updateMDSBadge?.());
+  }, [currentReport]);
+
   // Filter state — lives at the panel root so filters + cards + list share it.
   const [activeSeverities, setActiveSeverities] = useState(new Set(ALL_SEVERITIES));
 

@@ -37,7 +37,9 @@ export function CommandCenterHeader({
   isFullscreen,
   onToggleFullscreen,
   queryCount,
+  queryHasUnseen,
   certCount,
+  certHasUnseen,
   certsEnabled,
   complianceGaps,
   payerFilter,
@@ -140,6 +142,7 @@ export function CommandCenterHeader({
         >
           Queries
           {queryCount > 0 && <span class="mds-cc__view-tab-badge">{queryCount}</span>}
+          {queryHasUnseen && <span class="mds-cc__view-tab-dot" title="New recently-signed queries to review" />}
         </button>
         {certsEnabled && (
           <button
@@ -148,6 +151,7 @@ export function CommandCenterHeader({
           >
             Certs
             {certCount > 0 && <span class="mds-cc__view-tab-badge">{certCount}</span>}
+            {certHasUnseen && <span class="mds-cc__view-tab-dot" title="New recently-signed certs to review" />}
           </button>
         )}
         <button

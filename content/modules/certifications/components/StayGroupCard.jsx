@@ -58,6 +58,7 @@ export function StayGroupCard({
   onSkip,
   onDelay,
   onUnskip,
+  onRevoke,
   onEditReason,
   onViewPractitioner,
 }) {
@@ -107,6 +108,7 @@ export function StayGroupCard({
             onSkip={onSkip}
             onDelay={onDelay}
             onUnskip={onUnskip}
+            onRevoke={onRevoke}
             onEditReason={onEditReason}
             onViewPractitioner={onViewPractitioner}
           />
@@ -134,6 +136,7 @@ export function StayGroupCard({
                   onSkip={onSkip}
                   onDelay={onDelay}
                   onUnskip={onUnskip}
+                  onRevoke={onRevoke}
                   onEditReason={onEditReason}
                   onViewPractitioner={onViewPractitioner}
                 />

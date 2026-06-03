@@ -272,6 +272,50 @@ const CertAPI = {
     }
 
     return response.data;
+  },
+
+  /**
+   * Revoke an outstanding (sent) certification — invalidates the practitioner's
+   * live signing link so the signature can no longer be completed. Reversible
+   * via unrevokeCert. `reason` is required (non-empty).
+   * @param {string} certId
+   * @param {string} reason
+   * @returns {Promise<Object>}
+   */
+  async revokeCert(certId, reason) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/${certId}/revoke`,
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to revoke certification');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Un-revoke a certification — restores it to its prior `sent` status. No body.
+   * @param {string} certId
+   * @returns {Promise<Object>}
+   */
+  async unrevokeCert(certId) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/${certId}/revoke`,
+      options: { method: 'DELETE' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to un-revoke certification');
+    }
+
+    return response.data;
   }
 };
 

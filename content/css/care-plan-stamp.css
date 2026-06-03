@@ -398,6 +398,17 @@
   background: #fef3c7;
   border-left-color: #f59e0b;
 }
+/* Single-added: committed to the care plan, locked from further edits. */
+.cpas-list__item.is-added {
+  background: #f0fdf4;
+  border-left-color: #10b981;
+}
+.cpas-list__item.is-added .cpas-list__badge {
+  background: #10b981;
+}
+.cpas-list__item.is-added .cpas-list__text {
+  color: #047857;
+}
 .cpas-list__badge {
   display: inline-flex;
   width: 22px;
@@ -543,6 +554,26 @@
 .cpas-state-chip.is-skipped .cpas-state-chip__icon { background: #9ca3af; }
 .cpas-state-chip.is-skipped .cpas-state-chip__action { color: #4f46e5; }
 .cpas-state-chip.is-skipped:hover { background: #f9fafb; }
+
+/* Static "Added to care plan" pill — non-interactive, shown after a single add. */
+.cpas-state-chip.is-added {
+  border: 1.5px solid #10b981;
+  color: #047857;
+  background: #ecfdf5;
+  cursor: default;
+}
+.cpas-state-chip.is-added .cpas-state-chip__icon { background: #10b981; }
+
+/* "Add this one" — secondary primary button sitting beside the skip chip. */
+.cpas-detail__add-one {
+  padding: 6px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.cpas-detail__add-one:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .cpas-detail__rule {
   font-size: 11px;
   font-weight: 700;

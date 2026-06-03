@@ -297,13 +297,32 @@
   min-width: 16px; height: 16px;
   display: flex; align-items: center; justify-content: center; padding: 0 3px; font-weight: 700;
 }
+/* Standalone red dot (no count) — e.g. the 24H button when today's report is unseen. */
+.super-dial__action-dot {
+  position: absolute; top: -3px; right: -3px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #ef4444; border: 2px solid #fff; box-sizing: border-box;
+}
 .super-bubble__main {
+  position: relative;
   width: 56px; height: 56px; border-radius: 50%;
   background: #6366f1; color: #fff; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 16px rgba(0,0,0,0.25);
   font-size: 19px; font-weight: 700; font-family: inherit;
   transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+/* Aggregate notification count on the collapsed main "S" bubble. Counter-rotates
+   so it stays upright when the bubble rotates 45° on open. */
+.super-bubble__badge {
+  position: absolute; top: -3px; right: -3px;
+  background: #ef4444; color: #fff; border-radius: 10px; font-size: 10px;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+  border: 2px solid #fff; box-sizing: border-box;
+}
+#super-bubbles-container.super-dial--open .super-bubble__main .super-bubble__badge {
+  transform: rotate(-45deg);
 }
 .super-bubble__main:hover { transform: scale(1.08); box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
 #super-bubbles-container.super-dial--open .super-bubble__main {

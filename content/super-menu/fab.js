@@ -13,13 +13,13 @@ function createBubbles() {
       </svg>
     </button>
     <button id="super-qm-action" class="super-dial__action super-dial__action--qm" aria-label="QM Board" data-track="fab_clicked" data-track-prop-fab="qm_board">QM</button>
-    <button id="super-24hr-action" class="super-dial__action super-dial__action--24hr" aria-label="24-Hour Report" data-track="fab_clicked" data-track-prop-fab="24hr">24H</button>
+    <button id="super-24hr-action" class="super-dial__action super-dial__action--24hr" aria-label="24-Hour Report" data-track="fab_clicked" data-track-prop-fab="24hr">24H<span class="super-dial__action-dot" id="super-24hr-dot" style="display:none;"></span></button>
     <button id="super-coverage-action" class="super-dial__action super-dial__action--coverage" aria-label="Care Plan Coverage" style="display:none;" data-track="fab_clicked" data-track-prop-fab="coverage">CP</button>
     <button id="super-mds-action" class="super-dial__action super-dial__action--mds" aria-label="MDS" data-track="fab_clicked" data-track-prop-fab="mds">
       MDS
       <span class="super-dial__action-badge" id="super-mds-badge" style="display:none;"></span>
     </button>
-    <button id="super-bubble-main" class="super-bubble__main" aria-label="Super" data-track="fab_clicked" data-track-prop-fab="main">S</button>
+    <button id="super-bubble-main" class="super-bubble__main" aria-label="Super" data-track="fab_clicked" data-track-prop-fab="main">S<span class="super-bubble__badge" id="super-bubble-badge" style="display:none;"></span></button>
   `;
 
   document.body.appendChild(container);
@@ -718,42 +718,61 @@ function setupBubblesDraggable(container) {
 
 async function updateMDSBadge() {
   const badge = document.getElementById('super-mds-badge');
-  if (!badge) return;
+  const mainBadge = document.getElementById('super-bubble-badge');
+  const report24hrDot = document.getElementById('super-24hr-dot');
+  if (!badge && !mainBadge) return;
 
   let count = 0;
+  let report24hUnseen = false;
 
+  // Warm the dashboard cache ONLY to resolve facilityName/orgSlug — the badge
+  // count itself is driven entirely by the notification summary below, NOT by
+  // assessment compliance counts.
   if (window.FacilityDashboardState) {
     if (!FacilityDashboardState.data && !FacilityDashboardState.loading) {
       try {
         await FacilityDashboardState.loadDashboard();
       } catch (err) {
-        console.warn('Super Menu: Failed to load badge count:', err);
+        console.warn('Super Menu: Failed to resolve facility for badge:', err);
       }
     }
-    count = FacilityDashboardState.getTotalActionable?.() || 0;
   }
 
-  // Add cert actionable count
+  // The notification summary — one facility-scoped request covering action items
+  // (certs overdue/due + queries needing signature) and FYI items (recently-
+  // signed certs/queries unseen + today's 24h report unseen). This IS the badge.
   try {
-    if (window.CertAPI && window.FacilityDashboardState) {
+    if (window.NotificationsAPI && window.FacilityDashboardState) {
       const facilityName = FacilityDashboardState.facilityName;
       const orgSlug = FacilityDashboardState.orgSlug;
       if (facilityName && orgSlug) {
-        const certDash = await CertAPI.fetchDashboard(facilityName, orgSlug);
-        if (certDash) {
-          count += (certDash.pending || 0) + (certDash.overdue || 0);
+        const summary = await NotificationsAPI.fetchSummary(facilityName, orgSlug);
+        if (summary) {
+          count = summary.actionCount + summary.fyiUnseenCount;
+          report24hUnseen = summary.report24hUnseen;
         }
       }
     }
   } catch (err) {
-    console.warn('Super Menu: Failed to load cert badge count:', err);
+    console.warn('Super Menu: Failed to load notification badge count:', err);
   }
 
-  if (count > 0) {
-    badge.textContent = count > 99 ? '99+' : count;
-    badge.style.display = '';
-  } else {
-    badge.style.display = 'none';
+  // The aggregate count shows on BOTH the collapsed main "S" bubble (so it's
+  // visible without expanding the dial) and the MDS sub-action button.
+  const label = count > 99 ? '99+' : String(count);
+  [badge, mainBadge].forEach((el) => {
+    if (!el) return;
+    if (count > 0) {
+      el.textContent = label;
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+
+  // Standalone red dot on the 24H button when today's report is unseen.
+  if (report24hrDot) {
+    report24hrDot.style.display = report24hUnseen ? '' : 'none';
   }
 }
 

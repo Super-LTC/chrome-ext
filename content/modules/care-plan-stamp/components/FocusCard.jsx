@@ -19,7 +19,7 @@ import { Combobox } from '../CarePlanStampModal.jsx';
  *   - readOnly: disable all editors (during stamping/done)
  *   - dropdowns: org dropdowns { kardexLabels, kardexOptions, positionLabels, positionOptions }
  */
-export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns }) => {
+export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns, isStamped, stampOneDisabled, onStampOne }) => {
   const sectionRef = useRef(null);
   // Snap back to top whenever the active focus changes — otherwise scroll
   // position from the previous focus leaks over and looks broken.
@@ -98,33 +98,62 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
           </span>
         </div>
         <div className="cpas-detail__actions">
-          {!readOnly && onToggleSkip && (
-            // Outlined toggle chip. Shows the current state clearly + the
-            // action verb. Outlined (not filled) so it reads as secondary
-            // to the primary "Add all" CTA in the sidebar.
-            <button
-              className={`cpas-state-chip ${state.skipped ? 'is-skipped' : 'is-included'}`}
-              onClick={() => onToggleSkip()}
-              title={state.skipped ? 'Click to include this focus' : 'Click to skip this focus'}
-            >
-              {state.skipped ? (
-                <>
-                  <span className="cpas-state-chip__state">
-                    <span className="cpas-state-chip__icon">−</span> Skipped
-                  </span>
-                  <span className="cpas-state-chip__sep">·</span>
-                  <span className="cpas-state-chip__action">Include</span>
-                </>
-              ) : (
-                <>
-                  <span className="cpas-state-chip__state">
-                    <span className="cpas-state-chip__icon">✓</span> Will be added
-                  </span>
-                  <span className="cpas-state-chip__sep">·</span>
-                  <span className="cpas-state-chip__action">Skip</span>
-                </>
+          {/* Once single-added via "Add this one", the focus is locked: show a
+              static "Added" pill instead of the skip chip + add button. */}
+          {isStamped ? (
+            <span className="cpas-state-chip is-added" title="Already added to the care plan">
+              <span className="cpas-state-chip__state">
+                <span className="cpas-state-chip__icon">✓</span> Added to care plan
+              </span>
+            </span>
+          ) : (
+            <>
+              {!readOnly && onToggleSkip && (
+                // Outlined toggle chip. Shows the current state clearly + the
+                // action verb. Outlined (not filled) so it reads as secondary
+                // to the primary "Add all" CTA in the sidebar.
+                <button
+                  className={`cpas-state-chip ${state.skipped ? 'is-skipped' : 'is-included'}`}
+                  onClick={() => onToggleSkip()}
+                  title={state.skipped ? 'Click to include this focus' : 'Click to skip this focus'}
+                >
+                  {state.skipped ? (
+                    <>
+                      <span className="cpas-state-chip__state">
+                        <span className="cpas-state-chip__icon">−</span> Skipped
+                      </span>
+                      <span className="cpas-state-chip__sep">·</span>
+                      <span className="cpas-state-chip__action">Include</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="cpas-state-chip__state">
+                        <span className="cpas-state-chip__icon">✓</span> Will be added
+                      </span>
+                      <span className="cpas-state-chip__sep">·</span>
+                      <span className="cpas-state-chip__action">Skip</span>
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+              {/* Add just this one focus — sits next to "Add all" in the
+                  sidebar but lets the nurse commit only the focus they're
+                  looking at (e.g. the one relevant to the PCC page they're on).
+                  Hidden when the focus is skipped; disabled while it still
+                  needs nurse input. */}
+              {!readOnly && onStampOne && !state.skipped && (
+                <button
+                  className="cpas-btn cpas-btn--primary cpas-detail__add-one"
+                  onClick={onStampOne}
+                  disabled={stampOneDisabled}
+                  title={stampOneDisabled
+                    ? 'Fill in the required input before adding'
+                    : 'Add only this focus to the care plan'}
+                >
+                  ✓ Add to Careplan
+                </button>
+              )}
+            </>
           )}
         </div>
       </header>

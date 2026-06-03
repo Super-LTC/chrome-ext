@@ -53,6 +53,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [activeIdx, setActiveIdx] = useState(0);
   const [progress, setProgress] = useState(null);
   const [stampResult, setStampResult] = useState(null);
+  // Initial-flow per-focus single-adds. ruleIds the nurse stamped one-at-a-time
+  // via "Add this one". These behave like skipped focuses for the "Add all"
+  // batch (excluded so they can't double-stamp) but render an "✓ Added" state.
+  const [stampedRuleIds, setStampedRuleIds] = useState(new Set());
+  // Focus index currently being single-added (null = Add-all batch). Lets the
+  // list highlight exactly the right row during a single add instead of keying
+  // off the batch-relative progress.focusIndex.
+  const [singleAddIdx, setSingleAddIdx] = useState(null);
 
   // Library browser — nurse picks additional focuses from PCC's actual library.
   // Stamped via the same custom-text path (we use PCC's wording, not stdNeedId linking).
@@ -440,20 +448,29 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     });
   }, [proposal, patientId, orgSlug, facilityName]);
 
-  const includedCount = focusStates.filter((s) => !s.skipped).length;
+  // A focus is "included" for the Add-all batch when it's neither skipped nor
+  // already single-added via "Add this one".
+  const _isStamped = useCallback((f) => !!f && stampedRuleIds.has(f.ruleId), [stampedRuleIds]);
+  const includedCount = focusStates.filter(
+    (s, i) => !s.skipped && !_isStamped(allRawFocuses[i])
+  ).length;
 
   // Count of included focuses still missing required input. Disables the
   // sidebar Add-all button so the nurse can't submit an unfilled slot.
   // For segment-bearing focuses, "unfilled" = any token segment with
-  // needsFilling=true that lacks a tokenValues entry. For older proposals
-  // without descriptionSegments (and for library picks), fall back to the
-  // flat-string `___` heuristic.
+  // needsFilling=true that lacks a tokenValues entry. We also catch a raw
+  // underscore blank ("___") still sitting in the composed description —
+  // whether it came from an unfilled token OR was baked into a plain text
+  // segment by the backend (e.g. code-status "advance directive: ___"). For
+  // older proposals without descriptionSegments (and for library picks), the
+  // broader _detectPlaceholder heuristic ((SPECIFY), trailing colon, etc.)
+  // still applies.
   const needsInputCount = allRawFocuses.reduce((n, f, i) => {
     const st = focusStates[i];
-    if (!st || st.skipped) return n;
+    if (!st || st.skipped || _isStamped(f)) return n;
     const hasUnfilledToken = _focusUnfilledTokenKeys(f, st.tokenValues).length > 0;
     const desc = composedFocuses?.[i]?.description || f.description || '';
-    const flatHasBlank = !_hasSegments(f.descriptionSegments) && _detectPlaceholder(desc);
+    const flatHasBlank = _descNeedsInput(desc, f.descriptionSegments);
     return (hasUnfilledToken || flatHasBlank) ? n + 1 : n;
   }, 0);
 
@@ -465,8 +482,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       // CRITICAL: use the PCC clientid (from URL), not proposal.patientId
       // which is our internal UUID. PCC's stamp endpoints reject internal UUIDs.
       patientId: patientId,
+      // Skip both nurse-skipped focuses AND ones already single-added via
+      // "Add this one" (tracked in stampedRuleIds) so they don't double-stamp.
       focuses: allRawFocuses
-        .map((f, i) => focusStates[i]?.skipped ? null : _composeFocus(f, focusStates[i] || {}))
+        .map((f, i) =>
+          (focusStates[i]?.skipped || stampedRuleIds.has(f.ruleId))
+            ? null
+            : _composeFocus(f, focusStates[i] || {})
+        )
         .filter(Boolean),
     };
 
@@ -520,7 +543,63 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       setErrorMsg(e.message || 'Add failed');
       setStage('error');
     }
-  }, [proposal, careplanId, miniToken, focusStates, patientId]);
+  }, [proposal, careplanId, miniToken, focusStates, patientId, stampedRuleIds]);
+
+  // -------- Single-focus add ("Add this one") --------
+  // Stamps just one focus and STAYS in the modal (unlike handleStamp, which
+  // jumps to the 'done' result screen). On success the focus is added to
+  // stampedRuleIds so it drops out of the "Add all" batch and renders as
+  // "✓ Added". Lets a nurse add the one focus relevant to the page they're on
+  // without committing the whole proposal.
+  const handleStampOne = useCallback(async (idx) => {
+    if (!proposal || !careplanId || !miniToken) return;
+    const f = allRawFocuses[idx];
+    const st = focusStates[idx];
+    if (!f || !st || st.skipped || stampedRuleIds.has(f.ruleId)) return;
+
+    const focus = _composeFocus(f, st);
+    setSingleAddIdx(idx);
+    setStage('stamping');
+    setProgress({ phase: 'starting', focusIndex: 0, focusTotal: 1 });
+
+    window.SuperAnalytics?.track?.('care_plan_autopop_stamp_clicked', {
+      patient_id: patientId,
+      n_focuses_to_stamp: 1,
+      n_focuses_skipped: 0,
+      scope: 'single',
+    });
+
+    try {
+      const result = await window.CarePlanStampClient.orchestrateStamp({
+        proposal: { patientId, focuses: [focus] },
+        careplanId,
+        miniToken,
+        onProgress: (p) => setProgress(p),
+      });
+      // Mark added and return to the editing view (do NOT go to 'done').
+      setStampedRuleIds((prev) => new Set(prev).add(f.ruleId));
+      setProgress(null);
+      setSingleAddIdx(null);
+      setStage('ready');
+      window.SuperToast?.success?.('Added to care plan');
+
+      window.SuperAnalytics?.track?.('care_plan_autopop_stamped', {
+        patient_id: patientId,
+        scope: 'single',
+        n_proposed: proposal.focuses?.length ?? 0,
+        n_stamped: result.focusesStamped,
+        n_goals: result.goalsStamped,
+        n_interventions: result.interventionsStamped,
+        n_failed: result.errors.length,
+        duration_ms: result.durationMs,
+      });
+    } catch (e) {
+      setProgress(null);
+      setSingleAddIdx(null);
+      setStage('ready');
+      window.SuperToast?.error?.(e.message || 'Add failed');
+    }
+  }, [proposal, careplanId, miniToken, focusStates, patientId, allRawFocuses, stampedRuleIds]);
 
   // -------- Comprehensive-mode handlers --------
   const _patchAuditFocusStateByRuleId = useCallback((ruleId, patch) => {
@@ -578,6 +657,58 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       setStage('ready');
     }
   }, [audit, addBucketFilter, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
+
+  // Add a single comprehensive-flow focus without committing the whole bucket.
+  // Stays in the Add step (does NOT jump to dashboard), marks the item stamped,
+  // and auto-advances to the next live item so the nurse keeps moving — mirrors
+  // _skipAuditAddItem's advance behavior.
+  const _stampAuditAddOne = useCallback(async (item) => {
+    if (!item?.focus || !careplanId || !miniToken) return;
+    if (stampedAddIds.has(item.ruleId) || skippedAddIds.has(item.ruleId)) return;
+    const state = auditFocusStates[item.ruleId] || _emptyFocusState();
+    const focus = _composeFocus(item.focus, state);
+    setStage('stamping');
+    setProgress({ phase: 'starting', focusIndex: 0, focusTotal: 1 });
+    try {
+      const result = await window.CarePlanStampClient.orchestrateStamp({
+        proposal: { patientId, focuses: [focus] },
+        careplanId,
+        miniToken,
+        onProgress: (p) => setProgress(p),
+      });
+      const nextStamped = new Set([...stampedAddIds, item.ruleId]);
+      setStampedAddIds(nextStamped);
+      setProgress(null);
+      setStage('ready');
+      window.SuperToast?.success?.('Added to care plan');
+      window.SuperAnalytics?.track?.('care_plan_audit_commit_stamped', {
+        patient_id: patientId,
+        scope: 'single',
+        n_focuses: result?.focusesStamped ?? 1,
+        n_goals: result?.goalsStamped ?? 0,
+        n_interventions: result?.interventionsStamped ?? 0,
+      });
+      // Advance to the next still-live toAdd item (not stamped, not skipped).
+      const toAdd = audit?.toAdd || [];
+      const startIdx = toAdd.findIndex((it) => it._rowId === item._rowId);
+      let next = null;
+      if (startIdx >= 0) {
+        for (let step = 1; step <= toAdd.length; step++) {
+          const cand = toAdd[(startIdx + step) % toAdd.length];
+          if (!cand || cand._rowId === item._rowId) continue;
+          if (nextStamped.has(cand.ruleId)) continue;
+          if (skippedAddIds.has(cand.ruleId)) continue;
+          next = cand;
+          break;
+        }
+      }
+      setSelectedRail(next ? { kind: 'add', key: next._rowId } : null);
+    } catch (e) {
+      setProgress(null);
+      setStage('ready');
+      window.SuperToast?.error?.(e.message || 'Add failed');
+    }
+  }, [audit, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
 
   const _skipAuditAddItem = useCallback(async (item) => {
     if (!item) return;
@@ -768,6 +899,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 needsInputCount={needsInputCount}
                 skippedFocuses={skippedFocuses}
                 onUnSkip={stage === 'ready' ? unSkipFocus : null}
+                stampedRuleIds={stampedRuleIds}
+                singleAddIdx={singleAddIdx}
               />
               <FocusCard
                 composed={composedFocuses[activeIdx]}
@@ -775,8 +908,20 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 rawFocus={allRawFocuses[activeIdx]}
                 onUpdate={(patch) => patchFocus(activeIdx, patch)}
                 onToggleSkip={() => toggleFocusSkip(activeIdx)}
-                readOnly={stage !== 'ready'}
+                readOnly={stage !== 'ready' || _isStamped(allRawFocuses[activeIdx])}
                 dropdowns={dropdowns}
+                isStamped={_isStamped(allRawFocuses[activeIdx])}
+                stampOneDisabled={
+                  _descNeedsInput(
+                    composedFocuses[activeIdx]?.description,
+                    allRawFocuses[activeIdx]?.descriptionSegments
+                  ) ||
+                  _focusUnfilledTokenKeys(
+                    allRawFocuses[activeIdx],
+                    focusStates[activeIdx]?.tokenValues
+                  ).length > 0
+                }
+                onStampOne={stage === 'ready' ? () => handleStampOne(activeIdx) : null}
               />
             </div>
           )}
@@ -861,6 +1006,13 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                           }
                         }}
                         dropdowns={dropdowns}
+                        isStamped={stampedAddIds.has(item.ruleId)}
+                        readOnly={stage !== 'ready' || stampedAddIds.has(item.ruleId)}
+                        stampOneDisabled={
+                          _descNeedsInput(composed.description, item.focus.descriptionSegments) ||
+                          _focusUnfilledTokenKeys(item.focus, state.tokenValues).length > 0
+                        }
+                        onStampOne={stage === 'ready' ? () => _stampAuditAddOne(item) : null}
                       />
                     </>
                   );
@@ -1041,7 +1193,7 @@ function _auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusSta
     if (!it.focus) return false;
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
-    const flatBlank = !_hasSegments(it.focus.descriptionSegments) && composed.description.includes('___');
+    const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
     const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
     return flatBlank || tokenBlank;
   });
@@ -1054,7 +1206,7 @@ function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusSt
     if (!it.focus) return false;
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
-    const flatBlank = !_hasSegments(it.focus.descriptionSegments) && composed.description.includes('___');
+    const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
     const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
     return flatBlank || tokenBlank;
   });
@@ -1079,7 +1231,7 @@ function _auditNeedsInputByRowId(audit, auditFocusStates) {
     if (!it.focus) { m.set(it._rowId, false); return; }
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
-    const flatBlank = !_hasSegments(it.focus.descriptionSegments) && composed.description.includes('___');
+    const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
     const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
     m.set(it._rowId, flatBlank || tokenBlank);
   });
@@ -1261,8 +1413,11 @@ const DriftState = ({ missing, onClose }) => (
   </div>
 );
 
-const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip }) => {
-  const stampCount = focusStates.filter((s) => !s.skipped).length;
+const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip, stampedRuleIds, singleAddIdx }) => {
+  const _stamped = stampedRuleIds instanceof Set ? stampedRuleIds : new Set();
+  // "To add" excludes both skipped and already single-added focuses.
+  const stampCount = focusStates.filter((s, i) => !s.skipped && !_stamped.has(rawFocuses[i]?.ruleId)).length;
+  const addedCount = rawFocuses.filter((f) => _stamped.has(f?.ruleId)).length;
   const onPlanCount = rawFocuses.filter((f) => f.alreadyOnPlan).length;
   const libCount = rawFocuses.filter((f) => f._isLibrary).length;
 
@@ -1274,8 +1429,9 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           {stampCount} of {focusStates.length} {stampCount === 1 ? 'focus' : 'focuses'}
         </div>
       </div>
-      {(onPlanCount > 0 || libCount > 0) && (
+      {(onPlanCount > 0 || libCount > 0 || addedCount > 0) && (
         <div className="cpas-list__legend">
+          {addedCount > 0 && <span><b>{addedCount}</b> added</span>}
           {onPlanCount > 0 && <span><b>{onPlanCount}</b> already on plan (skipped)</span>}
           {libCount > 0 && <span><b>{libCount}</b> from PCC library</span>}
         </div>
@@ -1292,9 +1448,9 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           .sort((a, b) => {
             const rank = (e) => {
               const st = focusStates[e.i] || {};
-              if (st.skipped) return 2;
+              if (_stamped.has(e.f?.ruleId) || st.skipped) return 2;
               const desc = composedFocuses?.[e.i]?.description || e.f.description || '';
-              const flatBlank = !_hasSegments(e.f.descriptionSegments) && _detectPlaceholder(desc);
+              const flatBlank = _descNeedsInput(desc, e.f.descriptionSegments);
               const tokenBlank = _focusUnfilledTokenKeys(e.f, st.tokenValues).length > 0;
               return (flatBlank || tokenBlank) ? 0 : 1;
             };
@@ -1305,18 +1461,23 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           })
           .map(({ f, i }) => {
           const state = focusStates[i] || {};
+          const isAdded = _stamped.has(f?.ruleId);
           // Compute display state up-front (composedDesc + needsInput) so the
           // class-name chain below can reference it.
           const composedDesc = composedFocuses?.[i]?.description || f.description || '';
           const preview = composedDesc.replace(/\s+/g, ' ').trim();
-          const flatHasBlank = !_hasSegments(f.descriptionSegments) && _detectPlaceholder(composedDesc);
+          const flatHasBlank = _descNeedsInput(composedDesc, f.descriptionSegments);
           const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues).length > 0;
-          const needsInput = !state.skipped && (flatHasBlank || tokenBlank);
+          const needsInput = !state.skipped && !isAdded && (flatHasBlank || tokenBlank);
 
           let cls = 'cpas-list__item';
           let badge = '+';
           let badgeTitle = 'Will be added to the care plan';
-          if (state.skipped) {
+          if (isAdded) {
+            cls += ' is-added';
+            badge = '✓';
+            badgeTitle = 'Added to the care plan';
+          } else if (state.skipped) {
             cls += ' is-skipped';
             badge = '−';
             badgeTitle = f.alreadyOnPlan ? 'Pre-skipped — already on plan' : 'Skipped';
@@ -1325,7 +1486,11 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           if (f._isLibrary) cls += ' is-library';
           if (needsInput) cls += ' is-needs-input';
           if (i === activeIdx) cls += ' is-active';
-          const isStamping = progress && progress.focusIndex === i && !state.skipped;
+          // During a single add, highlight only the row being added. During an
+          // Add-all batch (singleAddIdx == null), follow the batch progress.
+          const isStamping = progress && !state.skipped && !isAdded && (
+            singleAddIdx != null ? i === singleAddIdx : progress.focusIndex === i
+          );
           if (isStamping) { cls += ' is-stamping'; badge = '…'; badgeTitle = 'Adding now…'; }
 
           const label = f._isLibrary ? (f._libraryLabel || 'From PCC library') : _ruleIdToLabel(f.ruleId);
@@ -2148,6 +2313,25 @@ function _renderFilledText(segments, fills) {
  * Detect "needs nurse input" patterns common in PCC's library text.
  * Returns the matched pattern label for tooltip use, or null if none.
  */
+/**
+ * "Does this composed focus description still need nurse input before stamping?"
+ *
+ * A raw underscore blank ("___") is always a blocker — whether it came from an
+ * unfilled token segment OR was baked into a plain `kind:"text"` segment by the
+ * backend (e.g. code-status "Resident has an established advance directive:
+ * ___"). The old gate guarded the placeholder check behind `!_hasSegments`,
+ * which let segment-bearing focuses slip a raw "___" straight into PCC (which
+ * then collapses it to "_"). We check the underscore blank regardless of
+ * segments, and only apply the broader heuristics ((SPECIFY), trailing colon,
+ * etc.) to segment-less focuses — those heuristics throw false positives on the
+ * mid-sentence colons/connectors that are normal in segmented templates.
+ */
+function _descNeedsInput(description, descriptionSegments) {
+  if (/_{3,}/.test(description || '')) return true;
+  if (!_hasSegments(descriptionSegments) && _detectPlaceholder(description)) return true;
+  return false;
+}
+
 function _detectPlaceholder(text) {
   if (!text) return null;
   if (/_{3,}/.test(text)) return 'underscore blank';
