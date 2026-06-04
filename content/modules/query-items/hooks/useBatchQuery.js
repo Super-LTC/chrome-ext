@@ -1,6 +1,32 @@
 import { useState, useCallback, useRef } from 'preact/hooks';
 
 /**
+ * Build the recommendedIcd10 payload for a query create call.
+ *
+ * Guarantees a single entry { code, description } with a NON-EMPTY
+ * description whenever any code is resolvable — this is what makes the
+ * physician sign-portal's code picker pre-populate so the query is signable.
+ * An empty recommendedIcd10 is a silent dead-end (created+sent but unsignable),
+ * so we exhaust every description source and finally fall back to the code
+ * string itself rather than ever emitting an empty description.
+ */
+function buildRecommendedIcd10(item, icd10Code, preferredIcd10) {
+  const descFor = (code) =>
+    (preferredIcd10 && preferredIcd10.code === code ? preferredIcd10.description : '') ||
+    (item.recommendedIcd10 || []).find(x => x.code === code)?.description ||
+    item.mdsItemName || item.description || code;
+
+  if (icd10Code) {
+    return [{ code: icd10Code, description: descFor(icd10Code) }];
+  }
+  // No single resolved code — fall back to the item's own list, but still
+  // ensure each entry has a non-empty description.
+  return (item.recommendedIcd10 || [])
+    .filter(x => x && x.code)
+    .map(x => ({ code: x.code, description: x.description || item.mdsItemName || x.code }));
+}
+
+/**
  * Batch query state machine hook
  * States: idle → generating → reviewing → sending → complete
  *
@@ -149,11 +175,16 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
         const { item, noteText, selectedIcd10, preferredIcd10 } = generatedQueries[i];
         setProgress({ current: i, total: generatedQueries.length });
 
-        // Use user-selected ICD-10 if set, else AI preferred, else item defaults
-        const icd10Code = selectedIcd10 || preferredIcd10?.code || null;
-        const recommendedIcd10 = icd10Code
-          ? [{ code: icd10Code }]
-          : (item.recommendedIcd10 || []);
+        // Resolve the code to seed. Fall back to the source row code
+        // (item.icd10Code) so we ALWAYS have a code even when note
+        // generation returned no preferredIcd10 (thin evidence).
+        const icd10Code = selectedIcd10 || preferredIcd10?.code || item.icd10Code || null;
+        // HARD REQUIREMENT: recommendedIcd10 must carry a single code with a
+        // NON-EMPTY description, otherwise the physician sign-portal's code
+        // picker comes up empty and the query is created+sent but impossible
+        // to sign (silent dead-end). Seed the description from the strongest
+        // source available; never ship an empty recommendedIcd10.
+        const recommendedIcd10 = buildRecommendedIcd10(item, icd10Code, preferredIcd10);
 
         try {
           // Step 1: Create the query
@@ -231,13 +262,11 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
         const { item, noteText, selectedIcd10, preferredIcd10 } = generatedQueries[i];
         setProgress({ current: i, total: generatedQueries.length });
 
-        const icd10Code = selectedIcd10 || preferredIcd10?.code || null;
-        const icd10Description = preferredIcd10?.description
-          || (item.recommendedIcd10 || []).find(x => x.code === icd10Code)?.description
-          || '';
-        const recommendedIcd10 = icd10Code
-          ? [{ code: icd10Code, description: icd10Description }]
-          : (item.recommendedIcd10 || []);
+        const icd10Code = selectedIcd10 || preferredIcd10?.code || item.icd10Code || null;
+        // Same non-empty-description guarantee as sendAll (see note there) —
+        // printQueryPdf also throws if code/description are missing.
+        const recommendedIcd10 = buildRecommendedIcd10(item, icd10Code, preferredIcd10);
+        const icd10Description = recommendedIcd10[0]?.description || '';
 
         try {
           // Step 1: create the query so we have an id

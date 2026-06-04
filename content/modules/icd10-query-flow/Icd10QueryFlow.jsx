@@ -14,7 +14,8 @@ import { BatchReviewPage } from '../query-items/components/BatchReviewModal.jsx'
  * Build a solverResult-shaped item the backend understands.
  *
  * mdsItem precedence (matches backend's POST /diagnosis-queries logic):
- *   1. dx.mdsItemCode (real Section-I slot, e.g. "I2900")
+ *   1. dx.mdsItemCode (real Section-I slot, e.g. "I2900"; backend now also
+ *      supplies the direct "I8000:<code>" form here for any other code)
  *   2. `I8000:${pdpmCategory}:${pdpmCategoryNumber}` when both present
  *      (e.g. "I8000:NTA:6") — the canonical I8000 fallback shape
  *   3. legacy `I8000:${pdpmCategory}:${baseCode}` (e.g. "I8000:NTA:E11")
