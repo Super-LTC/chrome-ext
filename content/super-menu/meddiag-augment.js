@@ -263,7 +263,11 @@ const MedDiagAugment = {
 
   _buildQueryChip(dx) {
     const qh = dx.queryHistory;
-    const queryable = dx.queryable === true;
+    // A code is queryable if the backend flags it OR hands us an MDS handle.
+    // Non-PDPM "direct-form" codes (e.g. dysphagia R13.10) come back with
+    // queryable:false but a populated mdsItemCode ("I8000:R13.10") — those are
+    // fully queryable; _launchQueryFor passes the mdsItemCode straight through.
+    const queryable = dx.queryable === true || !!dx.mdsItemCode;
     const wrap = document.createElement('span');
     wrap.className = 'super-meddiag-chip super-meddiag-chip--q';
 
