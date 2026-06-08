@@ -129,6 +129,133 @@ const SuperLoadingStatus = {
   }
 };
 
+// ============================================
+// "Run it" Card — on-demand pipeline trigger
+// ============================================
+// Shown when the section endpoint 404s because the assessment isn't synced /
+// solved yet (nurse edited ARD/type in PCC). Offers a button that fires the
+// shared MdsRunNow pipeline and shows live progress, revealing each section's
+// badges as its solver finishes.
+const escRunIt = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s ?? ''));
+const SuperRunItCard = {
+  _el: null,
+  _handle: null,
+  _code: null,
+
+  // Show the pre-click prompt. `code` is the originating 404 code.
+  show(code) {
+    this._code = code;
+    this._ensureEl();
+    this._renderPrompt();
+  },
+
+  _ensureEl() {
+    if (this._el) return;
+    const el = document.createElement('div');
+    el.id = 'super-run-it-card';
+    document.body.appendChild(el);
+    this._el = el;
+  },
+
+  _renderPrompt() {
+    if (!this._el) return;
+    const intro = window.MdsRunNow?.introCopy?.(this._code) || 'No analysis yet for this assessment.';
+    this._el.className = '';
+    this._el.innerHTML = `
+      <div class="super-run-it__icon">✨</div>
+      <div class="super-run-it__body">
+        <div class="super-run-it__title">${escRunIt(intro)}</div>
+        <div class="super-run-it__sub">Run Super's MDS analysis now — this usually takes about 10 minutes.</div>
+      </div>
+      <!-- NO_TRACK: starts mds_run_triggered centrally via MdsRunNow -->
+      <button class="super-run-it__btn" type="button">Run it</button>`;
+    this._el.querySelector('.super-run-it__btn').addEventListener('click', () => this._run());
+  },
+
+  _run() {
+    const RunNow = window.MdsRunNow;
+    if (!RunNow) return;
+    const params = RunNow.gatherParams();
+    if (!RunNow.hasRequiredParams(params)) {
+      this._renderError("Couldn't read the assessment details from this page. Try reloading.");
+      return;
+    }
+
+    this._renderProgress({ phase: 'none' });
+
+    this._handle = RunNow.start(params, {
+      onPhase: (state) => this._renderProgress(state),
+      onSectionDone: (section) => revealSection(section),
+      onDone: () => this._onDone(),
+      onError: (msg) => this._renderError(msg),
+    }, 'section_overlay', this._code);
+  },
+
+  _renderProgress(state) {
+    if (!this._el) return;
+    const copy = window.MdsRunNow?.phaseCopy?.(state) || { title: 'Working…', detail: '', busy: true };
+    this._el.className = 'super-run-it--busy';
+    this._el.innerHTML = `
+      <div class="super-run-it__spinner"></div>
+      <div class="super-run-it__body">
+        <div class="super-run-it__title">${escRunIt(copy.title)}</div>
+        ${copy.detail ? `<div class="super-run-it__sub">${escRunIt(copy.detail)}</div>` : ''}
+      </div>`;
+  },
+
+  _renderError(message) {
+    if (!this._el) return;
+    this._el.className = 'super-run-it--error';
+    this._el.innerHTML = `
+      <div class="super-run-it__icon">⚠</div>
+      <div class="super-run-it__body">
+        <div class="super-run-it__title">${escRunIt(message || 'Something went wrong')}</div>
+      </div>
+      <!-- NO_TRACK: re-runs MdsRunNow which fires mds_run_triggered -->
+      <button class="super-run-it__btn" type="button">Retry</button>`;
+    this._el.querySelector('.super-run-it__btn').addEventListener('click', () => this._run());
+  },
+
+  _onDone() {
+    // Full picture is ready — re-run init so every section's badges + decisions
+    // load cleanly, then tear the card down.
+    this.hide();
+    SuperOverlay.initialized = false;
+    initSuperOverlay();
+  },
+
+  hide() {
+    if (this._handle) { this._handle.cancel(); this._handle = null; }
+    if (this._el) { this._el.remove(); this._el = null; }
+  },
+};
+window.SuperRunItCard = SuperRunItCard;
+
+/**
+ * Re-fetch one section's data and inject its badges as soon as its solver
+ * finishes (incremental reveal during a "Run it"). No-op on failure — the final
+ * onDone re-init is the backstop.
+ */
+async function revealSection(section) {
+  try {
+    const params = await getAPIParams();
+    if (!params.assessmentId || params.section !== section) return; // only the open section
+    const apiResponse = await fetchSectionData(params);
+    if (apiResponse.assessment?.patientId) SuperOverlay.patientId = apiResponse.assessment.patientId;
+    SuperOverlay.assessmentId = apiResponse.assessment?.externalAssessmentId || params.assessmentId;
+    SuperOverlay.facilityName = params.facilityName;
+    SuperOverlay.orgSlug = params.orgSlug;
+    SuperOverlay.section = params.section;
+    const data = transformAPIResponse(apiResponse, params.section);
+    if (data.items && data.items.length) {
+      processItems(data.items);
+      createSummaryPanel();
+    }
+  } catch {
+    /* not ready yet — onDone re-init will catch it */
+  }
+}
+
 // Evidence cache — keyed by "section:itemCode", stores fetched evidence data
 const EvidenceCache = new Map();
 
@@ -188,6 +315,12 @@ window.SuperOverlay = SuperOverlay;
 window.fetchItemEvidence = fetchItemEvidence;
 window.showIncidentDetailModal = showIncidentDetailModal;
 window.renderSplitAdministrations = renderSplitAdministrations;
+// Pure MAR/TAR grid builders — reused by the F-Tag Prevention source viewer so
+// it renders the same calendar grid (times × days, ✓/codes, legend) as here,
+// fed from /findings/[id]/mar instead of the assessment-anchored endpoint.
+window.buildAdminGridData = buildAdminGridData;
+window.renderAdminGrid = renderAdminGrid;
+window.countAdminEvents = countEvents;
 window.renderSplitNote = renderSplitNote;
 window.renderSplitTherapy = renderSplitTherapy;
 window.renderSplitUda = renderSplitUda;
@@ -271,7 +404,12 @@ async function fetchSectionData(params) {
   });
 
   if (!response.success) {
-    throw new Error(response.error);
+    // Carry status/body so the caller can detect an actionable "not analyzed
+    // yet" 404 and offer "Run it" (see MdsRunNow.runnableCode).
+    const err = new Error(response.error);
+    err.status = response.status;
+    err.body = response.body;
+    throw err;
   }
 
   return response.data;
@@ -406,11 +544,16 @@ async function initSuperOverlay() {
 
   } catch (error) {
     console.error('Super LTC: Failed to fetch section data:', error);
+    // Assessment not synced / not solved yet → offer the on-demand "Run it"
+    // pipeline instead of a dead-end notice.
+    const runnable = window.MdsRunNow?.runnableCode?.(error);
+    if (runnable) {
+      SuperLoadingStatus.hide();
+      SuperRunItCard.show(runnable);
+      return;
+    }
     const msg = String(error?.message || error || '');
-    const friendly = /no completed run/i.test(msg)
-      ? 'AI analysis not run for this section yet'
-      : `Super LTC couldn't load: ${msg || 'unknown error'}`;
-    SuperLoadingStatus.showNotice(friendly);
+    SuperLoadingStatus.showNotice(`Super LTC couldn't load: ${msg || 'unknown error'}`);
   }
 }
 

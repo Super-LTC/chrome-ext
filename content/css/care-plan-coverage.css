@@ -1330,6 +1330,85 @@
 }
 
 /* ============================================================
+   "Run it" Card — on-demand MDS pipeline trigger
+   ============================================================ */
+#super-run-it-card {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 440px;
+  padding: 14px 16px;
+  background: #0f172a;
+  color: #f1f5f9;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  font-family: var(--super-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  z-index: 2147483646;
+  animation: super-loading-in 0.2s ease-out;
+}
+
+#super-run-it-card.super-run-it--error {
+  border-color: #7f1d1d;
+}
+
+.super-run-it__icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.super-run-it__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-top-color: #818cf8;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: cpc-spin 0.6s linear infinite;
+}
+
+.super-run-it__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.super-run-it__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.super-run-it__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.super-run-it__btn {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.super-run-it__btn:hover {
+  background: #4f46e5;
+}
+
+/* ============================================================
    MDS Section I — Care Plan Dots
    ============================================================ */
 .super-careplan-dot {

@@ -161,13 +161,35 @@ function getPCCAssessmentMetaFromDOM() {
   return { ardDate, assessmentType };
 }
 
+// Scrape an ESOLclientid from the live MDS section page when it's not in the
+// URL. On section.xhtml the client id never appears in the page URL, but PCC
+// embeds it in link builders (e.g. the diag-find anchor
+// `/mds3diagfind.jsp?...&ESOLclientid=2657250&...`) and inline scripts. This is
+// the only patient signal available in the "Run it" 404 case, where section
+// data never loads so SuperOverlay.patientId is still null.
+function scrapeClientIdFromDOM() {
+  // 1. Anchor hrefs — most reliable, survive across PCC markup tweaks.
+  for (const a of document.querySelectorAll('a[href*="ESOLclientid="]')) {
+    const m = /[?&]ESOLclientid=(\d+)/.exec(a.getAttribute('href') || '');
+    if (m && m[1] && m[1] !== '0') return m[1];
+  }
+  // 2. Inline scripts — diag-find link builder strings, etc.
+  for (const s of document.querySelectorAll('script:not([src])')) {
+    const m = /ESOLclientid=(\d+)/.exec(s.textContent || '');
+    if (m && m[1] && m[1] !== '0') return m[1];
+  }
+  return null;
+}
+
 // Resolve externalPatientId from current PCC page state (URL first, fall back
-// to SuperOverlay's resolved id on MDS section pages where URL lacks ESOLclientid).
+// to SuperOverlay's resolved id, then to a DOM scrape on MDS section pages where
+// the URL lacks ESOLclientid and section data hasn't loaded yet).
 function getMDSResolverPatientId() {
   const fromUrl = getChatPatientId();
   if (fromUrl) return fromUrl;
   const fromOverlay = window.SuperOverlay?.patientId;
-  return fromOverlay ? String(fromOverlay) : null;
+  if (fromOverlay) return String(fromOverlay);
+  return scrapeClientIdFromDOM();
 }
 
 // Append the three MDS-resolver context fields to a URLSearchParams.

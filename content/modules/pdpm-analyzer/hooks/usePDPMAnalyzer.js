@@ -21,6 +21,10 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Non-null when the backend 404'd because the assessment isn't synced/solved
+  // yet — holds the 404 code ('ASSESSMENT_NOT_FOUND' | 'NO_RUN_YET') so the UI
+  // can offer "Run it" instead of a generic error. See MdsRunNow.runnableCode.
+  const [notSynced, setNotSynced] = useState(null);
   const [listFetchCount, setListFetchCount] = useState(0);
   const [detailFetchCount, setDetailFetchCount] = useState(0);
 
@@ -53,6 +57,7 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
     async function fetchData() {
       setLoading(true);
       setError(null);
+      setNotSynced(null);
 
       try {
         const { orgSlug, facilityName } = await getApiContext();
@@ -66,7 +71,11 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
             endpoint: `/api/extension/mds/pdpm-potential?${params}`,
             options: { method: 'GET' }
           });
-          if (!result.success) throw new Error(result.error || 'Failed to load MDS data');
+          if (!result.success) {
+            const code = window.MdsRunNow?.runnableCode?.(result);
+            if (code) { if (!cancelled) setNotSynced(code); return; }
+            throw new Error(result.error || 'Failed to load MDS data');
+          }
           if (!cancelled) {
             setDetail(result.data);
             setPatientName(result.data?.patientName || context.patientName || '');
@@ -114,6 +123,7 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
     async function fetchDetail() {
       setDetailLoading(true);
       setDetail(null);
+      setNotSynced(null);
 
       try {
         const { orgSlug, facilityName } = await getApiContext();
@@ -124,7 +134,11 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
           endpoint: `/api/extension/mds/pdpm-potential?${params}`,
           options: { method: 'GET' }
         });
-        if (!result.success) throw new Error(result.error || 'Failed to load assessment data');
+        if (!result.success) {
+          const code = window.MdsRunNow?.runnableCode?.(result);
+          if (code) { if (!cancelled) setNotSynced(code); return; }
+          throw new Error(result.error || 'Failed to load assessment data');
+        }
         if (!cancelled) setDetail(result.data);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load assessment detail');
@@ -146,5 +160,5 @@ export function usePDPMAnalyzer(context, selectedAssessmentId) {
     return () => window.removeEventListener('super:item-decision', onItemDecision);
   }, []);
 
-  return { assessments, detail, patientName, loading, detailLoading, error, retry, retryDetail };
+  return { assessments, detail, patientName, loading, detailLoading, error, notSynced, retry, retryDetail };
 }

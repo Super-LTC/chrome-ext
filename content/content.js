@@ -54,6 +54,7 @@ import './icd10-viewer/icd10-viewer.js';
 import './super-menu/state.js';
 import './super-menu/utils.js';
 import './super-menu/context.js';
+import './super-menu/mds-run-now.js';
 import './super-menu/session.js';
 import './super-menu/fab.js';
 import './super-menu/panel.js';

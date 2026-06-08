@@ -15,6 +15,7 @@ import { CertSection } from '../certifications/components/CertSection.jsx';
 import { Selector } from '../../components/Selector.jsx';
 import { formatPaymentRates } from '../../utils/payment.js';
 import { track } from '../../utils/analytics.js';
+import { MdsRunNow } from '../../super-menu/mds-run-now.js';
 
 // ─── Assessment selector (patient scope — multiple assessments) ────────────────
 
@@ -241,6 +242,7 @@ function OpportunityCallout({ data, onItemClick }) {
             <span class="pdpm-an__opp-code">{displayCode}</span>
             <span class="pdpm-an__opp-name">{resolveItemName(d.itemName, d.mdsItem)}</span>
             <ImpactChips impact={d.impact} payment={payment} />
+            <span class="pdpm-an__opp-review">Review</span>
             <svg class="pdpm-an__opp-go" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         );
@@ -1181,6 +1183,71 @@ function ErrorState({ message, onRetry }) {
   );
 }
 
+/**
+ * RunItState — shown when the assessment isn't synced/solved yet (404). Triggers
+ * the on-demand pipeline and waits for the FULL run to finish before re-fetching
+ * (PDPM needs every section's detections, so no incremental reveal here).
+ *
+ * @param {string} code     originating 404 code
+ * @param {object} runParams { externalPatientId, ardDate, assessmentType, facilityName, orgSlug }
+ * @param {()=>void} onComplete  re-fetch the PDPM data once the run is done
+ */
+function RunItState({ code, runParams, onComplete }) {
+  const [progress, setProgress] = useState(null); // null = pre-click
+  const [errorMsg, setErrorMsg] = useState(null);
+  const handleRef = useRef(null);
+
+  useEffect(() => () => { handleRef.current?.cancel?.(); }, []);
+
+  const intro = MdsRunNow.introCopy(code);
+
+  function startRun() {
+    if (!MdsRunNow.hasRequiredParams(runParams)) {
+      setErrorMsg("Couldn't read the assessment details. Try reopening from the MDS page.");
+      return;
+    }
+    setErrorMsg(null);
+    setProgress({ phase: 'none' });
+    handleRef.current = MdsRunNow.start(runParams, {
+      onPhase: (state) => setProgress(state),
+      onDone: () => { handleRef.current = null; onComplete?.(); },
+      onError: (msg) => { handleRef.current = null; setProgress(null); setErrorMsg(msg); },
+    }, 'pdpm_analyzer', code);
+  }
+
+  if (errorMsg) {
+    return (
+      <div class="pdpm-an__state">
+        <div class="pdpm-an__state-icon">⚠</div>
+        <p>{errorMsg}</p>
+        {/* NO_TRACK: re-runs MdsRunNow which fires mds_run_triggered */}
+        <button class="pdpm-an__retry-btn" onClick={startRun}>Retry</button>
+      </div>
+    );
+  }
+
+  if (progress) {
+    const copy = MdsRunNow.phaseCopy(progress);
+    return (
+      <div class="pdpm-an__state">
+        <div class="pdpm-an__spinner" />
+        <p>{copy.title}</p>
+        {copy.detail && <p class="pdpm-an__state-sub">{copy.detail}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div class="pdpm-an__state">
+      <div class="pdpm-an__state-icon">✨</div>
+      <p>{intro}</p>
+      <p class="pdpm-an__state-sub">Run Super's MDS analysis now — this usually takes about 10 minutes.</p>
+      {/* NO_TRACK: run starts mds_run_triggered via MdsRunNow */}
+      <button class="pdpm-an__retry-btn pdpm-an__run-btn" onClick={startRun}>Run it</button>
+    </div>
+  );
+}
+
 // ─── Assessment detail view ────────────────────────────────────────────────────
 
 function AssessmentView({ assessmentData, onItemClick, onQueryClick, patientId }) {
@@ -1251,7 +1318,7 @@ export function PDPMAnalyzer({ context, onClose, initialMode = 'modal', fromComm
 
   const {
     assessments, detail, patientName: hookPatientName,
-    loading, detailLoading, error, retry, retryDetail
+    loading, detailLoading, error, notSynced, retry, retryDetail
   } = usePDPMAnalyzer(context, selectedAssessmentId);
 
   // Auto-select first assessment once list loads
@@ -1294,6 +1361,23 @@ export function PDPMAnalyzer({ context, onClose, initialMode = 'modal', fromComm
 
   const isLoading = loading || detailLoading;
 
+  // Params for an on-demand "Run it" when the assessment isn't synced/solved.
+  // mds scope → scrape the live PCC MDS page; patient scope → use the selected
+  // assessment summary + patient context.
+  const runParams = (() => {
+    const base = MdsRunNow.gatherParams?.() || {};
+    if (context?.scope === 'patient') {
+      return {
+        ...base,
+        externalPatientId: context?.patientId || base.externalPatientId,
+        ardDate: selectedSummary?.ardDate || base.ardDate,
+        assessmentType: selectedSummary?.type || selectedSummary?.assessmentType || base.assessmentType,
+      };
+    }
+    return base;
+  })();
+  const onRunComplete = (context?.scope === 'patient' && selectedAssessmentId) ? retryDetail : retry;
+
   const backdropClass = isPanel ? 'pdpm-an__panel-backdrop' : 'pdpm-an__overlay';
   const containerClass = (isPanel ? 'pdpm-an__panel' : 'pdpm-an__modal') + (isSplitView ? ' pdpm-an--split' : '');
 
@@ -1330,8 +1414,11 @@ export function PDPMAnalyzer({ context, onClose, initialMode = 'modal', fromComm
         {/* Body */}
         <div class="pdpm-an__body">
           {isLoading && <LoadingState />}
-          {!isLoading && error && <ErrorState message={error} onRetry={detail ? retryDetail : retry} />}
-          {!isLoading && !error && (
+          {!isLoading && notSynced && (
+            <RunItState code={notSynced} runParams={runParams} onComplete={onRunComplete} />
+          )}
+          {!isLoading && !notSynced && error && <ErrorState message={error} onRetry={detail ? retryDetail : retry} />}
+          {!isLoading && !notSynced && !error && (
             detailItem
               ? <ItemDetailView
                   item={detailItem.item}

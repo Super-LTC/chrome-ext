@@ -400,8 +400,8 @@
 /* ── Opportunity Callout ── */
 .pdpm-an__opps {
   border-radius: 8px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
   overflow: hidden;
 }
 
@@ -415,11 +415,11 @@
 }
 
 .pdpm-an__opp-row:hover {
-  background: #dcfce7;
+  background: #f9fafb;
 }
 
 .pdpm-an__opp-row + .pdpm-an__opp-row {
-  border-top: 1px solid #dcfce7;
+  border-top: 1px solid #f1f5f9;
 }
 
 .pdpm-an__opp-icon {
@@ -430,12 +430,30 @@
 .pdpm-an__opp-code {
   font-size: 11px;
   font-weight: 600;
-  color: #059669;
-  background: #dcfce7;
+  color: #475569;
+  background: #f1f5f9;
   padding: 1px 6px;
   border-radius: 4px;
   flex-shrink: 0;
   font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.pdpm-an__opp-review {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f46e5;
+  padding: 3px 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: #fff;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.pdpm-an__opp-row:hover .pdpm-an__opp-review {
+  color: #fff;
+  background: #4f46e5;
+  border-color: #4f46e5;
 }
 
 .pdpm-an__opp-name {
@@ -1300,6 +1318,17 @@
   font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* In the opportunity list, keep the row neutral (not "captured" green) so it
+   reads as a to-review action rather than a completed item. */
+.pdpm-an__opp-row .pdpm-an__impact-chip {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.pdpm-an__opp-row .pdpm-an__impact-chip-v {
+  color: #475569;
+}
+
 /* Pending queries card */
 .pdpm-an__card--queries {
   border-color: #fde68a;
@@ -1723,6 +1752,20 @@
 
 .pdpm-an__retry-btn:hover {
   background: #4f46e5;
+}
+
+/* "Run it" not-synced state — sub-line + emphasized primary button */
+.pdpm-an__state-sub {
+  margin: -4px 0 4px;
+  font-size: 12.5px;
+  color: #9ca3af;
+  max-width: 320px;
+}
+
+.pdpm-an__run-btn {
+  padding: 9px 22px;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
 /* ============================================================

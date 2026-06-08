@@ -52,7 +52,15 @@ async function apiRequest(endpoint, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    // Surface the status code and parsed error body so content scripts can
+    // distinguish actionable 404s (e.g. assessment-not-synced → "Run it") from
+    // generic failures. Best-effort: some error responses have no JSON body.
+    let body = null;
+    try { body = await response.json(); } catch { /* non-JSON body */ }
+    const err = new Error(body?.error || `API error: ${response.status}`);
+    err.status = response.status;
+    err.body = body;
+    throw err;
   }
 
   return response.json();
@@ -379,7 +387,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const result = await apiRequest(message.endpoint, message.options);
         sendResponse({ success: true, data: result });
       } catch (error) {
-        sendResponse({ success: false, error: error.message });
+        // status/body are additive — existing callers only read success/error.
+        sendResponse({ success: false, error: error.message, status: error.status, body: error.body });
       }
     })();
     return true;
