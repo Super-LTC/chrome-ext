@@ -248,6 +248,13 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
         );
       })()}
 
+      {/* "Why this is proposed" — the backend's rationale for this focus.
+          basisLabel is an honest tag (universals say "Standard admission focus"
+          even when a positive screen exists); evidence[] lists the supporting
+          screens / firing dx-orders. Empty evidence → tag only, no empty box.
+          Renders only when rawFocus.rationale is present (Initial wizard). */}
+      <FocusRationale rationale={rawFocus?.rationale} />
+
       {/* Goals — always inline-editable */}
       <h3 className="cpas-detail__section">Goals ({goals.length})</h3>
           <ul className="cpas-detail__list cpas-detail__list--editable">
@@ -384,6 +391,38 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
 // Mirrors web/components/patients/care-plan-segment-renderer.tsx. Filled-token
 // rendering is driven by `tokenValues` (client-side state) rather than mutating
 // the segment array, so re-renders stay declarative.
+// "Why this is proposed" block for the Initial wizard. Mirrors the
+// Comprehensive add pane's evidence box. Renders nothing when there's no
+// rationale (older proposals / library picks). A `basisLabel` always shows as a
+// tag; `evidence[]` lines show only when present.
+const RATIONALE_BASIS_CLASS = {
+  standard: 'is-standard',
+  diagnosis: 'is-diagnosis',
+  order: 'is-order',
+  assessment: 'is-assessment',
+};
+export const FocusRationale = ({ rationale }) => {
+  if (!rationale || (!rationale.basisLabel && !(rationale.evidence || []).length)) return null;
+  const evidence = rationale.evidence || [];
+  return (
+    <div className="cpas-detail__rationale">
+      <div className="cpas-detail__rationale-head">
+        <span className="cpas-detail__rationale-title">Why this is proposed</span>
+        {rationale.basisLabel && (
+          <span className={`cpas-detail__rationale-tag ${RATIONALE_BASIS_CLASS[rationale.basis] || ''}`}>
+            {rationale.basisLabel}
+          </span>
+        )}
+      </div>
+      {evidence.length > 0 && (
+        <ul className="cpas-detail__rationale-list">
+          {evidence.map((e, i) => <li key={i}>{e}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCommit, onToggleFactor, readOnly }) => {
   // Per-segment-index "editing" set — lets a filled token sparkle revert to
   // its editor on click. Keyed by index, not tokenKey, since a key can appear

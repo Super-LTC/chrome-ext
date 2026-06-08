@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 
 /**
  * Round 13 unified rail for Comprehensive Review.
@@ -23,6 +23,7 @@ export const AuditRail = ({
   audit,
   ruleIdToCAA,
   focusIdToCAA,
+  caaTitle,
   stampedAddIds,
   skippedAddIds,
   resolveStatus,
@@ -36,7 +37,7 @@ export const AuditRail = ({
   commitCount,
   needsInputCount,
   stamping,
-  step = 'add', // 'add' | 'verify' | 'on_plan' — controls which sections + header render
+  step = 'add', // 'add' | 'verify' | 'on_plan' | 'care_area' — controls sections + header
 }) => {
   // Each section can be independently collapsed. Default: Add sections open,
   // On Plan sections collapsed (they're informational, shouldn't dominate).
@@ -57,9 +58,12 @@ export const AuditRail = ({
     (it) => !stampedAddIds.has(it.ruleId) && !skippedAddIds.has(it.ruleId)
   );
 
-  // Within a bucket, AI-gap first, then alphabetical by short title.
+  // Within a bucket, sort by backend `score` (desc, clinically significant
+  // first); fall back to AI-gap then alphabetical when scores tie/are absent.
   const sortBucket = (items) =>
     [...items].sort((a, b) => {
+      const ds = (b.score ?? 0) - (a.score ?? 0);
+      if (ds !== 0) return ds;
       const ag = a.coverageSignal === 'ai_says_missing' ? 0 : 1;
       const bg = b.coverageSignal === 'ai_says_missing' ? 0 : 1;
       if (ag !== bg) return ag - bg;
@@ -87,12 +91,29 @@ export const AuditRail = ({
 
   const isActiveRow = (item) => selected?.key === item._rowId;
 
+  // When the selection changes (e.g. arriving from a coverage-grid chip), jump
+  // the sidebar to the active row and flash it so the nurse sees where they
+  // landed in a potentially long list.
+  const activeRef = useRef(null);
+  const [flashing, setFlashing] = useState(false);
+  useEffect(() => {
+    if (!selected?.key) return;
+    const el = activeRef.current;
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setFlashing(true);
+    const t = setTimeout(() => setFlashing(false), 1100);
+    return () => clearTimeout(t);
+  }, [selected?.key]);
+  const activeClass = (item) => isActiveRow(item) ? `is-active ${flashing ? 'is-flash' : ''}` : '';
+  const activeRefFor = (item) => (isActiveRow(item) ? activeRef : null);
+
   const renderAddRow = (item) => {
     const needsInput = !!addNeedsInputByRowId?.get(item._rowId);
     return (
       <li
         key={item._rowId}
-        className={`cpas-list__item ${isActiveRow(item) ? 'is-active' : ''} ${needsInput ? 'is-needs-input' : ''}`}
+        ref={activeRefFor(item)}
+        className={`cpas-list__item ${activeClass(item)} ${needsInput ? 'is-needs-input' : ''}`}
         onClick={() => onSelect({ kind: 'add', key: item._rowId })}
       >
         <span className="cpas-list__badge" title="Will be added to the care plan">+</span>
@@ -120,7 +141,8 @@ export const AuditRail = ({
   const renderOnPlanRow = (item) => (
     <li
       key={item._rowId}
-      className={`cpas-list__item cpas-list__item--onplan ${isActiveRow(item) ? 'is-active' : ''}`}
+      ref={activeRefFor(item)}
+      className={`cpas-list__item cpas-list__item--onplan ${activeClass(item)}`}
       onClick={() => onSelect({ kind: 'on_plan', key: item._rowId })}
     >
       <span className="cpas-list__badge cpas-list__badge--onplan" title="Already on this resident's care plan">−</span>
@@ -183,7 +205,8 @@ export const AuditRail = ({
   const renderRemoveRow = (item) => (
     <li
       key={item._rowId}
-      className={`cpas-list__item cpas-list__item--remove ${isActiveRow(item) ? 'is-active' : ''}`}
+      ref={activeRefFor(item)}
+      className={`cpas-list__item cpas-list__item--remove ${activeClass(item)}`}
       onClick={() => onSelect({ kind: 'remove', key: item._rowId })}
     >
       <span className="cpas-list__badge cpas-list__badge--remove">−</span>
@@ -221,6 +244,12 @@ export const AuditRail = ({
   } else if (step === 'on_plan') {
     headerTitle = 'ON PLAN';
     headerCount = `${onPlanCount} ${onPlanCount === 1 ? 'focus' : 'focuses'}`;
+  } else if (step === 'care_area') {
+    headerTitle = caaTitle || 'CARE AREA';
+    const parts = [];
+    if (liveAddCount) parts.push(`${liveAddCount} to add`);
+    if (onPlanCount) parts.push(`${onPlanCount} on plan`);
+    headerCount = parts.join(' · ') || 'reviewed';
   }
 
   return (
@@ -254,6 +283,29 @@ export const AuditRail = ({
         </ol>
       )}
 
+      {step === 'care_area' && (
+        <ol className="cpas-list__items">
+          {(liveAddCount > 0 || liveRemoves.length > 0) && (
+            <SectionGroup
+              title="Needs a focus"
+              items={[...allAdds, ...liveRemoves]}
+              collapsed={false}
+              onToggle={() => {}}
+              renderRow={(it) => (it.focus ? renderAddRow(it) : renderRemoveRow(it))}
+            />
+          )}
+          {onPlanCount > 0 && (
+            <SectionGroup
+              title="On plan"
+              items={audit.onPlan || []}
+              collapsed={false}
+              onToggle={() => {}}
+              renderRow={renderOnPlanRow}
+            />
+          )}
+        </ol>
+      )}
+
       {step === 'on_plan' && onPlanCount > 0 && (
         <ol className="cpas-list__items cpas-list__items--onplan">
           {onPlanSectionDefs.map((s) => (
@@ -269,7 +321,7 @@ export const AuditRail = ({
         </ol>
       )}
 
-      {step === 'add' && (
+      {(step === 'add' || step === 'care_area') && commitCount.focuses > 0 && (
         <div className="cpas-list__commit">
           <button
             className="cpas-btn cpas-btn--primary cpas-list__commit-btn"

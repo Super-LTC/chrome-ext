@@ -1,9 +1,11 @@
 import { h } from 'preact';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
 import { ScopeToggle } from './components/ScopeToggle.jsx';
-import { FocusCard } from './components/FocusCard.jsx';
+import { FocusCard, FocusRationale } from './components/FocusCard.jsx';
 import { AuditRail } from './components/AuditRail.jsx';
 import { AuditDashboard } from './components/AuditDashboard.jsx';
+import { CoveredOverview } from './components/CoveredOverview.jsx';
+import { areaLabel } from './careArea.js';
 // Round 10: universals bundle dropped — pane file deleted, no import.
 // Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
@@ -91,6 +93,31 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // Optional bucket filter for the Add step — set when the nurse clicks a
   // dashboard tile (universal / order / dx). Null means "show all toAdd".
   const [addBucketFilter, setAddBucketFilter] = useState(null);
+  // Care-area filter — set when the nurse clicks a coverage-grid chip; scopes
+  // the rail to one care area (covered + to-add together). Null otherwise.
+  const [caaFilter, setCaaFilter] = useState(null);
+
+  // -------- Assessment cross-check header count --------
+  // audit.assessmentLinkages cross-checks each UDA/MDS assessment against the
+  // plan. The per-focus detail now lives in each focus's `rationale.evidence`
+  // (rendered via FocusRationale); here we only tally the header count.
+  const linkageCounts = useMemo(() => {
+    let covered = 0, gap = 0;
+    (audit?.assessmentLinkages || []).forEach((lk) => {
+      if (lk?.status === 'covered') covered += 1;
+      else if (lk?.status === 'gap') gap += 1;
+    });
+    return { covered, gap };
+  }, [audit]);
+
+  // Audit scoped for the rail: by care area (chip click) or by source bucket
+  // (tile click). Detail-pane lookups still use the full `audit`, so row-ids
+  // resolve regardless of the filter.
+  const railAudit = useMemo(() => {
+    if (!audit) return audit;
+    if (comprehensiveStep === 'care_area') return _filterAuditByCaa(audit, caaFilter);
+    return _filterAuditToAddByBucket(audit, addBucketFilter);
+  }, [audit, comprehensiveStep, caaFilter, addBucketFilter]);
 
   // -------- Load proposal + PCC context in parallel --------
   useEffect(() => {
@@ -112,6 +139,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setPartialStampError({});
     setComprehensiveStep('dashboard');
     setAddBucketFilter(null);
+    setCaaFilter(null);
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -199,6 +227,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               })),
             };
           });
+          // Sort to-add by clinical significance (backend `score`, descending)
+          // so the rail, tiles, and coverage grid surface the important focuses
+          // first and sink boilerplate.
+          audit.toAdd = (audit.toAdd || []).slice().sort((x, y) => (y?.score ?? 0) - (x?.score ?? 0));
           // Round 10: stamp synthetic _rowId on every audit item so rail
           // selection is unique per-row (fixes multi-highlight bug when
           // toCheck items share a null focusId).
@@ -208,8 +240,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           (audit.onPlan || []).forEach((it, i) => { it._rowId = `onplan-${i}-${it.ruleId || it.focusId || 'na'}`; });
           setAudit(audit);
           const a = audit;
-          // Default rail selection: first Add, else null.
-          const firstAdd = (a.toAdd || [])[0];
+          // Note: unlike the Initial wizard, the audit rail hides skipped items,
+          // so we do NOT auto-skip autoSelect:false here (they'd vanish with no
+          // way to opt in). Score-sort already sinks boilerplate to the bottom;
+          // a proper optional-group for the audit rail is a follow-up.
+          const firstAdd = (a.toAdd || []).find((it) => it.autoSelect !== false) || (a.toAdd || [])[0];
           if (firstAdd) {
             setSelectedRail({ kind: 'add', key: firstAdd._rowId });
           }
@@ -295,8 +330,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         setCareplanId(cpId);
         setMiniToken(token);
         setFocusStates(mergedFocuses.map((f, i) => ({
-          // Pre-skip if backend marked this focus as already-on-plan OR
-          // if it came from the previously-skipped tail of the list.
+          // Pre-skip only if backend marked this already-on-plan OR it came from
+          // the previously-skipped tail. Everything else defaults ON (included);
+          // the nurse skips what they don't want.
           skipped: !!f.alreadyOnPlan || i >= (propWithRecs.focuses?.length || 0),
           focusText: null,
           goals: null,
@@ -611,10 +647,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
   const _commitAuditAdds = useCallback(async (overrideItems) => {
     if (!audit || !careplanId || !miniToken) return;
-    // When the nurse is drilled into a specific bucket from the dashboard,
-    // "Add all" should only stamp items from that bucket — not the other
-    // buckets they haven't reviewed yet.
-    const scopedAudit = _filterAuditToAddByBucket(audit, addBucketFilter);
+    // When the nurse is drilled into a specific bucket or care area, "Add all"
+    // should only stamp items from that scope — not areas they haven't reviewed.
+    const scopedAudit = comprehensiveStep === 'care_area'
+      ? _filterAuditByCaa(audit, caaFilter)
+      : _filterAuditToAddByBucket(audit, addBucketFilter);
     const candidates = Array.isArray(overrideItems)
       ? overrideItems
       : (scopedAudit.toAdd || []).filter((it) =>
@@ -646,6 +683,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       setComprehensiveStep('dashboard');
       setSelectedRail(null);
       setAddBucketFilter(null);
+      setCaaFilter(null);
       window.SuperAnalytics?.track?.('care_plan_audit_commit_stamped', {
         patient_id: patientId,
         n_focuses: result?.focusesStamped ?? eligible.length,
@@ -656,7 +694,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       setErrorMsg(e.message || 'Add failed');
       setStage('ready');
     }
-  }, [audit, addBucketFilter, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
+  }, [audit, addBucketFilter, comprehensiveStep, caaFilter, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
 
   // Add a single comprehensive-flow focus without committing the whole bucket.
   // Stays in the Add step (does NOT jump to dashboard), marks the item stamped,
@@ -836,6 +874,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 setComprehensiveStep('dashboard');
                 setSelectedRail(null);
                 setAddBucketFilter(null);
+                setCaaFilter(null);
               }}
               title="Back to overview"
             >
@@ -895,10 +934,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 progress={progress}
                 onRemoveLibraryPick={removeLibraryPick}
                 onStamp={stage === 'ready' ? handleStamp : null}
-                stampDisabled={includedCount === 0}
+                stampDisabled={includedCount === 0 || needsInputCount > 0}
                 needsInputCount={needsInputCount}
                 skippedFocuses={skippedFocuses}
                 onUnSkip={stage === 'ready' ? unSkipFocus : null}
+                onToggleSkip={stage === 'ready' ? toggleFocusSkip : null}
                 stampedRuleIds={stampedRuleIds}
                 singleAddIdx={singleAddIdx}
               />
@@ -928,13 +968,20 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
             <AuditDashboard
               audit={audit}
+              linkageCounts={linkageCounts}
               stampedAddIds={stampedAddIds}
               skippedAddIds={skippedAddIds}
               onEnterStep={(step, opts) => {
                 setComprehensiveStep(step);
                 const bucket = opts?.bucket || null;
                 setAddBucketFilter(step === 'add' ? bucket : null);
-                window.SuperAnalytics?.track?.('care_plan_audit_step_entered', { step, bucket });
+                setCaaFilter(step === 'care_area' ? (opts?.caa || null) : null);
+                window.SuperAnalytics?.track?.('care_plan_audit_step_entered', { step, bucket, caa: opts?.caa || null });
+                // Precise routing: a chip/row passes the exact item to open.
+                if (opts?.rowId && opts?.kind) {
+                  setSelectedRail({ kind: opts.kind, key: opts.rowId });
+                  return;
+                }
                 if (step === 'add') {
                   const matchBucket = (it) => {
                     if (!bucket) return true;
@@ -954,24 +1001,28 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               }}
             />
           )}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && (
+          {mode === 'comprehensive' && stage === 'ready' && audit && comprehensiveStep === 'on_plan' && (
+            <CoveredOverview audit={audit} focusRowId={selectedRail?.kind === 'on_plan' ? selectedRail.key : null} />
+          )}
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && comprehensiveStep !== 'on_plan' && (
             <div className="cpas-modal__columns">
               <AuditRail
-                audit={_filterAuditToAddByBucket(audit, addBucketFilter)}
+                audit={railAudit}
                 ruleIdToCAA={audit._ruleIdToCAA || new Map()}
                 focusIdToCAA={audit._focusIdToCAA || new Map()}
+                caaTitle={comprehensiveStep === 'care_area' ? caaFilter : null}
                 stampedAddIds={stampedAddIds}
                 skippedAddIds={skippedAddIds}
                 resolveStatus={resolveStatus}
                 toCheck={comprehensiveStep === 'verify' ? (audit.toCheck || []) : []}
                 dismissedVerifyIds={dismissedVerifyIds}
-                addNeedsInputByRowId={_auditNeedsInputByRowId(_filterAuditToAddByBucket(audit, addBucketFilter), auditFocusStates)}
+                addNeedsInputByRowId={_auditNeedsInputByRowId(railAudit, auditFocusStates)}
                 selected={selectedRail}
                 onSelect={setSelectedRail}
                 onCommit={_commitAuditAdds}
-                commitCount={_computeCommitCount(_filterAuditToAddByBucket(audit, addBucketFilter), stampedAddIds, skippedAddIds)}
-                commitDisabled={_auditCommitDisabled(_filterAuditToAddByBucket(audit, addBucketFilter), stampedAddIds, skippedAddIds, auditFocusStates, stage)}
-                needsInputCount={_auditNeedsInputCount(_filterAuditToAddByBucket(audit, addBucketFilter), stampedAddIds, skippedAddIds, auditFocusStates)}
+                commitCount={_computeCommitCount(railAudit, stampedAddIds, skippedAddIds)}
+                commitDisabled={_auditCommitDisabled(railAudit, stampedAddIds, skippedAddIds, auditFocusStates, stage)}
+                needsInputCount={_auditNeedsInputCount(railAudit, stampedAddIds, skippedAddIds, auditFocusStates)}
                 stamping={stage === 'stamping'}
                 step={comprehensiveStep}
               />
@@ -981,19 +1032,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   if (!item?.focus) return <div className="cpas-empty"><p>Select an item</p></div>;
                   const state = auditFocusStates[item.ruleId] || _emptyFocusState();
                   const composed = _composeFocus(item.focus, state);
+                  // Prefer the backend's structured rationale (basisLabel +
+                  // evidence) — it labels universals honestly ("Standard
+                  // admission focus · PHQ-9 12") rather than "driven by". Fall
+                  // back to the legacy evidence[] array for older responses.
+                  const addRationale = item.rationale
+                    || (Array.isArray(item.evidence) && item.evidence.length
+                        ? { evidence: item.evidence }
+                        : null);
                   return (
                     <>
-                      {Array.isArray(item.evidence) && item.evidence.length > 0 && (
-                        <div className="cpas-audit-evidence">
-                          <div className="cpas-audit-evidence__label">Why this is proposed</div>
-                          <ul className="cpas-audit-evidence__list">
-                            {item.evidence.map((e, i) => <li key={i}>{e}</li>)}
-                          </ul>
-                        </div>
-                      )}
                       <FocusCard
                         composed={composed}
-                        rawFocus={item.focus}
+                        rawFocus={{ ...item.focus, rationale: addRationale }}
                         state={state}
                         onUpdate={(patch) => _patchAuditFocusStateByRuleId(item.ruleId, patch)}
                         onToggleSkip={() => {
@@ -1020,10 +1071,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 {selectedRail?.kind === 'on_plan' && (() => {
                   const item = (audit.onPlan || []).find((it) => it._rowId === selectedRail.key);
                   if (!item) return null;
+                  const onPlanRationale = item.rationale
+                    || (Array.isArray(item.evidence) && item.evidence.length
+                        ? { evidence: item.evidence }
+                        : null);
                   return (
                     <div className="cpas-detail">
                       <div className="cpas-detail__header">
-                        <div className="cpas-detail__badge">− ON PLAN</div>
+                        <div className="cpas-detail__badge">✓ ON PLAN</div>
                       </div>
                       <div className="cpas-audit-section">
                         <div className="cpas-audit-section__label">Existing focus</div>
@@ -1031,12 +1086,16 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                           {item.focusText || item.description || item.focus?.description || '—'}
                         </div>
                       </div>
-                      {item.caa && (
-                        <div className="cpas-audit-section">
-                          <div className="cpas-audit-section__label">CAA</div>
-                          <div className="cpas-audit-section__body">{item.caa}</div>
-                        </div>
-                      )}
+                      {/* Rich coverage: what dx/order/assessment this focus
+                          accounts for — fixes the barren focus-text + CAA view. */}
+                      {onPlanRationale
+                        ? <FocusRationale rationale={{ ...onPlanRationale, basisLabel: onPlanRationale.basisLabel ? `Covered · ${onPlanRationale.basisLabel}` : 'Covered' }} />
+                        : (item.caa && (
+                            <div className="cpas-audit-section">
+                              <div className="cpas-audit-section__label">Care area</div>
+                              <div className="cpas-audit-section__body">{item.caa}</div>
+                            </div>
+                          ))}
                     </div>
                   );
                 })()}
@@ -1158,6 +1217,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
  * BC with proposals that lack `descriptionSegments`.
  */
 // -------- Round 9 audit commit helpers --------
+
 // Filter audit.toAdd by ruleId-prefix bucket so the rail only shows items
 // belonging to the tile the nurse clicked on the dashboard. Returns a shallow
 // clone with toAdd narrowed; other fields (toCheck, onPlan, byCAA, lookup
@@ -1171,6 +1231,20 @@ function _filterAuditToAddByBucket(audit, bucket) {
     return !id.startsWith('order.') && !id.startsWith('dx.');
   };
   return { ...audit, toAdd: (audit.toAdd || []).filter(match) };
+}
+
+// Filter the whole audit to one care area — toAdd, onPlan, and toRemove — so
+// the rail shows the complete picture for that area (covered + to-add). Lookup
+// maps pass through; row-ids are preserved for detail-pane lookups.
+function _filterAuditByCaa(audit, caaLabel) {
+  if (!caaLabel || !audit) return audit;
+  const inArea = (it) => areaLabel(audit, it) === caaLabel;
+  return {
+    ...audit,
+    toAdd: (audit.toAdd || []).filter(inArea),
+    onPlan: (audit.onPlan || []).filter(inArea),
+    toRemove: (audit.toRemove || []).filter(inArea),
+  };
 }
 
 function _computeCommitCount(audit, stampedAddIds, skippedAddIds) {
@@ -1413,13 +1487,105 @@ const DriftState = ({ missing, onClose }) => (
   </div>
 );
 
-const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip, stampedRuleIds, singleAddIdx }) => {
+const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip, onToggleSkip, stampedRuleIds, singleAddIdx }) => {
   const _stamped = stampedRuleIds instanceof Set ? stampedRuleIds : new Set();
   // "To add" excludes both skipped and already single-added focuses.
   const stampCount = focusStates.filter((s, i) => !s.skipped && !_stamped.has(rawFocuses[i]?.ruleId)).length;
   const addedCount = rawFocuses.filter((f) => _stamped.has(f?.ruleId)).length;
   const onPlanCount = rawFocuses.filter((f) => f.alreadyOnPlan).length;
   const libCount = rawFocuses.filter((f) => f._isLibrary).length;
+
+  // Single ranked list: active focuses first, ordered by clinical `score`
+  // (descending); skipped / already-on-plan / added sink to the bottom, dimmed.
+  // Original indices preserved so focusStates[i] / composedFocuses[i] /
+  // activeIdx still address the source arrays.
+  const sortedRows = rawFocuses
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => {
+      const aBottom = (focusStates[a.i]?.skipped || _stamped.has(a.f?.ruleId)) ? 1 : 0;
+      const bBottom = (focusStates[b.i]?.skipped || _stamped.has(b.f?.ruleId)) ? 1 : 0;
+      if (aBottom !== bBottom) return aBottom - bBottom;
+      return ((b.f?.score ?? 0) - (a.f?.score ?? 0)) || (a.i - b.i);
+    });
+
+  const renderRow = ({ f, i }) => {
+    const state = focusStates[i] || {};
+    const isAdded = _stamped.has(f?.ruleId);
+    const composedDesc = composedFocuses?.[i]?.description || f.description || '';
+    const preview = composedDesc.replace(/\s+/g, ' ').trim();
+    const flatHasBlank = _descNeedsInput(composedDesc, f.descriptionSegments);
+    const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues).length > 0;
+    const needsInput = !state.skipped && !isAdded && (flatHasBlank || tokenBlank);
+
+    let cls = 'cpas-list__item';
+    let badge = '+';
+    let badgeTitle = 'Will be added to the care plan';
+    if (isAdded) {
+      cls += ' is-added';
+      badge = '✓';
+      badgeTitle = 'Added to the care plan';
+    } else if (state.skipped) {
+      cls += ' is-skipped';
+      badge = '−';
+      badgeTitle = f.alreadyOnPlan ? 'Pre-skipped — already on plan' : 'Skipped';
+    }
+    if (f.alreadyOnPlan) cls += ' is-on-plan';
+    if (f._isLibrary) cls += ' is-library';
+    if (needsInput) cls += ' is-needs-input';
+    if (i === activeIdx) cls += ' is-active';
+    const isStamping = progress && !state.skipped && !isAdded && (
+      singleAddIdx != null ? i === singleAddIdx : progress.focusIndex === i
+    );
+    if (isStamping) { cls += ' is-stamping'; badge = '…'; badgeTitle = 'Adding now…'; }
+
+    const label = f._isLibrary ? (f._libraryLabel || 'From PCC library') : _ruleIdToLabel(f.ruleId);
+
+    return (
+      <li key={f.ruleId} className={cls} onClick={() => onSelect(i)}>
+        <span className="cpas-list__badge" title={badgeTitle}>{badge}</span>
+        <div className="cpas-list__body">
+          <div className="cpas-list__row-top">
+            <span className="cpas-list__text">{label}</span>
+            {f.alreadyOnPlan && <span className="cpas-list__tag" title="Already on this resident's plan">on plan</span>}
+            {f._isLibrary && (
+              <>
+                <span className="cpas-list__tag cpas-list__tag--lib">lib</span>
+                {/* NO_TRACK: pure-UI remove of library-picked focus */}
+                <button
+                  className="cpas-list__remove"
+                  onClick={(e) => { e.stopPropagation(); onRemoveLibraryPick?.(f._libraryStdNeedId); }}
+                  title="Remove from queue"
+                >×</button>
+              </>
+            )}
+            {needsInput && (
+              <span className="cpas-list__tag cpas-list__tag--blank" title="This focus needs input before stamping">
+                ⚠ needs input
+              </span>
+            )}
+            {!needsInput && (f.ruleId === 'universal.code_status' || f.ruleId === 'universal.discharge_planning') && !state.skipped && (
+              <span className="cpas-list__tag cpas-list__tag--ready" title="Input provided">
+                ✓ ready
+              </span>
+            )}
+          </div>
+          {preview && <div className="cpas-list__preview">{preview}</div>}
+        </div>
+        {onToggleSkip && !isAdded && !isStamping && !f.alreadyOnPlan && (
+          /* NO_TRACK: per-row quick skip/include — fire-and-forget UI toggle.
+             Already-on-plan rows are informational only — no include/skip. */
+          <button
+            type="button"
+            className={`cpas-list__skip ${state.skipped ? 'is-include' : ''}`}
+            title={state.skipped ? 'Add this focus back to the queue' : 'Skip this focus'}
+            onClick={(e) => { e.stopPropagation(); onToggleSkip(i); }}
+          >
+            {state.skipped ? '+ Include' : 'Skip'}
+          </button>
+        )}
+      </li>
+    );
+  };
 
   return (
     <aside className="cpas-list">
@@ -1437,98 +1603,7 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
         </div>
       )}
       <ol className="cpas-list__items">
-        {rawFocuses
-          // Stable sort into three buckets:
-          //   0. To-add, needs input (act first)
-          //   1. To-add, ready
-          //   2. Skipped / already on plan
-          // Indices are preserved so focusStates[i], composedFocuses[i], and
-          // activeIdx still address the original arrays correctly.
-          .map((f, i) => ({ f, i }))
-          .sort((a, b) => {
-            const rank = (e) => {
-              const st = focusStates[e.i] || {};
-              if (_stamped.has(e.f?.ruleId) || st.skipped) return 2;
-              const desc = composedFocuses?.[e.i]?.description || e.f.description || '';
-              const flatBlank = _descNeedsInput(desc, e.f.descriptionSegments);
-              const tokenBlank = _focusUnfilledTokenKeys(e.f, st.tokenValues).length > 0;
-              return (flatBlank || tokenBlank) ? 0 : 1;
-            };
-            const ra = rank(a);
-            const rb = rank(b);
-            if (ra !== rb) return ra - rb;
-            return a.i - b.i; // stable within bucket
-          })
-          .map(({ f, i }) => {
-          const state = focusStates[i] || {};
-          const isAdded = _stamped.has(f?.ruleId);
-          // Compute display state up-front (composedDesc + needsInput) so the
-          // class-name chain below can reference it.
-          const composedDesc = composedFocuses?.[i]?.description || f.description || '';
-          const preview = composedDesc.replace(/\s+/g, ' ').trim();
-          const flatHasBlank = _descNeedsInput(composedDesc, f.descriptionSegments);
-          const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues).length > 0;
-          const needsInput = !state.skipped && !isAdded && (flatHasBlank || tokenBlank);
-
-          let cls = 'cpas-list__item';
-          let badge = '+';
-          let badgeTitle = 'Will be added to the care plan';
-          if (isAdded) {
-            cls += ' is-added';
-            badge = '✓';
-            badgeTitle = 'Added to the care plan';
-          } else if (state.skipped) {
-            cls += ' is-skipped';
-            badge = '−';
-            badgeTitle = f.alreadyOnPlan ? 'Pre-skipped — already on plan' : 'Skipped';
-          }
-          if (f.alreadyOnPlan) cls += ' is-on-plan';
-          if (f._isLibrary) cls += ' is-library';
-          if (needsInput) cls += ' is-needs-input';
-          if (i === activeIdx) cls += ' is-active';
-          // During a single add, highlight only the row being added. During an
-          // Add-all batch (singleAddIdx == null), follow the batch progress.
-          const isStamping = progress && !state.skipped && !isAdded && (
-            singleAddIdx != null ? i === singleAddIdx : progress.focusIndex === i
-          );
-          if (isStamping) { cls += ' is-stamping'; badge = '…'; badgeTitle = 'Adding now…'; }
-
-          const label = f._isLibrary ? (f._libraryLabel || 'From PCC library') : _ruleIdToLabel(f.ruleId);
-
-          return (
-            <li key={f.ruleId} className={cls} onClick={() => onSelect(i)}>
-              <span className="cpas-list__badge" title={badgeTitle}>{badge}</span>
-              <div className="cpas-list__body">
-                <div className="cpas-list__row-top">
-                  <span className="cpas-list__text">{label}</span>
-                  {f.alreadyOnPlan && <span className="cpas-list__tag" title="Already on this resident's plan">on plan</span>}
-                  {f._isLibrary && (
-                    <>
-                      <span className="cpas-list__tag cpas-list__tag--lib">lib</span>
-                      {/* NO_TRACK: pure-UI remove of library-picked focus */}
-                      <button
-                        className="cpas-list__remove"
-                        onClick={(e) => { e.stopPropagation(); onRemoveLibraryPick?.(f._libraryStdNeedId); }}
-                        title="Remove from queue"
-                      >×</button>
-                    </>
-                  )}
-                  {needsInput && (
-                    <span className="cpas-list__tag cpas-list__tag--blank" title="This focus needs input before stamping">
-                      ⚠ needs input
-                    </span>
-                  )}
-                  {!needsInput && (f.ruleId === 'universal.code_status' || f.ruleId === 'universal.discharge_planning') && !state.skipped && (
-                    <span className="cpas-list__tag cpas-list__tag--ready" title="Input provided">
-                      ✓ ready
-                    </span>
-                  )}
-                </div>
-                {preview && <div className="cpas-list__preview">{preview}</div>}
-              </div>
-            </li>
-          );
-        })}
+        {sortedRows.map(renderRow)}
       </ol>
       {onStamp && (
         <div className="cpas-list__commit">

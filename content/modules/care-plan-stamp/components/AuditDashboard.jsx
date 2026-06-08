@@ -1,5 +1,6 @@
 import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
+import { areaLabel as _areaLabel } from '../careArea.js';
 
 /**
  * Step-1 overview for Comprehensive Review.
@@ -9,6 +10,7 @@ import { useEffect } from 'preact/hooks';
  */
 export const AuditDashboard = ({
   audit,
+  linkageCounts,
   stampedAddIds,
   skippedAddIds,
   onEnterStep,
@@ -68,6 +70,31 @@ export const AuditDashboard = ({
       icon: <IconDx />,
     },
   ];
+
+  // ── Coverage-by-care-area matrix ──
+  // The high-signal, low-load overview: every care area touched by the audit,
+  // shown as covered (green) / needs a focus (red) / partial (amber). Lets a
+  // nurse see at a glance what's accounted for and what isn't — without the
+  // wall of individual focuses.
+  const careAreas = (() => {
+    const m = new Map();
+    const bump = (label, key, idKey, rowId) => {
+      const l = label || 'Other';
+      if (!m.has(l)) m.set(l, { label: l, toAdd: 0, onPlan: 0, toRemove: 0, addRowId: null, onPlanRowId: null, removeRowId: null });
+      const a = m.get(l);
+      a[key] += 1;
+      if (idKey && !a[idKey]) a[idKey] = rowId; // first item of that kind in the area
+    };
+    (audit.toAdd || []).forEach((it) => bump(_areaLabel(audit, it), 'toAdd', 'addRowId', it._rowId));
+    (audit.onPlan || []).forEach((it) => bump(_areaLabel(audit, it), 'onPlan', 'onPlanRowId', it._rowId));
+    (audit.toRemove || []).forEach((it) => bump(_areaLabel(audit, it), 'toRemove', 'removeRowId', it._rowId));
+    const STATUS_ORDER = { gap: 0, partial: 1, resolved: 2, covered: 3 };
+    return Array.from(m.values())
+      .map((a) => ({ ...a, status: _areaStatus(a) }))
+      .sort((a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || a.label.localeCompare(b.label));
+  })();
+  const coveredAreas = careAreas.filter((a) => a.status === 'covered').length;
+  const actionAreas = careAreas.length - coveredAreas;
 
   const onPlanCount = (audit.onPlan || []).length;
   const totalAdds = (audit.toAdd || []).length;
@@ -132,23 +159,72 @@ export const AuditDashboard = ({
         })}
       </div>
 
-      {onPlanCount > 0 && (
-        /* NO_TRACK: navigation only, telemetry fires at the modal level via onEnterStep */
-        <button
-          type="button"
-          className="cpas-dashboard__onplan"
-          onClick={() => onEnterStep('on_plan')}
-        >
-          <span className="cpas-dashboard__onplan-icon"><IconShield /></span>
-          <span className="cpas-dashboard__onplan-text">
-            <strong>{onPlanCount}</strong> already on plan — no action needed
-          </span>
-          <span className="cpas-dashboard__onplan-link">Browse →</span>
-        </button>
+      {careAreas.length > 0 && (
+        <div className="cpas-cov">
+          <div className="cpas-cov__head">
+            <span className="cpas-cov__title">Coverage by care area</span>
+            <span className="cpas-cov__legend">
+              <span className="cpas-cov__key"><i className="cpas-cov__dot is-covered" />covered</span>
+              <span className="cpas-cov__key"><i className="cpas-cov__dot is-gap" />needs a focus</span>
+              <span className="cpas-cov__key"><i className="cpas-cov__dot is-partial" />partial</span>
+            </span>
+          </div>
+          <div className="cpas-cov__grid">
+            {careAreas.map((a) => (
+              /* NO_TRACK: navigation only, telemetry fires at the modal level via onEnterStep */
+              <button
+                key={a.label}
+                type="button"
+                className={`cpas-cov__chip is-${a.status}`}
+                title={_areaTooltip(a)}
+                onClick={() => {
+                  // Open the focused view for this whole care area (covered +
+                  // to-add together). Pre-select the first actionable item.
+                  const first = a.addRowId ? { kind: 'add', rowId: a.addRowId }
+                    : a.onPlanRowId ? { kind: 'on_plan', rowId: a.onPlanRowId }
+                    : a.removeRowId ? { kind: 'remove', rowId: a.removeRowId }
+                    : {};
+                  onEnterStep('care_area', { caa: a.label, ...first });
+                }}
+              >
+                <span className={`cpas-cov__dot is-${a.status}`} aria-hidden="true" />
+                <span className="cpas-cov__chip-label">{a.label}</span>
+                <span className="cpas-cov__chip-meta">{_areaMeta(a)}</span>
+              </button>
+            ))}
+          </div>
+          {onPlanCount > 0 && (
+            /* NO_TRACK: navigation only */
+            <button type="button" className="cpas-cov__browse" onClick={() => onEnterStep('on_plan')}>
+              Browse all {onPlanCount} on plan →
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
 };
+
+function _areaStatus(a) {
+  if (a.toAdd > 0 && a.onPlan > 0) return 'partial';
+  if (a.toAdd > 0) return 'gap';
+  if (a.onPlan > 0) return 'covered';
+  return 'resolved';
+}
+
+function _areaMeta(a) {
+  if (a.status === 'covered') return '✓';
+  if (a.status === 'resolved') return 'resolve';
+  return `+${a.toAdd}`;
+}
+
+function _areaTooltip(a) {
+  const parts = [];
+  if (a.onPlan) parts.push(`${a.onPlan} on plan`);
+  if (a.toAdd) parts.push(`${a.toAdd} to add`);
+  if (a.toRemove) parts.push(`${a.toRemove} to resolve`);
+  return `${a.label}: ${parts.join(' · ') || 'no items'}`;
+}
 
 // Map a backend ruleId (e.g. "universal.communication") to a short, nurse-
 // friendly label. Mirrors FocusCard's _ruleIdToLabel so the preview list on

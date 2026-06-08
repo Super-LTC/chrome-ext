@@ -340,6 +340,26 @@
 .cpas-list__item.is-skipped .cpas-list__preview {
   color: #9ca3af;
 }
+
+/* Per-row quick skip / include — lets the nurse skip without opening each
+   focus. Subtle until row hover; "Include" (undo) stays visible on skipped
+   rows so they can bring one back. */
+.cpas-list__skip {
+  flex-shrink: 0; align-self: center;
+  padding: 4px 10px;
+  font-size: 12px; font-weight: 600;
+  color: #6b7280; background: #f3f4f6;
+  border: 1px solid #e5e7eb; border-radius: 6px;
+  cursor: pointer; opacity: 0;
+  transition: opacity .12s, background .12s, color .12s, border-color .12s;
+}
+.cpas-list__item:hover .cpas-list__skip,
+.cpas-list__item.is-active .cpas-list__skip { opacity: 1; }
+.cpas-list__skip:hover { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.cpas-list__skip.is-include {
+  opacity: 1; color: #4338ca; background: #eef2ff; border-color: #c7d2fe;
+}
+.cpas-list__skip.is-include:hover { background: #e0e7ff; color: #3730a3; }
 .cpas-list__tag--blank {
   background: #f59e0b;
   color: #fff;
@@ -380,6 +400,14 @@
   border-left-color: #4f46e5;
   color: #111827;
   font-weight: 600;
+}
+/* Brief flash when arriving from a coverage-grid chip — draws the eye to where
+   the nurse just landed in a long sidebar. */
+.cpas-list__item.is-flash { animation: cpas-list-flash 1.05s ease-out; }
+@keyframes cpas-list-flash {
+  0%   { background: #c7d2fe; box-shadow: inset 0 0 0 2px #6366f1; }
+  60%  { background: #c7d2fe; box-shadow: inset 0 0 0 2px #6366f1; }
+  100% { background: #eef2ff; box-shadow: inset 0 0 0 0 transparent; }
 }
 .cpas-list__item.is-skipped {
   opacity: 0.5;
@@ -2877,6 +2905,137 @@
   font-size: 13px; line-height: 1.6; color: #1f2937;
 }
 
+/* Initial-wizard "Why this is proposed" rationale block (FocusCard).
+   Tag + optional evidence bullets, sitting under the focus statement. */
+.cpas-detail__rationale {
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+.cpas-detail__rationale-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.cpas-detail__rationale-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: #92400e;
+}
+.cpas-detail__rationale-tag {
+  display: inline-flex; align-items: center;
+  padding: 2px 9px;
+  font-size: 11px; font-weight: 600; border-radius: 999px;
+  background: #e5e7eb; color: #374151; border: 1px solid #d1d5db;
+}
+.cpas-detail__rationale-tag.is-diagnosis { background: #ccfbf1; color: #0f766e; border-color: #99f6e4; }
+.cpas-detail__rationale-tag.is-order { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.cpas-detail__rationale-tag.is-assessment { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
+.cpas-detail__rationale-list {
+  margin: 8px 0 0; padding-left: 18px;
+  font-size: 13px; line-height: 1.6; color: #1f2937;
+}
+
+/* ── Coverage-by-care-area matrix (dashboard) ─────────────────────────── */
+.cpas-cov { margin-top: 22px; }
+.cpas-cov__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+}
+.cpas-cov__title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: #475569;
+}
+.cpas-cov__legend { display: flex; gap: 12px; }
+.cpas-cov__key { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; }
+
+.cpas-cov__dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; display: inline-block; }
+.cpas-cov__dot.is-covered { background: #16a34a; }
+.cpas-cov__dot.is-gap { background: #dc2626; }
+.cpas-cov__dot.is-partial { background: #d97706; }
+.cpas-cov__dot.is-resolved { background: #94a3b8; }
+
+.cpas-cov__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px;
+}
+.cpas-cov__chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; text-align: left; cursor: pointer;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 9px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.cpas-cov__chip:hover { border-color: #c7d2fe; box-shadow: 0 1px 4px rgba(79,70,229,.08); }
+.cpas-cov__chip.is-covered { background: #f0fdf4; border-color: #dcfce7; }
+.cpas-cov__chip.is-gap { background: #fef2f2; border-color: #fee2e2; }
+.cpas-cov__chip.is-partial { background: #fffbeb; border-color: #fef3c7; }
+.cpas-cov__chip-label {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: #1f2937;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cpas-cov__chip-meta { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #64748b; }
+.cpas-cov__chip.is-gap .cpas-cov__chip-meta { color: #dc2626; }
+.cpas-cov__chip.is-covered .cpas-cov__chip-meta { color: #16a34a; }
+
+.cpas-cov__browse {
+  margin-top: 12px; background: none; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #4f46e5; padding: 0;
+}
+.cpas-cov__browse:hover { text-decoration: underline; }
+
+/* ── Covered overview (read-only "what's on plan", condensed) ──────────── */
+.cpco { flex: 1; padding: 20px 26px 28px; overflow-y: auto; }
+.cpco__head { margin-bottom: 14px; }
+.cpco__title { font-size: 16px; font-weight: 700; color: #111827; }
+.cpco__hint { display: block; margin-top: 2px; font-size: 12.5px; color: #6b7280; }
+
+.cpco__group { margin-top: 10px; }
+.cpco__group-head {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: none; border: none; cursor: pointer; text-align: left;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  color: #475569; padding: 8px 2px 6px;
+}
+.cpco__group-head:hover { color: #1e293b; }
+.cpco__caret { font-size: 10px; color: #94a3b8; width: 10px; }
+.cpco__dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+.cpco__dot--baseline { background: #6366f1; }
+.cpco__dot--order { background: #d97706; }
+.cpco__dot--dx { background: #0d9488; }
+
+.cpco__list { list-style: none; margin: 0 0 4px; padding: 0; }
+
+/* Single-line rows — low visual load even with 20 covered focuses. */
+.cpco__row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; background: none; border: none; border-radius: 7px;
+  text-align: left; cursor: pointer; min-height: 34px;
+}
+.cpco__row:hover { background: #f8fafc; }
+.cpco__row--flat { cursor: default; }
+.cpco__row--flat:hover { background: none; }
+.cpco__row.is-focused { background: #eef2ff; box-shadow: inset 0 0 0 1px #c7d2fe; }
+.cpco__check {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px;
+  background: #dcfce7; color: #15803d; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.cpco__row-title {
+  font-size: 13.5px; color: #1f2937; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cpco__tag {
+  flex-shrink: 0; font-size: 11px; font-weight: 600; color: #64748b;
+  background: #f1f5f9; border-radius: 6px; padding: 1px 7px;
+}
+.cpco__row-cta { margin-left: auto; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #94a3b8; }
+.cpco__expand { padding: 2px 10px 8px 38px; }
+
+/* Dashboard assessment cross-check count line */
+.cpas-dashboard__linkage {
+  margin-top: 6px;
+  font-size: 12px; color: #64748b;
+}
+.cpas-dashboard__linkage strong { color: #334155; }
+
 /* Round 13 — collapsible sidebar section headers */
 .cpas-list__section-head {
   display: flex; align-items: center; gap: 8px;
@@ -3154,10 +3313,10 @@
 
 .cpas-dashboard {
   flex: 1; overflow-y: auto;
-  padding: 32px 48px 40px;
+  padding: 20px 28px 24px;
   background: #f8fafc;
   display: flex; flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
 .cpas-dashboard__summary {
@@ -3176,18 +3335,18 @@
 }
 
 .cpas-dashboard__tiles {
-  display: flex; flex-direction: column;
+  display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
 .cpas-dashboard__tile {
-  display: flex; align-items: flex-start;
-  gap: 18px;
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 10px;
   width: 100%;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 20px 22px;
+  padding: 14px 16px;
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -3220,10 +3379,9 @@
 
 .cpas-dashboard__tile-icon {
   flex: 0 0 auto;
-  width: 44px; height: 44px;
-  border-radius: 11px;
+  width: 34px; height: 34px;
+  border-radius: 9px;
   display: inline-flex; align-items: center; justify-content: center;
-  margin-top: 2px;
 }
 .cpas-dashboard__tile-icon--add {
   background: #eef2ff; color: #4338ca;
@@ -3276,7 +3434,7 @@
   flex-wrap: wrap;
 }
 .cpas-dashboard__tile-count {
-  font-size: 28px; font-weight: 700;
+  font-size: 22px; font-weight: 700;
   color: #111827; line-height: 1;
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
@@ -3293,7 +3451,11 @@
   font-weight: 500;
 }
 
-.cpas-dashboard__tile-preview {
+/* Preview bullets hidden — the Coverage-by-care-area grid below now carries
+   the "what's in each bucket" detail, so the tiles stay compact and the grid
+   sits above the fold. */
+.cpas-dashboard__tile-preview { display: none; }
+.cpas-dashboard__tile-preview--legacy {
   list-style: none; padding: 0; margin: 6px 0 0;
   display: flex; flex-direction: column; gap: 4px;
 }
@@ -3322,8 +3484,8 @@
 .cpas-dashboard__tile-cta {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: 6px;
-  align-self: center;
-  padding: 8px 12px;
+  align-self: flex-start; margin-top: auto;
+  padding: 6px 10px;
   border-radius: 8px;
   font-size: 13px; font-weight: 600;
   color: #4338ca;
