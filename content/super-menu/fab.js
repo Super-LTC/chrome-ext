@@ -12,9 +12,21 @@ function createBubbles() {
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     </button>
+    <!-- F-Tag Prevention (Survey Readiness) — facility-scoped. Hidden until
+         module-status reports the module is enabled for the current facility. -->
+    <button id="super-ftag-action" class="super-dial__action super-dial__action--ftag" aria-label="F-Tag Prevention" style="display:none;" data-track="fab_clicked" data-track-prop-fab="ftag_prevention">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+    </button>
+    <!-- QM Board FAB — temporarily hidden (kept for easy re-enable). Replaced by F-Tag Prevention above.
     <button id="super-qm-action" class="super-dial__action super-dial__action--qm" aria-label="QM Board" data-track="fab_clicked" data-track-prop-fab="qm_board">QM</button>
+    -->
     <button id="super-24hr-action" class="super-dial__action super-dial__action--24hr" aria-label="24-Hour Report" data-track="fab_clicked" data-track-prop-fab="24hr">24H<span class="super-dial__action-dot" id="super-24hr-dot" style="display:none;"></span></button>
+    <!-- Care Plan Coverage FAB (patient shield) — temporarily hidden (kept for easy re-enable).
     <button id="super-coverage-action" class="super-dial__action super-dial__action--coverage" aria-label="Care Plan Coverage" style="display:none;" data-track="fab_clicked" data-track-prop-fab="coverage">CP</button>
+    -->
     <button id="super-mds-action" class="super-dial__action super-dial__action--mds" aria-label="MDS" data-track="fab_clicked" data-track-prop-fab="mds">
       MDS
       <span class="super-dial__action-badge" id="super-mds-badge" style="display:none;"></span>
@@ -34,7 +46,7 @@ function createBubbles() {
   const mainBtn = document.getElementById('super-bubble-main');
   const mdsAction = document.getElementById('super-mds-action');
   const chatAction = document.getElementById('super-chat-action');
-  const qmAction = document.getElementById('super-qm-action');
+  const ftagAction = document.getElementById('super-ftag-action');
 
   mainBtn.addEventListener('click', () => {
     if (hasDragged) {
@@ -54,28 +66,41 @@ function createBubbles() {
     }
   });
 
-  // Coverage button → toggles Care Plan Coverage panel
-  const coverageAction = document.getElementById('super-coverage-action');
-  coverageAction.addEventListener('click', (e) => {
+  // F-Tag Prevention button → toggles the Survey Readiness overlay
+  ftagAction.addEventListener('click', (e) => {
     e.stopPropagation();
     container.classList.remove('super-dial--open');
-    if (CoveragePanelLauncher.isOpen()) {
-      CoveragePanelLauncher.close();
+    if (FTagPreventionLauncher.isOpen()) {
+      FTagPreventionLauncher.close();
     } else {
-      CoveragePanelLauncher.open();
+      FTagPreventionLauncher.open();
     }
   });
 
+  // Coverage button → toggles Care Plan Coverage panel
+  // TEMPORARILY DISABLED — care plan FAB hidden (see commented button above).
+  // const coverageAction = document.getElementById('super-coverage-action');
+  // coverageAction.addEventListener('click', (e) => {
+  //   e.stopPropagation();
+  //   container.classList.remove('super-dial--open');
+  //   if (CoveragePanelLauncher.isOpen()) {
+  //     CoveragePanelLauncher.close();
+  //   } else {
+  //     CoveragePanelLauncher.open();
+  //   }
+  // });
+
   // QM Board button → toggles QM Board modal
-  qmAction.addEventListener('click', (e) => {
-    e.stopPropagation();
-    container.classList.remove('super-dial--open');
-    if (QMBoardLauncher.isOpen()) {
-      QMBoardLauncher.close();
-    } else {
-      QMBoardLauncher.open();
-    }
-  });
+  // TEMPORARILY DISABLED — QM FAB hidden, replaced by F-Tag Prevention (see commented button above).
+  // qmAction.addEventListener('click', (e) => {
+  //   e.stopPropagation();
+  //   container.classList.remove('super-dial--open');
+  //   if (QMBoardLauncher.isOpen()) {
+  //     QMBoardLauncher.close();
+  //   } else {
+  //     QMBoardLauncher.open();
+  //   }
+  // });
 
   // 24-Hour Report button → toggles report panel
   const twentyFourHrAction = document.getElementById('super-24hr-action');
@@ -116,6 +141,12 @@ function createBubbles() {
 
   // Show/hide patient button based on context
   updateBubblesContext();
+
+  // PCC chrome (#pccFacLink) may not be present the instant the FAB mounts on a
+  // fresh page load, so the F-Tag module-status check can't resolve a facility
+  // yet. Retry a few times until facility context appears (then the cache keeps
+  // it to one request per facility).
+  retryFtagModuleStatus();
 
   // Load badge count
   updateMDSBadge();
@@ -170,6 +201,68 @@ function updateBubblesContext() {
 
   const coverageAction = document.getElementById('super-coverage-action');
   if (coverageAction) coverageAction.style.display = isPatientPage ? '' : 'none';
+
+  // F-Tag Prevention FAB is gated per-facility by the module-status endpoint.
+  updateFtagModuleStatus();
+}
+
+// Per-facility cache of the F-Tag module flag so navigation within the same
+// facility doesn't re-hit the endpoint. Key = `${orgSlug}::${facilityName}`.
+const _ftagModuleStatusCache = new Map();
+
+// Resolve facility/org, ask the backend whether F-Tag Prevention is enabled for
+// this facility, and show/hide the FAB accordingly. The button stays hidden
+// unless the endpoint explicitly reports `enabled: true`.
+async function updateFtagModuleStatus() {
+  const btn = document.getElementById('super-ftag-action');
+  if (!btn) return;
+
+  let facilityName, orgSlug;
+  try {
+    facilityName = getChatFacilityInfo();
+    orgSlug = getOrg()?.org;
+  } catch (_) { /* fall through */ }
+
+  // No facility context yet (org-level page, or PCC chrome not loaded) → keep hidden.
+  if (!facilityName || !orgSlug) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  const key = `${orgSlug}::${facilityName}`;
+  if (_ftagModuleStatusCache.has(key)) {
+    btn.style.display = _ftagModuleStatusCache.get(key) ? '' : 'none';
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    const res = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/ftag-prevention/module-status?${params}`,
+      options: { method: 'GET' },
+    });
+    // Background wraps as { success, data: <server envelope> }.
+    const enabled = res?.success === true && res?.data?.enabled === true;
+    _ftagModuleStatusCache.set(key, enabled);
+    btn.style.display = enabled ? '' : 'none';
+  } catch (err) {
+    console.warn('[FTagPrevention] module-status check failed:', err);
+    btn.style.display = 'none';
+  }
+}
+
+// Poll for facility context a few times after mount, then run the status check
+// once it's available. Stops as soon as a facility resolves (or after ~5s).
+function retryFtagModuleStatus(attempt = 0) {
+  let hasFacility = false;
+  try { hasFacility = !!(getChatFacilityInfo() && getOrg()?.org); } catch (_) {}
+  if (hasFacility) {
+    updateFtagModuleStatus();
+    return;
+  }
+  if (attempt >= 10) return; // ~5s of retries at 500ms
+  setTimeout(() => retryFtagModuleStatus(attempt + 1), 500);
 }
 
 // Module-level hasDragged so the main button click handler can read it
@@ -399,6 +492,84 @@ const QMBoardLauncher = {
       this._preactUnmount = () => render(null, overlayEl);
     } catch (err) {
       console.error('[QMBoard] Failed to load module:', err);
+      overlayEl.remove();
+      this._overlayEl = null;
+    }
+  },
+
+  close() {
+    if (this._escapeHandler) {
+      document.removeEventListener('keydown', this._escapeHandler);
+      this._escapeHandler = null;
+    }
+    if (this._preactUnmount) {
+      this._preactUnmount();
+      this._preactUnmount = null;
+    }
+    if (this._overlayEl) {
+      this._overlayEl.remove();
+      this._overlayEl = null;
+    }
+  },
+
+  isOpen() { return !!this._overlayEl; }
+};
+
+// F-Tag Prevention Launcher — dynamic import pattern (same as QMBoardLauncher).
+// Facility-scoped: shows the building the nurse is currently in (read from PCC).
+// Cross-building / regional view lives in the web dashboard, not here.
+const FTagPreventionLauncher = {
+  _overlayEl: null,
+  _preactUnmount: null,
+
+  async open() {
+    if (this._overlayEl) return;
+
+    let facilityName, orgSlug;
+    try {
+      const orgResponse = getOrg();
+      orgSlug = orgResponse?.org;
+      facilityName = getChatFacilityInfo();
+    } catch (e) {
+      console.error('[FTagPrevention] Could not get org/facility:', e);
+    }
+
+    if (!facilityName || !orgSlug) {
+      if (typeof SuperToast?.show === 'function') {
+        SuperToast.show({
+          message: 'Could not detect facility — open a PointClickCare facility page first.',
+          type: 'error'
+        });
+      }
+      return;
+    }
+
+    const overlayEl = document.createElement('div');
+    overlayEl.id = 'ftag-prevention-overlay';
+    document.body.appendChild(overlayEl);
+    this._overlayEl = overlayEl;
+
+    this._escapeHandler = (e) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this._escapeHandler);
+
+    try {
+      const [{ render, h }, { FtagBoard }] = await Promise.all([
+        import('preact'),
+        import('../modules/ftag-prevention/FtagBoard.jsx')
+      ]);
+
+      render(
+        h(FtagBoard, {
+          facilityName: facilityName || '',
+          orgSlug: orgSlug || '',
+          onClose: () => this.close()
+        }),
+        overlayEl
+      );
+
+      this._preactUnmount = () => render(null, overlayEl);
+    } catch (err) {
+      console.error('[FTagPrevention] Failed to load module:', err);
       overlayEl.remove();
       this._overlayEl = null;
     }
@@ -795,5 +966,6 @@ window.updateBubblesContext = updateBubblesContext;
 window.ChatOverlayLauncher = ChatOverlayLauncher;
 window.CoveragePanelLauncher = CoveragePanelLauncher;
 window.QMBoardLauncher = QMBoardLauncher;
+window.FTagPreventionLauncher = FTagPreventionLauncher;
 window.TwentyFourHourReportLauncher = TwentyFourHourReportLauncher;
 window.FeedbackLauncher = FeedbackLauncher;
