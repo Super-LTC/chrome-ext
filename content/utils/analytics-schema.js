@@ -44,6 +44,8 @@ export const EVENT_SCHEMA = {
   pdpm_analyzer_opened: ['source'],
   dx_confirmation_opened: ['source', 'dx_count'],
   cert_view_opened: ['source'],
+  cert_discharged_tab_opened: ['source'],
+  cert_discharged_load_more: ['page'],
   care_plan_coverage_opened: ['source'],
   care_plan_stamp_submitted: ['source'],
   rounding_reports_opened: ['source'],
@@ -69,6 +71,13 @@ export const EVENT_SCHEMA = {
   //   'pdpm_sidebar'        — PDPM Analyzer item detail view
   // `has_reason` only applies to disagree.
   mds_item_decision: ['item_code', 'column', 'decision', 'has_reason', 'surface'],
+
+  // "Run it" on-demand pipeline (assessment not synced / unsolved → trigger a
+  // hard sync + full solver run). `surface`: 'section_overlay' | 'pdpm_analyzer'.
+  // `code`: originating 404 — 'ASSESSMENT_NOT_FOUND' | 'NO_RUN_YET'.
+  mds_run_triggered: ['surface', 'code'],
+  mds_run_completed: ['surface', 'code', 'sections_total', 'duration_ms_bucket'],
+  mds_run_failed: ['surface', 'code', 'duration_ms_bucket'],
 
   facility_dashboard_tab_switched: ['from_tab', 'to_tab'],
   facility_dashboard_resident_clicked: [],
@@ -144,6 +153,70 @@ export const EVENT_SCHEMA = {
   pcc_page_viewed: ['page_type', 'section', 'has_patient_context'],
   error_shown: ['surface', 'error_code', 'error_type'],
   error_caught: ['surface', 'error_code'],
+
+  // === Care Plan — Initial (auto-pop) flow ===
+  // patient_id / focus_id (patient-linked record ids) and `detail` (clinical
+  // free-text) are deliberately NOT listed — the guardrail would strip them and
+  // we don't want them anyway. Counts, buckets, and `scope` (initial|single)
+  // carry the analytical signal.
+  care_plan_autopop_button_clicked: [],
+  care_plan_autopop_modal_opened: ['n_proposed', 'n_already_on_plan'],
+  care_plan_autopop_stamp_clicked: ['scope', 'n_focuses_to_stamp', 'n_focuses_skipped'],
+  care_plan_autopop_stamped: ['scope', 'n_proposed', 'n_stamped', 'n_goals', 'n_interventions', 'n_failed', 'duration_ms'],
+  care_plan_autopop_library_focus_added: [],
+  care_plan_autopop_view_care_plan_clicked: [],
+
+  // === Care Plan — Comprehensive (audit) flow ===
+  care_plan_audit_opened_from_button: ['n_existing_focus_texts'],
+  care_plan_audit_opened_from_banner: [],
+  care_plan_audit_opened_from_review_page: [],
+  care_plan_audit_modal_opened: ['n_to_add', 'n_to_verify', 'n_to_remove', 'has_coverage_check_data'],
+  care_plan_audit_dashboard_viewed: [],
+  care_plan_audit_step_entered: ['step', 'bucket'],
+  care_plan_audit_step_exited: ['from_step'],
+  care_plan_audit_scope_toggled: ['from_mode', 'to_mode'],
+  care_plan_audit_item_resolved: ['from_bucket'],
+  care_plan_audit_item_skipped: ['rule_id'],
+  // NOTE: emit call is currently MISSING in code — VerifyBucketPane comments
+  // claim it's tracked in the modal's _verifyAuditItem handler, but neither the
+  // handler nor the track() call exist. Allowlisted so it works once wired up.
+  care_plan_audit_item_verified: ['from_bucket'],
+  care_plan_audit_verify_dismissed: ['kind'],
+  care_plan_audit_partial_stamped: ['source', 'n_interventions', 'caa'],
+  care_plan_audit_remove_kept: [],
+  care_plan_audit_remove_kept_click: [],
+  care_plan_audit_commit: ['source'],
+  care_plan_audit_commit_stamped: ['scope', 'n_focuses', 'n_goals', 'n_interventions'],
+
+  // === F-Tag Prevention ===
+  // `ftag` is the survey tag code (e.g. "F684") — categorical.
+  ftag_prevention_opened: ['source'],
+  ftag_filter_clicked: ['ftag'],
+  ftag_finding_resolved: ['ftag', 'resolution_type'],
+  ftag_finding_snoozed: ['ftag', 'days'],
+  ftag_finding_unsnoozed: ['ftag'],
+  ftag_finding_reopened: ['ftag'],
+  ftag_finding_progress_note_opened: ['ftag'],
+  ftag_finding_progress_note: ['ftag'],
+  ftag_view_source: ['ftag'],
+  ftag_open_patient: ['ftag'],
+  ftag_open_pcc_chart: ['ftag'],
+  ftag_open_pcc_order: ['ftag'],
+  ftag_unsnooze_clicked: ['ftag'],
+  ftag_reopen_clicked: ['ftag'],
+
+  // === ICD-10 dismiss ===
+  icd10_code_dismissed: ['code', 'origin'],
+  icd10_code_undismissed: ['code', 'origin'],
+
+  // === Query print / urgent notify ===
+  query_print_started: ['item_code'],
+  query_print_succeeded: ['duration_ms'],
+  query_print_failed: ['error_code'],
+  query_urgent_notify_failed: ['error_code'],
+
+  // === Certifications ===
+  cert_view_document: ['cert_type'],
 
   // === Meta (PHI guardrail tripwire) ===
   phi_guardrail_tripped: ['event_name', 'prop_name', 'pattern'],
