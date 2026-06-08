@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
 import { useCertifications } from './hooks/useCertifications.js';
+import { useDischargedCerts } from './hooks/useDischargedCerts.js';
 import { StayGroupCard } from './components/StayGroupCard.jsx';
 import { SendCertModal } from './components/SendCertModal.jsx';
 import { SkipCertModal } from './components/SkipCertModal.jsx';
@@ -23,7 +24,40 @@ const SUB_TABS = [
   { id: 'overdue', label: 'Overdue' },
   { id: 'dueSoon', label: 'Due Soon' },
   { id: 'signed', label: 'Signed' },
+  { id: 'discharged', label: 'Discharged' },
 ];
+
+/**
+ * Adapt a discharged-endpoint patient object into the stay-grouped shape
+ * StayGroupCard/CertListRow consume. Enriches each cert with the patient-level
+ * fields those components read (name, payer, start date, external id) and shows
+ * the full chain inline (archive view — signed rows render quiet).
+ */
+function adaptDischargedPatient(p) {
+  const enriched = (p.certs || []).map(c => ({
+    ...c,
+    partAStayId: p.stayId,
+    patientName: p.patientName,
+    patientExternalId: p.patientExternalId,
+    payerType: p.payerType,
+    partAStartDate: p.partAStartDate,
+  }));
+  enriched.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+  return {
+    stayId: p.stayId,
+    dischargeDate: p.endDate,
+    outstandingCount: p.outstandingCount || 0,
+    displayCerts: enriched,
+    historyCerts: [],
+    allCerts: enriched,
+  };
+}
+
+function matchesStayTypePayer(payerType, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'managed') return payerType === 'managed_care';
+  return payerType !== 'managed_care';
+}
 
 /** Lower score = more urgent. Used to sort stay groups. */
 function getCertSortKey(cert) {
@@ -73,10 +107,34 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
     facilityName, orgSlug, patientId, status: 'signed'
   });
 
+  // Discharged tab — lazy, paginated, patient-grouped (separate endpoint).
+  // Only fetches once the tab is first opened.
+  const {
+    patients: dischargedPatients,
+    hasMore: dischargedHasMore,
+    loading: dischargedLoading,
+    loadingMore: dischargedLoadingMore,
+    error: dischargedError,
+    loadMore: dischargedLoadMore,
+    refetch: refetchDischarged,
+  } = useDischargedCerts({
+    facilityName, orgSlug, enabled: activeSubTab === 'discharged'
+  });
+
+  // Fire-once when the Discharged tab is first opened.
+  const [dischargedOpened, setDischargedOpened] = useState(false);
+  useEffect(() => {
+    if (activeSubTab === 'discharged' && !dischargedOpened) {
+      setDischargedOpened(true);
+      track('cert_discharged_tab_opened', { source: 'mds_cc' });
+    }
+  }, [activeSubTab, dischargedOpened]);
+
   const refetchAll = useCallback(() => {
     refetchActive();
     refetchSigned();
-  }, [refetchActive, refetchSigned]);
+    refetchDischarged(); // no-op until the discharged tab has loaded
+  }, [refetchActive, refetchSigned, refetchDischarged]);
 
   // Filter certs by stay type
   const filteredActive = useMemo(
@@ -197,6 +255,22 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
     return groups;
   }, [filteredActive, filteredSigned, activeSubTab]);
 
+  // Discharged groups (already patient-grouped + newest-first from backend).
+  // Apply the same stay-type filter as the other tabs.
+  const dischargedGroups = useMemo(
+    () => dischargedPatients
+      .filter(p => matchesStayTypePayer(p.payerType, stayTypeFilter))
+      .map(adaptDischargedPatient),
+    [dischargedPatients, stayTypeFilter]
+  );
+
+  // Tab badge for Discharged = the actionable subset (outstanding certs), 0 until loaded.
+  const dischargedOutstanding = useMemo(
+    () => dischargedGroups.reduce((sum, g) => sum + g.outstandingCount, 0),
+    [dischargedGroups]
+  );
+  const tabCounts = { ...counts, discharged: dischargedOutstanding };
+
   // Action handlers
   async function handleSkipCert(reason) {
     await window.CertAPI.skipCert(skipCert.id, reason);
@@ -263,6 +337,12 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
     });
   }
 
+  function handleDischargedLoadMore() {
+    track('cert_discharged_load_more', { page: Math.floor(dischargedPatients.length / 10) });
+    dischargedLoadMore();
+  }
+
+  const isDischarged = activeSubTab === 'discharged';
   const loading = activeSubTab === 'signed' ? signedLoading : activeLoading;
 
 
@@ -307,7 +387,8 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           ))}
         </div>
         <div class="cert__sub-tabs">
-          {SUB_TABS.map(tab => (
+          {/* Discharged is a facility-wide archive; hide it in per-patient overlay */}
+          {SUB_TABS.filter(tab => tab.id !== 'discharged' || !patientId).map(tab => (
             // NO_TRACK
             <button
               key={tab.id}
@@ -315,8 +396,8 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
               onClick={() => setActiveSubTab(tab.id)}
             >
               {tab.label}
-              {counts[tab.id] > 0 && (
-                <span class="cert__sub-tab-count">{counts[tab.id]}</span>
+              {tabCounts[tab.id] > 0 && (
+                <span class={`cert__sub-tab-count${tab.id === 'discharged' ? ' cert__sub-tab-count--due' : ''}`}>{tabCounts[tab.id]}</span>
               )}
             </button>
           ))}
@@ -325,14 +406,15 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
 
       {/* Content */}
       <div class="cert__list">
-        {loading && (
+        {/* Active / signed tabs */}
+        {!isDischarged && loading && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__spinner" />
             <p class="mds-cc__state-text">Loading certifications...</p>
           </div>
         )}
 
-        {!loading && activeError && (
+        {!isDischarged && !loading && activeError && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__state-icon">{'\u26A0'}</div>
             <p class="mds-cc__state-text">{activeError}</p>
@@ -341,7 +423,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           </div>
         )}
 
-        {!loading && !activeError && stayGroups.length === 0 && (
+        {!isDischarged && !loading && !activeError && stayGroups.length === 0 && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__state-icon">{activeSubTab === 'overdue' ? '\u2705' : '\u{1F4CB}'}</div>
             <p class="mds-cc__state-text">
@@ -354,7 +436,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           </div>
         )}
 
-        {!loading && !activeError && stayGroups.map(group => (
+        {!isDischarged && !loading && !activeError && stayGroups.map(group => (
           <StayGroupCard
             key={group.stayId}
             stayId={group.stayId}
@@ -370,6 +452,60 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
             onViewPractitioner={(practId) => setWorkloadPractitionerId(practId)}
           />
         ))}
+
+        {/* Discharged tab \u2014 archive of ended Part A stays, paginated */}
+        {isDischarged && dischargedLoading && (
+          <div class="mds-cc__state-container">
+            <div class="mds-cc__spinner" />
+            <p class="mds-cc__state-text">Loading discharged patients...</p>
+          </div>
+        )}
+
+        {isDischarged && !dischargedLoading && dischargedError && (
+          <div class="mds-cc__state-container">
+            <div class="mds-cc__state-icon">{'\u26A0'}</div>
+            <p class="mds-cc__state-text">{dischargedError}</p>
+            {/* NO_TRACK */}
+            <button class="mds-cc__retry-btn" onClick={refetchDischarged}>Retry</button>
+          </div>
+        )}
+
+        {isDischarged && !dischargedLoading && !dischargedError && dischargedGroups.length === 0 && (
+          <div class="mds-cc__state-container">
+            <div class="mds-cc__state-icon">{'\u{1F4CB}'}</div>
+            <p class="mds-cc__state-text">No discharged patients</p>
+          </div>
+        )}
+
+        {isDischarged && !dischargedLoading && !dischargedError && dischargedGroups.map(group => (
+          <StayGroupCard
+            key={group.stayId}
+            stayId={group.stayId}
+            displayCerts={group.displayCerts}
+            historyCerts={group.historyCerts}
+            allCerts={group.allCerts}
+            dischargeDate={group.dischargeDate}
+            outstandingCount={group.outstandingCount}
+            onSend={(c) => setSendCert(c)}
+            onSkip={(c) => setSkipCert(c)}
+            onDelay={(c) => setDelayCert(c)}
+            onUnskip={handleUnskip}
+            onRevoke={(c) => setRevokeCert(c)}
+            onEditReason={(c) => setEditCert(c)}
+            onViewPractitioner={(practId) => setWorkloadPractitionerId(practId)}
+          />
+        ))}
+
+        {isDischarged && !dischargedLoading && !dischargedError && dischargedHasMore && (
+          // NO_TRACK
+          <button
+            class="cert__load-more"
+            onClick={handleDischargedLoadMore}
+            disabled={dischargedLoadingMore}
+          >
+            {dischargedLoadingMore ? 'Loading\u2026' : 'Load more'}
+          </button>
+        )}
       </div>
 
       {/* Modals */}

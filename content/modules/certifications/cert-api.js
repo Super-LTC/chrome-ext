@@ -51,6 +51,37 @@ const CertAPI = {
   },
 
   /**
+   * Fetch a page of discharged patients (ended Part A stays), newest-discharge-first.
+   * Patient-grouped + paginated — distinct shape from fetchCertifications.
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @param {Object} [opts]
+   * @param {number} [opts.limit=10] - page size (max 50 server-side)
+   * @param {number} [opts.offset=0] - for "load more", pass offset += limit
+   * @returns {Promise<{discharged: Array, hasMore: boolean, limit: number, offset: number}>}
+   */
+  async fetchDischarged(facilityName, orgSlug, { limit = 10, offset = 0 } = {}) {
+    const params = new URLSearchParams({ facilityName, orgSlug, limit, offset });
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/discharged?${params}`,
+      options: { method: 'GET' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch discharged certifications');
+    }
+
+    const data = response.data || {};
+    return {
+      discharged: data.discharged || [],
+      hasMore: !!data.hasMore,
+      limit: data.limit ?? limit,
+      offset: data.offset ?? offset,
+    };
+  },
+
+  /**
    * Fetch cert chain for a specific patient
    * @param {string} facilityName
    * @param {string} orgSlug

@@ -61,6 +61,8 @@ export function StayGroupCard({
   onRevoke,
   onEditReason,
   onViewPractitioner,
+  dischargeDate,        // discharged tab: ISO date of the ended Part A stay
+  outstandingCount,     // discharged tab: # certs still unsigned (pending/sent/delayed)
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -86,8 +88,18 @@ export function StayGroupCard({
           <span class="cert__stay-patient">{patientName}</span>
           <StayTypeBadge payerType={payerType} />
           <ChainIndicator allCerts={allCerts} />
+          {outstandingCount > 0 && (
+            <span class="cert__stay-due-badge">
+              {outstandingCount} cert{outstandingCount !== 1 ? 's' : ''} still due
+            </span>
+          )}
         </div>
         <div class="cert__stay-header-right">
+          {dischargeDate && (
+            <span class="cert__stay-meta cert__stay-meta--discharged">
+              Discharged {formatShortDate(dischargeDate)}
+            </span>
+          )}
           {currentMedicareDay != null && (
             <span class="cert__stay-meta">Day {currentMedicareDay}</span>
           )}

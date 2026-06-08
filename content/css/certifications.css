@@ -138,6 +138,16 @@
   color: #fff;
 }
 
+/* Discharged tab badge = outstanding (compliance-relevant) cert count */
+.cert__sub-tab-count--due {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.cert__sub-tab--active .cert__sub-tab-count--due {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
 /* ── Cert list container ── */
 .cert__list {
   padding: 6px 0 12px;
@@ -212,6 +222,50 @@
   color: #6b7280;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.cert__stay-meta--discharged {
+  color: #9333ea;
+  font-weight: 600;
+}
+
+/* "X certs still due" badge on discharged patients with outstanding certs */
+.cert__stay-due-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 9px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* "Load more" button for the paginated Discharged tab */
+.cert__load-more {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 10px 12px 4px;
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cert__load-more:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+.cert__load-more:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* ── Chain indicator (always visible in header) ── */
