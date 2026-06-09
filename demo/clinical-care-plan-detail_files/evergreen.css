@@ -1,0 +1,94 @@
+/*
+	All Evergreen styles are applied only to DOM elements descending from an element with the class name "evergreen" (typically the body tag or a section tag)
+*/
+
+/*
+	Colors:
+		Background Accent Green:
+			Main: rgba(151,204,4,1);
+			Dark: rgba(44,115,0,1);
+			Light: rgba(206,230,150,0.5);
+		Background Surfaces:
+			Base: rgba(255,255,255,1);
+			Dark: rgba(245,245,245,1);
+			Scrim: rgba(0,0,0,0.5);
+*/
+
+.evergreen{
+	box-sizing:border-box;
+	color:rgba(0,0,0,0.88);
+	font-family:var(--pcc-evergreen-font-family) !important;
+	font-size:16px;
+	font-weight:400;
+	letter-spacing:0.15px;
+	line-height:24px;
+}
+
+/* Tables need to be explicitly declared to inherit font styles */
+.evergreen td{
+	font-family:var(--pcc-evergreen-font-family) !important;
+	font-size:14px;
+	font-weight:400;
+	letter-spacing:0.25px;
+	line-height:20px;
+}
+.evergreen th{
+	font-size:12px;
+	font-weight:500 !important;
+	letter-spacing:0.4px;
+	line-height:16px;
+}
+
+/* Page Title */
+.evergreen .pageTitle{
+	display:inline-block;
+	font-size:28px;
+	font-weight:400;
+	line-height:34px;
+	letter-spacing:-0.15px;
+	padding:24px;
+}
+
+/* Section Title "Table headers" */
+.evergreen .pccModuleHeader{
+	font-size:20px;
+	font-weight:500;
+	line-height:28px;
+}
+
+/* Tabs */
+.evergreen ul.pccTabs > li > a{
+	font-family:var(--pcc-evergreen-font-family) !important;
+	font-size:14px;
+	font-weight:500 !important;
+	letter-spacing:1.25px;
+	line-height:16px;
+}
+
+
+/* FORMS */
+
+/* Override Select elements font */
+.evergreen select{
+	font-family:var(--pcc-evergreen-font-family) !important;
+}
+
+
+/* Handle jQuery UI DatePicker rendering in Evergreen contexts */
+.evergreen div.ui-datepicker *{
+  font-family:var(--pcc-body-text-font-family) !important;
+  font-size:var(--pcc-body-text-font-size) !important;
+  letter-spacing:normal;
+  line-height:normal;
+  font-weight:normal;
+}
+/* DatePicker default width is in em units, override to the computed size */
+.evergreen div.ui-datepicker{
+  width:225px;
+}
+.evergreen div.ui-datepicker a{
+  font-weight:bold;
+}
+.evergreen div.ui-datepicker button{
+  font-weight:bold;
+}

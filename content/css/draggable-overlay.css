@@ -1,0 +1,17 @@
+/* Draggable overlay handles — grab cursor on headers */
+
+.super-draggable-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.super-draggable-handle:active,
+.super-draggable--dragging .super-draggable-handle {
+  cursor: grabbing;
+}
+
+.super-draggable--dragging {
+  transition: none !important;
+  animation: none !important;
+}

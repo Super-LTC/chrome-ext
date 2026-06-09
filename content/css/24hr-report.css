@@ -205,6 +205,339 @@
   background: #f9fafb;
 }
 
+/* Schedule settings — visible bar + popover */
+
+.thr__settings-wrap {
+  position: relative;
+  margin-top: 10px;
+}
+
+.thr__schedule-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.thr__schedule-trigger:hover:not(:disabled),
+.thr__schedule-trigger.is-open {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.thr__schedule-trigger:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.thr__schedule-trigger:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.thr__schedule-trigger-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.thr__schedule-trigger-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.35;
+}
+
+.thr__schedule-trigger-text strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.thr__schedule-trigger-action {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.thr__schedule-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.18),
+              0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.thr__schedule-head {
+  margin-bottom: 12px;
+}
+
+.thr__schedule-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.thr__schedule-presets-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.thr__schedule-presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.thr__preset-pill {
+  flex: 1 1 0;
+  padding: 8px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__preset-pill:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.thr__preset-pill.is-selected {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px #2563eb;
+}
+
+.thr__preset-pill:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.thr__schedule-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+}
+
+.thr__schedule-more-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.thr__schedule-current-pick {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.thr__schedule-current-pick strong {
+  color: #111827;
+}
+
+.thr__hour-picker {
+  margin-top: 10px;
+}
+
+.thr__hour-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.thr__hour-pill {
+  padding: 7px 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+}
+
+.thr__hour-pill:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.thr__hour-pill.is-selected {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.thr__hour-pill:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.thr__hour-pill:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.thr__schedule-help {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.thr__schedule-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.thr__schedule-reset-btn {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  color: #2563eb;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+}
+
+.thr__schedule-reset-btn:hover:not(:disabled) {
+  color: #1d4ed8;
+}
+
+.thr__schedule-reset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.thr__schedule-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.thr__schedule-cancel {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.thr__schedule-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.thr__schedule-save {
+  padding: 6px 14px;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.thr__schedule-save:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.thr__schedule-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.thr__schedule-save:focus-visible,
+.thr__schedule-cancel:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.thr__schedule-loading,
+.thr__schedule-error {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.thr__schedule-error {
+  color: #7f1d1d;
+  text-align: center;
+}
+
+.thr__schedule-error button {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.thr__schedule-inline-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
 /* Severity strip */
 
 .thr__severity-strip {

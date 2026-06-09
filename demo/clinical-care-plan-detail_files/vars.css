@@ -1,0 +1,201 @@
+:root {
+  /* Branded colors */
+  --pcc-primary-accent-color-main:#899B70;
+  --pcc-primary-accent-color-dark:#435030;
+  --pcc-primary-accent-color-medium:#b3e3e7;
+  --pcc-primary-accent-color-light:#c8d4b7;
+
+  --pcc-primary-accent-color-main-bevelled-light:#a3b88a;
+  --pcc-primary-accent-color-main-bevelled-dark:#6f7a4e;
+
+  /* Standard fonts/colors/sizes */
+  --pcc-body-text-color:rgba(0,0,0,0.88);
+  --pcc-hint-text-color:#4b483e;
+
+  --pcc-overlay-mask-color-dark:rgba(0,0,0,0.35);
+  --pcc-overlay-mask-color-light:rgba(1,1,1,0.35);
+
+  --pcc-fixed-width-font-family:"Courier New",Courier,monospace;
+  --pcc-variable-font-family:Arial,Helvetica,sans-serif;
+
+  --pcc-body-text-font-family:var(--pcc-variable-font-family);
+  --pcc-body-text-font-size:9pt;
+
+  --pcc-poc-body-text-font-family:var(--pcc-variable-font-family);
+
+  /* Form Fields */
+  --pcc-field-fixed-width-font-family:var(--pcc-fixed-width-font-family);
+  --pcc-field-variable-font-family:var(--pcc-variable-font-family);
+  --pcc-field-bg-color:#fff;
+  --pcc-field-border:1px solid rgba(0,0,0,0.42);
+  --pcc-field-border-focus:1px solid #6B804D;
+  --pcc-field-border-hover:1px solid rgba(0,0,0,1);
+  --pcc-field-border-disabled:1px solid #c3c3c3;
+  --pcc-field-border-readonly:1px solid #c3c3c3;
+  --pcc-field-box-shadow-focus:0 0 5px rgba(200,212,183,1);
+  --pcc-field-color-disabled:#666;
+  --pcc-field-color-readonly:#666;
+  --pcc-field-font-size:9pt;
+
+  /* Buttons */
+  --pcc-button-background-image:linear-gradient(to bottom, #fcfcfc 0, #cfcfcf 100%);
+  --pcc-button-border-color:#707070;
+  --pcc-button-text-color:#333;
+  --pcc-button-font-family:var(--pcc-field-variable-font-family);
+  --pcc-button-font-size:10pt;
+
+  --pcc-button-background-image-disabled:linear-gradient(to bottom, #fcfcfc 0, #cfcfcf 100%);
+  --pcc-button-background-image-hover:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.25) 100%);
+  --pcc-button-background-image-focus:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.25) 100%);
+  --pcc-button-background-image-active:linear-gradient(to bottom, #fff 0, rgba(0,110,194,0.25) 50%, rgba(0,110,194,0.75) 100%);
+
+  --pcc-button-border-color-disabled:#bbb;
+  --pcc-button-border-color-hover:#3f76b7;
+  --pcc-button-border-color-focus:#3f76b7;
+  --pcc-button-border-color-active:#3f76b7;
+  --pcc-button-color-disabled:#666;
+  --pcc-button-color-active:#111;
+
+  --pcc-split-button-background-image:url('/assets/core/images/forms/pcc-core-split-button-sprite.png');
+
+  /* checkbox */
+  --pcc-checkbox-border-color:#435030;
+  --pcc-checkbox-color:#435030;
+
+  /* Tables */
+  --pcc-table-header-bg-image:linear-gradient(to bottom, #fcfcfc 0, #cfcfcf 100%);
+  --pcc-table-header-sortable-bg-image-hover:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.20) 50%, rgba(0,110,194,0.35) 100%);
+  --pcc-table-header-sortable-sorted-bg-image:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.15) 50%, rgba(0,110,194,0.25) 90%, rgba(0,110,194,0.3) 100%);
+  --pcc-table-header-sortable-sorted-asc-bg-image:url('/images/core/results/sortedAscending.gif');
+  --pcc-table-header-sortable-sorted-desc-bg-image:url('/images/core/results/sortedDescending.gif');
+
+  --pcc-filter-bar-button-bg-image:linear-gradient(to bottom, #fcfcfc 0, #cfcfcf 100%);
+  --pcc-filter-bar-button-bg-image-hover:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.25) 100%);
+  --pcc-filter-bar-button-bg-image-focus:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.25) 100%);
+  --pcc-filter-bar-button-bg-image-selected:linear-gradient(to bottom, #fff 0, rgba(0,110,194,0.25) 50%, rgba(0,110,194,0.75) 100%);
+  --pcc-filter-bar-button-bg-image-active:linear-gradient(to bottom, #fff 0, rgba(0,110,194,0.25) 50%, rgba(0,110,194,0.75) 100%);
+  --pcc-filter-bar-button-border-color:#707070;
+  --pcc-filter-bar-button-border-color-hover:rgba(0,110,194,1);
+  --pcc-filter-bar-button-border-color-focus:rgba(0,110,194,1);
+  --pcc-filter-bar-button-border-color-selected:rgba(0,110,194,1);
+  --pcc-filter-bar-button-border-color-active:rgba(0,110,194,1);
+
+  --pcc-pagination-button-bg-image-focus:linear-gradient(to bottom, #fcfcfc 0, rgba(0,110,194,0.25) 100%);
+  --pcc-pagination-button-bg-image-selected:linear-gradient(to bottom, #fff 0, rgba(0,110,194,0.25) 50%, rgba(0,110,194,0.75) 100%);
+  --pcc-pagination-button-bg-image-active:linear-gradient(to bottom, #fff 0, rgba(0,110,194,0.25) 50%, rgba(0,110,194,0.75) 100%);
+
+  /* Toggle Buttons */
+  --pcc-toggle-button-bg-color-selected:rgba(200,212,183,0.5);
+  --pcc-toggle-button-bg-color-selected-hover:rgba(200,212,183,0.75);
+  --pcc-toggle-button-color-selected:var(--pcc-primary-accent-color-dark);
+  --pcc-toggle-button-color-selected-hover:rgba(60,72,43,1);
+
+  /* Cross Nav Buttons */
+  --pcc-cross-nav-button-bg-color-selected:rgba(200,212,183,0.5);
+  --pcc-cross-nav-button-color-selected:var(--pcc-primary-accent-color-dark);
+
+  /* Links */
+  --pcc-link-color-default:rgba(0,110,194,1);
+  --pcc-link-color-visited:rgba(0,110,194,1);
+  --pcc-link-color-hover:rgba(0,110,194,1);
+  --pcc-link-color-focus:rgba(0,110,194,1);
+  --pcc-link-color-active:rgba(0,110,194,1);
+
+  /* Light link states – typically on dark backgrounds */
+  --pcc-link-color-light-default:#fff;
+  --pcc-link-color-light-visited:#fff;
+  --pcc-link-color-light-hover:#eee;
+  --pcc-link-color-light-focus:#eee;
+  --pcc-link-color-light-active:#eee;
+
+  --pcc-link-subtle-hover-color:rgba(0,110,194,1);
+
+  /* List Items */
+  --pcc-list-item-bg-hover:rgba(0,0,0,0.04);
+  --pcc-list-item-bg-selected:rgba(200,212,183,0.5);
+  --pcc-list-item-bg-selected-hover:rgba(200,212,183,0.75);
+  --pcc-list-item-color-selected:rgba(67,80,48,1);
+
+  /* Blocks */
+  --pcc-unsaved-items-bg-color:#fdf4e7;
+
+  /* App Menu */
+  --pcc-app-menu-tab-bg-color:#fff;
+  --pcc-app-menu-tab-bg-color-hover:rgba(200,212,183,0.5);
+  --pcc-app-menu-tab-bg-color-selected:rgba(200,212,183,1);
+  --pcc-app-menu-tab-bg-color-selected-hover:rgba(197,214,179,1);
+  --pcc-app-menu-tab-border-bottom:2px solid #899b70;
+  --pcc-app-menu-tab-border-bottom-selected:#899b70;
+  --pcc-app-menu-tab-border-background-selected:rgba(200,212,183,1);
+  --pcc-app-menu-tab-border-background-selected-hover:#414042;
+  --pcc-app-menu-tab-color:#fff;
+  --pcc-app-menu-tab-color-selected:var(--pcc-primary-accent-color-dark);
+  --pcc-app-menu-tab-color-hover:rgba(0,160,175,0.04);
+  --pcc-app-menu-subheader-color:var(--pcc-primary-accent-color-main);
+  --pcc-app-menu-divider-color:var(--pcc-primary-accent-color-main);
+
+  /* Facility Menu */
+  --pcc-facility-menu-tab-bg-color-selected:#899b70;
+  --pcc-facility-menu-tab-bg-color-hover:#5f6062;
+  --pcc-facility-menu-tab-bg-color:#414042;
+
+  /* Messages */
+  --pcc-msg-bg-position:8px 12px;
+  --pcc-msg-bg-image-size:24px;
+  --pcc-msg-border:1px solid #333;
+  --pcc-msg-box-shadow:0 3px 1px -2px rgba(0,0,0,0.2),0 2px 2px 0 rgba(0,0,0,0.14),0 1px 5px 0 rgba(0,0,0,0.12);
+  --pcc-msg-padding:16px 8px 14px 40px;
+  --pcc-msg-info-bg-color:#e8f5fc;
+  --pcc-msg-info-bg-image:url("/assets/core/images/msgs/info.svg");
+  --pcc-msg-info-border-color:rgba(51,87,113,1);
+  --pcc-msg-success-bg-color:#eff7ee;
+  --pcc-msg-success-bg-image:url("/assets/core/images/msgs/success.svg");
+  --pcc-msg-success-border-color:rgba(56,111,30,1);
+  --pcc-msg-warn-bg-color:#fdf4e7;
+  --pcc-msg-warn-bg-image:url("/assets/core/images/msgs/warn.svg");
+  --pcc-msg-warn-border-color:rgba(115,84,43,1);
+  --pcc-msg-error-bg-color:#faeeed;
+  --pcc-msg-error-bg-image:url("/assets/core/images/msgs/error.svg");
+  --pcc-msg-error-border-color:rgba(124,72,70,1);
+
+  --pcc-deprecated-msg-bg-position:4px 4px;
+  --pcc-deprecated-msg-bg-image-size:18px;
+  --pcc-deprecated-msg-padding:6px 1px 1px 26px;
+
+  /* POC */
+  --pcc-poc-tab-bg-active:transparent url("/images/poc_tab_green.png?v=1") no-repeat left top;
+
+
+  /* Evergreen Styles */
+  --pcc-evergreen-font-family:PangeaText,Roboto,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+
+  --pcc-evergreen-button-font-family:var(--pcc-evergreen-font-family);
+  --pcc-evergreen-button-font-size:14px;
+
+  --pcc-evergreen-button-bg-color-disabled:rgba(219,219,219,1);
+  --pcc-evergreen-button-border-radius:20px;
+  --pcc-evergreen-button-color-disabled:rgba(135,135,135,1);
+
+  --pcc-evergreen-button-primary-bg-color:rgba(67,80,48,1);
+  --pcc-evergreen-button-primary-bg-color-active:rgba(83,95,65,1);
+  --pcc-evergreen-button-primary-bg-color-focus:rgba(83,95,65,1);
+  --pcc-evergreen-button-primary-bg-color-hover:rgba(82,94,64,1);
+  --pcc-evergreen-button-primary-border:none;
+  --pcc-evergreen-button-primary-color:#fff;
+
+  --pcc-evergreen-button-secondary-bg-color:transparent;
+  --pcc-evergreen-button-secondary-bg-color-active:rgba(200,212,183,1);
+  --pcc-evergreen-button-secondary-bg-color-focus:rgba(200,212,183,0.6);
+  --pcc-evergreen-button-secondary-bg-color-hover:rgba(247,246,246,1);
+  --pcc-evergreen-button-secondary-border:1px solid rgba(0,0,0,0.12);
+  --pcc-evergreen-button-secondary-border-active:1px solid var(--pcc-primary-accent-color-main);
+  --pcc-evergreen-button-secondary-border-focus:1px solid rgba(0,0,0,0.24);
+  --pcc-evergreen-button-secondary-border-hover:1px solid rgba(0,0,0,0.24);
+  --pcc-evergreen-button-secondary-text-color:rgba(67,80,48,1);
+  --pcc-evergreen-button-secondary-text-color-active:rgba(67,80,48,1);
+  --pcc-evergreen-button-secondary-text-color-focus:rgba(67,80,48,1);
+  --pcc-evergreen-button-secondary-text-color-hover:rgba(67,80,48,1);
+
+  --pcc-evergreen-field-border-color-hover:rgba(82,94,64,1);
+
+}

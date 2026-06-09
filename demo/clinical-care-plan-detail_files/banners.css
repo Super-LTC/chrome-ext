@@ -1,0 +1,23 @@
+.greenBanner{
+    background-color:#86b324;
+    color:#fff;
+    font-weight:bold;
+    line-height:36px;
+    padding-left:16px;
+}
+
+.redBanner{
+    background-color:#f00;
+    color:#fff;
+    font-weight:bold;
+    line-height:36px;
+    padding-left:16px;
+}
+
+.yellowBanner{
+    background-color:#e3c300;
+    color:#fff;
+    font-weight:bold;
+    line-height:36px;
+    padding-left:16px;
+}

@@ -72,8 +72,9 @@ export default defineConfig(({ command }) => ({
   ],
   root: '.',
   define: {
-    // Demo doesn't ship analytics — provide a stub so analytics.js loads.
+    // Demo doesn't ship analytics — provide stubs so analytics.js loads.
     __POSTHOG_KEY__: JSON.stringify(''),
+    __ANALYTICS_FORCE_ON__: JSON.stringify(false),
     __DEV_MODE__: true,
   },
   build: {

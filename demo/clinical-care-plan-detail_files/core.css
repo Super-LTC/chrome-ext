@@ -1,0 +1,1513 @@
+body{
+	background-color:#fff;
+	color:var(--pcc-body-text-color);
+	font-family:var(--pcc-body-text-font-family);
+	font-size:var(--pcc-body-text-font-size);
+	margin:0;
+	padding:0;
+}
+form{
+	margin:0;
+}
+
+img{
+	border:0;
+}
+
+/* Fix vertical alignment on old calendar icons */
+img[src="/images/calendar.gif"]{
+	vertical-align:top;
+}
+
+br.clear{
+	clear:both;
+}
+
+a[href], a[onclick]{
+	color:var(--pcc-link-color-default);
+	cursor:pointer;
+	text-decoration:none;
+}
+
+a:link{
+	color:var(--pcc-link-color-default);
+	text-decoration:none;
+}
+
+a:visited{
+	color:var(--pcc-link-color-default);
+}
+a:hover{
+	color:var(--pcc-link-color-hover);
+	text-decoration:underline;
+}
+a:focus{
+	color:var(--pcc-link-color-focus);
+	text-decoration:underline;
+}
+a:active{
+	color:var(--pcc-link-color-active);
+	text-decoration:underline;
+}
+
+a.lightlink:link{
+	color:var(--pcc-link-color-light-default);
+}
+a.lightlink:visited{
+	color:var(--pcc-link-color-light-visited);
+}
+a.lightlink:hover{
+	color:var(--pcc-link-color-light-hover);
+}
+a.lightlink:focus{
+	color:var(--pcc-link-color-light-focus);
+}
+a.lightlink:active{
+	color:var(--pcc-link-color-light-active);
+}
+
+
+td p{
+	margin:0;
+}
+
+.fixedWidthFont{
+	font-family:var(--pcc-fixed-width-font-family);
+}
+.variableWidthFont{
+	font-family:var(--pcc-variable-font-family);
+}
+.allowWrapping{
+	text-wrap-mode:wrap;
+}
+.noMargin{
+	margin:0;
+}
+
+.updatedItemHighlight{
+	background-color:#fffedf;
+}
+
+span.hintText{
+	color:var(--pcc-hint-text-color);
+	font-size:8pt;
+	font-weight:normal;
+}
+
+span.systemText{
+	color:#777;
+	font-size:9pt;
+	font-style:italic;
+	font-weight:normal;
+}
+
+.pageTitle{
+	font-size:12pt;
+	font-weight:bold;
+}
+
+.reportTitle{
+	font-size:20pt;
+	font-weight:bold;
+}
+
+.shadeout{
+	background-color:#d5d5d5;
+	color:#000;
+}
+
+.shadeoutlight{
+	background-color:#f0f0f0;
+	color:#000;
+}
+
+.overlay-mask-background{
+	background-color:var(--pcc-overlay-mask-color-dark);
+	content:"";
+	display:block;
+	height:100%;
+	left:0;
+	position:fixed;
+	top:0;
+	visibility:visible;
+	width:100%;
+	z-index:13;
+}
+
+.overlay-container{
+	position:absolute;
+	top:0;
+	visibility:visible;
+	z-index:14;
+}
+
+.overlay-container .overlay-content{
+	background: #fff;
+	border:0;
+	border-radius:5px;
+	box-shadow:0 5px 10px 0 rgba(0,0,0,.25);
+	box-sizing:border-box;
+	height:100%;
+	overflow:hidden;
+	position:relative;
+	width:100%;
+}
+
+.overlay-container iframe{
+	border:0;
+	height:100%;
+	width:100%;
+}
+
+.overlay-container #iframePreLoadingSpinner{
+	height: 100%;
+	width: 100%;
+}
+
+.overlay-container #iframeLoadingErrorContainer{
+	margin: 0;
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+}
+
+.overlay-container #iframeFailSafeButtonContainer{
+	position: absolute;
+	padding-bottom: 10px;
+	bottom: 0;
+	width: 100%;
+	text-align: center;
+}
+
+.overlay-container #iframeActionBarContainer{
+	box-sizing:border-box;
+	background-color:#fff;
+	bottom:0;
+	height:68px;
+	padding:16px 40px 16px 40px;
+	position:absolute;
+	text-align:right;
+	width:100%;
+}
+
+input[type=button].pccEvergreenButton{
+	background-color:var(--pcc-evergreen-button-primary-bg-color);
+	border:none;
+	border-radius: var(--pcc-evergreen-button-border-radius);
+	box-sizing:border-box;
+	box-shadow:0 1px 3px 0 rgba(0, 0, 0, 0.2), 0 2px 1px -1px rgba(0, 0, 0, 0.12), 0 1px 1px 0 rgba(0, 0, 0, 0.14);
+	color:#fff;
+	cursor:pointer;
+	font-family:var(--pcc-evergreen-font-family) !important;
+	font-size:14px;
+	font-weight:500;
+	letter-spacing:1.25px;
+	line-height:1.14;
+	margin-left:auto;
+	padding:8px 16px 8px 16px;
+	text-align:center;
+	-webkit-appearance:none;
+}
+
+input[type=button].pccEvergreenButton:hover{
+  background-color:var(--pcc-evergreen-button-primary-bg-color-hover);
+}
+input[type=button].pccEvergreenButton:active{
+	box-shadow:0 5px 5px -3px rgba(0,0,0,0.2),0 8px 10px 1px rgba(0,0,0,0.14),0 3px 14px 2px rgba(0,0,0,0.12);
+}
+
+td{
+	font-family:var(--pcc-body-text-font-family);
+	font-size:var(--pcc-body-text-font-size);
+}
+
+td.menu{
+	font-family:var(--pcc-body-text-font-family);
+	font-size:8pt;
+	font-weight:bold;
+	text-align:center;
+}
+
+td.calendarNum{
+	color:#333;
+	cursor:pointer;
+	font-size:10pt;
+	font-weight:bold;
+	text-align:center;
+	width:14%;
+}
+td.calendarWkd{
+	background-color:#ddd;
+	color:#333;
+	cursor:pointer;
+	font-size:10pt;
+	font-weight:bold;
+	text-align:center;
+	width:14%;
+}
+td.calendarToday{
+	background-color:#fffa9e;
+	color:#000;
+	cursor:pointer;
+	font-size:10pt;
+	font-weight:bold;
+	text-align:center;
+	width:14%;
+}
+
+.calendarDay{
+	background:var(--pcc-primary-accent-color-main);
+	color:#fff;
+	font-size:10pt;
+	font-weight:bold;
+	text-align:center;
+	width:14%;
+}
+
+.errormsg{
+	color:red;
+	font-family:var(--pcc-body-text-font-family);
+	font-size:8pt;
+}
+
+.errormsgbold{
+	color:red;
+	font-family:var(--pcc-body-text-font-family);
+	font-size:10pt;
+	font-weight:bold;
+}
+
+
+
+/* Default FORM FIELD rendering */
+select{
+	font-family:var(--pcc-field-variable-font-family);
+	font-size:var(--pcc-field-font-size);
+	min-height:20px;
+	scroll-behavior:smooth;
+}
+
+input, textarea{
+	font-family:var(--pcc-field-fixed-width-font-family);
+	font-size:var(--pcc-field-font-size);
+}
+
+/* Specific textarea properties */
+textarea{
+	scroll-behavior:smooth;
+}
+
+/* Text based form elements */
+input[type="text"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="tel"],
+input[type="email"],
+input[type="url"],
+input[type="color"],
+input[type="date"],
+input[type="datetime"],
+input[type="time"],
+input[type="week"],
+input[type="month"],
+select,
+textarea{
+	background-color:var(--pcc-field-bg-color);
+	border:var(--pcc-field-border);
+	margin:0;
+	outline:none;
+	padding:2px 1px 2px 1px;
+	transition:all 0.10s ease-in-out;
+}
+
+input[type="file"]{
+	margin:0;
+	outline:none;
+	padding:2px 1px 2px 1px;
+	transition:all 0.10s ease-in-out;
+	width:100%;
+}
+
+
+/* Reset select padding */
+select{
+	line-height:14px;
+	padding:1px;
+}
+
+input[type="text"]:hover,
+input[type="password"]:hover,
+input[type="search"]:hover,
+input[type="number"]:hover,
+input[type="tel"]:hover,
+input[type="email"]:hover,
+input[type="url"]:hover,
+input[type="color"]:hover,
+input[type="date"]:hover,
+input[type="datetime"]:hover,
+input[type="time"]:hover,
+input[type="week"]:hover,
+input[type="month"]:hover,
+select:hover,
+textarea:hover{
+	border:var(--pcc-field-border-hover);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus,
+input[type="tel"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+input[type="color"]:focus,
+input[type="date"]:focus,
+input[type="datetime"]:focus,
+input[type="time"]:focus,
+input[type="week"]:focus,
+input[type="month"]:focus,
+select:focus,
+textarea:focus{
+	border:var(--pcc-field-border-focus);
+	box-shadow:var(--pcc-field-box-shadow-focus);
+}
+
+/* Readonly fields */
+input[readonly][type="text"],
+input[readonly][type="password"],
+input[readonly][type="search"],
+input[readonly][type="number"],
+input[readonly][type="tel"],
+input[readonly][type="email"],
+input[readonly][type="url"],
+input[readonly][type="color"],
+input[readonly][type="date"],
+input[readonly][type="datetime"],
+input[readonly][type="time"],
+input[readonly][type="week"],
+input[readonly][type="month"],
+textarea[readonly]{
+	background-color:#e7e7e7;
+	border:var(--pcc-field-border-readonly);
+	color:var(--pcc-field-color-readonly);
+	-webkit-appearance:none;/* Trying to override Safari search box but no luck */
+}
+
+/* Disabled fields */
+input[disabled][type="text"],
+input[disabled][type="password"],
+input[disabled][type="search"],
+input[disabled][type="number"],
+input[disabled][type="tel"],
+input[disabled][type="email"],
+input[disabled][type="url"],
+input[disabled][type="color"],
+input[disabled][type="date"],
+input[disabled][type="datetime"],
+input[disabled][type="time"],
+input[disabled][type="week"],
+input[disabled][type="month"],
+select[disabled],
+textarea[disabled]{
+	background-color:#e7e7e7;
+	border:var(--pcc-field-border-disabled);
+	color:var(--pcc-field-color-disabled);
+}
+
+/* Only set the text color on file inputs */
+input[readonly][type="file"],
+input[disabled][type="file"]{
+	color:var(--pcc-field-color-disabled);
+}
+
+/* Revert back radio buttons (stops the box bleeding behind the radio button) */
+input[readonly][type="radio"],
+input[disabled][type="radio"]{
+	background:none;
+	border:none;
+}
+
+/* Override READONLY and DISABLED fields to not show a focus or hover highlights */
+input[readonly][type="text"]:hover,
+input[readonly][type="password"]:hover,
+input[readonly][type="search"]:hover,
+input[readonly][type="number"]:hover,
+input[readonly][type="tel"]:hover,
+input[readonly][type="email"]:hover,
+input[readonly][type="url"]:hover,
+input[readonly][type="color"]:hover,
+input[readonly][type="date"]:hover,
+input[readonly][type="datetime"]:hover,
+input[readonly][type="time"]:hover,
+input[readonly][type="week"]:hover,
+input[readonly][type="month"]:hover,
+select[readonly]:hover,
+textarea[readonly]:hover{
+	border:var(--pcc-field-border-readonly);
+	box-shadow:none;
+}
+
+input[disabled][type="text"]:hover,
+input[disabled][type="password"]:hover,
+input[disabled][type="search"]:hover,
+input[disabled][type="number"]:hover,
+input[disabled][type="tel"]:hover,
+input[disabled][type="email"]:hover,
+input[disabled][type="url"]:hover,
+input[disabled][type="color"]:hover,
+input[disabled][type="date"]:hover,
+input[disabled][type="datetime"]:hover,
+input[disabled][type="time"]:hover,
+input[disabled][type="week"]:hover,
+input[disabled][type="month"]:hover,
+select[disabled]:hover,
+textarea[disabled]:hover{
+	border:var(--pcc-field-border-disabled);
+	box-shadow:none;
+}
+
+input[readonly]:focus,
+select[readonly]:focus,
+textarea[readonly]:focus{
+	border:var(--pcc-field-border-readonly);
+	box-shadow:none;
+}
+
+input[disabled]:focus,
+select[disabled]:focus,
+textarea[disabled]:focus{
+	border:1px solid #a9a9a9;
+	box-shadow:none;
+}
+
+/* Override (back) any checkbox/radio buttons */
+input[type="checkbox"],
+input[type="checkbox"]:hover,
+input[type="radio"],
+input[type="radio"]:hover{
+	border:none;
+	background-color:transparent;
+}
+
+input[type="checkbox"],input[type="radio"]{
+	accent-color:var(--pcc-primary-accent-color-dark);
+	cursor:pointer;
+}
+
+input[type="checkbox"]:hover,
+input[type="radio"]:hover{
+	accent-color:var(--pcc-primary-accent-color-dark);
+}
+
+
+/* Override (file) input elements */
+input[type="file"]{
+	/* DO NOT SET a background or border style here */
+}
+
+/* Override search input element (x) clear element */
+input[type="search"]::-webkit-search-cancel-button {
+	filter:invert(40%) sepia(0%) saturate(0%) brightness(85%) contrast(90%);
+}
+
+/* For pccDateField calendar icons on disabled date fields */
+input.pccDateField[disabled] + img.ui-datepicker-trigger{
+	visibility:hidden;
+}
+
+
+/* Standard PCC Buttons */
+input.pccButton,
+input.dropDownButton,
+button.pccButton,
+label.pccButton,
+input::file-selector-button{
+	background-image:var(--pcc-button-background-image);
+	border:1px solid var(--pcc-button-border-color);
+	border-radius:4px;
+	color:#333;
+	cursor:pointer;
+	display:inline-block;
+	font-family:var(--pcc-field-variable-font-family);/*TODO: Remove this when set by default font*/
+	font-size:var(--pcc-button-font-size);
+	font-weight:bold;
+	line-height:var(--pcc-button-font-size);/*MUST match font-size*/
+	margin:1px 3px 1px 3px;
+	padding:3px 5px 3px 5px;
+	text-align:center;
+	text-decoration:none;
+	text-shadow:0 1px 0 rgba(255, 255, 255, 0.25);
+	user-select:none;
+}
+
+input.pccButton:hover,
+input.dropDownButton:hover,
+button.pccButton:hover,
+label.pccButton:hover,
+input::file-selector-button:hover{
+	background-image:var(--pcc-button-background-image-hover);
+	border-color:var(--pcc-button-border-color-hover);
+}
+
+input.pccButton:focus,
+input.dropDownButton:focus,
+button.pccButton:focus,
+label.pccButton:focus,
+input::file-selector-button:focus{
+	background-image:var(--pcc-button-background-image-focus);
+	border-color:var(--pcc-button-border-color-focus);
+	box-shadow:0 0 5px rgba(63, 118, 183, 0.5), 0 0 10px #fff inset;
+	outline:medium none;
+}
+
+input.pccButton:active,
+input.dropDownButton:active,
+button.pccButton:active,
+label.pccButton:active,
+input::file-selector-button:active{
+	background-image:var(--pcc-button-background-image-active);
+	border-color:var(--pcc-button-border-color-active);
+	color:#111;
+}
+
+input.pccButton[disabled],
+input.pccButton[disabled]:hover,
+input.pccButton[disabled]:focus,
+input.pccButton[disabled]:active,
+input.dropDownButton[disabled],
+input.dropDownButton[disabled]:hover,
+input.dropDownButton[disabled]:focus,
+input.dropDownButton[disabled]:active,
+button.pccButton[disabled],
+button.pccButton[disabled]:hover,
+button.pccButton[disabled]:focus,
+button.pccButton[disabled]:active,
+label.pccButton[disabled],
+label.pccButton[disabled]:hover,
+label.pccButton[disabled]:focus,
+label.pccButton[disabled]:active,
+input[disabled]::file-selector-button,
+input[disabled]::file-selector-button:hover,
+input[disabled]::file-selector-button:focus,
+input[disabled]::file-selector-button:active{
+	background:#ddd;
+	border:1px solid var(--pcc-button-border-color-disabled);
+	border-radius:4px;
+	color:var(--pcc-button-color-disabled);
+	cursor:not-allowed;
+	display:inline-block;
+	font-family:var(--pcc-button-font-family);/*TODO: Remove this when set by default font*/
+	font-size:var(--pcc-button-font-size);
+	font-weight:bold;
+	line-height:var(--pcc-button-font-size);/*MUST match font-size*/
+	margin:1px 3px 1px 3px;
+	padding:3px 5px 3px 5px;
+	text-align:center;
+	text-decoration:none;
+	text-shadow:0 1px 0 rgba(255, 255, 255, 0.25);
+	user-select:none;
+}
+
+/*TODO: Remove this when converted to pccButton's*/
+input.button{
+	font-family:var(--pcc-button-font-family);
+	font-size:var(--pcc-button-font-size);
+}
+
+
+label{
+	cursor:pointer;
+	user-select:none;
+}
+
+
+/* PCC Date field style tweaks beyond default form styling */
+input.pccDateField{
+	vertical-align:middle;
+}
+
+/* Search/Chooser icon */
+img[src$="/core/images/icon-search.png"]{
+	height:18px;
+	margin-left:1px;
+	vertical-align:middle;
+	width:18px;
+}
+
+/* 14-pixel Info Icon icon */
+img[src$="/core/images/icon-info-14.png"]{
+	height:14px;
+	margin-left:1px;
+	vertical-align:middle;
+	width:14px;
+}
+
+nav.breadcrumb{
+	display:inline-block;
+}
+nav.breadcrumb ul{
+	display:inline;
+	list-style-type:none;
+	margin:0;
+	padding:0;
+}
+nav.breadcrumb ul li{
+	display:inline-block;
+}
+
+nav.breadcrumb ul li + li::before{
+	color:var(--pcc-body-text-color);
+	content:"/";
+	padding:0 4px 0 0;
+}
+
+nav.breadcrumb ul li a{
+	font-size:14px;
+	font-weight:bold;
+}
+
+/* Help assets */
+.questionMark {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.popupHelp{
+	float:right;	
+}
+.popupHelp a{
+	border:none !important; 
+	background:none !important
+}
+
+/* Textarea counter/limit styles */
+span.pccTextareaCounter{
+	color:#888;
+	cursor:help;
+	padding:1px 2px 1px 2px;
+}
+span.pccTextLimitNear{
+	color:#800000;
+}
+span.pccTextLimitAtOrReached{
+	color:#c00000;
+	font-weight:bold;
+}
+
+/* pccResults Table styles */
+table.pccResults{
+	background-color:#666;
+	border-collapse:collapse;
+	box-shadow:0 8px 6px -6px #ccc;
+	margin-bottom:8px;
+}
+
+table.pccResults > thead > tr > th{
+	background-color:rgb(233,233,237);
+	background-image:var(--pcc-table-header-bg-image);
+	background-position:0 100%;
+	background-repeat:repeat-x;
+	border:1px solid #ccc;
+	border-bottom:1px solid #777;
+	color:#222;
+	font-weight:bold;
+	height:20px;
+	margin:0;
+	outline:none;
+	padding:1px 2px 1px 2px;
+
+	text-align:left;
+	user-select:none;
+}
+
+table.pccResults > thead > tr > th.sortable{
+	cursor:pointer;
+}
+
+table.pccResults > thead > tr > th.sortable > span{
+	background-position:50% 0;
+	background-repeat:no-repeat;
+	display:block;
+	width:100%;
+}
+table.pccResults > thead > tr > th.sortable:hover{
+	background-color:#fcfcfc;
+	background-image:var(--pcc-table-header-sortable-bg-image-hover);
+}
+
+table.pccResults > thead > tr > th.sortedAscending,
+table.pccResults > thead > tr > th.sortedDescending{
+	background-clip:border-box;
+	background-color:#fcfcfc;
+	background-image:var(--pcc-table-header-sortable-sorted-bg-image);
+	position:relative;
+}
+
+table.pccResults > thead > tr > th.sortedAscending::after{
+	border-left:4px solid transparent;
+	border-right:4px solid transparent;
+	border-bottom:0;
+	border-top:4px solid var(--pcc-link-color-default);
+	bottom:0;
+	content:"";
+	height:0;
+	left:50%;
+	pointer-events:none;
+	position:absolute;
+	transform:translateX(-50%);
+	width:0;
+}
+
+table.pccResults > thead > tr > th.sortedDescending::after{
+	border-left:4px solid transparent;
+	border-right:4px solid transparent;
+	border-top:0;
+	border-bottom:4px solid var(--pcc-link-color-default);
+	content:"";
+	height:0;
+	left:50%;
+	pointer-events:none;
+	position:absolute;
+	top:0;
+	transform:translateX(-50%);
+	width:0;
+}
+
+
+
+/* Filters within a results table */
+table.pccResults > thead > tr.pccFilterRow th,
+table.pccResults > thead > tr.pccFilterRow td{
+	background-color:#888;
+	background-image:none;
+	border:1px solid #666;
+	border-top:1px solid #000;
+	padding:1px;
+}
+
+table.pccResults > thead > tr > td,
+table.pccResults > tbody > tr > td,
+table.pccResults > tr > td{
+	background-color:#fff;
+	border:1px solid #ddd;
+	color:#222;
+	padding:1px 3px 1px 3px;
+}
+
+table.pccResults > thead > tr.even > td,
+table.pccResults > tbody > tr.even > td,
+table.pccResults > tr.even > td{
+	background-color:#f9f9f9;
+}
+
+/* scoped styles */
+table.pccResults > thead > tr.corporateRowColor > td,
+table.pccResults > tbody > tr.corporateRowColor > td,
+table.pccResults > tr.corporateRowColor > td{
+	background-color:#fff;
+}
+
+table.pccResults > thead > tr.facilityRowColor > td,
+table.pccResults > tbody > tr.facilityRowColor > td,
+table.pccResults > tr.facilityRowColor > td{
+	background-color:#eef567;
+}
+
+table.pccResults > thead > tr.divisionRowColor > td,
+table.pccResults > tbody > tr.divisionRowColor > td,
+table.pccResults > tr.divisionRowColor > td{
+	background-color:#85e381;
+}
+
+/* New PCC Pagination */
+div.pccPaginationWrapper{
+	background-color:#f6f6f6;
+	border:1px solid #ddd;
+	border-radius:3px;
+	display:inline-block;
+	margin:3px 0 1px 0;
+	padding:1px 8px;
+	width:auto;
+}
+
+div.pccPaginationWrapper div.pccPaginationMetaData{
+	display:block;
+	padding:2px 0;
+}
+
+div.pccPaginationWrapper div.pccPaginationMetaData span.pccPaginationCount{
+	display:inline-block;
+	margin-right:15px;
+}
+div.pccPaginationWrapper div.pccPaginationMetaData span.pccPaginationPageXofY{
+	display:inline-block;
+	margin-right:15px;
+}
+div.pccPaginationWrapper div.pccPaginationMetaData span.pccPaginationResultsPerPage{
+	display:inline-block;
+	margin-right:15px;
+}
+
+div.pccPaginationWrapper div.pccPaginationMetaData span.pccPaginationCount span{
+	font-weight:bold;
+}
+div.pccPaginationWrapper div.pccPaginationMetaData span.pccPaginationPageXofY span{
+	font-weight:bold;
+}
+div.pccPaginationWrapper div.pccPaginationMetaData span.pccPaginationResultsPerPage span{
+	font-weight:bold;
+}
+
+div.pccPaginationWrapper div.pccPaginationLinks{
+	display:block;
+	padding:2px 0;
+}
+div.pccPaginationWrapper div.pccPaginationLinks ol{
+	display:inline-block;
+	list-style-type:none;
+	margin:0;
+	padding:0;
+}
+div.pccPaginationWrapper div.pccPaginationLinks ol li{
+	display:inline-block;
+}
+div.pccPaginationWrapper div.pccPaginationLinks a{
+	background-image:var(--pcc-button-background-image);
+	border:1px solid var(--pcc-button-border-color);
+	border-radius:3px;
+	color:var(--pcc-button-text-color);
+	cursor:pointer;
+	display:inline-block;
+	font-size:13px;
+	font-weight:normal;
+	line-height:13px;
+	margin:0;
+	min-width:15px;
+	padding:2px 3px;
+	text-align:center;
+	text-decoration:none;
+	text-shadow:0 1px 0 rgba(255, 255, 255, 0.5);
+	-webkit-touch-callout:none;
+	user-select:none;
+}
+
+div.pccPaginationWrapper div.pccPaginationLinks a:hover{
+	background-image:var(--pcc-button-background-image-hover);
+	border-color:var(--pcc-button-border-color-hover);
+}
+div.pccPaginationWrapper div.pccPaginationLinks a.pccActiveLink{
+	background-image:linear-gradient(to bottom, #b1e4f9 0, #9bbcf2 100%);
+	color:#111;
+	font-weight:bold;
+}
+div.pccPaginationWrapper div.pccPaginationLinks a:focus{
+	background-image:linear-gradient(to bottom, #fcfcfc 0px, #b1e1f5 100%);
+	border-color:var(--pcc-button-border-color-focus);
+	box-shadow:0 0 5px rgba(63, 118, 183, 0.5), 0 0 10px #fff inset;
+	outline:medium none;
+}
+div.pccPaginationWrapper div.pccPaginationLinks a:active{
+	background-image:linear-gradient(to bottom, #fff 0px, #94d2dd 50%, #77d9ef 100%);
+	border-color:var(--pcc-button-border-color-hover);
+}
+
+div.pccPaginationWrapper div.pccPaginationLinks a.pccPaginationFirst{
+	padding:2px 6px;
+}
+div.pccPaginationWrapper div.pccPaginationLinks a.pccPaginationPrev{
+	margin-right:5px;
+	padding:2px 6px;
+}
+div.pccPaginationWrapper div.pccPaginationLinks a.pccPaginationNext{
+	margin-left:5px;
+	padding:2px 6px;
+}
+div.pccPaginationWrapper div.pccPaginationLinks a.pccPaginationLast{
+	padding:2px 6px;
+}
+
+
+div.pccBoxBorder{
+	border:1px solid #ccc;
+}
+
+/* Legacy PCC Pagination (Deprecated) */
+
+/* A high level container for all of the results bar elements */
+div.pccResultsBar{
+	background-color:#f6f6f6;
+	border:1px solid #ddd;
+	border-radius:3px;
+	margin:3px 0 1px 0;
+	padding:3px 30px 3px 30px;
+}
+
+div.pccResultsBar span.pccResultsInfo{
+	display:inline-block;
+}
+
+div.pccResultsBar span.pccResultsInfo span.pccResultsCount{
+	font-weight:bold;
+}
+
+div.pccResultsBar span.pccResultsInfo span.pccResultsPageX{
+	font-weight:bold;
+}
+
+div.pccResultsBar span.pccResultsInfo span.pccResultsPageY{
+	font-weight:bold;
+}
+
+div.pccResultsBar span.pccResultsInfo span.pccResultsCountPerPage{
+	font-weight:bold;
+}
+
+span.pccResultsJumpBarPagination{
+}
+
+span.pccResultsJumpBarPagination a{
+	background-image:var(--pcc-button-background-image);
+	border:1px solid var(--pcc-button-border-color);
+	border-radius:3px;
+	color:var(--pcc-button-text-color);
+	cursor:pointer;
+	display:inline-block;
+	font-size:13px;
+	font-weight:normal;
+	line-height:13px;
+	margin:1px;
+	min-width:15px;
+	padding:2px 3px;
+	text-align:center;
+	text-decoration:none;
+	text-shadow:0 1px 0 rgba(255, 255, 255, 0.5);
+	-webkit-touch-callout:none;
+	user-select:none;
+}
+
+span.pccResultsJumpBarPagination a:hover{
+	background-image:var(--pcc-button-background-image-hover);
+	border-color:var(--pcc-button-border-color-hover);
+}
+
+span.pccResultsJumpBarPagination a.selected{
+	background-image:var(--pcc-pagination-button-bg-image-selected);
+	color:#111;
+	font-weight:bold;
+}
+
+span.pccResultsJumpBarPagination a:focus{
+	background-image:var(--pcc-pagination-button-bg-image-focus);
+	border-color:var(--pcc-button-border-color-focus);
+	box-shadow:0 0 5px rgba(63, 118, 183, 0.5), 0 0 10px #fff inset;
+	outline:medium none;
+}
+
+span.pccResultsJumpBarPagination a:active{
+	background-image:var(--pcc-pagination-button-bg-image-active);
+	border-color:var(--pcc-button-border-color-active);
+}
+
+/* PCC Tabs */
+ul.pccTabs{
+	background:#606060;
+	list-style:none;
+	margin:0;
+	overflow:auto;
+	padding:0;
+	white-space:nowrap;
+}
+
+ul.pccTabs > li{
+	float:left;
+}
+
+ul.pccTabs > li > a{
+	color:#fff;
+	cursor:pointer;
+	display:inline-block;
+	font-weight:bold;
+	padding:3px 7px;
+	text-decoration:none;
+	-webkit-touch-callout:none;
+	user-select:none;
+}
+
+ul.pccTabs > li:hover{
+	background:#828080;
+}
+
+ul.pccTabs .pccActiveTab,
+ul.pccTabs .pccActiveTab:hover{
+	background:var(--pcc-primary-accent-color-main);
+}
+
+/* PCC SECTION TITLE */
+div.pccSectionTitle{
+	background:var(--pcc-primary-accent-color-main);
+	color:#fff;
+	font-size:11pt;
+	padding:5px;
+}
+div.pccSectionSubTitle{
+	border-bottom:1px solid var(--pcc-primary-accent-color-main);
+	font-size:11pt;
+	font-weight:bold;
+	margin:10px 0;
+	padding-bottom:3px;
+}
+
+
+img.ui-datepicker-trigger{
+	cursor:pointer;
+	vertical-align:middle;
+}
+
+#ui-datepicker-div{
+	z-index:3;
+}
+
+/* Generic Busy Indicator */
+.pccBusy{
+    position:relative;
+}
+.pccBusy:before{
+    color:#555;
+    content:attr(data-pccbusymessage);
+    font-size:10pt;
+    position:absolute;
+    left:calc(50% + 12px);
+    top:calc(50% - .5em);
+    z-index:1;
+}
+.pccBusy:after{
+    background:rgba(255,255,255, 0.65) url('/assets/core/images/gif/busy-small.gif') center center no-repeat;
+    bottom:0;
+    content:'';
+    left:0;
+    position:absolute;
+    right:0;
+    top:0;
+}
+
+/* WeDate info div styles */
+div#dateSelectTextId{
+	border:1px solid #a9a9a9;
+	color:#333;
+	cursor:pointer;
+	display:none;
+	font-size:var(--pcc-body-text-font-size);
+	margin:0;
+	padding:0;
+	position:absolute;
+	white-space:nowrap;
+	z-index:999;
+}
+div#dateSelectTextId span{
+	background-color:#fffdef;
+	display:block;
+	padding:1px;
+}
+
+#pendo-resource-hub-icon-container{
+	box-sizing:content-box;
+	display:inline-block;
+	font-size:14px;
+	height:24px;
+	line-height:38px;
+	margin:0 12px 0 12px;
+	position:relative;
+	width:24px;
+	z-index:19000;
+}
+
+#pendo-resource-hub-icon{
+	background-image:url('/assets/core/images/resource-hub.svg');
+	box-sizing:border-box;
+	cursor:pointer;
+	display:inline-block;
+	height:24px;
+	line-height:24px;
+	margin:0;
+	position:relative;
+	vertical-align:middle;
+	width:24px;
+}
+
+/* popup specific overrides */
+#pendo-resource-hub-icon-container-popup-window{
+	float:right;
+	line-height:normal;
+}
+
+#pendo-resource-hub-icon-container-popup-window #pendo-resource-hub-icon-container{
+	line-height:normal;
+}
+
+#pendo-resource-hub-icon-container-popup-window #pendo-resource-hub-icon{
+	background-image:url('/assets/core/images/icon-help-24.png');
+	height:24px;
+	line-height:normal;
+	width:24px;
+}
+
+/* New Form Layout Classes */
+.pccForm{
+    box-shadow:0 8px 6px -6px #ccc;
+    display:inline-block;
+    margin:10px;
+}
+.pccForm .pccFormTitle{
+    background-color:#00a0af;
+    color:#fff;
+    font-size:14px;
+    font-weight:bold;
+    padding:10px;
+}
+.pccForm .pccFormBody{
+    border-collapse:collapse;
+    display:table;
+}
+.pccForm .pccFormRow{
+    display:table-row;
+}
+.pccForm .pccFormRow > *{
+    border:1px solid #ccc;
+    display:table-cell;
+    vertical-align:top;
+}
+.pccForm .pccFormLabel{
+    background-color:#eee;
+    max-width:200px;
+    min-width:75px;
+    padding:5px 10px 5px 5px;
+    text-align:right;
+}
+.pccForm .pccRequired::after{
+    color:red;
+    content:"\2731";
+    float:right;
+    font-size:9px;
+    margin:0 -8px 0 0;
+}
+.pccForm .pccFormField{
+    padding:3px;
+}
+.pccForm .pccFormButtons{
+    background-color:#fff;
+    border:1px solid #ccc;
+    border-top:none;
+    padding:10px 0;
+    text-align:center;
+}
+/* End New Form Classes */
+
+.required{
+	color:red;
+	font-size:10pt;
+}
+
+.appAriaHide{
+	display:none;
+}
+
+div.scroller{
+	background-color:var(--pcc-field-bg-color);
+	border:1px solid #a9a9a9;
+	overflow:auto;
+}
+
+.strikeout{
+	text-decoration:line-through;
+}
+
+.dropDownMenu{
+	background-color:#fff;
+	border:1px solid #ccc;
+	border-radius:3px;
+	-webkit-border-radius:3px;
+	-webkit-background-clip:padding-box;
+	box-shadow:8px 8px 4px -6px #999;
+	clear:both;
+	display:none;
+	min-width:150px;
+	position:absolute;
+	text-align:left;/* required if container is center aligned */
+	z-index:100;
+}
+.dropDownMenu a{
+	border:1px solid transparent;
+	color:#000;
+	display:block;
+	font-size:var(--pcc-body-text-font-size);
+	font-weight:bold;
+	line-height:var(--pcc-body-text-font-size);
+	padding:5px;
+	text-decoration:none;
+}
+.dropDownMenu a:hover{
+	background-image:linear-gradient(to bottom, #ffffff 0, #e7eef7 100%);
+	border:1px solid #aecff7;
+}
+
+/* IE9 Only Hack to avoid hover based flicker */
+@media screen\0{
+	.dropDownMenu a:hover{
+		background-color:#e7eef7;
+	}
+}
+
+/* Colors */
+.pccModuleBackgroundColorWhite{
+	background-color:#fff;
+}
+.pccModuleBackgroundColor{
+	background-color:var(--pcc-primary-accent-color-main);
+	background-image:none !important;/* TODO: remove images on clinical pages so this isn't needed */
+}
+
+.pccModuleHeader{
+	background-color:var(--pcc-primary-accent-color-main);
+	color:#fff;
+	font-size:10pt;
+	font-weight:bold;
+}
+
+.pccSubHeaderText{
+	color:rgba(0, 0, 0, 0.87);
+	font-size:10pt;
+	font-weight:bold;
+}
+
+.pccDivider{
+	border-bottom:2px solid var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleBackgroundColorLight{
+	background-color:var(--pcc-primary-accent-color-light);
+}
+
+.pccModuleBackgroundColorResTabs{
+	background-color:#606060;
+}
+
+.pccModuleBorderColor{
+	border-color:var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleBorderColorLight{
+	border-color:#606060;
+}
+
+.pccModuleBorder{
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleTopBorder{
+	border-top:1px solid var(--pcc-primary-accent-color-main);
+}
+.pccModuleTopBorder2Px{
+	border-top:2px solid var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleBottomBorder{
+	border-bottom:1px solid var(--pcc-primary-accent-color-main);
+}
+body.clinical .pccModuleBottomBorder{
+	border-bottom:2px solid var(--pcc-primary-accent-color-main);/* TODO: determine where this is being used, we likely do not want this override */
+}
+
+body.clinical .pccModuleBottomBorderOnePx{ /*Some places use 1px rather than most places which use 2px */
+	border-bottom:1px solid var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleTopBorderColor{
+	border-top-color:var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleBottomBorderColor{
+	border-bottom-color:var(--pcc-primary-accent-color-main);
+}
+
+.pccModuleColor{
+	color:var(--pcc-primary-accent-color-main);
+}
+
+
+/* PCC messages */
+div.pccMessageHeader,label.pccMessage{
+	background-position:var(--pcc-msg-bg-position);
+	background-repeat:no-repeat;
+	background-size:var(--pcc-msg-bg-image-size);
+	border:var(--pcc-msg-border);
+	border-radius:5px;
+	box-shadow:var(--pcc-msg-box-shadow);
+	color:#222;
+	font-size:10pt;
+	font-weight:normal;
+	margin:1px;
+	max-height:195px;
+	min-height:20px;
+	overflow:auto;
+	padding:var(--pcc-msg-padding);
+}
+
+/* PCC field-level messages DEPRECATED do not use */
+label.pccMessage{
+	background-position:var(--pcc-deprecated-msg-bg-position);
+	background-size:var(--pcc-deprecated-msg-bg-image-size);
+	display:block;
+	line-height:normal;
+	padding:var(--pcc-deprecated-msg-padding);
+}
+
+div.pccMessageHeader.pccInfo,div.pccMessageHeader.info,label.pccMessage.info{
+	background-color:var(--pcc-msg-info-bg-color);
+	background-image:var(--pcc-msg-info-bg-image);
+	border-color:var(--pcc-msg-info-border-color);
+}
+
+div.pccMessageHeader.pccSuccess,div.pccMessageHeader.success,label.pccMessage.success{
+	background-color:var(--pcc-msg-success-bg-color);
+	background-image:var(--pcc-msg-success-bg-image);
+	border-color:var(--pcc-msg-success-border-color);
+}
+
+div.pccMessageHeader.pccWarn,div.pccMessageHeader.warn,label.pccMessage.warn{
+	background-color:var(--pcc-msg-warn-bg-color);
+	background-image:var(--pcc-msg-warn-bg-image);
+	border-color:var(--pcc-msg-warn-border-color);
+}
+
+div.pccMessageHeader.pccError,div.pccMessageHeader.error,label.pccMessage.error{
+	background-color:var(--pcc-msg-error-bg-color);
+	background-image:var(--pcc-msg-error-bg-image);
+	border-color:var(--pcc-msg-error-border-color);
+}
+
+div.pccMessageHeader.pccGreenInfo{
+	background-color:var(--pcc-primary-accent-color-light);
+	border-color:var(--pcc-primary-accent-color-main);
+	background-image:url("/assets/core/images/msgs/info-green.svg");
+}
+
+/* Inline PCC messages */
+div.pccMessage,span.pccMessage{
+	background-position:1px 1px;
+	background-repeat:no-repeat;
+	border:var(--pcc-msg-border);
+	border-radius:3px;
+	box-shadow:var(--pcc-msg-box-shadow);
+	color:#222;
+	display:inline-block;
+	font-size:var(--pcc-body-text-font-size);
+	font-weight:normal;
+	margin:1px;
+	min-height:15px;
+	padding:2px 3px 1px 19px;
+}
+
+div.pccMessage.pccInfo,span.pccMessage.pccInfo{
+	background-color:var(--pcc-msg-info-bg-color);
+	background-image:url('/assets/core/images/msgs/icon-info-16.png');
+	border-color:var(--pcc-msg-info-border-color);
+}
+
+div.pccMessage.pccSuccess,span.pccMessage.pccSuccess{
+	background-color:var(--pcc-msg-success-bg-color);
+	background-image:url('/assets/core/images/msgs/icon-success-16.png');
+	border-color:var(--pcc-msg-success-border-color);
+}
+
+div.pccMessage.pccWarn,span.pccMessage.pccWarn{
+	background-color:var(--pcc-msg-warn-bg-color);
+	background-image:url('/assets/core/images/msgs/icon-warn-16.png');
+	border-color:var(--pcc-msg-warn-border-color);
+}
+
+div.pccMessage.pccError,span.pccMessage.pccError{
+	background-color:var(--pcc-msg-error-bg-color);
+	background-image:url('/assets/core/images/msgs/icon-error-16.png');
+	border-color:var(--pcc-msg-error-border-color);
+}
+
+a.pccActionMenu{
+  background:url('/images/pcc-drop-arrow.png') center right no-repeat;
+  cursor:pointer;
+  padding-right:15px;
+  -webkit-touch-callout:none;
+  user-select:none;
+  white-space:nowrap;
+}
+
+ul.pccMenuWrapper{
+   background-color:#fff;;
+   border:1px solid #999;
+   border-top-left-radius:1px;
+   border-top-right-radius:2px;
+   border-bottom-left-radius:2px;
+   border-bottom-right-radius:2px;
+   box-shadow:8px 8px 4px -6px #999;
+   color:#333;
+   display:none;
+   list-style:none;
+   margin:0;
+   min-width:75px;
+   padding:2px;
+   position:absolute;
+   z-index:1;
+}
+
+ul.pccMenuWrapper li{
+   border:1px solid #fff;
+   border-radius:3px;
+   color:#333;
+   cursor:pointer;
+   padding:1px 2px 0 2px;
+   text-align:left;
+}
+
+ul.pccMenuWrapper li:hover{
+   background-image:linear-gradient(to bottom, #ffffff 0, #e7eef7 100%);
+   border:1px solid var(--pcc-link-color-default);
+   color:#000;
+}
+
+th.detailColHeader{
+	background-color:#d5d5d5;
+	color:#333;
+	font-size:var(--pcc-body-text-font-size);
+	font-weight:bold;
+	text-align:left;
+}
+
+td.detailColHeader{
+	background-color:#d5d5d5;
+	color:#333;
+	font-weight:bold;
+}
+
+/*********** FOOTER ***********/
+div.footertext{
+	background-color:#e2e2e2;
+	color:#606060 !important;
+	display:inline-block;
+	margin:10px 0 0 0 !important;
+	padding:10px 0 0 0;
+	text-align:left;
+	width:100%;
+}
+
+div.footertext div{
+	border-left:1px dotted #fff;
+	float:left;
+	height:120px;
+	padding-left:20px;
+	width:30%;
+}
+
+div.footertext .footerWrap{
+	white-space:nowrap;
+}

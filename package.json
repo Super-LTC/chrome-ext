@@ -35,6 +35,7 @@
     "@crxjs/vite-plugin": "^2.3.0",
     "@preact/preset-vite": "^2.10.3",
     "@preact/signals": "^2.7.1",
+    "playwright": "^1.60.0",
     "vite": "^7.3.1"
   },
   "dependencies": {

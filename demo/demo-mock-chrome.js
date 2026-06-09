@@ -17,6 +17,9 @@ import {
   buildReportForDate,
 } from './demo-qm-fixtures.js';
 
+/** In-memory schedule hour for the 24hr report settings demo. */
+let demo24hrScheduleHour = 3;
+
 /**
  * Demo UDA fixture — mirrors the structure the extension UDA viewer expects
  * (see handoff: chrome-ext-uda-viewer-handoff.md). The Nutrition Assessment
@@ -213,7 +216,7 @@ function randomDelay() {
 /**
  * Route an API_REQUEST to the appropriate mock data
  */
-function routeApiRequest(endpoint) {
+function routeApiRequest(endpoint, options = {}) {
   // Strip query string for pattern matching, keep params for keyed lookups
   const [path, queryString] = endpoint.split('?');
   const params = new URLSearchParams(queryString || '');
@@ -705,6 +708,39 @@ function routeApiRequest(endpoint) {
 
   // ── 24-Hour Report routes ──────────────────────────────────────
 
+  if (path === '/api/extension/24hr-report/schedule') {
+    const method = (options?.method || 'GET').toUpperCase();
+    if (method === 'PATCH') {
+      let body = {};
+      try {
+        body = options?.body ? JSON.parse(options.body) : {};
+      } catch {
+        return { success: false, error: 'Invalid request body' };
+      }
+      const hour = body.scheduleHour;
+      if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+        return {
+          success: false,
+          status: 400,
+          error: 'scheduleHour must be an integer between 0 and 23',
+        };
+      }
+      demo24hrScheduleHour = hour;
+    }
+    const hour = demo24hrScheduleHour;
+    return {
+      success: true,
+      data: {
+        success: true,
+        locationId: 'demo-loc-1',
+        scheduleHour: hour,
+        defaultScheduleHour: 3,
+        timezone: 'America/Chicago',
+        scheduleTimeLocal: `${String(hour).padStart(2, '0')}:00`,
+      },
+    };
+  }
+
   if (path === '/api/extension/24hr-report') {
     const date = params.get('date');
     if (date) {
@@ -733,7 +769,7 @@ async function handleMessage(msg) {
       return { authenticated: true };
 
     case 'API_REQUEST':
-      return routeApiRequest(msg.endpoint);
+      return routeApiRequest(msg.endpoint, msg.options);
 
     case 'CAPTURE_VIEWPORT':
       // 1×1 transparent PNG so the FeedbackModal preview/region selector has something to render.

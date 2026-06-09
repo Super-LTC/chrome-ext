@@ -1,0 +1,147 @@
+dialog.pccOverlay[open]{
+    opacity:1;
+}
+dialog.pccOverlay{
+    background-color:#fff;
+    border:0;
+    border-radius:4px;
+    box-shadow:rgba(0, 0, 0, 0.2) 0 11px 15px -7px, rgba(0, 0, 0, 0.14) 0 24px 38px 3px, rgba(0, 0, 0, 0.12) 0 9px 46px 8px;
+    color:#000;
+    font-family:var(--pcc-evergreen-button-font-family);
+    opacity:0;
+    overflow:hidden;
+    padding:0;
+    transition:opacity 0.7s ease-out
+    overlay 0.7s ease-out allow-discrete,
+    display 0.7s ease-out allow-discrete;
+    max-height:80vh;
+    max-width:80vw;
+}
+dialog.pccOverlay h3{
+    color:rgba(0, 0, 0, 0.87);
+    font-size:20px;
+    font-weight:500;
+    letter-spacing:0.009375rem;
+    margin:0;
+    padding:16px 16px 8px 16px;
+}
+dialog.pccOverlay div.dialogBody{
+    border-bottom:1px solid #fff;
+    border-top:1px solid #fff;
+    overflow:auto;
+    padding:8px 16px 8px 16px;
+}
+dialog.pccOverlay div.dialogBody.currentlyOverflowing{
+    border-bottom:1px solid rgba(0, 0, 0, 0.12);
+    border-top:1px solid rgba(0, 0, 0, 0.12);
+}
+dialog.pccOverlay div.actionButtonRow{
+    min-height:40px;
+    padding:8px 16px 16px 16px;
+    text-align:right;
+}
+dialog.pccOverlay div.actionButtonRow button{
+    background-color:var(--pcc-evergreen-button-primary-bg-color);
+    background-image:none;
+    border:none;
+    border-radius:var(--pcc-evergreen-button-border-radius);
+    box-shadow:0 3px 1px -2px rgba(0,0,0,0.2),0 2px 2px 0 rgba(0,0,0,0.14),0 1px 5px 0 rgba(0,0,0,0.12);
+    color:var(--pcc-evergreen-button-primary-color);
+    cursor:pointer;
+    font-size:var(--pcc-evergreen-button-font-size);
+    font-weight:500 !important;
+    height:36px;
+    letter-spacing:1.25px;
+    line-height:16px;
+    margin:6px 8px 6px 8px;
+    min-width:88px;
+    outline:none;
+    overflow:hidden;
+    padding:6px 16px 6px 16px;
+    position:relative;
+    text-align:center;
+    text-shadow:none;
+    text-transform:uppercase;
+    transition:opacity .2s cubic-bezier(.4,0,.6,1);
+    user-select:none;
+    will-change:box-shadow;
+}
+dialog.pccOverlay div.actionButtonRow button:before{
+    background-color:rgba(236,240,241,.3);
+    border-radius:100%;
+    content:"";
+    display:block;
+    left:50%;
+    padding-top:0;
+    position:absolute;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:0;
+}
+dialog.pccOverlay div.actionButtonRow button:active{
+    background-color:var(--pcc-evergreen-button-primary-bg-color-active);
+}
+dialog.pccOverlay div.actionButtonRow button:active:before{
+    padding-top:120%;
+    transition:width .2s ease-out,padding-top .2s ease-out;
+    width:120%;
+}
+dialog.pccOverlay div.actionButtonRow button::after{
+    box-shadow:0 5px 5px -3px rgba(0,0,0,.2),0 8px 10px 1px rgba(0,0,0,.14),0 3px 14px 2px rgba(0,0,0,.12);
+}
+
+dialog.pccOverlay div.actionButtonRow button:hover{
+    background-color:var(--pcc-evergreen-button-primary-bg-color-hover);
+    box-shadow:0 2px 4px -1px rgba(0, 0, 0, 0.2), 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
+}
+
+dialog.pccOverlay div.actionButtonRow button:hover::before,
+dialog.pccOverlay div.actionButtonRow button:focus::before{
+    opacity:.08;
+}
+dialog.pccOverlay div.actionButtonRow button:focus{
+    opacity:.76;
+}
+dialog.pccOverlay div.actionButtonRow button.secondary{
+    background-color:var(--pcc-evergreen-button-secondary-bg-color);
+    border:var(--pcc-evergreen-button-secondary-border);
+    box-shadow:none;
+    color:var(--pcc-evergreen-button-secondary-text-color);
+}
+dialog.pccOverlay div.actionButtonRow button.secondary:hover{
+    background-color:var(--pcc-evergreen-button-secondary-bg-color-hover);
+    border:var(--pcc-evergreen-button-secondary-border-hover);
+    color:var(--pcc-evergreen-button-secondary-text-color-hover);
+}
+dialog.pccOverlay div.actionButtonRow button.secondary:focus{
+    background-color:var(--pcc-evergreen-button-secondary-bg-color-focus);
+    border:var(--pcc-evergreen-button-secondary-border-focus);
+    color:var(--pcc-evergreen-button-secondary-text-color-focus);
+}
+dialog.pccOverlay div.actionButtonRow button.secondary:active{
+    background-color:var(--pcc-evergreen-button-secondary-bg-color-active);
+    border:var(--pcc-evergreen-button-secondary-border-active);
+    color:var(--pcc-evergreen-button-secondary-text-color-active);
+}
+
+dialog.pccOverlay div.actionButtonRow button[disabled]{
+    background-color:var(--pcc-evergreen-button-bg-color-disabled);
+    box-shadow:none;
+    color:var(--pcc-evergreen-button-color-disabled);
+    cursor:default;
+    pointer-events:none;
+}
+
+dialog.pccOverlay div.actionButtonRow span.ripple{
+    animation:ripple 600ms linear;
+    background-color:rgba(255,255,255,0.7);
+    border-radius:50%;
+    position:absolute;
+    transform:scale(0);
+}
+@keyframes ripple{
+    to{
+        opacity:0;
+        transform:scale(4);
+    }
+}

@@ -73,6 +73,34 @@ export function addDays(ymd, delta) {
  * shape on list mode should include a facility-local date already, but guard
  * against both shapes.
  */
+/**
+ * Format an hour (0–23) as a friendly local time label, e.g. "7:00 AM".
+ */
+export function formatHourLabel(hour) {
+  if (hour == null || Number.isNaN(Number(hour))) return '—';
+  const h = ((Number(hour) % 24) + 24) % 24;
+  const period = h < 12 ? 'AM' : 'PM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display}:00 ${period}`;
+}
+
+/**
+ * Short friendly timezone label from an IANA timezone, e.g. "ET" for
+ * America/New_York. Falls back to the raw IANA string.
+ */
+export function formatTimezoneLabel(timezone) {
+  if (!timezone) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'short',
+    }).formatToParts(new Date());
+    return parts.find((p) => p.type === 'timeZoneName')?.value || timezone;
+  } catch {
+    return timezone;
+  }
+}
+
 export function facilityDateFromReport(item, timezone) {
   if (!item) return null;
   if (typeof item.facilityDate === 'string') return item.facilityDate;

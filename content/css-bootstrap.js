@@ -34,6 +34,7 @@ import therapyModal from './css/therapy-modal.css?inline';
 import pdfModal from './css/pdf-modal.css?inline';
 import diagnosisQueryModal from './css/diagnosis-query-modal.css?inline';
 import superComponents from './css/super-components.css?inline';
+import draggableOverlay from './css/draggable-overlay.css?inline';
 import selector from './css/selector.css?inline';
 import query from './css/query.css?inline';
 import icd10Viewer from './css/icd10-viewer.css?inline';
@@ -74,6 +75,7 @@ const CSS_BUNDLE = [
   pdfModal,
   diagnosisQueryModal,
   superComponents,
+  draggableOverlay,
   selector,
   query,
   icd10Viewer,

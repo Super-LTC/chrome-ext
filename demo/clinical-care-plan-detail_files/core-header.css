@@ -1,0 +1,222 @@
+.core-header-wrapper{
+    color:var(--pcc-body-text-color);
+    font-family:var(--pcc-body-text-font-family);
+    font-size:var(--pcc-body-text-font-size);
+}
+.core-header-wrapper label{
+    cursor:pointer;
+    user-select:none;
+}
+.core-header-wrapper a[href],
+.core-header-wrapper a[onclick]{
+    color:var(--pcc-link-color-default);
+    cursor:pointer;
+    text-decoration:none;
+}
+.core-header-wrapper h5{
+    font-weight:bold;
+}
+.core-header-wrapper .appAriaHide{
+    display:none;
+}
+.core-header-wrapper #pendo-resource-hub-icon-container{
+    box-sizing:content-box;
+    display:inline-block;
+    font-size:14px;
+    height:24px;
+    line-height:38px;
+    margin:0 12px 0 12px;
+    position:relative;
+    width:24px;
+    z-index:1;
+}
+.core-header-wrapper #pendo-resource-hub-icon{
+    background-image:url('/assets/core/images/resource-hub.svg');
+    box-sizing:border-box;
+    cursor:pointer;
+    display:inline-block;
+    height:24px;
+    line-height:24px;
+    margin:0;
+    position:relative;
+    vertical-align:middle;
+    width:24px;
+}
+
+/* Default FORM FIELD rendering (in key header zones) */
+.core-header-wrapper .core-form-styles select{
+    font-family:var(--pcc-field-variable-font-family);
+    font-size:var(--pcc-field-font-size);
+    min-height:20px;
+    scroll-behavior:smooth;
+}
+.core-header-wrapper .core-form-styles input,
+.core-header-wrapper .core-form-styles textarea{
+    font-family:var(--pcc-field-fixed-width-font-family);
+    font-size:var(--pcc-field-font-size);
+}
+
+/* Text based form elements (in header) */
+.core-header-wrapper .core-form-styles input[type="text"],
+.core-header-wrapper .core-form-styles input[type="search"],
+.core-header-wrapper .core-form-styles select{
+    background-color:#fff;
+    border:1px solid rgba(0, 0, 0, 0.42);
+    margin:0;
+    outline:none;
+    padding:2px 1px 2px 1px;
+    transition:all 0.10s ease-in-out;
+}
+
+/* Reset select padding (in header) */
+.core-header-wrapper .core-form-styles select{
+    line-height:14px;
+    padding:1px;
+}
+
+.core-header-wrapper .core-form-styles input[type="text"]:hover,
+.core-header-wrapper .core-form-styles input[type="search"]:hover,
+.core-header-wrapper .core-form-styles select:hover{
+    border:var(--pcc-field-border-hover);
+}
+
+.core-header-wrapper .core-form-styles input[type="text"]:focus,
+.core-header-wrapper .core-form-styles input[type="search"]:focus,
+.core-header-wrapper .core-form-styles select:focus,
+.core-header-wrapper .core-form-styles textarea:focus{
+    border:var(--pcc-field-border-focus);
+    box-shadow:0 0 5px rgba(200, 212, 183, 1);
+}
+
+/* Override (back) any checkbox/radio buttons (in header) */
+.core-header-wrapper .core-form-styles input[type="checkbox"],
+.core-header-wrapper .core-form-styles input[type="checkbox"]:hover,
+.core-header-wrapper .core-form-styles input[type="radio"],
+.core-header-wrapper .core-form-styles input[type="radio"]:hover{
+    border:none;
+    background-color:transparent;
+}
+
+.core-header-wrapper .core-form-styles input[type="checkbox"],
+.core-header-wrapper .core-form-styles input[type="radio"]{
+    accent-color:var(--pcc-primary-accent-color-dark);
+}
+
+.core-header-wrapper .core-form-styles input[type="checkbox"]:hover,
+.core-header-wrapper .core-form-styles input[type="radio"]:hover{
+    accent-color:var(--pcc-primary-accent-color-dark);
+}
+
+/* Standard PCC Buttons (in header) */
+.core-header-wrapper .core-form-styles input.pccButton{
+    background-image:var(--pcc-button-background-image);
+    border:1px solid var(--pcc-button-border-color);
+    border-radius:4px;
+    color:#333;
+    cursor:pointer;
+    display:inline-block;
+    font-family:var(--pcc-field-variable-font-family);/*TODO: Remove this when set by default font*/
+    font-size:var(--pcc-button-font-size);
+    font-weight:bold;
+    line-height:var(--pcc-button-font-size);/*MUST match font-size*/
+    margin:1px 3px 1px 3px;
+    padding:3px 5px 3px 5px;
+    text-align:center;
+    text-decoration:none;
+    text-shadow:0 1px 0 rgba(255, 255, 255, 0.25);
+    user-select:none;
+}
+
+/* Fix additional Firefox issues with button sizing http://davidwalsh.name/firefox-buttons */
+.core-header-wrapper .core-form-styles input.pccButton::-moz-focus-inner{
+    border:0;
+    padding:0;
+}
+.core-header-wrapper .core-form-styles input.pccButton:hover{
+    background-image:var(--pcc-button-background-image-hover);
+    border-color:var(--pcc-button-border-color-hover);
+}
+.core-header-wrapper .core-form-styles input.pccButton:focus{
+    background-image:var(--pcc-button-background-image-focus);
+    border-color:var(--pcc-button-border-color-focus);
+    box-shadow:0 0 5px rgba(63, 118, 183, 0.5), 0 0 10px #fff inset;
+    outline:medium none;
+}
+.core-header-wrapper .core-form-styles input.pccButton:active{
+    background-image:linear-gradient(to bottom, #fff 0, #94d2dd 50%, #77d9ef 100%);
+    border-color:var(--pcc-button-border-color-active);
+    color:#111;
+}
+.headerMessageDiv{
+    margin-right:-10px;
+    margin-left:-10px;
+}
+#headerMessageDiv p{
+    font-family:var(--pcc-body-text-font-family);
+}
+#headerMessageDiv a:link{
+    color:var(--pcc-link-color-default);
+    text-decoration:none;
+}
+#headerMessageDiv a:visited{
+    color:var(--pcc-link-color-default);
+}
+#headerMessageDiv a:hover{
+    color:var(--pcc-link-color-hover);
+    text-decoration:underline;
+}
+#headerMessageDiv a:focus{
+    color:var(--pcc-link-color-focus);
+    text-decoration:underline;
+}
+#headerMessageDiv a:active{
+    color:var(--pcc-link-color-active);
+    text-decoration:underline;
+}
+.headerMessage{
+    align-items:flex-start;
+    background-color:#F3D35F;
+    display:flex;
+    flex-wrap:nowrap;
+    margin-bottom:3px;
+    min-height:56px;
+}
+.headerMessage-icon{
+    background-image:url("/assets/core/images/campaign_32x32.svg");
+    background-repeat:no-repeat;
+    background-size:32px;
+    margin-bottom:12px;
+    margin-left:16px;
+    margin-top:12px;
+    min-height:32px;
+    min-width:32px;
+}
+.headerMessage-text{
+    flex-grow:4;
+    font-size:4px;
+    line-height:1.00;
+    margin-left:12px;
+    padding:16px 0 16px 0;
+}
+ .headerMessage-dismiss{
+     background-color:#F3D35F;
+     background-image:url("/assets/core/images/close.svg");
+     background-position:center;
+     background-repeat:no-repeat;
+     background-size:24px;
+     border-radius:48px;
+     cursor:pointer;
+     margin-bottom:4px;
+     margin-right:16px;
+     margin-top:4px;
+     min-height:48px;
+     min-width:48px;
+ }
+.headerMessage-dismiss.dismissible .headerMessage-text{
+    display:block;
+    margin-right:10px;
+}
+.headerMessage-dismiss:hover{
+    background-color:rgba(0,0,0,0.04);
+    color:#3F3F3F;
+}

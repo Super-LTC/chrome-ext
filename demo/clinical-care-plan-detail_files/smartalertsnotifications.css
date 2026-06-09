@@ -1,0 +1,1365 @@
+.s-clinical-smart-alerts,
+.s-clinical-smart-alerts p,
+.s-clinical-smart-alerts button,
+.s-clinical-smart-alerts input,
+.s-clinical-smart-alerts textarea {
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+  font-size:14px;
+}
+
+.s-clinical-smart-alerts p {
+  margin-bottom:16px !important;
+}
+
+.js-more-less *,
+.js-more-less *:before,
+.js-more-less *:after
+{
+  overflow-wrap: break-word;
+}
+
+.s-clinical-smart-alerts *,
+.s-clinical-smart-alerts *:before,
+.s-clinical-smart-alerts *:after {
+  box-sizing:border-box;
+}
+
+.s-clinical-smart-alerts .c-notification-toggle {
+  background:url('/assets/core/images/notifications.svg') no-repeat center center;
+  cursor:pointer;
+  display:inline-block;
+  height:24px;
+  margin:0;
+  position:relative;
+  vertical-align:middle;
+  width:24px;
+}
+
+.s-clinical-smart-alerts .c-notification-toggle.c-notification-toggle--has-alerts:after {
+  -webkit-animation:scaleUp 0.35s ease-in-out;
+  animation:scaleUp 0.35s ease-in-out;
+  background-color:red;
+  border:2px solid #fff;
+  border-radius:50%;
+  content:'';
+  display:block;
+  height:10px;
+  position:absolute;
+  right:1px;
+  top:2px;
+  width:10px;
+}
+
+
+ .c-emar-notification-toggle--has-alerts:after {
+  -webkit-animation:scaleUp 0.35s ease-in-out;
+  animation:scaleUp 0.35s ease-in-out;
+}
+
+img.smartalert-bell-badge, .c-emar-notification-toggle--has-alerts img.smartalert-bell {
+	display: none;
+}
+
+.c-emar-notification-toggle--has-alerts img.smartalert-bell-badge, img.smartalert-bell {
+	display: inline;
+}
+
+.s-clinical-smart-alerts .c-drawer {
+  background:#eee;
+  box-shadow:0 1px 4px rgba(0,0,0,0.25);
+  box-sizing:border-box;
+  height:calc(100% - 56px);
+  overflow:hidden;
+  position:fixed;
+  right:10px;
+  transition-property: transform, top, height;
+  transition-duration: 0.6s;
+  transition-timing-function: cubic-bezier(0.86, 0, 0.07, 1);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  width:375px;
+  z-index:3;
+}
+
+.s-clinical-smart-alerts .c-drawer.c-drawer--is-hidden  {
+  transform:translateX(105%); 
+}
+
+.s-clinical-smart-alerts .c-panel {
+  color:#666;
+  height:100%;
+  overflow:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  position:relative;
+  text-align:left;
+}
+
+.s-clinical-smart-alerts .c-panel .c-panel__content {
+  padding: 16px 16px 16px;
+}
+
+.s-clinical-smart-alerts .c-filter_header_table_component .c-filter_label{
+  padding-left: 14px;
+  font-weight: bold;
+  display: none;
+}
+.s-clinical-smart-alerts .c-filter_header_table_component .c-filter_icon{
+  margin-top: 4px;
+}
+
+.s-clinical-smart-alerts .c-panel .c-filter_dropdown{
+  padding: 0 12px 0 12px;
+  visibility: visible; opacity: 1; max-height: 254px;
+  transition: max-height 150ms, opacity 100ms ease-out 0s, visibility 100ms ease-out 0s;
+  position: fixed;
+  width: 96%;
+  left: 0;
+  z-index: 1;
+  background-color: rgb(238, 238, 238);
+  box-shadow: rgba(0, 0, 0, 0.2) 0 2px 2px 0;
+  margin-top: 1px;
+  top:48px;
+}
+
+.s-clinical-smart-alerts .c-unit-and-floor-filter{
+  padding: 8px 0 4px 0;
+  font-size: 13px;
+  display: flex;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_unit{
+  display: inline;
+  width: 50%;
+  float: left;
+  padding-right: 6px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_floor{
+  display: inline;
+  width: 50%;
+  float: right;
+  padding-left:6px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_border{
+  width: 100%;
+  background-color:var(--pcc-field-bg-color);
+  border:var(--pcc-field-border);
+  border-width:2px;
+  border-radius: 5px;
+  padding-left: 13px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_border:hover{
+  border:var(--pcc-field-border-hover);
+  border-width:2px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_category{
+  width: 100%;
+  font-size: 13px;
+  padding-top: 8px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_border_category{
+  width: 100%;
+  background-color:var(--pcc-field-bg-color);
+  border:var(--pcc-field-border);
+  border-width:2px;
+  border-radius: 5px;
+  padding-left: 13px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown_border_category:hover{
+  border:var(--pcc-field-border-hover);
+  border-width:2px;
+}
+
+.s-clinical-smart-alerts .c-filter_button_row{
+  padding: 16px 0 14px 0;
+    display:flex;
+}
+
+.s-clinical-smart-alerts .c-filter_button_row .c-button--primary{
+    display: inline;
+    width: 35%;
+    float: right;
+    margin-left: auto
+}
+
+.s-clinical-smart-alerts .c-filter_button_row .c-loader_filter_panel{
+    display: inline;
+    width: 50%;
+    float: left;
+    left: 18%;
+}
+
+.s-clinical-smart-alerts .s-clinical-smart-alert-details {
+  color: #585858;
+}
+
+
+.s-clinical-smart-alerts .s-clinical-smart-alert-details .c-alert-detail {
+	display: inline;
+}
+
+.s-clinical-smart-alerts .s-clinical-smart-alert-details .l-detail-row {
+	display:table;
+	margin:0 0 0;
+	width:100%;
+}
+
+.s-clinical-smart-alerts .c-tabs {
+  background-color:#eee;
+  box-shadow:0 0 2px rgba(0, 0, 0, 0.25);
+  line-height:0;
+  list-style:none;
+  margin:0;
+  overflow:hidden;
+  white-space:nowrap;
+  width:100%;
+  padding:0 16px 0 16px;
+}
+
+.s-clinical-smart-alerts .c-tabs.c-tabs--is-sticky {
+  position:fixed;
+  margin-left:0;
+  margin-top:0;
+  width:375px;
+  z-index:2;
+  transition-property: transform, top, height;
+  transition-duration: 0.6s;
+  transition-timing-function: cubic-bezier(0.86, 0, 0.07, 1);
+  border-bottom-style: solid;
+  border-bottom-width: 1px;
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab {
+  cursor:pointer;
+  display:inline-block;
+  height:48px;
+  position:relative;
+  white-space:normal;
+  width:47%;
+}
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab__filter {
+  cursor:pointer;
+  display:inline-block;
+  height:48px;
+  position:relative;
+  white-space:normal;
+  width:6.5%;
+  top: 12px;
+}
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab.c-tabs__tab--is-full-width {
+   box-shadow:none !important;
+   cursor:default;
+   width:100%;
+ }
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab__filter.c-tabs__tab--is-full-width-filter {
+  width:0% !important;
+}
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab.c-tabs__tab--is-active {
+  box-shadow:inset 0 -2px 0 #00a0af;
+}
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab.c-tabs__tab--has-alert span:before {
+  background-color:#d0021b;
+  border-radius:50%;
+  content:'';
+  display:block;
+  height:8px;
+  position:absolute;
+  top:calc(50% - 4px);
+  left:-16px;
+  width:8px;
+}
+
+.s-clinical-smart-alerts .c-tabs .c-tabs__tab > span {
+  font-size:14px;
+  font-weight:600;
+  left:50%;
+  line-height:1.5;
+  position:absolute;
+  text-transform:uppercase;
+  transform:translateX(-50%) translateY(-50%);
+  top:50%;
+}
+
+.s-clinical-smart-alerts .c-tabs.c-tabs--is-sticky + .c-panel__content {
+  padding-top:48px;
+}
+
+.s-clinical-smart-alerts .c-panel-alerts.c-panel-alerts--has-no-alerts {
+  font-weight:600;
+  left:50%;
+  position:absolute;
+  text-align:center;
+  top:50%;
+  transform:translate(-50%, -50%);
+  padding-top: 55px
+}
+
+.s-clinical-smart-alerts .c-label {
+  color:#8a8a8a;
+  display:block;
+  font-size:10px;
+  font-weight:600;
+  line-height:16px;
+  margin-bottom:4px;
+}
+
+.s-clinical-smart-alerts .c-dropdown {
+  position:relative;
+  display:inline-block;
+}
+
+.s-clinical-smart-alerts .c-dropdown .c-dropdown__trigger {
+  color:#666;
+  display:inline-block;
+  line-height:18px;
+  padding:9px 24px 9px 0;
+  position:relative;
+  text-decoration:none;
+  width:100%;
+}
+
+.s-clinical-smart-alerts .c-dropdown .c-dropdown__trigger:after {
+  border-left:4px solid transparent;
+  border-right:4px solid transparent;
+  border-top:4px solid #666;
+  content:"";
+  display:block;
+  position:absolute;
+  right:8px;
+  top:calc(50% - 2px);
+}
+
+.s-clinical-smart-alerts .assessment-date-picker .c-dropdown {
+    padding:2px;
+}
+
+.s-clinical-smart-alerts .c-dropdown .c-dropdown__content {
+     background-color:#fff;
+     box-shadow:0 4px 5px 0 rgba(0,0,0,0.14), 0 1px 10px 0 rgba(0,0,0,0.12), 0 2px 4px -1px rgba(0,0,0,0.3);
+     display:none;
+     list-style:none;
+     margin:0;
+     padding:0;
+     position:absolute;
+     z-index:1;
+ }
+
+.s-clinical-smart-alerts .c-dropdown .c-multiselectdropdown__content {
+  background-color:#fff;
+  box-shadow:0 4px 5px 0 rgba(0,0,0,0.14), 0 1px 10px 0 rgba(0,0,0,0.12), 0 2px 4px -1px rgba(0,0,0,0.3);
+  list-style:none;
+  margin:0;
+  padding:0;
+  position:absolute;
+  z-index:1;
+  max-height: 370px;
+  overflow-y: auto;
+}
+
+s-clinical-smart-alerts .c-dropdown .c-multiselectdropdown__content li{
+  padding:0 6px;
+  display:table;
+  width:100%;
+}
+
+s-clinical-smart-alerts .c-dropdown .c-multiselectdropdown__content li input{
+  display:table-cell;
+}
+
+
+.s-clinical-smart-alerts .c-dropdown .c-dropdown__content li a {
+  color:#666;
+  display:block;
+  line-height:18px;
+  outline:none;
+  padding:9px 8px;
+  text-decoration:none;
+  white-space:nowrap;
+}
+
+.s-clinical-smart-alerts .c-dropdown .c-multiselectdropdown__content li label {
+  color:#666;
+  display: table-cell;
+  line-height:18px;
+  outline:none;
+  padding:9px 8px;
+  text-decoration:none;
+  white-space:nowrap;
+  width: 100%;
+}
+
+.s-clinical-smart-alerts .c-dropdown .c-dropdown__content li:hover {
+  background-color:#f2f2f2;
+}
+
+
+.s-clinical-smart-alerts .c-dropdown .c-multiselectdropdown__content li:hover {
+  background-color:#f2f2f2;
+}
+.s-clinical-smart-alerts .c-button {
+	-webkit-appearance:none;
+	appearance:none;
+	border:none;
+	border-radius:4px;
+  cursor:pointer;
+  line-height:20px;
+  padding:4px 12px;
+}
+
+.s-clinical-smart-alerts .c-filter_dropdown .c-button {
+  -webkit-appearance:none;
+  appearance:none;
+  border:none;
+  border-radius:4px;
+  cursor:pointer;
+  line-height:20px;
+  padding: 4px 0 4px 0;
+  height:40px;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--primary {
+  color:#fff;
+  background-color:var(--pcc-evergreen-button-primary-bg-color);
+}
+
+.s-clinical-smart-alerts button[disabled].c-button.c-button--primary {
+  color:#fff;
+  background-color:var(--pcc-evergreen-button-primary-bg-color);
+  cursor:default;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--primary:hover {
+  background-color:var(--pcc-evergreen-button-primary-bg-color-hover);
+}
+
+.s-clinical-smart-alerts .c-button.c-button--primary:active {
+  background-color:var(--pcc-evergreen-button-primary-bg-color-hover);
+}
+
+.s-clinical-smart-alerts button[disabled].c-button.c-button--primary-inverse {
+  color:var(--pcc-link-color-default);
+  background-color:transparent;
+  cursor:default;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--primary-inverse {
+  color:var(--pcc-link-color-default);
+  background-color:transparent;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--primary-inverse:hover {
+  color:var(--pcc-link-color-hover);
+}
+
+.s-clinical-smart-alerts .c-button.c-button--primary-inverse:active {
+  color:var(--pcc-link-color-active);
+}
+
+.s-clinical-smart-alerts .c-button.c-button--has-loader {
+	color:transparent !important;
+	cursor:default;
+	position:relative;
+	text-shadow:none !important;
+	vertical-align:sub;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--has-loader:before, 
+.s-clinical-smart-alerts .c-button.c-button--has-loader:after {
+  border-radius:100%;
+  content:'';
+  display:block;
+  height:16px;
+  left:50%;
+  margin:-8px 0 0 -8px;
+  position:absolute;
+  top:50%;
+  width:16px;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--has-loader:before {
+  border:2px solid rgba(0, 0, 0, 0.1);
+}
+
+.s-clinical-smart-alerts .c-button.c-button--has-loader.c-button--primary:before {
+  border:2px solid rgba(255, 255, 255, 0.35);
+}
+
+.s-clinical-smart-alerts .c-button.c-button--has-loader:after {
+  webkit-animation:rotate360 .75s linear;
+  animation:rotate360 .75s linear;
+  -webkit-animation-iteration-count:infinite;
+  animation-iteration-count:infinite;
+  border-color:#666 transparent transparent;
+  border-style:solid;
+  border-width:2px;
+}
+
+.s-clinical-smart-alerts .c-button.c-button--has-loader.c-button--primary:after {
+  border-color:#fff transparent transparent;
+}
+
+.s-clinical-smart-alerts .c-card {
+  background:#fff;
+  border-radius:4px;
+  box-shadow:0 2px 4px rgba(0, 0, 0, 0.25);
+  font-size:14px;
+  line-height:18px;
+  margin-bottom:16px;
+}
+
+.s-clinical-smart-alerts .c-card .c-card__content {
+  padding:12px;
+}
+
+.s-clinical-smart-alerts .c-card .c-card__header {
+  background-color:#f9f9f9;
+  border-radius:4px 4px 0 0;
+  font-size:14px;
+  padding:12px;
+  width:100%;
+}
+
+.s-clinical-smart-alerts .c-card .c-card__type {
+  font-weight:600;
+}
+
+.s-clinical-smart-alerts .c-card .c-card__clear {
+  text-decoration:none;
+}
+
+.s-clinical-smart-alerts .c-more-less .c-more-less__content {
+  display:none;
+}
+
+.s-clinical-smart-alerts .c-card .c-grouped-alerts-link {
+  color:#05576f;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.s-clinical-smart-alerts .c-more-less .c-more-less__btn,
+.s-clinical-smart-alerts .c-details-expander .c-show-hide__toggle,
+.s-clinical-smart-alerts .suggestions-section .smart-alert-card-link {
+  color:var(--pcc-link-color-default);
+  display:block;
+  font-size:14px;
+  font-weight:600;
+  margin-bottom:0.5em;
+  position:relative;
+  text-decoration:none;
+}
+
+.s-clinical-smart-alerts .suggestions-section p.c-suggestion-heading,
+.s-clinical-smart-alerts .einteract-assessment-heading p {
+  margin-top:16px;
+  font-weight:bold;
+}
+
+.s-clinical-smart-alerts .c-more-less .c-more-less__btn:after,
+.s-clinical-smart-alerts .c-details-expander > .c-show-hide__toggle:after,
+.s-clinical-smart-alerts .c-card__content .c-grouped-alert-expand_toggle:after{
+  border-right:1px solid #05576f;
+  border-bottom:1px solid #05576f;
+  content:'';
+  display:inline-block;
+  height:4px;
+  margin-left:5px;
+  margin-top:-2px;
+  transform:rotate(45deg);
+  vertical-align:middle;
+  width:4px;
+}
+
+.s-clinical-smart-alerts .c-more-less.c-more-less--is-active .c-more-less__content {
+  display:inline;
+}
+
+.c-more-less {
+	position: relative;
+	text-align: justify;	
+}
+
+.c-more-less__truncated-text {
+  max-height: 54px;
+  margin-right: 0em;
+  padding-right: 1px;
+  overflow: hidden;
+  display: inline-block;
+  width: 280px;
+}
+
+.c-more-less__truncated-text:before {
+  content: '...';
+  position: absolute;
+  right: 0;
+  bottom: 20px;
+}
+
+.s-clinical-smart-alerts .c-more-less.c-more-less--is-active .c-more-less__truncated-text {
+  display:none;
+}
+
+.s-clinical-smart-alerts .c-more-less .c-more-less__content .c-einteract-heading,
+.s-clinical-smart-alerts .c-more-less.c-more-less .c-more-less__truncated-text .c-einteract-heading,
+.s-clinical-smart-alerts .c-non-more-less .c-einteract-heading,
+.s-clinical-smart-alerts .c-einteract-assessment .c-einteract-heading {
+  font-weight: bold;
+}
+
+.s-clinical-smart-alerts .c-einteract-assessment .c-einteract-heading {
+  margin-bottom:0 !important;
+}
+
+.s-clinical-smart-alerts .s-clinical-smart-alert-details .c-alert-detail ul {
+  margin-top:0;
+  margin-bottom:0;
+}
+
+.s-clinical-smart-alerts .c-more-less.c-more-less--is-active .c-more-less__btn:after,
+.s-clinical-smart-alerts .c-details-expander.c-show-hide--is-active > .c-show-hide__toggle:after,
+.s-clinical-smart-alerts .c-grouped-alert-is-expanded > .c-grouped-alert-expand_toggle:after {
+  margin-top:2px;
+  transform:rotate(225deg);
+}
+
+.s-clinical-smart-alerts .c-show-hide > .c-show-hide__content {
+	display:none;
+}
+
+.s-clinical-smart-alerts .c-show-hide.c-show-hide--is-active > .c-show-hide__content {
+  display:block;
+}
+
+.s-clinical-smart-alerts .c-card-expander > .c-show-hide__content,
+.s-clinical-smart-alerts .c-details-expander  {
+  margin-bottom:16px;
+}
+
+.s-clinical-smart-alerts .c-card-expander.c-show-hide--is-active > .c-show-hide__content {
+  webkit-animation:fadeIn .4s cubic-bezier(0.455, 0.03, 0.515, 0.955);
+  animation:fadeIn .4s cubic-bezier(0.455, 0.03, 0.515, 0.955);
+}
+
+.s-clinical-smart-alerts .c-card-expander > .c-show-hide__toggle {
+	cursor:pointer;
+	margin:-8px 0;
+	padding:8px;
+	text-align:center;
+}
+
+.s-clinical-smart-alerts .c-card-expander > .c-show-hide__toggle:after {
+  border-right:2px solid #444;
+  border-bottom:2px solid #444;
+  content:'';
+  display:inline-block;
+  height:10px;
+  transform:rotate(45deg);
+  transform-origin:center 8px;
+  transition:transform 0.25s cubic-bezier(0.455, 0.03, 0.515, 0.955);
+  width:10px;
+}
+
+.s-clinical-smart-alerts .c-card-expander.c-show-hide--is-active > .c-show-hide__toggle:after {
+  transform:rotate(-135deg);
+}
+
+.s-clinical-smart-alerts .c-einteract-assessment__hidden {
+  display: none;
+}
+
+.s-clinical-smart-alerts .c-loader {
+  display:block;
+  height:24px;
+  position:relative;
+  width:24px;
+}
+
+.s-clinical-smart-alerts .c-loader:before, 
+.s-clinical-smart-alerts .c-loader:after {
+  border-radius:100%;
+  content:'';
+  display:block;
+  height:24px;
+  left:50%;
+  margin:-12px 0 0 -12px;
+  position:absolute;
+  top:50%;
+  width:24px;
+}
+
+.s-clinical-smart-alerts .c-loader:before {
+  border:2px solid rgba(0, 0, 0, 0.1);
+}
+
+.s-clinical-smart-alerts .c-loader:after {
+  webkit-animation:rotate360 .75s linear;
+  animation:rotate360 .75s linear;
+  -webkit-animation-iteration-count:infinite;
+  animation-iteration-count:infinite;
+  border-color:#666 transparent transparent;
+  border-style:solid;
+  border-width:2px;
+}
+
+.s-clinical-smart-alerts .c-loader.c-loader--inline {
+  display:inline-block;
+}
+
+.s-clinical-smart-alerts .c-loader.c-loader--center {
+  display:block;
+  margin-left:auto;
+  margin-right:auto;
+}
+
+
+.s-clinical-smart-alerts .c-carousel {
+  overflow:hidden;
+  transition:height 0.35s ease;
+  white-space:nowrap;
+  width:100%;
+}
+
+.s-clinical-smart-alerts .c-carousel__item {
+  display:inline-block;
+  margin:0 -4px 0 0;
+  transition:all 0.35s ease;
+  vertical-align:top;
+  white-space:normal;
+  width:100%;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox__disabled,
+.s-clinical-smart-alerts .c-custom-checkbox {
+  display:inline-block;
+  padding-left:28px;
+  position:relative;
+}
+
+.s-clinical-smart-alerts label.c-custom-checkbox__disabled {
+    opacity:0.5;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox input,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled input {
+	height:0;
+	opacity:0 !important;
+	position:absolute;
+	width:0;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox .c-custom-checkbox__checkmark,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled .c-custom-checkbox__checkmark {
+	border:2px solid #666;
+	border-radius:4px;
+	background-color:#fff;
+	content:'';
+	display:block;
+	height:20px;
+	left:0;
+	position:absolute;
+	top:0;
+	width:20px;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox:hover .c-custom-checkbox__checkmark,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled:hover .c-custom-checkbox__checkmark {
+	background-color:#f1f1f1;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox:hover input[type="checkbox"][disabled] + span.c-custom-checkbox__checkmark,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled:hover input[type="checkbox"][disabled] + span.c-custom-checkbox__checkmark {
+	background-color:#fff;
+}
+
+.s-clinical-smart-alerts label.c-custom-checkbox__disabled:hover {
+	cursor:default;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox input:checked ~ .c-custom-checkbox__checkmark,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled input:checked ~ .c-custom-checkbox__checkmark,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled:hover input:checked[type="checkbox"][disabled] + span.c-custom-checkbox__checkmark {
+	background-color:var(--pcc-primary-accent-color-dark);
+	border:none;
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox .c-custom-checkbox__checkmark:after,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled .c-custom-checkbox__checkmark:after {
+	border:solid white;
+	border-width:0 2px 2px 0;
+	content:'';
+	display:none;
+	height:11px;
+	left:7px;
+	position:absolute;
+	width:6px;
+	top:3px;
+	transform:rotate(45deg);
+}
+
+.s-clinical-smart-alerts .c-custom-checkbox input:checked ~ .c-custom-checkbox__checkmark:after,
+.s-clinical-smart-alerts .c-custom-checkbox__disabled input:checked ~ .c-custom-checkbox__checkmark:after {
+  display:block;
+}
+
+.s-clinical-smart-alerts .c-form input, 
+.s-clinical-smart-alerts .c-form textarea {
+	-webkit-appearance:none;
+	appearance:none;
+	background-color:#f9f9f9;
+	border:var(--pcc-field-border-hover);
+	border-radius:4px;
+	box-shadow:none;
+	color:#666;
+	margin:0;
+	outline:none;
+	padding:8px;
+	transition:color 0.1s ease, border-color 0.1s ease;
+	width:100%;
+}
+
+.s-clinical-smart-alerts .c-form input.pccDateField {
+	width: 40%;
+}
+
+@-moz-document url-prefix() {
+  .assessment-date-picker select {
+    width: 20%;
+  }
+}
+
+.s-clinical-smart-alerts .c-form select {
+	background-color:#f9f9f9;
+	border:1px solid #e1e1e1;
+	border-radius:4px;
+	box-shadow:none;
+	color:#666;
+	margin:0;
+	outline:none;
+	padding:8px;
+	transition:color 0.1s ease, border-color 0.1s ease;
+}
+
+.s-clinical-smart-alerts .assessment-date-picker,
+.s-clinical-smart-alerts .assessment-date-picker *,
+.s-clinical-smart-alerts .c-cic-other-symptoms input,
+.s-clinical-smart-alerts .c-cic-other-symptoms span {
+  display: inline-block;
+}
+
+.s-clinical-smart-alerts .c-cic-other-symptoms input {
+  width: 75%;
+}
+
+.s-clinical-smart-alerts .c-einteract-assessment .chzn-container.chzn-container-multi {
+  margin-bottom: 16px;
+}
+
+.s-clinical-smart-alerts .c-einteract-assessment .chzn-container.chzn-container-multi .chzn-choices .default {
+  height: 100%;
+
+}
+
+.s-clinical-smart-alerts .c-form input:focus, 
+.s-clinical-smart-alerts .c-form textarea:focus {
+  border:var(--pcc-field-border-focus);
+}
+
+.s-clinical-smart-alerts .c-form .has-error {
+	background-color:#fff6f6 !important;
+	border-color:#e0b4b4 !important;
+	color:#9f3a38;
+}
+
+.s-clinical-smart-alerts .c-form .c-form__status-msg {
+	color:#80b42e;
+  font-size:12px;
+}
+
+.s-clinical-smart-alerts .c-form .c-form__status-msg.c-form__status-msg--has-error {
+  color:#9f3a38;
+}
+
+.s-clinical-smart-alerts p.has-error {
+  color:#9f3a38;
+}
+
+.s-clinical-smart-alerts .l-table-row {
+	display:table;
+	margin:0 0 16px;
+	width:100%;
+}
+
+.s-clinical-smart-alerts .c-einteract-assessment
+{
+  margin-bottom:8px !important;
+}
+.s-clinical-smart-alerts .c-einteract-assessment .c-cic-other-symptoms-input
+{
+  padding:2px;
+}
+.s-clinical-smart-alerts .l-table-row__col {
+	display:table-cell;
+	padding:0 8px;
+	width:50%;
+}
+
+.s-clinical-smart-alerts .l-table-row__col:first-child {
+	padding-left:0;
+}
+
+.s-clinical-smart-alerts .l-table-row__col:last-child {
+	padding-right:0;
+}
+
+.s-clinical-smart-alerts .l-table-row__col.l-table-row__col--70 {
+	width:70%;
+}
+
+.s-clinical-smart-alerts .l-table-row__col.l-table-row__col--30 {
+  width:30%;
+}
+
+.s-clinical-smart-alerts .l-stack {
+  margin-left:-8px;
+  margin-right:-8px;
+}
+
+.s-clinical-smart-alerts .l-stack:after {
+  clear:both;
+  content:'';
+  display:table;
+}
+
+.s-clinical-smart-alerts .l-stack__item {
+  float:left;
+  padding-left:8px;
+  padding-right:8px;
+}
+
+.s-clinical-smart-alerts .o-hr {
+	border:0;
+	border-top:1px solid #eee;
+	height:1px;
+	margin:12px -12px;
+}
+
+.s-clinical-smart-alerts .u-mt-8 {
+  margin-top:8px !important;
+}
+
+.s-clinical-smart-alerts .u-mb-8 {
+  margin-bottom:8px !important;
+}
+
+.s-clinical-smart-alerts .u-mt-16 {
+  margin-top:16px !important;
+}
+
+.s-clinical-smart-alerts .u-mb-16 {
+  margin-bottom:16px !important;
+}
+
+.s-clinical-smart-alerts .u-mb-0 {
+  margin-bottom:0 !important;
+}
+
+.s-clinical-smart-alerts .u-pad-2 {
+  padding: 2px !important;
+}
+
+.s-clinical-smart-alerts .u-top-100 {
+    top: 100px !important;
+}
+
+.u-mw {
+	max-width:300px !important;
+}
+
+.s-clinical-smart-alerts .u-text-subdued {
+  color:#727272 !important;
+}
+
+.s-clinical-smart-alerts .u-text-align-right {
+  text-align:right;
+}
+
+.s-clinical-smart-alerts .u-text-uppercase {
+  text-transform:uppercase;
+}
+
+.s-clinical-smart-alerts .u-no-transition {
+  transition:none;
+}
+
+.s-clinical-smart-alerts .u-hidden {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  max-height:0 !important;
+}
+
+.s-clinical-smart-alerts .u-display-none {
+  display: none;
+}
+
+.s-clinical-smart-alerts .u-filter-boxshadow {
+  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.2);
+  height: 223px;
+  transition: all 1s ease 0s;
+}
+
+.s-clinical-smart-alerts .u-transition-scale-down-bounce {
+  margin:0;
+  opacity:0;
+  transform:scale(0.85);
+  transition:all 0.75s cubic-bezier(0.36, -0.64, 0.34, 1.76);
+}
+
+.s-clinical-smart-alerts .t-h2 {
+  font-size:24px;
+  font-weight:600;
+  line-height:32px;
+  margin:0 0 16px;
+}
+
+.s-clinical-smart-alerts .t-h4 {
+  font-size:14px;
+  line-height:18px;
+  margin:0 0 16px;
+}
+
+.s-clinical-smart-alerts .new-alert-bubble {
+  background-color:#80b42e;
+  border-radius:20px;
+  box-shadow:0 2px 4px 0 rgba(0, 0, 0, 0.25);
+  color:white;
+  cursor:pointer;
+  height:40px;
+  line-height:24px;
+  margin-left:104px;
+  margin-top:-12px;
+  padding:8px 16px;
+  position:fixed !important;
+  text-align:center;
+  z-index:2;
+}
+
+.s-clinical-smart-alerts .tail-up {
+  margin-right:8px;
+  vertical-align:sub;
+}
+
+.s-clinical-smart-alerts .c-button--has-loader .tail-up {
+  display:none;
+}
+
+.s-clinical-smart-alerts table.c-alert-details-table {
+  width:100%;
+}
+
+.s-clinical-smart-alerts .flipcard-side.c-hidden {
+  display:none;
+}
+
+.s-clinical-smart-alerts .flipcard-container.c-hidden {
+  display:none;
+}
+
+.s-clinical-smart-alerts table.c-alert-details-table th {
+  padding-bottom:5px;
+}
+
+.s-clinical-smart-alerts table.c-alert-details-table tr.highlighted-row {
+  background-color:#f0f2f4;
+}
+
+.s-clinical-smart-alerts table.c-alert-details-table td.has-error {
+  color:red;
+}
+
+.s-clinical-smart-alerts table.c-alert-details-table td.has-error div {
+  display:inline-block;
+  min-width: 45px;
+}
+
+.s-clinical-smart-alerts .pccChart {
+	border:0;
+}
+
+.s-clinical-smart-alerts table.c-alert-details-table td.has-error img {
+  vertical-align:middle;
+}
+
+.pccChart .c3-grid .pccChartBaselineSystolic,.pccChartBaselineDiastolic {
+	stroke-dasharray: 4 ;
+    stroke-width:2px;	 
+}
+.pccChart .c3-grid .pccChartBaselineSystolic line{
+    stroke: #57c5bb ;
+}
+
+.pccChart .c3-grid .pccChartBaselineDiastolic line{
+    stroke: #f5a623 ;
+}
+
+.pccChart .c3-grid .pccChartBaselineSystolic text, .pccChartBaselineDiastolic text{
+    fill:#000;
+}
+
+.s-clinical-smart-alerts .flipcard {
+   perspective: 600px;
+   -webkit-perspective: 600px;
+   height: 320px;
+   margin-top: 10px;
+}
+
+.s-clinical-smart-alerts .flipcard.flipcard-is-switched .flipcard-wrapper  {
+	animation: rotate 0.5s linear both;
+	-webkit-animation: rotate 0.5s linear both;
+}
+
+.s-clinical-smart-alerts .flipcard-wrapper {
+	transform-style: preserve-3d;
+	-webkit-transform-style: preserve-3d;
+	animation: rotate-inverse 0.5s linear both;
+	-webkit-animation: rotate-inverse 0.5s linear both;
+	height: 100%;
+	position: relative;
+	width: 100%;
+}
+
+.s-clinical-smart-alerts .c3 svg {
+	font: 12px sans-serif;
+}
+
+.s-clinical-smart-alerts .flipcard-side {
+	-webkit-backface-visibility: hidden;
+	-moz-backface-visibility : hidden;
+	backface-visibility: hidden;
+	border-spacing:0;
+	border-radius: 5px;
+	border: 1px solid lightgrey;
+	height: 100%;
+	position: absolute;
+	width: 100%;
+}
+
+.s-clinical-smart-alerts .flipcard-side.flipcard-is-active {
+	/* Needs to be set for IE11 to work */
+	backface-visibility: visible;
+	position: static;
+}
+
+.s-clinical-smart-alerts .flipcard-side-back {
+	-webkit-transform: rotateY(180deg);
+	transform: rotateY(180deg);
+}
+
+
+.s-clinical-smart-alerts .flipcard-side-front {
+	transform: rotateY(0deg);
+}
+
+.s-clinical-smart-alerts .flipcard.c-loader .flipcard-side {
+	border:0;
+}
+
+.s-clinical-smart-alerts .flipcard-chevron-container {
+  padding-right: 10px;
+  padding-top: 10px;
+  text-align: right;
+}
+
+.s-clinical-smart-alerts .flipcard-chevron {
+  border-right: 2px solid #444;
+  border-bottom:2px solid #444;
+  content:'';
+  display:inline-block;
+  height:10px;
+  transform: rotate(-45deg);
+  transform-origin:center 8px;
+  transition:transform 0.25s cubic-bezier(0.455, 0.03, 0.515, 0.955);
+  width:10px;
+}
+
+.s-clinical-smart-alerts .c-emar {
+	top:103px;
+	right:0;
+}
+
+.pn-view, .pn-create {
+	margin-bottom:4px !important;
+}
+
+.pending-patient-buttons {
+	text-align: center;
+}
+
+.pending-patient-delete-confirmation-section-buttons {
+	text-align: center;
+}
+
+@-webkit-keyframes rotate {
+  0% {
+    -webkit-transform: rotateY(0);
+    transform: rotateY(0);
+  }
+  70% {
+    -webkit-transform: rotateY(200deg);
+    transform: rotateY(200deg);
+  }
+  100% {
+    -webkit-transform: rotateY(180deg);
+    transform: rotateY(180deg);
+  }
+}
+
+@keyframes rotate {
+  0% {
+    -webkit-transform: rotateY(0);
+    transform: rotateY(0);
+  }
+  70% {
+    -webkit-transform: rotateY(200deg);
+    transform: rotateY(200deg);
+  }
+  100% {
+    -webkit-transform: rotateY(180deg);
+    transform: rotateY(180deg);
+  }
+}
+@-webkit-keyframes rotate-inverse {
+  0% {
+    -webkit-transform: rotateY(180deg);
+    transform: rotateY(180deg);
+  }
+  70% {
+    -webkit-transform: rotateY(-20deg);
+   transform: rotateY(-20deg);
+  }
+  100% {
+    -webkit-transform: rotateY(0);
+    transform: rotateY(0);
+  }
+}
+@keyframes rotate-inverse {
+  0% {
+    -webkit-transform: rotateY(180deg);
+    transform: rotateY(180deg);
+  }
+  70% {
+    -webkit-transform: rotateY(-20deg);
+    transform: rotateY(-20deg);
+  }
+  100% {
+    -webkit-transform: rotateY(0);
+    transform: rotateY(0);
+  }
+}
+
+@-webkit-keyframes scaleUp {
+    0% { transform:scale(0); }
+    75% { transform:scale(1.25); }
+    100% { transform:scale(1); }
+}
+
+@keyframes scaleUp {
+    0% { transform:scale(0); }
+    75% { transform:scale(1.25); }
+    100% { transform:scale(1); }
+}
+
+
+@-webkit-keyframes rotate360 {
+    from {
+        -webkit-transform:rotate(0);
+        transform:rotate(0);
+    }
+
+    to {
+        -webkit-transform:rotate(360deg);
+        transform:rotate(360deg);
+    }
+}
+
+@keyframes rotate360 {
+    from {
+        -webkit-transform:rotate(0);
+        transform:rotate(0);
+    }
+
+    to {
+        -webkit-transform:rotate(360deg);
+        transform:rotate(360deg);
+    }
+}
+
+@-webkit-keyframes fadeIn {
+    from { opacity:0; }
+      to { opacity:1; }
+}
+
+@keyframes fadeIn {
+    from { opacity:0; }
+      to { opacity:1; }
+}
+
+.s-clinical-smart-alerts .c-filter-fixed-position{
+  position: fixed !important;
+}
+
+.s-clinical-smart-alerts .c-grouped-alert{
+  display: flow-root;
+}
+
+.s-clinical-smart-alerts .c-grouped-alert-desc{
+  float: left;
+  font-size: 11px;
+  width: 67%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s-clinical-smart-alerts .c-grouped-alert-date{
+  float: right;
+  font-size: 10px;
+  display: inline;
+  width: 33%;
+  text-align: right;
+  color: #727272;
+}
+
+.s-clinical-smart-alerts .c-grouped-alert-desc-title{
+  float: left;
+  font-size: small;
+  display: inline;
+  width: 50%;
+  font-weight: bold;
+  padding: 4px 0 4px 0;
+}
+
+.s-clinical-smart-alerts .c-grouped-alert-date-title{
+  float: right;
+  font-size: small;
+  display: inline;
+  width: 50%;
+  text-align: right;
+  font-weight: bold;
+  padding: 4px 0 4px 0;
+}
+
+.s-clinical-smart-alerts .u-width-100p {
+  width: 100%;
+}

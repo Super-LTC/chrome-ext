@@ -1,0 +1,1551 @@
+/* TODO: FIXME: determine where the class below is being used, and clean up instances to NOT add this class */
+input.readonly{
+	background-color:#efefef;
+}
+
+
+td.total{
+	font-weight:bold;
+}
+
+.offTab{
+	background-color:#656452;
+	color:#fff;
+	font-family:Verdana, Arial, Helvetica, sans-serif;
+	font-size:10pt;
+	font-weight:bold;
+	text-decoration:none;
+}
+
+.headerDate{
+	color:#fff;
+	font-weight:bold;
+}
+
+.carePlanFont{
+	color:#900;
+	font-size:10pt;
+	font-weight:bold;
+}
+
+span.mdsHeaderFont{
+	color:#900;
+	font-size:12pt;
+	font-weight:bold;
+}
+
+td.reportHeader{
+	background-color:#b50008;
+	color:#fff;
+	font-size:10pt;
+	font-weight:bold;
+}
+
+td.data{
+	font-weight:bold;
+}
+
+td.leftindex{
+	padding-right:1mm;
+	text-align:right;
+	vertical-align:middle;
+}
+
+td.lefttopindex{
+	padding-right:1mm;
+	text-align:right;
+	vertical-align:top;
+}
+
+td.rightindex{
+	padding-right:1mm;
+	text-align:right;
+	vertical-align:middle;
+}
+
+td.righttopindex{
+	padding-right:1mm;
+	text-align:right;
+	vertical-align:top;
+}
+
+table.pccTableShowDivider > tbody > tr > td{
+	border-bottom:1px solid #ddd;
+}
+
+table.pccTableShowDivider tr td{
+	border-bottom:1px solid #ddd\9;/* Temporary Hack to only apply to IE8,9,10 until Stds Mode */
+}
+
+.colHeader{
+	color:#000;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:10pt;
+	font-weight:bold;
+}
+
+.filter{
+	background-color:#efefef;
+}
+
+td.reportTitle{
+	font-weight:bold;
+}
+
+td.detailBody{
+	background-color:#fff;
+	padding:0;
+}
+
+tr.l{
+	background-color:#eee;
+}
+
+td.processingMsg{
+	color:red;
+	font-size:10pt;
+	font-weight:bold;
+}
+
+td.processingMsgNormal{
+	font-size:12pt;
+	font-weight:bold;
+}
+
+@page rotated{
+	size:landscape;
+}
+
+tr.detailBlockBodyLight{
+	background-color:#fff;
+	color:#000;
+	font-size:9pt;
+	vertical-align:top;
+}
+
+tr.detailBlockHeaderLight{
+	background-color:#fff;
+	color:#000;
+	font-size:12pt;
+	font-weight:bold;
+}
+
+tr.detailBlockBodyDark{
+	background-color:#efefef;
+	color:#000;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:9pt;
+	vertical-align:top;
+}
+
+tr.detailBlockHeaderDark{
+	background-color:#efefef;
+	color:#000;
+	font-size:12pt;
+	font-weight:bold;
+}
+
+.exportReady{
+	color:blue;
+}
+
+.exported{
+	color:navy;
+}
+
+.inProgress{
+	color:purple;
+}
+
+.accepted{
+	color:green;
+}
+
+.modified{
+	color:teal;
+}
+
+.incomplete{
+	color:brown;
+}
+
+tr.corporateRowColor, body#screenpopup div#detail table.simple tr.corporateRowColor td{
+	background-color:#fff;
+}
+
+tr.facilityRowColor, body#screenpopup div#detail table.simple tr.facilityRowColor td{
+	background-color:#eef567;
+}
+
+tr.divisionRowColor, body#screenpopup div#detail table.simple tr.divisionRowColor td{
+	background-color:#85e381;
+}
+
+td.corporateRowColor, span.corporateRowColor{
+	background-color:#fff;
+	border:1px solid #000;
+}
+
+td.facilityRowColor, span.facilityRowColor{
+	background-color:#eef567;
+	border:1px solid #000;
+}
+
+td.divisionRowColor, span.divisionRowColor{
+	background-color:#85e381;
+	border:1px solid #000;
+}
+
+span.corporateRowColor, span.facilityRowColor, span.divisionRowColor{
+	display:block;
+}
+
+.rugs{
+	color:#2553a6;
+	font-size:11px;
+	font-weight:bold;
+}
+
+.raps{
+	color:red;
+	font-size:11px;
+	font-weight:bold;
+}
+
+.edited{
+	color:#b00f40;
+	font-size:11px;
+	font-weight:bold;
+}
+
+.qa{
+	color:purple;
+	font-size:11px;
+	font-weight:bold;
+}
+
+.cp{
+	color:green;
+	font-size:11px;
+	font-weight:bold;
+}
+
+a.footOn{
+	color:red;
+	font-size:11px;
+	font-weight:bold;
+}
+
+a.footOff{
+	color:blue;
+	font-size:11px;
+	font-weight:bold;
+}
+
+.sig{
+	color:#85e381;
+	font-size:11px;
+	font-weight:bold;
+}
+
+.history{
+	color:#2553a6;
+	font-family:'Times New Roman', Times, serif;
+	font-size:7pt;
+	font-weight:bold;
+	text-decoration:underline;
+}
+
+.refresh{
+	color:green;
+	font-family:'Times New Roman', Times, serif;
+	font-size:7pt;
+	font-weight:bold;
+	text-decoration:underline;
+}
+
+td.errors{
+	background-color:#f5b5b5;
+	border:outset;
+	color:#000;
+	cursor:pointer;
+}
+
+td.inprogress{
+	background-color:#eef567;
+	border:outset;
+	color:#000;
+	cursor:pointer;
+}
+
+td.signed{
+	background-color:#85e381;
+	border:outset;
+	color:#000;
+	cursor:pointer;
+}
+
+td.unedited{
+	background-color:#fff;
+	border:outset;
+	color:#000;
+	cursor:pointer;
+}
+
+td.errorsSelected{
+	background-color:#f5b5b5;
+	border-color:#6e6e6e;
+	border:ridge;
+	color:#000;
+	cursor:pointer;
+}
+
+td.inprogressSelected{
+	background-color:#eef567;
+	border-color:#6e6e6e;
+	border:ridge;
+	color:#000;
+	cursor:pointer;
+}
+
+td.signedSelected{
+	background-color:#85e381;
+	border-color:#6e6e6e;
+	border:ridge;
+	color:#000;
+	cursor:pointer;
+}
+
+td.uneditedSelected{
+	background-color:#fff;
+	border-color:#6e6e6e;
+	border:ridge;
+	color:#000;
+	cursor:pointer;
+}
+
+td.focus{
+	background-color:#c5c5c5;
+	border-color:#6e6e6e;
+	border:inset;
+	color:#000;
+	cursor:pointer;
+}
+
+.clinicalButton{
+	background-color:#5275b5;
+	border-color:#a8bee3 #254c8a #254c8a #c2d3ed;
+	border-style:outset;
+	border-width:2px;
+	color:#fff;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:12px;
+	font-weight:bold;
+	margin:0;
+	padding:0 5px 0 5px;
+	text-decoration:none;
+	vertical-align:middle;
+}
+
+.clinicalButtonLight{
+	background-color:#ccf;
+	border-color:#d3dded #94abd4 #7290c4 #a5b9d9;
+	border-style:outset;
+	border-width:3px;
+	color:#000;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:12px;
+	font-weight:bold;
+	margin:0;
+	padding:0 5px 0 5px;
+	text-decoration:none;
+	vertical-align:middle;
+}
+
+.adminButton{
+	background-color:#681898;
+	border-color:#a9a5b2 #503757 #4b2b50 #8d759a;
+	border-style:solid;
+	border-width:2px;
+	color:#fff;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:12px;
+	font-weight:bold;
+	margin:0;
+	padding:0 5px 0 5px;
+	text-decoration:none;
+	vertical-align:middle;
+}
+
+.adminButtonLight{
+	background-color:#c8b4e0;
+	border-color:#e2dcef #a16faf #9657a0 #bd9ccf;
+	border-style:solid;
+	border-width:2px;
+	color:#000;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:12px;
+	font-weight:bold;
+	padding:0 5px 0 5px;
+	text-decoration:none;
+	vertical-align:middle;
+}
+
+.btbl{
+	border:1px solid #cecece;
+}
+
+.btr{
+	border-right:solid #cecece;
+	border-top:solid #cecece;
+	border-width:1px;
+}
+
+.btl{
+	border-left:solid #cecece;
+	border-top:solid #cecece;
+	border-width:1px;
+}
+
+.br{
+	border-right:solid #cecece;
+	border-width:1px;
+}
+
+.bl{
+	border-left:solid #cecece;
+	border-width:1px;
+}
+
+.bt{
+	border-top:solid #cecece;
+	border-width:1px;
+}
+
+.bb{
+	border-bottom:solid #cecece;
+	border-width:1px;
+}
+
+.bbr{
+	border-bottom:solid #cecece;
+	border-right:solid #cecece;
+	border-width:1px;
+}
+
+.bbl{
+	border-bottom:solid #cecece;
+	border-left:solid #cecece;
+	border-width:1px;
+}
+
+tr.titleRow{
+	background-color:#dfdfdf;
+	font-weight:bold;
+	height:25px;
+}
+
+.qcheck{
+	color:teal;
+	font-size:16px;
+	font-weight:bold;
+	text-decoration:none;
+}
+
+.crmTab{
+	background-color:#419ba6;
+	color:#fff;
+	font-family:Verdana, Arial, Helvetica, sans-serif;
+	font-size:10pt;
+	font-weight:bold;
+	text-decoration:none;
+}
+
+.crmTabHighlight{
+	background-color:#59c7d4;
+}
+
+/******************************************************************************/
+/* POPUP SCREEN STYLE                                                         */
+/* USAGE: Style applies to the entire page                                    */
+/* <body id="screenpopup" class="<%=tabType%>">                               */
+/*   <div id="header"></div>                                                  */
+/*   <div id="detail"></div>                                                  */
+/*   <div id="footer"></div>                                                  */
+/* </body>                                                                    */
+/******************************************************************************/
+
+/* HEADER STYLES */
+body#screenpopup div#header{
+  color:#fff;
+  font-size:13px;
+  font-weight:bold;
+  height:25px;
+  padding-top:5px;
+  position:relative;
+  text-align:left;
+  vertical-align:middle;
+  width:100%;
+}
+
+/* HEADER TITLE */
+body#screenpopup div#header span{
+  position:relative;
+  vertical-align:middle;
+}
+
+/* BUTTONS IN HEADER */
+body#screenpopup div#header a{
+  background-color:#a5b9d9;/*DEFAULT LIGHT*/
+  border:2px outset #ccc;
+  color:#000;
+  font-size:12px;
+  font-weight:bold;
+  margin-left:5px;
+  margin-right:5px;
+  padding-bottom:0;
+  padding-right:5px;
+  padding-top:0;
+  position:relative;
+  text-align:center;
+  text-decoration:none;
+  vertical-align:middle;
+  white-space:nowrap;
+  width:75px;
+}
+
+body#screenpopup div#footer{
+  background-color:#fff;
+  color:#000;
+  font-weight:bold;
+  height:35px;
+  padding:5px;
+  position:relative;
+  text-align:center;
+  width:100%;
+}
+
+/* FOOTER BUTTONS */
+body#screenpopup div#footer a{
+  background-color:#006;/*DEFAULT DARK*/
+  border:2px outset #ccc;
+  color:#fff;
+  font-weight:bold;
+  margin-left:5px;
+  margin-right:5px;
+  padding-bottom:0;
+  padding-left:5px;
+  padding-right:5px;
+  padding-top:0;
+  position:relative;
+  text-align:center;
+  text-decoration:none;
+  vertical-align:middle;
+  white-space:nowrap;
+  width:75px;
+}
+
+/* DETAIL */
+body#screenpopup div#detail{
+  background-color:#efefef;
+  border:0;
+  border-bottom:1px solid rgba(0, 0, 0, 0.12);
+  overflow:auto;
+  position:relative;
+  width:100%;
+}
+
+#screenpopup div#detail{
+	border:0;
+	border-bottom:1px solid rgba(0, 0, 0, 0.12);
+}
+
+
+/* SEARCH BAR - LIGHT COLOR - DARK BOTTOM BORDER */
+body#screenpopup div#detail div.search{
+  border-bottom-style:solid;
+  border-bottom-width:1px;
+  vertical-align:middle;
+}
+
+/*was in main.css */
+/* DETAIL ERROR */
+body#screenpopup div#detail div.errmsg{
+  color:#f00;
+  font-weight:bold;
+  padding-left:10px;
+  padding-right:10px;
+  padding-top:10px;
+  width:100%;
+}
+
+body#screenpopup div#detail div.error{
+  color:#f00;
+  border:1px solid #b7b7b7;
+  background-color:#ffc;
+  margin:5px;
+  padding-left:5px;
+  padding-right:5px;
+  padding-top:3px;
+  padding-bottom:3px;
+  width:100%;
+}
+
+/* DETAIL ERROR */
+body#screenpopup div#detail span.error{
+  color:#f00;
+  font-weight:bold;
+  margin-left:10px;
+  margin-right:10px;
+  margin-top:10px;
+  width:100%;
+}
+
+body#screenpopup div#detail hr.hline{
+  height:1px;
+}
+
+/* SECTION HEADER */
+body#screenpopup div#detail div.header{
+  color:#fff;
+  font-weight:bold;
+  margin-top:10px;
+  min-height:20px;
+  padding-top:2px;
+  position:relative;
+  text-align:left;
+  vertical-align:middle;
+  width:100%;
+}
+
+/* SECTION HEADER TITLE */
+body#screenpopup div#detail div.header span{
+  position:relative;
+  vertical-align:middle;
+}
+
+/* DETAIL SCROLL AREA */
+body#screenpopup div#detail div.scroll{
+  overflow-x:auto;
+  overflow-y:auto;
+  position:relative;
+  width:100%;
+}
+
+/* TODO: FIXME: merge use of .simple table class to use .pccResults instead */
+
+
+/* SIMPLE TABLE - WHITE ROWS WITH A GRAY BOTTOM BORDER */
+body#screenpopup div#detail table.simple{
+  border-collapse:collapse;
+  empty-cells:show;
+  width:100%;
+  background-color:#efefef;
+}
+
+/* SIMPLE TABLE - HEADER */
+body#screenpopup div#detail table.simple tr th{
+  background-color:#d5d5d5;
+  border-bottom-color:#b7b7b7;
+  border-bottom-style:solid;
+  border-bottom-width:1px;
+  font-size:12px;
+  font-weight:bold;
+  height:20px;
+  padding-left:5px;
+  padding-right:5px;
+}
+
+/* SIMPLE TABLE - DETAIL */
+body#screenpopup div#detail table.simple tr td{
+  background-color:#fff;
+  border-bottom-color:#b7b7b7;
+  border-bottom-style:solid;
+  border-bottom-width:1px;
+  height:20px;
+  padding-left:5px;
+  padding-right:5px;
+}
+
+/* SIMPLE TABLE - ROW FOCUS */
+body#screenpopup div#detail table.simple tr.focus td{
+  background-color:#ffffb7;
+}
+
+body#screenpopup div#detail table.simple tr.shade td{
+  background-color:#efefef;
+}
+
+/* SHADED TABLE */
+body#screenpopup div#detail table.shaded{
+  border-collapse:collapse;
+  empty-cells:show;
+  width:100%;
+}
+
+/* SIMPLE TABLE - HEADER */
+body#screenpopup div#detail table.shaded tr th{
+  background-color:#d5d5d5;
+  border-bottom-color:#b7b7b7;
+  border-bottom-style:solid;
+  border-bottom-width:1px;
+  font-size:12px;
+  font-weight:bold;
+  height:20px;
+  padding-left:5px;
+  padding-right:5px;
+}
+
+/* SIMPLE TABLE - DETAIL */
+body#screenpopup div#detail table.shaded tr td{
+  background-color:#fff;
+  height:20px;
+  padding-left:5px;
+  padding-right:5px;
+}
+
+body#screenpopup div#detail table.shaded tr.shade td{
+  background-color:#efefef;
+}
+
+/* SIMPLE TABLE - ROW FOCUS */
+body#screenpopup div#detail table.shaded tr.focus td{
+  background-color:#ffffb7;
+}
+
+.tabBar{
+	border-bottom-width:0;
+	border-color:#fff;
+	border-left-width:0;
+	border-right-width:0;
+	border-spacing:0;
+	border-top-width:0;
+}
+
+.clinicalbuttonOn{
+	border-color:#d5d5d5;
+	border-left-style:outset;
+	border-left-width:3px;
+	border-right-style:outset;
+	border-right-width:3px;
+	border-top-style:outset;
+	border-top-width:3px;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0;
+	text-decoration:none;
+}
+
+.clinicalbuttonOff{
+	background-color:#ccf;
+	border-color:#fff;
+	border-left-style:outset;
+	border-left-width:3px;
+	border-right-style:outset;
+	border-right-width:3px;
+	border-top-style:outset;
+	border-top-width:3px;
+	color:#333;
+	font-size:11px;
+	font-weight:bold;
+	padding:0;
+	text-decoration:none;
+}
+
+.clinicalbuttonOn span, .clinicalbuttonOff span{
+	padding:0 5px;
+}
+
+.adminbuttonOn{
+	border-color:#d5d5d5;
+	border-left-style:outset;
+	border-left-width:3px;
+	border-right-style:outset;
+	border-right-width:3px;
+	border-top-style:outset;
+	border-top-width:3px;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0;
+	text-decoration:none;
+}
+
+.adminbuttonOff{
+	background-color:#ccc;
+	border-color:#fff;
+	border-left-style:outset;
+	border-left-width:3px;
+	border-right-style:outset;
+	border-right-width:3px;
+	border-top-style:outset;
+	border-top-width:3px;
+	color:#333;
+	font-size:11px;
+	font-weight:bold;
+	padding:0;
+	text-decoration:none;
+}
+
+.adminbuttonOn span, .adminbuttonOff span{
+	padding:0 5px;
+}
+
+.crmbuttonOn{
+	border-color:#d5d5d5;
+	border-left-style:outset;
+	border-left-width:3px;
+	border-right-style:outset;
+	border-right-width:3px;
+	border-top-style:outset;
+	border-top-width:3px;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0;
+	text-decoration:none;
+}
+
+.crmbuttonOff{
+	background-color:#b3e3e8;
+	border-color:#fff;
+	border-left-style:outset;
+	border-left-width:3px;
+	border-right-style:outset;
+	border-right-width:3px;
+	border-top-style:outset;
+	border-top-width:3px;
+	color:#333;
+	font-size:11px;
+	font-weight:bold;
+	padding:0;
+	text-decoration:none;
+}
+
+.tabTextOn{
+	color:#fff;
+	font-size:11px;
+	text-decoration:none;
+}
+
+.tabTextOff{
+	color:#000;
+	font-size:11px;
+	text-decoration:none;
+}
+
+.ba{
+	border:1px solid #d5d5d5;
+	font-size:8pt;
+}
+
+a.button{
+	border:2px outset;
+	font-family:Arial, Helvetica, sans-serif;
+	font-size:12px;
+	font-weight:bold;
+	margin:0;
+	padding:0 5px 0 5px;
+	text-decoration:none;
+	vertical-align:middle;
+}
+
+.header{
+	font-size:10pt;
+	font-weight:bold;
+}
+
+a.button, .header{
+	color:#fff;
+}
+
+body.M a.button, body.M .header{
+	background-color:#419ba6;
+}
+
+body.M a.button{
+  border-color:#59c7d4 #000 #000 #59c7d4;
+}
+
+body.M .lightHeader{
+  background-color:#b3e3e8;
+}
+
+body.irm a.button, body.irm .header{
+	background-color:#419ba6;
+}
+
+body.irm a.button{
+  border-color:#59c7d4 #000 #000 #59c7d4;
+}
+
+body.irm .lightHeader{
+  background-color:var(--pcc-primary-accent-color-light);
+}
+
+body.P a.button{
+  background-color:#681898;
+  border-color:#c0a4d8 #254c8a #254c8a #a06cc0;
+}
+
+.repHead{
+	color:#000;
+	font-size:10pt;
+	font-weight:bold;
+}
+
+.even{
+	background-color:#efefef;
+}
+
+.odd{
+	background-color:#fff;
+}
+
+.over{
+	background-color:#ff3;
+}
+
+.clinicalButtonLightBigish{
+	background-color:#ccc;
+	border:3px outset #eee;
+	color:#000;
+	font:bold 12px arial;
+	margin:0;
+	padding:15px 1px 15px 1px;
+	text-align:center;
+	text-decoration:none;
+	vertical-align:middle;
+	width:120px;
+}
+
+
+/* content of coreSL.css below */
+/*
+	Everything below this line that is not part of the generic core styles
+	of the application needs to be moved elsewhere.
+
+	There should be no poc/emar/glap etc. code in this file
+*/
+
+
+/*********** GENERAL ***********/
+.ordersListBar{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+}
+
+.slBorderColor{
+	border:1px solid var(--pcc-primary-accent-color-main) !important;
+}
+
+.physorder-subheader{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+}
+
+.slBackgroundColor{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+}
+
+.slLightBackgroundColor{
+	background-color:#c1ceab;
+}
+
+div.sectiontitle{
+	background-image:none !important;
+}
+
+.slSectionTitle{
+	height:25px !important;
+	line-height:25px !important;
+}
+
+/*********** EMAR ***********/
+.resDetailHeader{
+	background-image:none !important;
+	background-color:#606060;
+}
+
+.resDetailHeader b{
+	color:#ff !important;/* TODO: FIXME: invalid color */
+}
+
+.clientHeaderInfo{
+	background-image:none !important;
+	background-color:#c1ceab;
+}
+
+.pain-layout .roundedBox{
+	border:2px solid var(--pcc-primary-accent-color-main) !important;
+}
+
+.pain-layout .numScale{
+	background:#c1ceab !important;
+}
+
+.pain-layout .painChoice{
+	background:#c1ceab !important;
+}
+
+.pain-layout .numScaleSelected{
+	background:var(--pcc-primary-accent-color-main) !important;
+}
+
+div.windowTitle{
+	background:none;
+	background-color:var(--pcc-primary-accent-color-main) !important;
+}
+
+td.tableHeader{
+	background:none;
+	background-color:var(--pcc-primary-accent-color-main) !important;
+	color:#000;
+	height:20px;
+}
+
+.blueInnerBorder{
+	border-top:2px solid var(--pcc-primary-accent-color-main);
+}
+
+#orderDescription{
+	color:#fff;
+	font-size:16px;
+	height:30px;
+	line-height:28px;
+	padding:0 0 0 10px;
+}
+
+div.tabtitle{
+	background-image:none;
+	background-color:var(--pcc-primary-accent-color-main) !important
+}
+
+/********** EMAR BUTTONS ***********/
+.emarButtonImageOn, .emarButtonImageOnBig{
+	background:none;
+	background-color:var(--pcc-primary-accent-color-main) !important;
+	border-top:1px solid #000;
+	border-left:1px solid #000;
+	border-right:1px solid #000;
+	border-radius:4px 4px 0 0;
+	margin-right:2px;
+}
+
+.emarButtonImageOff, .emarButtonImageOffBig{
+	background:none;
+	background-color:#eee !important;
+	border-top:1px solid #000;
+	border-left:1px solid #000;
+	border-right:1px solid #000;
+	border-bottom:none;
+	border-radius:4px 4px 0 0;
+	margin-right:2px;
+}
+
+button.emarButton, input.emarButton{
+	background:none;
+	background-color:#ccc;
+	border:1px solid #000;
+	border-radius:4px;
+	margin:0 0 5px 0;
+}
+
+.emarNoGreenEraserButton{
+	background:transparent url("/images/eMAR_whitebutton_eraser_trans.png") no-repeat center;
+	background-color:#eee;
+	border:1px solid #000;
+	border-radius:4px;
+	height:28px;
+	margin:0 0 5px 5px;
+}
+
+.emarYesGreenCheckButton{
+	background:transparent url("/images/eMAR_whitebutton_check_trans.png") no-repeat center;
+	background-color:#eee;
+	border:1px solid #000;
+	border-radius:4px;
+	height:28px;
+	margin:0 0 5px 5px;
+}
+
+button.emarButtonTwoState, input.emarButtonTwoState{
+	background-image:none;
+	background-color:var(--pcc-primary-accent-color-main);
+	border:1px solid #000;
+	border-radius:4px;
+	color:#000;
+	cursor:pointer;
+	display:inline-block;
+	font-size:8pt;
+	font-weight:normal;
+	height:45px;
+	margin:0 0 5px 3px;
+	padding:1px;
+	text-align:center;
+	vertical-align:middle;
+	white-space:normal;
+	width:100px;
+}
+
+.emarButtonAlert{
+	background-color:var(--pcc-primary-accent-color-main);
+	background-image:none !important;
+	border:0;
+	color:#000;
+	cursor:pointer;
+	display:inline-block;
+	font-size:8pt;
+	font-weight:bold;
+	height:45px;
+	padding:1px;
+	text-align:center;
+	vertical-align:middle;
+	white-space:normal;
+	width:150px;
+}
+
+.emarSupplyWaiting{
+	background-color:#ff3a49 !important;
+	background-image:none !important;
+	border:0;
+	color:#000;
+	cursor:pointer;
+	display:inline-block;
+	font-size:8pt;
+	font-weight:bold;
+	height:45px;
+	padding:1px;
+	text-align:center;
+	vertical-align:middle;
+	white-space:normal;
+	width:150px;
+}
+
+button.emarButton[disabled], input.emarButton[disabled]{
+	background-image:none !important;
+	color:grey;
+}
+
+.emarButton_OVERDUE{
+	background-color:#ff9e9e !important;
+	background-image:none !important;
+}
+.emarButton_INPROGRESS{
+	background-color:#ffff75 !important;
+	background-image:none !important;
+}
+.emarButton_SCHEDULED{
+	background-color:#eeeeee !important;
+	background-image:none !important;
+}
+.emarButton_COMPLETE{
+	background-color:#9dff6a !important;
+	background-image:none !important;
+}
+.emarButton_orange{
+	background-color:#ffa91f !important;
+	background-image:none !important;
+}
+.emarButton:active, .emarButtonTwoState:active{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+	background-image:none !important;
+}
+.emarButton_OVERDUE:active{
+	background-color:#ff9e9e !important;
+	background-image:none !important;
+}
+.emarButton_INPROGRESS:active{
+	background-color:#ffff75 !important;
+	background-image:none !important;
+}
+.emarButton_SCHEDULED:active{
+	background-color:#eeeeee !important;
+	background-image:none !important;
+}
+.emarButton_COMPLETE:active{
+	background-color:#9dff6a !important;
+	background-image:none !important;
+}
+.emarButton_orange:active{
+	background-color:#ffa91f !important;
+	background-image:none !important;
+}
+.emarButtonSelected{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+	background-image:none !important;
+	font-weight:bold !important;
+	text-decoration:underline;
+}
+.emarButtonSelected_OVERDUE{
+	background-color:#ff9e9e !important;
+	background-image:none !important;
+	font-weight:bold !important;
+	text-decoration:underline;
+}
+.emarButtonSelected_INPROGRESS{
+	background-color:#ffff75 !important;
+	background-image:none !important;
+	font-weight:bold !important;
+	text-decoration:underline;
+}
+.emarButtonSelected_SCHEDULED{
+	background-color:#eeeeee !important;
+	background-image:none !important;
+	font-weight:bold !important;
+	text-decoration:underline;
+}
+.emarButtonSelected_COMPLETE{
+	background-color:#9dff6a !important;
+	background-image:none !important;
+	font-weight:bold !important;
+	text-decoration:underline;
+}
+.emarButtonSelected_orange{
+	background-color:#ffa91f !important;
+	background-image:none !important;
+	font-weight:bold !important;
+	text-decoration:underline;
+}
+input.tinyTouchButton, button.tinyTouchButton{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+	background-image:none !important;
+}
+input.tinyTouchButton:active, button.tinyTouchButton:active{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+	background-image:none !important;
+	color:#fff;
+}
+
+.emarViewButtonLarge{
+	background:none;
+	background-color:#606060 !important;
+}
+
+.emarStrikeoutButton{
+	background:none !important;
+	background-color:#606060 !important;
+}
+
+.emarYesYellowButton{
+	background:none !important;
+	background-color:#ffff75 !important;
+	border:1px solid #000;
+	border-radius:4px;
+	height:28px;
+	margin:0 0 5px 5px;
+}
+
+.emarYesOrangeButton{
+	background:none !important;
+	background-color:#ffa91f !important;
+	border:1px solid #000;
+	border-radius:4px;
+	height:28px;
+	margin:0 0 5px 5px;
+}
+
+.emarYesWhiteButton{
+	background:none !important;
+	background-color:#eee !important;
+	border:1px solid #000;
+	border-radius:4px;
+	height:28px;
+	line-height:10px;
+	margin:0 0 5px 5px;
+}
+
+.emarPlusMinus{
+	font-size:14px !important;
+	font-weight:bold !important;
+	height:22px !important;
+	width:25px !important;
+}
+
+.emarViewButton{
+	background:none !important;
+	background-color:#606060 !important;
+	border:1px solid #000;
+	border-radius:4px;
+	padding:0 !important;
+}
+
+.emarViewButtonLarge{
+	background:none !important;
+	background-color:#606060 !important;
+	border:1px solid #000;
+	border-radius:4px;
+	padding:0 !important;
+
+}
+
+.emarStrikeoutButton{
+	background:none !important;
+	background-color:#606060 !important;
+	border:1px solid #000;
+	border-radius:4px;
+	padding:0 !important;
+}
+
+.emarExhaustButton{
+	background:none !important;
+	background-color:#606060 !important;
+	border:1px solid #000;
+	border-radius:4px;
+	padding:0 !important;
+	line-height:24px;
+}
+
+button.emarButton:hover,
+input.emarButton:hover,
+button.emarButtonTwoState:hover,
+input.emarButtonTwoState:hover,
+input.tinyTouchButton:hover,
+button.tinyTouchButton:hover,
+input.tinyTouchButton:hover,
+button.tinyTouchButton:hover,
+.emarViewButtonLarge:hover,
+.emarYesYellowButton:hover,
+.emarYesOrangeButton:hover,
+.emarNoGreenEraserButton:hover,
+.emarYesGreenCheckButton:hover,
+.emarYesWhiteButton:hover{
+	border:2px solid #000;
+}
+
+.marBrick{
+	padding:2px;
+}
+
+.marBrick:hover{
+	background-color:#979797 !important;
+	border-radius:7px;
+}
+
+.marBubble:hover{
+	background-color:#979797 !important;
+	border-radius:10px;
+}
+
+.emarViewButton:hover,
+.emarViewButtonLarge:hover,
+.emarStrikeoutButton:hover,
+.emarExhaustButton:hover{
+	background-color:#979797 !important;
+}
+
+#holder #topheader{
+	background-color:var(--pcc-primary-accent-color-light);
+	background-image:none;
+	border:none;
+}
+
+#holder #footer{
+	background-color:#fff;
+	border-top:1px solid rgba(0, 0, 0, 0.12);
+}
+
+
+
+
+/*********** ADMIN/BILLING ***********/
+.lease-dialog .ui-dialog-titlebar{
+	background-color:var(--pcc-primary-accent-color-main) !important;
+}
+.lease-dialog .ui-widget-header{
+	border:1px solid var(--pcc-primary-accent-color-main) !important;
+}
+
+/*********** CLINICAL/CARE SERVICES ***********/
+#displayFilter-title{
+	background-color:#606060 !important;
+}
+
+/*********** Results Tab ***********/
+span.depress, a.depress{
+	background-color:#c1ceab !important;
+}
+
+/*********** IRM/MARKETING ***********/
+.crmbuttonOff{
+	background-color:#606060;
+	border:0 !important;
+	color:#fff;
+}
+
+/*********** GLAP ***********/
+body.emcMode .facheader{
+	background-color:var(--pcc-primary-accent-color-main);
+}
+
+/*********** CLIENT TABS ***********/
+.clientInfoTabs{
+	background-color:#606060;
+	width:100%;
+}
+
+.clientInfoTabs .clinicalbuttonOn{
+	border-width:0;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0 3px;
+	text-decoration:none;
+}
+
+.clientInfoTabs .clinicalbuttonOff{
+	border-width:0;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0 3px;
+	text-decoration:none;
+}
+
+.clientInfoTabs .adminbuttonOn{
+	border-width:0;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0 3px;
+	text-decoration:none;
+}
+.clientInfoTabs .adminbuttonOff{
+	border-width:0;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0 3px;
+	text-decoration:none;
+}
+
+.clientInfoTabs .crmbuttonOn{
+	border-width:0;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0 3px;
+	text-decoration:none;
+}
+
+.clientInfoTabs .crmbuttonOFF{
+	background-color:#606060;
+	border-width:0;
+	color:#fff;
+	font-size:11px;
+	font-weight:bold;
+	padding:0 3px;
+	text-decoration:none;
+}
+
+.clientInfoLine{
+	display:none;
+}
+
+
+/*********** RESIDENT HEADER ***********/
+.residentWrapper{
+	border-left:1px solid #fff !important;
+	border-right:0 solid #fff !important;
+}
+
+.residentNameBar{
+	background-color:#ccc !important;
+	background-image:none !important;
+	padding:0 0 0 0 !important;
+}
+
+.residentDetailsWrapper{
+	border-left:1px solid #fff !important;
+	border-right:0 solid #fff !important;
+}
+
+.alertsSectionWrapper{
+	border-left:1px solid #fff !important;
+	border-right:0 solid #fff !important;
+}
+
+.residentListHeader{
+	width:100%;
+}
+
+.residentListTitle{
+	padding:5px 0 5px 5px;
+}
+
+.residentListViewsWrapper{
+	background-color:#606060;
+	padding:0;
+	margin:0;
+}
+
+.residentListViews td{
+	margin:0;
+}
+
+.residentListViews .selected{
+	background-color:var(--pcc-primary-accent-color-main);
+	font-weight:normal;
+	margin:0 !important;
+}
+
+.residentListViews span{
+	font-weight:bold;
+	margin:0 0 0 5px !important;
+}
+
+.residentListViews a{
+	color:#fff;
+	text-decoration:none;
+	line-height:20px;
+}
+
+.residentListViewHover{
+	background-color:var(--pcc-primary-accent-color-main);
+}
+
+.residentListViews a:hover{
+	text-decoration:none;
+}
+
+.residentListFilters td{
+	background-color:var(--pcc-primary-accent-color-main);
+	color:#fff !important;
+}
+
+div.questiongrouptitle{
+	background-image:none !important;
+	background-color:#414042 !important;
+}
+
+.clinicalbuttonOn{
+	border-color:var(--pcc-primary-accent-color-main);
+}
+
+body.emcMode .ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+.ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+body.clinical .ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+body.glap .ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+body.home .ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+body.irm .ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}
+body.qia .ui-widget-header{
+	background:var(--pcc-primary-accent-color-main);
+	border:1px solid var(--pcc-primary-accent-color-main);
+}

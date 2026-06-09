@@ -9,6 +9,7 @@
 import '../config.js';
 import './css-bootstrap.js';
 import './utils/analytics.js'; // initializes PostHog, sets super-properties, bootstraps auth
+import { initDraggableOverlays } from './utils/draggable-overlay.js';
 
 // 2. Import vanilla utilities (order matters - matches current manifest.json order)
 import './mockData.js';
@@ -125,6 +126,9 @@ startPccNavObserver();
 // 10. Install global delegated click listener for [data-track] elements
 import { startTrackDelegate } from './utils/track-delegate.js';
 startTrackDelegate();
+
+// 10.5. Make overlay panels draggable by their headers (MDS popovers, modals, etc.)
+initDraggableOverlays();
 
 // 11. Fire extension_loaded at most once per tab session. Content scripts
 // re-inject on every PCC top-frame navigation, so an unthrottled track() here

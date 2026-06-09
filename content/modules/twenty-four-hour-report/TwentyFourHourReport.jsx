@@ -8,8 +8,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useReportData } from './hooks/useReportData.js';
+import { useReportSchedule } from './hooks/useReportSchedule.js';
 import { useRestoreFromPCC } from './hooks/useRestoreFromPCC.js';
 import { formatFacilityDate, todayInFacilityTz } from './utils/api.js';
+import { ScheduleSettings } from './components/ScheduleSettings.jsx';
 import { SeverityCards } from './components/SeverityCards.jsx';
 import { FiltersBar } from './components/FiltersBar.jsx';
 import { FindingRow } from './components/FindingRow.jsx';
@@ -80,6 +82,18 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
     initialDate: restore?.date || null,
   });
 
+  const {
+    schedule,
+    loading: scheduleLoading,
+    saving: scheduleSaving,
+    error: scheduleError,
+    selectedHour,
+    setSelectedHour,
+    isDirty: scheduleDirty,
+    updateSchedule,
+    retry: retrySchedule,
+  } = useReportSchedule({ facilityName, orgSlug });
+
   const today = useMemo(() => todayInFacilityTz(timezone), [timezone]);
   const latestAvailable = availableDates[0] || null;
   const oldestAvailable = availableDates[availableDates.length - 1] || null;
@@ -136,6 +150,7 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Track search input as a length bucket — never the raw text (PHI risk).
   const lastSearchBucketRef = useRef('empty');
@@ -244,6 +259,34 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
     if (e.target === e.currentTarget) onClose();
   };
 
+  const closeSettings = () => {
+    if (schedule?.scheduleHour != null) setSelectedHour(schedule.scheduleHour);
+    setSettingsOpen(false);
+  };
+
+  const handleScheduleSave = async () => {
+    if (selectedHour == null) return;
+    try {
+      await updateSchedule(selectedHour);
+      window.SuperToast?.success?.('Report delivery time updated');
+      setSettingsOpen(false);
+    } catch (err) {
+      window.SuperToast?.error?.(err?.message || 'Failed to update report delivery time');
+    }
+  };
+
+  const handleScheduleReset = async () => {
+    const defaultHour = schedule?.defaultScheduleHour ?? 3;
+    setSelectedHour(defaultHour);
+    try {
+      await updateSchedule(defaultHour);
+      window.SuperToast?.success?.('Report delivery time reset to default');
+      setSettingsOpen(false);
+    } catch (err) {
+      window.SuperToast?.error?.(err?.message || 'Failed to reset report delivery time');
+    }
+  };
+
   return (
     <div class="thr__overlay" onClick={handleBackdropClick}>
       <aside
@@ -300,6 +343,24 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
               </button>
             )}
           </div>
+          <ScheduleSettings
+            isOpen={settingsOpen}
+            onToggle={() => {
+              if (settingsOpen) closeSettings();
+              else setSettingsOpen(true);
+            }}
+            onClose={closeSettings}
+            schedule={schedule}
+            loading={scheduleLoading}
+            saving={scheduleSaving}
+            error={scheduleError}
+            selectedHour={selectedHour}
+            onHourChange={setSelectedHour}
+            isDirty={scheduleDirty}
+            onSave={handleScheduleSave}
+            onReset={handleScheduleReset}
+            onRetry={retrySchedule}
+          />
         </header>
 
         {currentReport && (

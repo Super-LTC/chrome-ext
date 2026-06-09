@@ -8,10 +8,12 @@
 import { createMockChrome } from './demo-mock-chrome.js';
 import { installGlobalMocks } from './demo-mock-globals.js';
 import { installCarePlanAuditMocks } from './demo-care-plan-audit-fixtures.js';
+import { installCarePlanDemoWire } from './demo-care-plan-wire.js';
 
 createMockChrome();
 installGlobalMocks();
 installCarePlanAuditMocks();
+installCarePlanDemoWire();
 window.__DEMO_MODE = true;
 
 // ── Step 2: Import CSS (Vite will bundle these) ──
@@ -42,6 +44,7 @@ import '../content/css/ard-estimator.css';
 import '../content/css/qm-board.css';
 import '../content/css/24hr-report.css';
 import '../content/css/ai-chat.css';
+import '../content/css/draggable-overlay.css';
 import './demo-chat.css';
 import './pcc-demo-overrides.css';
 
@@ -53,6 +56,7 @@ import { Sidebar as ICD10SidebarComponent } from '../content/modules/icd10-sideb
 import { ArdEstimator } from '../content/modules/ard-estimator/ArdEstimator.jsx';
 import { Icd10QueryFlow } from '../content/modules/icd10-query-flow/Icd10QueryFlow.jsx';
 import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confirmation/DiagnosisConfirmationDialog.jsx';
+import { initDraggableOverlays } from '../content/utils/draggable-overlay.js';
 
 // Expose preact + components globally so the vanilla icd10-viewer.js can
 // mount Preact trees without dynamic JSX imports in the classic-script load path.
@@ -71,6 +75,7 @@ function boot() {
   }
 
   render(<PCCDemoApp />, root);
+  initDraggableOverlays();
   console.log('[PCC Demo] PCCDemoApp mounted');
 }
 

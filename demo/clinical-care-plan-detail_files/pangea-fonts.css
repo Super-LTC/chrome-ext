@@ -1,0 +1,40 @@
+@font-face {
+  font-family: 'PangeaText';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('fonts/PangeaText-Light.woff2') format('woff2'),
+       url('fonts/PangeaText-Light.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'PangeaText';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/PangeaText-Regular.woff2') format('woff2'),
+       url('fonts/PangeaText-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'PangeaText';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/PangeaText-Medium.woff2') format('woff2'),
+       url('fonts/PangeaText-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'PangeaText';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/PangeaText-SemiBold.woff2') format('woff2'),
+       url('fonts/PangeaText-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'PangeaText';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('fonts/PangeaText-Bold.woff2') format('woff2'),
+       url('fonts/PangeaText-Bold.ttf') format('truetype');
+}

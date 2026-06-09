@@ -22,9 +22,20 @@ import { CarePlanStampModal } from '../../content/modules/care-plan-stamp/CarePl
 import { DemoQueryModal } from './DemoQueryModal.jsx';
 import { DemoChatOverlay } from './DemoChatOverlay.jsx';
 import { SuperDemoFab } from './SuperDemoFab.jsx';
+import { isCarePlanDemoPage } from '../demo-care-plan-wire.js';
 
 const FACILITY_NAME = 'SUNNY MEADOWS DEMO FACILITY';
 const ORG_SLUG = 'demo-org';
+const DEMO_PATIENT_ID = '2657226';
+const DEMO_PATIENT_NAME = 'Doe, Jane';
+
+const isCarePlanDetailPage = isCarePlanDemoPage;
+
+function scrapeCarePlanPatientName() {
+  const txt = document.body?.innerText || '';
+  const m = txt.match(/Resident:\s*([^\n(]+)/);
+  return m ? m[1].replace(/DO NOT USE/i, '').trim() : DEMO_PATIENT_NAME;
+}
 
 // ── AI's verdict for each MDS Section I item ──
 // AI_VERDICT[code] = 'Yes' | 'No' | 'review'
@@ -82,8 +93,19 @@ export function PCCDemoApp() {
   const [pdpmContext, setPdpmContext] = useState(null);
   const [toast, setToast] = useState(null);
   const [queryData, setQueryData] = useState(null);
+  const [carePlanModal, setCarePlanModal] = useState(null); // { defaultMode: 'initial' | 'comprehensive' }
   const toastTimer = useRef(null);
   const injectedBadges = useRef([]);
+
+  // ── Care plan modal opener (registered for sync click wire in demo-care-plan-wire.js) ──
+  useEffect(() => {
+    window.__demoRegisterCarePlanOpener?.((opts) => {
+      setCarePlanModal(opts || { defaultMode: 'comprehensive' });
+    });
+    return () => {
+      window.__demoCarePlanOpener = null;
+    };
+  }, []);
 
   // ── Hide legacy vanilla Super elements on mount ──
   useEffect(() => {
@@ -224,11 +246,11 @@ export function PCCDemoApp() {
   // the same anchor (#idNewCustomFocusBtn) so the captured care plan page
   // shows the audit CTA exactly like prod.
   useEffect(() => {
-    // Run after a tick so any banner injected by the user's *installed*
-    // SuperLTC extension (which content-scripts onto localhost too) is
-    // already in the DOM and we can swap it out for the demo one.
+    if (!isCarePlanDetailPage()) return;
+
     let cancelled = false;
     let banner, cta, dismiss;
+    const openAudit = () => setCarePlanModal({ defaultMode: 'comprehensive' });
     const inject = () => {
       if (cancelled) return;
       const anchor = document.getElementById('idNewCustomFocusBtn');
@@ -256,7 +278,6 @@ export function PCCDemoApp() {
       cta.addEventListener('click', openAudit);
       dismiss.addEventListener('click', () => banner.remove());
     };
-    const openAudit = () => setOverlay('audit');
     inject();
     // Re-inject once more after a short delay so we beat the prod extension's
     // polling injector that fires up to 10 retries over ~2.5s.
@@ -268,6 +289,47 @@ export function PCCDemoApp() {
       cta?.removeEventListener('click', openAudit);
       banner?.remove();
     };
+  }, []);
+
+  // ── Inject AI Care Plan buttons if the captured page doesn't have them. ──
+  // Clicks are handled synchronously by demo-care-plan-wire.js (capture phase).
+  useEffect(() => {
+    if (!isCarePlanDetailPage()) return;
+
+    const BTN_ID_PREFIX = 'super-cpas-btn-';
+    const STYLE = `
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff;
+      border: 1px solid #4338ca;
+      font-weight: 600;
+      margin-left: 6px;
+      cursor: pointer;
+    `;
+
+    const inject = () => {
+      document.querySelectorAll('[id="idNewCustomFocusBtn"]').forEach((target, i) => {
+        const btnId = `${BTN_ID_PREFIX}${i}`;
+        if (document.getElementById(btnId)) return;
+        const btn = document.createElement('input');
+        btn.type = 'button';
+        btn.className = 'pccButton';
+        btn.id = btnId;
+        btn.value = '✨ AI Care Plan';
+        btn.title = 'AI-assisted care plan: auto-populate for new admits, audit + review for established plans';
+        btn.style.cssText = STYLE;
+        btn.setAttribute('data-track', 'care_plan_autopop_button_clicked');
+        target.parentNode.insertBefore(btn, target.nextSibling);
+      });
+    };
+
+    inject();
+    let tries = 0;
+    const tid = setInterval(() => {
+      tries += 1;
+      inject();
+      if (tries >= 10) clearInterval(tid);
+    }, 250);
+    return () => clearInterval(tid);
   }, []);
 
   // ── Listen for PDPM open events from Command Center ──
@@ -320,6 +382,7 @@ export function PCCDemoApp() {
     setOverlay(null);
     setPopoverItem(null);
     setPdpmContext(null);
+    setCarePlanModal(null);
   }, []);
 
   const handleCommandCenterClose = useCallback((opts) => {
@@ -396,15 +459,15 @@ export function PCCDemoApp() {
         <FeedbackModal onClose={handleClose} />
       )}
 
-      {/* ── Care Plan Audit (Comprehensive Review) ── */}
-      {overlay === 'audit' && (
+      {/* ── Care Plan wizard (Initial Auto-Pop + Comprehensive Audit) ── */}
+      {carePlanModal && (
         <CarePlanStampModal
-          patientId="2657226"
-          patientName="Doe, Jane"
+          patientId={DEMO_PATIENT_ID}
+          patientName={scrapeCarePlanPatientName()}
           facilityName={FACILITY_NAME}
           orgSlug={ORG_SLUG}
-          defaultMode="comprehensive"
-          onClose={handleClose}
+          defaultMode={carePlanModal.defaultMode}
+          onClose={() => setCarePlanModal(null)}
         />
       )}
 

@@ -1,0 +1,110 @@
+/*  Namespaced styles for C3 charts using $.pccGenerateChart() */
+.pccChart{
+    border:1px solid #ddd;
+    margin:0 0 10px 0;
+    padding:10px;
+}
+.pccChart .pccChartTitleContainer{
+    background:#efefef;
+    border-bottom:1px solid #ddd;
+    margin:-10px -10px 10px;
+    padding:10px;
+}
+.pccChart .pccChartTitle{
+    font-size:16px;
+}
+.pccChart .pccChartSubTitle{
+    color:#888;
+    font-size:14px;
+    margin-top: 3px;
+}
+.pccChart .c3 .c3-axis text{
+    fill:#999;
+}
+.pccChart .c3 .c3-axis line{
+    stroke:#c3c3c3;
+}
+.pccChart .c3 .c3-axis path{
+    stroke:#c3c3c3;
+}
+.pccChart .c3-xgrid, .pccChart .c3-ygrid{
+    stroke-dasharray:inherit;
+}
+.pccChart .c3-grid line{
+    stroke:#e0e0e0;
+}
+.pccChart .c3-grid .pccChartThreshold line{
+    stroke-width:2px;
+    stroke:#fff;
+}
+.pccChart .c3-grid .pccChartThreshold + .pccChartThreshold line{
+    stroke-width:1px;
+    stroke:#000;
+}
+.pccChart .pccChartThreshold text{
+    fill:#000;
+}
+
+.pccChart .c3-bar{
+    stroke-width:1px;
+    stroke:#fff !important;
+}
+
+.pccChart .c3-area{
+    opacity:0.8 !important;
+}
+
+
+
+/* Allows multiple inline charts, with the ability to be responsive */
+.pccChartGroup{
+    overflow:auto;
+}
+.pccChartGroup .pccChart{
+    box-sizing:border-box;
+    float:left;
+    margin-left:10px;
+}
+.pccChartGroup .pccChart:first-child{
+    margin-left:0;
+}
+
+.pccChartGroup .pccChart:first-child:nth-last-child(2),
+.pccChartGroup .pccChart:first-child:nth-last-child(2) ~ .pccChart{
+    width:calc(50% - 5px);
+}
+
+.pccChartGroup .pccChart:first-child:nth-last-child(3),
+.pccChartGroup .pccChart:first-child:nth-last-child(3) ~ .pccChart{
+    width:calc(33.333% - 6.666px);
+}
+
+.pccChartGroup .pccChart:first-child:nth-last-child(4),
+.pccChartGroup .pccChart:first-child:nth-last-child(4) ~ .pccChart{
+    width:calc(25% - 7.5px);
+}
+
+@media (max-width:1200px){
+    .pccChartGroup .pccChart:first-child:nth-last-child(3),
+    .pccChartGroup .pccChart:first-child:nth-last-child(3) ~ .pccChart,
+    .pccChartGroup .pccChart:first-child:nth-last-child(4),
+    .pccChartGroup .pccChart:first-child:nth-last-child(4) ~ .pccChart{
+        width:calc(50% - 5px);
+    }
+    .pccChartGroup .pccChart{
+        margin-left:0;
+    }
+    .pccChartGroup .pccChart:nth-child(2n){
+        margin-left:10px;
+    }
+}
+
+@media (max-width:1024px){
+    .pccChartGroup .pccChart:first-child:nth-last-child(2),
+    .pccChartGroup .pccChart:first-child:nth-last-child(2) ~ .pccChart,
+    .pccChartGroup .pccChart:first-child:nth-last-child(3),
+    .pccChartGroup .pccChart:first-child:nth-last-child(3) ~ .pccChart{
+        width:100%;
+        margin-left:0;
+    }
+}

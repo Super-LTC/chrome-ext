@@ -43,9 +43,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [errorMsg, setErrorMsg] = useState('');
   const [driftMissing, setDriftMissing] = useState([]);
   const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
-  // Always boot into Initial mode regardless of `defaultMode` — Comprehensive
-  // Review is still reachable via the ScopeToggle in the header.
-  const [mode, setMode] = useState('initial');
+  // Default from patient context (empty plan → initial, established → comprehensive).
+  // Nurse can override mid-session via ScopeToggle.
+  const [mode, setMode] = useState(() => (defaultMode === 'comprehensive' ? 'comprehensive' : 'initial'));
   const [audit, setAudit] = useState(null);
   const [proposal, setProposal] = useState(null);
   const [careplanId, setCareplanId] = useState(null);

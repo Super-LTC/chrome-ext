@@ -27,6 +27,9 @@
           <button class="super-demo-nav__tab super-demo-nav__tab--active" data-page="medical-diagnosis">
             📋 Medical Diagnosis
           </button>
+          <button class="super-demo-nav__tab" data-page="clinical-care-plan-detail">
+            📋 Care Plan
+          </button>
           <button class="super-demo-nav__tab" data-page="mds-section-i">
             📝 MDS Section I
           </button>
@@ -63,6 +66,8 @@
       nav.querySelector('[data-page="mds-section-n"]')?.classList.add('super-demo-nav__tab--active');
     } else if (path.includes('mds-section-i')) {
       nav.querySelector('[data-page="mds-section-i"]')?.classList.add('super-demo-nav__tab--active');
+    } else if (path.includes('clinical-care-plan-detail')) {
+      nav.querySelector('[data-page="clinical-care-plan-detail"]')?.classList.add('super-demo-nav__tab--active');
     } else if (path.includes('mds-summary')) {
       nav.querySelector('[data-page="mds-summary"]')?.classList.add('super-demo-nav__tab--active');
     } else if (path.includes('pcc-demo')) {
@@ -104,6 +109,7 @@
     
     const pageUrls = {
       'medical-diagnosis': './medical-diagnosis.html',
+      'clinical-care-plan-detail': './clinical-care-plan-detail.html',
       'mds-summary': './mds-summary.html',
       'mds-section-i': './mds-section-i.html',
       'mds-section-n': './mds-section-n.html',

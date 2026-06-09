@@ -1,0 +1,114 @@
+.mdwc-dialog,
+.mdwc-dialog__scrim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+}
+
+.mdwc-dialog {
+  visibility: hidden;
+  transition: visibility 0s linear 0.25s, opacity 0.25s 0s, transform 0.25s;
+  z-index: 5;
+}
+
+.mdwc-dialog--open {
+  visibility: visible;
+  transition: visibility 0s linear 0s, opacity 0.25s 0s, transform 0.25s;
+}
+
+.mdwc-dialog__scrim {
+  background-color: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  transition: opacity 0.25s;
+  z-index: -1;
+}
+
+.mdwc-dialog--open .mdwc-dialog__scrim {
+  opacity: 1;
+}
+
+.mdwc-dialog__container,
+.mdwc-dialog__surface {
+  display: flex;
+}
+
+.mdwc-dialog__container {
+  flex-direction: row;
+  justify-content: space-around;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.25s 0s, transform 0.25s;
+}
+
+.mdwc-dialog--open .mdwc-dialog__container {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mdwc-dialog__surface {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 11px 15px -7px rgba(0, 0, 0, 0.2),
+    0 24px 38px 3px rgba(0, 0, 0, 0.14), 0 9px 46px 8px rgba(0, 0, 0, 0.12);
+  flex-direction: column;
+  flex-grow: 0;
+  flex-shrink: 0;
+  max-height: calc(100vh - 32px);
+  min-width: 280px;
+  width: calc(100vw - 32px);
+}
+
+.mdwc-dialog__title {
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0;
+  padding: 24px 24px 7px;
+}
+
+.mdwc-dialog__content {
+  flex-grow: 1;
+  line-height: 1.5;
+  margin: 0;
+  overflow: auto;
+  padding: 20px 24px;
+}
+
+.mdwc-dialog__title + .mdwc-dialog__content {
+  padding-top: 0;
+}
+
+.mdwc-dialog__content:first-child {
+  margin-top: 0;
+}
+
+.mdwc-dialog__actions {
+  align-items: center;
+  border-top: 1px solid transparent;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-height: 52px;
+  padding: 8px 8px 7px;
+}
+
+.mdwc-dialog--scrollable .mdwc-dialog__title {
+  padding-bottom: 15px;
+}
+
+.mdwc-dialog--scrollable .mdwc-dialog__title,
+.mdwc-dialog--scrollable .mdwc-dialog__actions {
+  border-color: #e1e1e1;
+}
+
+@media (min-width: 600px) {
+  .mdwc-dialog__surface {
+    max-width: 560px;
+  }
+}
