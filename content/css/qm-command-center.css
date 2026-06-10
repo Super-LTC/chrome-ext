@@ -1,0 +1,366 @@
+/* ============================================================================
+   QM Command Center — parity rebuild of the QM Board surfaces.
+
+   Ported from the web app (web/components/quality-measures/*, PR #626). The web
+   source is Tailwind; here we map its semantic tones (rose=at-risk,
+   sky=clearable, slate=will-hit/calm, violet=crossers, amber=signals,
+   emerald=clear) to a small token system. Class prefix: `qmc-`.
+
+   The modal shell (.qmb__overlay / __backdrop / __modal / __header / __close)
+   is reused from qm-board.css; everything inside the body is `qmc-`.
+   ========================================================================== */
+
+/* ── Tone tokens ─────────────────────────────────────────────────────────── */
+.qmc {
+  --rose-500:#f43f5e; --rose-600:#e11d48; --rose-700:#be123c;
+  --rose-50:#fff1f2;  --rose-100:#ffe4e6; --rose-200:#fecdd3;
+  --amber-500:#f59e0b; --amber-600:#d97706; --amber-700:#b45309;
+  --amber-50:#fffbeb;  --amber-100:#fef3c7; --amber-200:#fde68a;
+  --sky-500:#0ea5e9; --sky-600:#0284c7; --sky-700:#0369a1;
+  --sky-50:#f0f9ff;  --sky-100:#e0f2fe; --sky-200:#bae6fd;
+  --violet-500:#8b5cf6; --violet-600:#7c3aed; --violet-700:#6d28d9;
+  --violet-50:#f5f3ff;  --violet-100:#ede9fe; --violet-200:#ddd6fe;
+  --emerald-500:#10b981; --emerald-600:#059669; --emerald-700:#047857;
+  --emerald-50:#ecfdf5;  --emerald-100:#d1fae5; --emerald-200:#a7f3d0; --emerald-400:#34d399;
+  --slate-300:#cbd5e1; --slate-400:#94a3b8; --slate-500:#64748b;
+  --slate-600:#475569; --slate-700:#334155; --slate-800:#1e293b; --slate-900:#0f172a;
+  --slate-50:#f8fafc;  --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
+/* dot color */
+.qmc-dot--rose{background:var(--rose-500)} .qmc-dot--amber{background:var(--amber-500)}
+.qmc-dot--sky{background:var(--sky-500)}  .qmc-dot--slate{background:var(--slate-400)}
+.qmc-dot--violet{background:var(--violet-500)} .qmc-dot--emerald{background:var(--emerald-500)}
+
+/* accent text color */
+.qmc-text--rose{color:var(--rose-600)} .qmc-text--amber{color:var(--amber-600)}
+.qmc-text--sky{color:var(--sky-600)}  .qmc-text--slate{color:var(--slate-500)}
+.qmc-text--violet{color:var(--violet-600)} .qmc-text--emerald{color:var(--emerald-600)}
+
+/* pill chip: bg + text + ring */
+.qmc-chip{display:inline-flex;align-items:center;gap:6px;border-radius:6px;
+  padding:2px 8px;font-size:12px;font-weight:500;border:1px solid transparent}
+.qmc-chip--rose{background:var(--rose-50);color:var(--rose-700);border-color:var(--rose-200)}
+.qmc-chip--amber{background:var(--amber-50);color:var(--amber-700);border-color:var(--amber-200)}
+.qmc-chip--sky{background:var(--sky-50);color:var(--sky-700);border-color:var(--sky-200)}
+.qmc-chip--slate{background:var(--slate-100);color:var(--slate-600);border-color:var(--slate-200)}
+.qmc-chip--violet{background:var(--violet-50);color:var(--violet-700);border-color:var(--violet-200)}
+.qmc-chip--emerald{background:var(--emerald-50);color:var(--emerald-700);border-color:var(--emerald-200)}
+
+/* segment icon tile bg */
+.qmc-seg--rose{background:var(--rose-100);color:var(--rose-600)}
+.qmc-seg--sky{background:var(--sky-100);color:var(--sky-600)}
+.qmc-seg--slate{background:var(--slate-100);color:var(--slate-500)}
+.qmc-seg--emerald{background:var(--emerald-100);color:var(--emerald-600)}
+
+.qmc-dot{display:inline-block;width:10px;height:10px;border-radius:9999px;flex-shrink:0}
+
+/* ── Root layout ─────────────────────────────────────────────────────────── */
+.qmc{display:flex;flex-direction:column;gap:18px;padding:2px}
+.qmc-rise{animation:qmc-rise .28s cubic-bezier(.16,.84,.44,1) both}
+@keyframes qmc-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.qmc-hero{position:relative;overflow:hidden;border-radius:16px;border:1px solid var(--slate-200);
+  background:linear-gradient(135deg,var(--slate-50),#fff 55%,rgba(240,249,255,.4));padding:18px}
+.qmc-hero__top{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+.qmc-eyebrow{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.14em;color:var(--slate-400)}
+.qmc-eyebrow svg{width:14px;height:14px}
+.qmc-hero__big{margin-top:8px;display:flex;align-items:flex-end;gap:12px}
+.qmc-hero__num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:46px;font-weight:700;
+  line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--slate-900)}
+.qmc-hero__sub{padding-bottom:4px;font-size:13px;font-weight:500;color:var(--slate-500)}
+.qmc-hero__sub small{color:var(--slate-400);font-size:12px}
+
+.qmc-quarter{width:100%;max-width:280px;border-radius:12px;border:1px solid var(--slate-200);
+  background:rgba(255,255,255,.7);padding:14px;backdrop-filter:blur(4px)}
+.qmc-quarter__row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.qmc-quarter__label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.qmc-quarter__label svg{width:14px;height:14px}
+.qmc-quarter__days{font-family:ui-monospace,monospace;font-size:18px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums}
+.qmc-quarter__days span{font-size:12px;font-weight:600;color:var(--slate-400)}
+.qmc-bar{margin-top:10px;height:8px;width:100%;overflow:hidden;border-radius:9999px;background:var(--slate-100)}
+.qmc-bar__fill{height:100%;border-radius:9999px;transition:width .4s ease}
+.qmc-bar__fill--rose{background:var(--rose-500)} .qmc-bar__fill--amber{background:var(--amber-500)}
+.qmc-bar__fill--sky{background:var(--sky-500)}
+.qmc-cliff-pulse{animation:qmc-pulse 1.8s ease-in-out infinite}
+@keyframes qmc-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* ── Status segments ─────────────────────────────────────────────────────── */
+.qmc-segs{margin-top:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media (min-width:560px){.qmc-segs{grid-template-columns:repeat(4,1fr)}}
+.qmc-seg{display:flex;align-items:center;gap:10px;border-radius:12px;border:1px solid var(--slate-200);
+  background:rgba(255,255,255,.7);padding:8px 12px;text-align:left;cursor:pointer;transition:all .15s}
+.qmc-seg:hover{border-color:var(--slate-300)}
+.qmc-seg--active{border-color:var(--slate-900);box-shadow:0 0 0 1px var(--slate-900);background:#fff}
+.qmc-seg__icon{display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:9px;flex-shrink:0}
+.qmc-seg__num{display:block;font-family:ui-monospace,monospace;font-size:16px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--slate-900)}
+.qmc-seg__label{display:block;margin-top:2px;font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--slate-500)}
+
+/* ── Clinical signals entry button ───────────────────────────────────────── */
+.qmc-signals-btn{margin-top:10px;display:flex;width:100%;align-items:center;justify-content:space-between;
+  gap:8px;border-radius:12px;border:1px solid var(--amber-200);background:rgba(255,251,235,.4);
+  padding:10px 14px;text-align:left;cursor:pointer;transition:background .15s}
+.qmc-signals-btn:hover{background:var(--amber-50)}
+.qmc-signals-btn__icon{display:flex;width:32px;height:32px;align-items:center;justify-content:center;
+  border-radius:9px;background:var(--amber-100);color:var(--amber-600);flex-shrink:0}
+.qmc-signals-btn__title{display:block;font-size:13px;font-weight:600;color:var(--slate-800)}
+.qmc-signals-btn__sub{font-size:11px;color:var(--slate-500)}
+
+/* ── Section labels ──────────────────────────────────────────────────────── */
+.qmc-seclabel{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--slate-400);margin-bottom:8px}
+.qmc-seclabel svg{width:14px;height:14px}
+.qmc-seclabel small{font-weight:400;text-transform:none;letter-spacing:normal;color:var(--slate-300)}
+.qmc-substate{margin:12px 0 8px;font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--slate-300)}
+
+/* ── Measure tiles ───────────────────────────────────────────────────────── */
+.qmc-tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media (min-width:560px){.qmc-tiles{grid-template-columns:repeat(3,1fr)}}
+.qmc-tile{display:flex;flex-direction:column;gap:8px;border-radius:12px;border:1px solid var(--slate-200);
+  background:#fff;padding:11px 13px;text-align:left;cursor:pointer;transition:all .15s}
+.qmc-tile:hover{border-color:var(--slate-300);box-shadow:0 1px 4px rgba(15,23,42,.06)}
+.qmc-tile__top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.qmc-tile__name{font-size:13px;font-weight:600;line-height:1.15;color:var(--slate-800);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qmc-tile__meta{margin-top:3px;display:flex;align-items:center;gap:6px}
+.qmc-tile__code{font-family:ui-monospace,monospace;font-size:10px;font-weight:500;color:var(--slate-400)}
+.qmc-tag{border-radius:4px;padding:1px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.qmc-tag--star{background:var(--sky-50);color:var(--sky-600);border:1px solid var(--sky-200)}
+.qmc-tag--state{background:var(--slate-100);color:var(--slate-400);font-weight:600}
+.qmc-tile__count{font-family:ui-monospace,monospace;font-size:20px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--slate-900)}
+.qmc-tile__count--zero{color:var(--slate-300)}
+.qmc-tile__dots{display:flex;min-height:8px;align-items:center;gap:4px}
+.qmc-tile__dots .qmc-dot{width:8px;height:8px}
+.qmc-tile__foot{display:flex;align-items:center;justify-content:space-between;font-size:11px;
+  font-variant-numeric:tabular-nums}
+.qmc-tile__foot-action{font-weight:600}
+.qmc-tile__rate{color:var(--slate-400)}
+.qmc-soon-pill{border-radius:4px;background:var(--violet-50);padding:1px 4px;font-size:10px;font-weight:600;
+  color:var(--violet-600);border:1px solid var(--violet-200);margin-right:6px}
+
+/* ── Worklist toolbar + search ───────────────────────────────────────────── */
+.qmc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.qmc-toolbar__title{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.12em;color:var(--slate-400)}
+.qmc-reset{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;border:1px solid var(--slate-200);
+  background:#fff;padding:3px 10px;font-size:10px;font-weight:600;text-transform:none;letter-spacing:normal;
+  color:var(--slate-600);cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.qmc-reset:hover{border-color:var(--slate-300);background:var(--slate-50);color:var(--slate-800)}
+.qmc-reset svg{width:12px;height:12px}
+.qmc-search{position:relative;width:100%;max-width:260px}
+.qmc-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;
+  color:var(--slate-400);pointer-events:none}
+.qmc-search input{width:100%;border-radius:8px;border:1px solid var(--slate-200);background:#fff;
+  padding:7px 28px 7px 32px;font-size:13px;color:var(--slate-800);outline:none}
+.qmc-search input:focus{border-color:var(--sky-400,#38bdf8);box-shadow:0 0 0 2px var(--sky-100)}
+.qmc-search__clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;
+  cursor:pointer;border-radius:4px;padding:2px;color:var(--slate-400);display:flex}
+.qmc-search__clear:hover{background:var(--slate-100);color:var(--slate-600)}
+
+/* ── Worklist groups + resident rows ─────────────────────────────────────── */
+.qmc-worklist{display:flex;flex-direction:column;gap:16px}
+.qmc-group__head{display:flex;width:100%;align-items:center;gap:8px;text-align:left;background:none;
+  border:none;cursor:pointer;padding:0;margin-bottom:6px}
+.qmc-group__head:disabled{cursor:default}
+.qmc-group__chev{width:14px;height:14px;color:var(--slate-400);flex-shrink:0}
+.qmc-group__label{font-size:14px;font-weight:700;color:var(--slate-800)}
+.qmc-group__count{font-family:ui-monospace,monospace;font-size:12px;font-variant-numeric:tabular-nums;color:var(--slate-400)}
+.qmc-group__sub{font-size:11px;color:var(--slate-400)}
+.qmc-rows{display:flex;flex-direction:column;gap:6px}
+
+.qmc-row{display:flex;width:100%;gap:12px;border-radius:9px;border:1px solid var(--slate-200);
+  background:#fff;padding:10px 12px;text-align:left;cursor:pointer;transition:background .12s}
+.qmc-row:hover{background:var(--slate-50)}
+.qmc-row__dot{margin-top:6px;width:6px;height:6px;border-radius:9999px;flex-shrink:0}
+.qmc-row__body{min-width:0;flex:1}
+.qmc-row__name-line{display:flex;align-items:center;gap:8px}
+.qmc-row__name{font-size:13px;font-weight:500;color:var(--slate-900);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.qmc-row__meta{flex-shrink:0;font-size:11px;color:var(--slate-400)}
+.qmc-row__pills{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
+.qmc-row__right{display:flex;flex-shrink:0;align-items:center;gap:8px;align-self:center}
+.qmc-row__count{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--slate-900);text-align:right}
+.qmc-row__days{font-size:10px;font-variant-numeric:tabular-nums;text-align:right}
+.qmc-row__chev{width:16px;height:16px;color:var(--slate-300)}
+.qmc-row:hover .qmc-row__chev{color:var(--slate-500)}
+
+/* ── Collapsible footers (coming soon / clear) ───────────────────────────── */
+.qmc-collapsible{border-radius:12px;border:1px solid var(--slate-200);background:rgba(248,250,252,.5)}
+.qmc-collapsible--violet{border-color:var(--violet-200);background:rgba(245,243,255,.3)}
+.qmc-collapsible__head{display:flex;width:100%;align-items:center;gap:8px;padding:10px 16px;text-align:left;
+  background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--slate-500)}
+.qmc-collapsible--violet .qmc-collapsible__head{color:var(--violet-700)}
+.qmc-collapsible__head svg{width:16px;height:16px}
+.qmc-collapsible__body{padding:0 12px 12px}
+.qmc-cleargrid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px 16px;padding:4px 8px 12px}
+@media (min-width:560px){.qmc-cleargrid{grid-template-columns:repeat(3,1fr)}}
+.qmc-clearitem{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--slate-500);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qmc-clearitem__dot{width:6px;height:6px;border-radius:9999px;background:var(--emerald-400);flex-shrink:0}
+.qmc-clearitem small{font-size:10px;color:var(--slate-300)}
+
+/* ── Empty / all-clear states ────────────────────────────────────────────── */
+.qmc-allclear{border-radius:12px;border:1px solid var(--emerald-200);background:rgba(236,253,245,.6);
+  padding:40px 16px;text-align:center;font-size:13px;font-weight:600;color:var(--emerald-700)}
+.qmc-empty{border-radius:12px;border:1px solid var(--slate-200);background:rgba(248,250,252,.6);
+  padding:32px 16px;text-align:center;font-size:13px;color:var(--slate-500)}
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+.qmc-loading,.qmc-error{padding:48px 16px;text-align:center;color:var(--slate-500);font-size:14px}
+.qmc-error__detail{margin-top:6px;font-size:12px;color:var(--slate-400)}
+.qmc-retry{margin-top:12px;border-radius:8px;border:1px solid var(--slate-300);background:#fff;
+  padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer}
+.qmc-retry:hover{background:var(--slate-50)}
+
+/* ── Resident drill-in modal (Surface C) ─────────────────────────────────── */
+.qmc-modal-overlay{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;
+  justify-content:center;padding:16px;background:rgba(15,23,42,.4);backdrop-filter:blur(2px)}
+.qmc-modal{position:relative;display:flex;flex-direction:column;max-height:85vh;width:100%;max-width:520px;
+  overflow:hidden;border-radius:16px;border:1px solid var(--slate-200);background:#fff;
+  box-shadow:0 24px 60px rgba(15,23,42,.28)}
+.qmc-modal-in{animation:qmc-modal-in .2s cubic-bezier(.16,.84,.44,1) both}
+@keyframes qmc-modal-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.qmc-modal__head{flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  border-bottom:1px solid var(--slate-200);background:#fff;padding:16px 20px}
+.qmc-modal__name{font-size:18px;font-weight:700;line-height:1.15;letter-spacing:-.01em;color:var(--slate-900)}
+.qmc-modal__meta{font-size:13px;color:var(--slate-500);margin-top:1px}
+.qmc-modal__eyebrow{margin-top:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-400)}
+.qmc-modal__close{border:none;background:none;cursor:pointer;border-radius:8px;padding:6px;color:var(--slate-400);display:flex}
+.qmc-modal__close:hover{background:var(--slate-100)}
+.qmc-modal__close svg{width:20px;height:20px}
+.qmc-modal__body{overflow-y:auto;background:rgba(248,250,252,.5);padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.qmc-modal__actions{display:flex;gap:8px;padding-top:2px}
+
+.qmc-btn{border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent}
+.qmc-btn--primary{flex:1;background:var(--slate-900);color:#fff}
+.qmc-btn--primary:hover{background:var(--slate-700)}
+.qmc-btn--ghost{background:#fff;border-color:var(--slate-200);color:var(--slate-600)}
+.qmc-btn--ghost:hover{background:var(--slate-50)}
+
+/* measure section + timeline */
+.qmc-msec{border-radius:12px;border:1px solid var(--slate-200);background:#fff;padding:16px}
+.qmc-msec__head{margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.qmc-msec__title{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--slate-900)}
+.qmc-timeline{position:relative;margin:0 0 0 4px;padding:0 0 0 24px;list-style:none;
+  border-left:1px solid var(--slate-200);display:flex;flex-direction:column;gap:16px}
+.qmc-beat{position:relative}
+.qmc-beat__dot{position:absolute;left:-31px;top:2px;width:12px;height:12px;border-radius:9999px;box-shadow:0 0 0 4px #fff}
+.qmc-beat__dot--slate900{background:var(--slate-900)}
+.qmc-beat__dot--slate{background:var(--slate-300)}
+.qmc-beat__dot--rose{background:var(--rose-500)} .qmc-beat__dot--amber{background:var(--amber-500)}
+.qmc-beat__dot--sky{background:var(--sky-500)} .qmc-beat__dot--violet{background:var(--violet-500)}
+.qmc-beat__dot--emerald{background:var(--emerald-500)}
+.qmc-beat__label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-400)}
+.qmc-beat__body{font-size:13px;color:var(--slate-600)}
+.qmc-beat__muted{font-size:13px;color:var(--slate-400)}
+.qmc-evlist{display:flex;flex-direction:column;gap:10px}
+.qmc-ev__row{display:flex;align-items:center;gap:8px}
+.qmc-ev__item{border-radius:4px;background:var(--slate-900);padding:2px 6px;font-family:ui-monospace,monospace;
+  font-size:10px;font-weight:700;color:#fff}
+.qmc-ev__eq{color:var(--slate-300)}
+.qmc-ev__val{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:var(--slate-900)}
+.qmc-ev__sub{margin-top:4px;font-size:12px;color:var(--slate-500)}
+
+/* ── Modal content scroll wrapper (replaces old qmb body grid) ───────────── */
+.qmc-scroll{flex:1;min-height:0;overflow-y:auto;padding:16px 20px}
+
+/* ── Breadcrumb (Surface B/D) ────────────────────────────────────────────── */
+.qmc-bc{display:flex;align-items:center;gap:8px;font-size:13px}
+.qmc-bc__back{display:flex;align-items:center;gap:4px;border:none;background:none;cursor:pointer;
+  border-radius:8px;padding:4px 8px;color:var(--slate-500)}
+.qmc-bc__back:hover{background:#fff;color:var(--slate-700)}
+.qmc-bc__back svg{width:16px;height:16px}
+.qmc-bc__crumb{display:flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--slate-200);
+  background:#fff;padding:4px 10px;font-weight:600;color:var(--slate-800)}
+
+/* ── Measure header (Surface B) ──────────────────────────────────────────── */
+.qmc-hero--amber{background:linear-gradient(135deg,var(--slate-50),#fff 55%,rgba(255,251,235,.4))}
+.qmc-mhead{display:flex;flex-direction:column;gap:16px}
+@media (min-width:560px){.qmc-mhead{flex-direction:row;align-items:flex-start;justify-content:space-between}}
+.qmc-mhead__rate-line{margin-top:4px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.qmc-rate{font-family:ui-monospace,monospace;font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--slate-900);line-height:1}
+.qmc-rate--struck{color:var(--slate-300);text-decoration:line-through}
+.qmc-rate__proj{padding-bottom:2px;font-family:ui-monospace,monospace;font-size:22px;font-weight:700;
+  font-variant-numeric:tabular-nums;color:var(--emerald-600)}
+.qmc-rate__sub{padding-bottom:5px;font-size:13px;color:var(--slate-400)}
+.qmc-pts{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px}
+.qmc-pts__main{font-weight:600;color:var(--slate-700)}
+.qmc-pts__hint{font-size:11px;color:var(--slate-400)}
+.qmc-wif{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+@media (min-width:560px){.qmc-wif{align-items:flex-end}}
+.qmc-wif__row{display:flex;align-items:center;gap:10px;user-select:none}
+.qmc-wif__label{font-size:13px;font-weight:600;color:var(--slate-700)}
+.qmc-switch{position:relative;height:24px;width:44px;flex-shrink:0;border:none;border-radius:9999px;
+  background:var(--slate-200);cursor:pointer;transition:background .15s}
+.qmc-switch--on{background:var(--emerald-500)}
+.qmc-switch__knob{position:absolute;top:2px;left:2px;height:20px;width:20px;border-radius:9999px;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .15s}
+.qmc-switch--on .qmc-switch__knob{left:22px}
+.qmc-wif-note{margin-top:10px;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.qmc-wif-note__row{display:flex;align-items:center;gap:6px;color:var(--slate-600)}
+.qmc-wif-pill{display:inline-flex;height:20px;align-items:center;border-radius:9999px;padding:0 8px;font-weight:600}
+.qmc-wif-pill--emerald{background:var(--emerald-100);color:var(--emerald-700)}
+.qmc-wif-pill--violet{background:var(--violet-100);color:var(--violet-700)}
+
+/* static group head (non-collapsible) */
+.qmc-ghead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+
+/* person rows (Surface B) */
+.qmc-prow{display:flex;align-items:center;gap:12px;border-radius:9px;border:1px solid var(--slate-200);
+  background:#fff;padding:10px 14px;transition:background .12s}
+.qmc-prow:hover{background:var(--slate-50)}
+.qmc-prow--cleared{border-color:var(--emerald-100);background:rgba(236,253,245,.4)}
+.qmc-prow__dot{width:8px;height:8px;border-radius:9999px;flex-shrink:0}
+.qmc-prow__main{min-width:0;flex:1;text-align:left;border:none;background:none;cursor:pointer;padding:0}
+.qmc-prow__name{font-size:13px;font-weight:500;color:var(--slate-900)}
+.qmc-prow__name--struck{color:var(--slate-400);text-decoration:line-through}
+.qmc-prow__meta{margin-top:2px;display:block;font-size:11px;color:var(--slate-400);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qmc-prow__cta{flex-shrink:0;font-size:12px}
+.qmc-locked{flex-shrink:0;font-size:11px;font-weight:500;color:var(--slate-300)}
+.qmc-toggle{display:inline-flex;flex-shrink:0;overflow:hidden;border-radius:6px;font-size:11px;font-weight:500;
+  border:1px solid var(--slate-200)}
+.qmc-toggle button{border:none;background:none;cursor:pointer;padding:4px 8px;color:var(--slate-400)}
+.qmc-toggle button:hover{background:var(--slate-100)}
+.qmc-toggle .qmc-toggle--kept{background:var(--slate-800);color:#fff}
+.qmc-toggle .qmc-toggle--on{background:var(--emerald-500);color:#fff}
+
+/* ── Clinical signals (Surface D) ────────────────────────────────────────── */
+.qmc-tabs{display:flex;width:fit-content;gap:4px;border-radius:8px;border:1px solid var(--slate-200);background:#fff;padding:4px}
+.qmc-tab{border:none;background:none;cursor:pointer;border-radius:6px;padding:4px 12px;font-size:13px;font-weight:600;color:var(--slate-500)}
+.qmc-tab:hover{background:var(--slate-100)}
+.qmc-tab--on{background:var(--slate-900);color:#fff}
+.qmc-tab--on:hover{background:var(--slate-900)}
+.qmc-breakdown{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.qmc-breakdown__chip{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--slate-200);
+  background:#fff;padding:4px 10px;font-size:12px;font-weight:500;color:var(--slate-700)}
+.qmc-breakdown__n{font-family:ui-monospace,monospace;font-weight:700;color:var(--slate-900)}
+.qmc-stakes{margin-top:12px;display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(226,232,240,.7);padding-top:12px}
+.qmc-stakes__row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate-600);flex-wrap:wrap}
+.qmc-snoozed{display:flex;align-items:center;gap:12px;border-radius:9px;border:1px solid var(--slate-200);background:#fff;padding:10px 12px}
+.qmc-undo{display:flex;flex-shrink:0;align-items:center;gap:4px;border-radius:6px;border:1px solid var(--slate-200);
+  background:#fff;padding:4px 10px;font-size:12px;font-weight:600;color:var(--slate-600);cursor:pointer}
+.qmc-undo:hover{border-color:var(--slate-300);background:var(--slate-50)}
+.qmc-undo svg{width:14px;height:14px}
+.qmc-dismiss{margin-left:auto;border:none;background:none;cursor:pointer;border-radius:6px;padding:2px 8px;
+  font-size:11px;font-weight:500;color:var(--slate-400)}
+.qmc-dismiss:hover{background:var(--slate-100);color:var(--slate-600)}
+.qmc-sig-list{display:flex;flex-direction:column;gap:6px}
+.qmc-sig{display:flex;align-items:flex-start;gap:8px;font-size:12px}
+.qmc-sig__src{flex-shrink:0;margin-top:1px;border-radius:4px;background:var(--slate-100);padding:2px 6px;
+  font-family:ui-monospace,monospace;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--slate-500)}
+.qmc-sig__text{min-width:0;flex:1;color:var(--slate-600)}
+.qmc-sig__date{flex-shrink:0;font-family:ui-monospace,monospace;font-size:10px;color:var(--slate-400)}
+.qmc-action-box{margin-top:10px;border-radius:8px;background:var(--slate-50);border:1px solid var(--slate-100);
+  padding:6px 10px;font-size:12px;line-height:1.5;color:var(--slate-600)}
+.qmc-action-box strong{color:var(--slate-700)}
