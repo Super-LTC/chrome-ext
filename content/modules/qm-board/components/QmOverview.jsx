@@ -19,7 +19,7 @@ import {
   URGENCY, CROSSING, STATUS_BUCKET, entryUrgency, soonestCliffDays,
   crosserToDrill, fullName, prettyDate, quarterLabel,
 } from '../lib/qm-tones.js';
-import { ShieldCheck, CalendarClock, Activity, ChevronRight, ChevronDown, CircleCheck, Search, X } from './icons.jsx';
+import { ShieldCheck, CalendarClock, Activity, ChevronRight, ChevronDown, CircleCheck, Search, X, TrendingDown } from './icons.jsx';
 
 // Tile footer copy keyed by the measure's actionability bucket.
 const BUCKET_FOOTER = {
@@ -44,7 +44,7 @@ const WORK_GROUPS = [
 ];
 
 export function QmOverview({
-  data, upcoming, onOpenMeasure, onOpenResident, signalCount = 0, onOpenSignals,
+  data, upcoming, onOpenMeasure, onOpenResident, signalCount = 0, onOpenSignals, onOpenFunctional,
 }) {
   const { summary } = data;
   const [seg, setSeg] = useState(null);
@@ -166,6 +166,20 @@ export function QmOverview({
               </span>
             </span>
             <ChevronRight className="qmc-text--amber" />
+          </button>
+        )}
+
+        {/* Functional Decline — its own screen inside the Command Center */}
+        {onOpenFunctional && (
+          <button type="button" data-track="qm_drill_in" data-track-prop-measure-code="gg_decline" data-track-prop-view="functional" className="qmc-signals-btn qmc-fd-entry" onClick={onOpenFunctional}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="qmc-fd-entry__icon"><TrendingDown /></span>
+              <span>
+                <span className="qmc-signals-btn__title">Functional Decline</span>
+                <span className="qmc-signals-btn__sub">GG self-care &amp; mobility decline — therapy pickup + QM roster</span>
+              </span>
+            </span>
+            <ChevronRight className="qmc-text--sky" />
           </button>
         )}
       </div>

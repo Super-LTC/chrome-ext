@@ -370,3 +370,9 @@
 .qmc-fd-card{display:flex;flex-direction:column;gap:2px;border-radius:12px;border:1px solid var(--slate-200);background:#fff;padding:10px 12px}
 .qmc-fd-card__n{font-family:ui-monospace,monospace;font-size:22px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
 .qmc-fd-card__label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+
+/* Functional Decline dashboard entry button (sky variant of the signals btn) */
+.qmc-fd-entry{border-color:var(--sky-200);background:rgba(240,249,255,.4)}
+.qmc-fd-entry:hover{background:var(--sky-50)}
+.qmc-fd-entry__icon{display:flex;width:32px;height:32px;align-items:center;justify-content:center;
+  border-radius:9px;background:var(--sky-100);color:var(--sky-600);flex-shrink:0}

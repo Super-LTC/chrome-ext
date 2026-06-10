@@ -283,7 +283,6 @@
 }
 .super-dial__action--mds  { background: #6366f1; color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; font-family: inherit; }
 .super-dial__action--qm   { background: #f59e0b; color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; font-family: inherit; }
-.super-dial__action--fd   { background: #0ea5e9; color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; font-family: inherit; }
 .super-dial__action--chat { background: #fff; color: #6366f1; border: 1.5px solid #e5e7eb; }
 .super-dial__action--coverage { background: #06b6d4; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.02em; font-family: inherit; }
 .super-dial__action--ftag { background: #e11d48; color: #fff; }

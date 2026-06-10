@@ -21,7 +21,6 @@ function createBubbles() {
       </svg>
     </button>
     <button id="super-qm-action" class="super-dial__action super-dial__action--qm" aria-label="QM Board" data-track="fab_clicked" data-track-prop-fab="qm_board">QM</button>
-    <button id="super-fd-action" class="super-dial__action super-dial__action--fd" aria-label="Functional Decline" data-track="fab_clicked" data-track-prop-fab="functional_decline">FD</button>
     <button id="super-24hr-action" class="super-dial__action super-dial__action--24hr" aria-label="24-Hour Report" data-track="fab_clicked" data-track-prop-fab="24hr">24H<span class="super-dial__action-dot" id="super-24hr-dot" style="display:none;"></span></button>
     <!-- Care Plan Coverage FAB (patient shield) — temporarily hidden (kept for easy re-enable).
     <button id="super-coverage-action" class="super-dial__action super-dial__action--coverage" aria-label="Care Plan Coverage" style="display:none;" data-track="fab_clicked" data-track-prop-fab="coverage">CP</button>
@@ -47,7 +46,6 @@ function createBubbles() {
   const chatAction = document.getElementById('super-chat-action');
   const ftagAction = document.getElementById('super-ftag-action');
   const qmAction = document.getElementById('super-qm-action');
-  const fdAction = document.getElementById('super-fd-action');
 
   mainBtn.addEventListener('click', () => {
     if (hasDragged) {
@@ -99,17 +97,6 @@ function createBubbles() {
       QMBoardLauncher.close();
     } else {
       QMBoardLauncher.open();
-    }
-  });
-
-  // Functional Decline button → toggles the Functional Decline screen
-  fdAction.addEventListener('click', (e) => {
-    e.stopPropagation();
-    container.classList.remove('super-dial--open');
-    if (FunctionalDeclineLauncher.isOpen()) {
-      FunctionalDeclineLauncher.close();
-    } else {
-      FunctionalDeclineLauncher.open();
     }
   });
 
@@ -503,72 +490,6 @@ const QMBoardLauncher = {
       this._preactUnmount = () => render(null, overlayEl);
     } catch (err) {
       console.error('[QMBoard] Failed to load module:', err);
-      overlayEl.remove();
-      this._overlayEl = null;
-    }
-  },
-
-  close() {
-    if (this._escapeHandler) {
-      document.removeEventListener('keydown', this._escapeHandler);
-      this._escapeHandler = null;
-    }
-    if (this._preactUnmount) {
-      this._preactUnmount();
-      this._preactUnmount = null;
-    }
-    if (this._overlayEl) {
-      this._overlayEl.remove();
-      this._overlayEl = null;
-    }
-  },
-
-  isOpen() { return !!this._overlayEl; }
-};
-
-// Functional Decline Launcher — standalone GG-decline screen (own FAB).
-const FunctionalDeclineLauncher = {
-  _overlayEl: null,
-  _preactUnmount: null,
-
-  async open() {
-    if (this._overlayEl) return;
-
-    let facilityName, orgSlug;
-    try {
-      const orgResponse = getOrg();
-      orgSlug = orgResponse?.org;
-      facilityName = getChatFacilityInfo();
-    } catch (e) {
-      console.error('[FunctionalDecline] Could not get org/facility:', e);
-    }
-
-    const overlayEl = document.createElement('div');
-    overlayEl.id = 'functional-decline-overlay';
-    document.body.appendChild(overlayEl);
-    this._overlayEl = overlayEl;
-
-    this._escapeHandler = (e) => { if (e.key === 'Escape') this.close(); };
-    document.addEventListener('keydown', this._escapeHandler);
-
-    try {
-      const [{ render, h }, { FunctionalDecline }] = await Promise.all([
-        import('preact'),
-        import('../modules/qm-board/FunctionalDecline.jsx')
-      ]);
-
-      render(
-        h(FunctionalDecline, {
-          facilityName: facilityName || '',
-          orgSlug: orgSlug || '',
-          onClose: () => this.close()
-        }),
-        overlayEl
-      );
-
-      this._preactUnmount = () => render(null, overlayEl);
-    } catch (err) {
-      console.error('[FunctionalDecline] Failed to load module:', err);
       overlayEl.remove();
       this._overlayEl = null;
     }
@@ -1043,7 +964,6 @@ window.updateBubblesContext = updateBubblesContext;
 window.ChatOverlayLauncher = ChatOverlayLauncher;
 window.CoveragePanelLauncher = CoveragePanelLauncher;
 window.QMBoardLauncher = QMBoardLauncher;
-window.FunctionalDeclineLauncher = FunctionalDeclineLauncher;
 window.FTagPreventionLauncher = FTagPreventionLauncher;
 window.TwentyFourHourReportLauncher = TwentyFourHourReportLauncher;
 window.FeedbackLauncher = FeedbackLauncher;

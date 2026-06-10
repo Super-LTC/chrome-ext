@@ -40,3 +40,6 @@ export const Clock = (p) => (
 export const Undo2 = (p) => (
   <svg {...base} className={p.className}><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
 );
+export const TrendingDown = (p) => (
+  <svg {...base} className={p.className}><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
+);

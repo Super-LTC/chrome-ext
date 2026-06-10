@@ -20,6 +20,7 @@ import { QmOverview } from './components/QmOverview.jsx';
 import { ResidentDrillIn } from './components/ResidentDrillIn.jsx';
 import { MeasureDetail } from './components/MeasureDetail.jsx';
 import { ClinicalSignalsView } from './components/ClinicalSignalsView.jsx';
+import { FunctionalDeclineView } from './FunctionalDecline.jsx';
 
 export function QMBoard({ facilityName, orgSlug, onClose }) {
   const [history, setHistory] = useState([{ kind: 'dashboard' }]);
@@ -42,6 +43,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
 
   const openMeasure = (measureId) => push({ kind: 'measure', measureId });
   const openSignals = () => push({ kind: 'signals' });
+  const openFunctional = () => push({ kind: 'functional' });
   const openResident = (patient, entry) => setResident({ patient, entry });
   const closeResident = () => setResident(null);
 
@@ -93,6 +95,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onOpenMeasure={openMeasure}
                 onOpenResident={openResident}
                 onOpenSignals={openSignals}
+                onOpenFunctional={openFunctional}
               />
             )}
             {view.kind === 'measure' && (
@@ -109,6 +112,13 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
               <ClinicalSignalsView
                 preventableAlerts={preventableAlerts}
                 currentlyTriggering={currentlyTriggering}
+                facilityName={facilityName}
+                orgSlug={orgSlug}
+                onBack={pop}
+              />
+            )}
+            {view.kind === 'functional' && (
+              <FunctionalDeclineView
                 facilityName={facilityName}
                 orgSlug={orgSlug}
                 onBack={pop}
