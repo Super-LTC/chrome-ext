@@ -38,7 +38,7 @@ const SEVERITY_PILL_CLASS = {
   mild: 'qmb-pill qmb-pill--mild',
 };
 
-export function GgDeclineDetail({ alert, facilityName, orgSlug, onBack }) {
+export function GgDeclineDetail({ alert, facilityName, orgSlug, onBack, mode = 'qm' }) {
   useEffect(() => {
     track('qm_drill_in', { measure_code: alert.qmId || 'gg_decline', view: 'gg_chart' });
   }, [alert.qmId]);
@@ -47,7 +47,7 @@ export function GgDeclineDetail({ alert, facilityName, orgSlug, onBack }) {
     patientId: alert.patientId,
     facilityName, orgSlug,
     days: 30,
-    mode: 'qm',
+    mode,
     enabled: true,
   });
 

@@ -86,6 +86,7 @@ export const EVENT_SCHEMA = {
   qm_action_clicked: ['measure_code', 'action'],
   qm_evidence_opened: ['measure_code'],
   qm_drill_in: ['measure_code', 'view'],
+  functional_decline_opened: ['source'],
 
   query_item_clicked: ['item_code'],
   query_evidence_opened: ['item_code', 'evidence_type'],
