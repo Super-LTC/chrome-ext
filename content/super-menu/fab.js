@@ -20,9 +20,7 @@ function createBubbles() {
         <path d="m9 12 2 2 4-4"/>
       </svg>
     </button>
-    <!-- QM Board FAB — temporarily hidden (kept for easy re-enable). Replaced by F-Tag Prevention above.
     <button id="super-qm-action" class="super-dial__action super-dial__action--qm" aria-label="QM Board" data-track="fab_clicked" data-track-prop-fab="qm_board">QM</button>
-    -->
     <button id="super-24hr-action" class="super-dial__action super-dial__action--24hr" aria-label="24-Hour Report" data-track="fab_clicked" data-track-prop-fab="24hr">24H<span class="super-dial__action-dot" id="super-24hr-dot" style="display:none;"></span></button>
     <!-- Care Plan Coverage FAB (patient shield) — temporarily hidden (kept for easy re-enable).
     <button id="super-coverage-action" class="super-dial__action super-dial__action--coverage" aria-label="Care Plan Coverage" style="display:none;" data-track="fab_clicked" data-track-prop-fab="coverage">CP</button>
@@ -47,6 +45,7 @@ function createBubbles() {
   const mdsAction = document.getElementById('super-mds-action');
   const chatAction = document.getElementById('super-chat-action');
   const ftagAction = document.getElementById('super-ftag-action');
+  const qmAction = document.getElementById('super-qm-action');
 
   mainBtn.addEventListener('click', () => {
     if (hasDragged) {
@@ -91,16 +90,15 @@ function createBubbles() {
   // });
 
   // QM Board button → toggles QM Board modal
-  // TEMPORARILY DISABLED — QM FAB hidden, replaced by F-Tag Prevention (see commented button above).
-  // qmAction.addEventListener('click', (e) => {
-  //   e.stopPropagation();
-  //   container.classList.remove('super-dial--open');
-  //   if (QMBoardLauncher.isOpen()) {
-  //     QMBoardLauncher.close();
-  //   } else {
-  //     QMBoardLauncher.open();
-  //   }
-  // });
+  qmAction.addEventListener('click', (e) => {
+    e.stopPropagation();
+    container.classList.remove('super-dial--open');
+    if (QMBoardLauncher.isOpen()) {
+      QMBoardLauncher.close();
+    } else {
+      QMBoardLauncher.open();
+    }
+  });
 
   // 24-Hour Report button → toggles report panel
   const twentyFourHrAction = document.getElementById('super-24hr-action');
