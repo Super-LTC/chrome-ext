@@ -33,7 +33,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   const push = useCallback((v) => setHistory((h) => [...h, v]), []);
   const pop = useCallback(() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h)), []);
 
-  const { currentlyTriggering, preventableAlerts, loading, error, retry } =
+  const { currentlyTriggering, preventableAlerts, upcoming, loading, error, retry } =
     useQmBoard({ facilityName, orgSlug });
 
   const signalCount = useMemo(
@@ -91,6 +91,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
             {view.kind === 'dashboard' && (
               <QmOverview
                 data={currentlyTriggering}
+                upcoming={upcoming}
                 signalCount={signalCount}
                 onOpenMeasure={openMeasure}
                 onOpenResident={openResident}
@@ -103,6 +104,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 measureId={view.measureId}
                 currentlyTriggering={currentlyTriggering}
                 preventableAlerts={preventableAlerts}
+                upcoming={upcoming}
                 onBack={pop}
                 onOpenResident={openResident}
                 onOpenResidentById={openResidentById}
