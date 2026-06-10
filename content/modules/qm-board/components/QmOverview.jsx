@@ -51,7 +51,7 @@ export function QmOverview({
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState(new Set(['clearable', 'will_hit']));
   const [showClear, setShowClear] = useState(false);
-  const [showCrossers, setShowCrossers] = useState(false);
+  const [showCrossers, setShowCrossers] = useState(true);
 
   const q = query.trim().toLowerCase();
   const matchesQuery = (p) =>
@@ -110,6 +110,34 @@ export function QmOverview({
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
+
+  // One status group (at_risk / clearable / will_hit). Returns null when a
+  // segment filter excludes it or it has no rows.
+  const renderGroup = (key) => {
+    if (seg && seg !== key) return null;
+    const g = WORK_GROUPS.find((x) => x.key === key);
+    const rows = residents.filter((r) => r.status === key).sort((a, b) => a.days - b.days);
+    if (rows.length === 0) return null;
+    const isCollapsed = !seg && collapsed.has(key);
+    return (
+      <div key={key}>
+        <button type="button" className="qmc-group__head" disabled={!!seg} onClick={() => toggleCollapse(key)}> {/* NO_TRACK */}
+          {!seg && (isCollapsed ? <ChevronRight className="qmc-group__chev" /> : <ChevronDown className="qmc-group__chev" />)}
+          <span className={`qmc-dot qmc-dot--${g.tone}`} />
+          <span className="qmc-group__label">{g.label}</span>
+          <span className="qmc-group__count">{rows.length}</span>
+          <span className="qmc-group__sub">· {g.sub}</span>
+        </button>
+        {!isCollapsed && (
+          <div className="qmc-rows">
+            {rows.map((r, i) => (
+              <ResidentRow key={r.patient.patientId} item={r} delay={Math.min(i, 16) * 16} onOpenResident={onOpenResident} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="qmc">
@@ -238,39 +266,15 @@ export function QmOverview({
         <ClearList residents={clearResidents} />
       ) : (
         <div className="qmc-worklist">
-          {WORK_GROUPS.filter((g) => !seg || seg === g.key).map((g) => {
-            const rows = residents.filter((r) => r.status === g.key).sort((a, b) => a.days - b.days);
-            if (rows.length === 0) return null;
-            const isCollapsed = !seg && collapsed.has(g.key);
-            return (
-              <div key={g.key}>
-                <button type="button" className="qmc-group__head" disabled={!!seg} onClick={() => toggleCollapse(g.key)}> {/* NO_TRACK */}
-                  {!seg && (isCollapsed ? <ChevronRight className="qmc-group__chev" /> : <ChevronDown className="qmc-group__chev" />)}
-                  <span className={`qmc-dot qmc-dot--${g.tone}`} />
-                  <span className="qmc-group__label">{g.label}</span>
-                  <span className="qmc-group__count">{rows.length}</span>
-                  <span className="qmc-group__sub">· {g.sub}</span>
-                </button>
-                {!isCollapsed && (
-                  <div className="qmc-rows">
-                    {rows.map((r, i) => (
-                      <ResidentRow key={r.patient.patientId} item={r} delay={Math.min(i, 16) * 16} onOpenResident={onOpenResident} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {residents.length === 0 && (
-            <div className="qmc-allclear">No residents triggering — all clear.</div>
-          )}
+          {/* Order: At risk → Coming soon (surfaced, not buried) → Clearable → Will hit → Clear */}
+          {renderGroup('at_risk')}
 
           {!seg && crossers.length > 0 && (
             <div className="qmc-collapsible qmc-collapsible--violet">
               <button type="button" className="qmc-collapsible__head" onClick={() => setShowCrossers((s) => !s)}> {/* NO_TRACK */}
                 {showCrossers ? <ChevronDown /> : <ChevronRight />}
                 <span className="qmc-dot qmc-dot--violet" style={{ width: '8px', height: '8px' }} />
-                {crossers.length} residents going to trigger soon — short-stay, will hit a long-stay measure when they cross day-101
+                Coming soon · {crossers.length} crossing day-101 — short-stay coding that will trip a long-stay measure
               </button>
               {showCrossers && (
                 <div className="qmc-collapsible__body qmc-rows">
@@ -280,6 +284,13 @@ export function QmOverview({
                 </div>
               )}
             </div>
+          )}
+
+          {renderGroup('clearable')}
+          {renderGroup('will_hit')}
+
+          {residents.length === 0 && (
+            <div className="qmc-allclear">No residents triggering — all clear.</div>
           )}
 
           {!seg && clearResidents.length > 0 && (
@@ -364,12 +375,8 @@ function ResidentRow({ item, delay, onOpenResident }) {
         </div>
       </div>
       <div className="qmc-row__right">
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span className="qmc-row__count">{r.triggeringCount}</span>
-          {Number.isFinite(item.days) && (
-            <span className={`qmc-row__days qmc-text--${tone}`}>{item.days <= 0 ? 'now' : `${item.days}d`}</span>
-          )}
-        </div>
+        {/* No per-row day countdown — the cliff is the shared quarter-end (hero). */}
+        <span className="qmc-row__count">{r.triggeringCount}</span>
         <ChevronRight className="qmc-row__chev" />
       </div>
     </button>
@@ -399,7 +406,10 @@ function CrosserResidentRow({ patient, onOpenResident }) {
         </div>
       </div>
       <div className="qmc-row__right">
-        <span className={`qmc-row__days qmc-text--${CROSSING.tone}`}>crosses {prettyDate(patient.crossingDate)} · {patient.daysUntilCrossing}d</span>
+        <div className="qmc-crosser-days">
+          <span className={`qmc-crosser-days__n qmc-text--${CROSSING.tone}`}>{patient.daysUntilCrossing}d</span>
+          <span className="qmc-crosser-days__lbl">to day-101</span>
+        </div>
         <ChevronRight className="qmc-row__chev" />
       </div>
     </button>

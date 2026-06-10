@@ -3,9 +3,25 @@
  * (orders / labs / diagnoses) that will likely trip a QM at the next MDS, from
  * the preventable-alerts service. Pure (no Preact) so it stays testable.
  *
- * Ported from web/components/quality-measures/qm-clinical-signals.ts (PR #626).
+ * Ported from web/components/quality-measures/qm-clinical-signals.ts
+ * (Superjonathan123/qm-signals-polish, PR #645).
  */
 import { measureRate, ratePct } from './qm-view-model.js';
+
+/** A documented Dx exempts this resident from the QM — render green, not as a problem. */
+export function alertIsExcluded(a) {
+  return (a.exclusions?.length ?? 0) > 0;
+}
+
+/** Phrase a signal's date by source so it reads as the *added* date. */
+export function signalDateVerb(source) {
+  switch (source) {
+    case 'order': return 'started';
+    case 'diagnosis': return 'onset';
+    case 'note': return 'noted';
+    default: return 'recorded';
+  }
+}
 
 // AlertMeta = { short, dodgeable }
 //   dodgeable: true = a lever exists to act before the MDS;
@@ -14,8 +30,17 @@ export const ALERT_META = {
   foley_order: { short: 'New Foley', dodgeable: true },
   antipsychotic_order: { short: 'New Antipsychotic', dodgeable: true },
   ua_canary: { short: 'UA / UTI workup', dodgeable: true },
-  uti_dx: { short: 'UTI diagnosis', dodgeable: false },
+  uti_dx: { short: 'UTI found', dodgeable: false },
 };
+
+/**
+ * Display name for one signal — the per-instance `headline` when the backend
+ * refined it ("Likely UTI" / "UA only" / "UTI found"), else the type's short
+ * label. The breakdown/filter chips still group by the type's short label.
+ */
+export function alertName(a) {
+  return a.headline ?? ALERT_META[a.id]?.short ?? a.id;
+}
 
 export const ALERT_ORDER = ['foley_order', 'antipsychotic_order', 'ua_canary', 'uti_dx'];
 
@@ -58,17 +83,24 @@ export function signalBreakdown(data) {
   })).filter((x) => x.count > 0);
 }
 
+/** Stable key for one signal (resident × alert) — used by the what-if. */
+export function signalKey(patientId, alertId) {
+  return `${patientId}:${alertId}`;
+}
+
 /**
- * Lightweight "stakes" projection per threatened QM: today's observed rate vs
- * the rate if the new signals all get coded into the numerator. Pessimistic
- * (not every UA becomes a coded UTI) — labelled as a worst-case ceiling.
+ * Stakes per threatened QM: today's rate vs the rate if signals get coded into
+ * the numerator. Excluded signals never count. Pass `coded` (a set of
+ * `signalKey`s) to project only the selected signals — the interactive what-if;
+ * omit it for the worst-case "if all code" ceiling.
  * QmStake = { qmId, added, curPct, projPct }
  */
-export function qmStakes(data, summary) {
-  // Count distinct residents with an actionable signal per threatened QM.
+export function qmStakes(data, summary, coded) {
   const addedByQm = new Map();
   for (const p of data.patients) {
     for (const a of actionableAlerts(p)) {
+      if (alertIsExcluded(a)) continue; // an exclusion Dx means it won't count
+      if (coded && !coded.has(signalKey(p.patientId, a.id))) continue;
       const set = addedByQm.get(a.qmId) ?? new Set();
       set.add(p.patientId);
       addedByQm.set(a.qmId, set);

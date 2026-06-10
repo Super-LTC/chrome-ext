@@ -136,15 +136,23 @@ function MeasureSection({ patient, entry }) {
           ) : (
             <div className="qmc-evlist">
               {entry.evidence.map((ev, i) => (
-                <div key={`${ev.mdsItem}-${ev.assessmentId}-${i}`}>
-                  <div className="qmc-ev__row">
-                    <span className="qmc-ev__item">{ev.mdsItem}</span>
-                    <span className="qmc-ev__eq">=</span>
-                    <span className="qmc-ev__val">{displayMdsValue(ev.mdsItem, ev.value) || '—'}</span>
+                <div key={`${ev.mdsItem}-${ev.assessmentId}-${i}`} className="qmc-ev">
+                  <div className="qmc-ev__left">
+                    <div className="qmc-ev__row">
+                      <span className="qmc-ev__item">{ev.mdsItem}</span>
+                      <span className="qmc-ev__eq">=</span>
+                      <span className="qmc-ev__val">{displayMdsValue(ev.mdsItem, ev.value) || '—'}</span>
+                    </div>
+                    {(ev.assessmentType || ev.note) && (
+                      <div className="qmc-ev__sub">{ev.assessmentType}{ev.note ? ` · ${ev.note}` : ''}</div>
+                    )}
                   </div>
-                  <div className="qmc-ev__sub">
-                    {ev.assessmentType} · ARD {prettyDate(ev.assessmentArdDate)}{ev.note ? ` · ${ev.note}` : ''}
-                  </div>
+                  {ev.assessmentArdDate && (
+                    <div className="qmc-ev__coded">
+                      <span className="qmc-ev__coded-lbl">Coded on MDS</span>
+                      <span className="qmc-ev__coded-date">{prettyDate(ev.assessmentArdDate)}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
