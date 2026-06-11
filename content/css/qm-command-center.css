@@ -440,3 +440,12 @@
 .qmc-load__bar span{display:block;width:40%;height:100%;border-radius:9999px;
   background:linear-gradient(90deg,#0ea5e9,#6366f1);animation:qmc-load-slide 1.3s ease-in-out infinite}
 @keyframes qmc-load-slide{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+
+/* ── Functional Decline roster — per-item decline chips ──────────────────── */
+.qmc-prow--fd{align-items:flex-start}
+.qmc-prow--fd .qmc-prow__dot{margin-top:5px}
+.qmc-prow__name-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.qmc-fd-chips{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
+.qmc-fd-chip__name{font-weight:600}
+.qmc-fd-chip__val{font-family:ui-monospace,monospace;font-weight:700;font-variant-numeric:tabular-nums}
+.qmc-fd-chip__arrow{opacity:.55;font-weight:400}

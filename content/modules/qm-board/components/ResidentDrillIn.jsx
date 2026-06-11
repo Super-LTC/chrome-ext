@@ -11,7 +11,7 @@ import {
   isFiveStarMds, shortLabel, measureCode, displayMdsValue,
   entryIsActionable, statusBucketForEntry, statusRank,
 } from '../lib/qm-view-model.js';
-import { STATUS_BUCKET, CROSSING, isCrossingEntry, fullName, prettyDate } from '../lib/qm-tones.js';
+import { STATUS_BUCKET, CROSSING, isCrossingEntry, fullName, prettyDate, stayDayLabel } from '../lib/qm-tones.js';
 import { X } from './icons.jsx';
 
 function toast(msg) {
@@ -34,8 +34,7 @@ export function ResidentDrillIn({ patient, entry, onClose }) {
           <div style={{ minWidth: 0 }}>
             <div className="qmc-modal__name">{fullName(patient)}</div>
             <div className="qmc-modal__meta">
-              {patient.stayType}
-              {patient.cdif != null && ` · d${patient.cdif}`}
+              {stayDayLabel(patient)}
               {patient.payerClassification && ` · ${patient.payerClassification}`}
               {patient.externalPatientId && ` · ${patient.externalPatientId}`}
             </div>

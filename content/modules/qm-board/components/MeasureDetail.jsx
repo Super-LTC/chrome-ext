@@ -13,7 +13,7 @@ import {
   projectedNum, ratePct, shortLabel, measureCode, statusBucketForEntry, displayMdsValue,
 } from '../lib/qm-view-model.js';
 import { fiveStarMeasure, pointsForRate, nextTier } from '../lib/qm-five-star.js';
-import { CROSSING, STATUS_BUCKET, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel } from '../lib/qm-tones.js';
+import { CROSSING, STATUS_BUCKET, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel } from '../lib/qm-tones.js';
 import { ChevronLeft, ChevronRight } from './icons.jsx';
 
 const GROUP_DEFS = [
@@ -211,7 +211,7 @@ function PersonRow({ patient, entry, wif, clearable, cleared, onToggle, onOpen }
       <button type="button" className="qmc-prow__main" onClick={onOpen} /* NO_TRACK */>
         <span className={`qmc-prow__name ${cleared ? 'qmc-prow__name--struck' : ''}`}>{fullName(patient)}</span>
         <span className="qmc-prow__meta">
-          {patient.stayType} · d{patient.cdif}{patient.payerClassification ? ` · ${patient.payerClassification}` : ''}{ard ? ` · MDS ${prettyDate(ard)}` : ''}
+          {stayDayLabel(patient)}{patient.payerClassification ? ` · ${patient.payerClassification}` : ''}{ard ? ` · MDS ${prettyDate(ard)}` : ''}
           {why0 ? <span style={{ color: 'var(--slate-500)' }}> · {why0.mdsItem} {displayMdsValue(why0.mdsItem, why0.value)}</span> : null}
         </span>
       </button>
@@ -233,7 +233,7 @@ function CrosserRow({ patient, hit, wif, prevented, onToggle, onOpen }) {
       <button type="button" className="qmc-prow__main" onClick={onOpen} /* NO_TRACK */>
         <span className={`qmc-prow__name ${prevented ? 'qmc-prow__name--struck' : ''}`}>{fullName(patient)}</span>
         <span className="qmc-prow__meta">
-          short · d{patient.cdif}<span className={`qmc-text--${CROSSING.tone}`}> · {hit.bucket}</span>
+          {stayDayLabel(patient)}<span className={`qmc-text--${CROSSING.tone}`}> · {hit.bucket}</span>
           {why0 ? <span style={{ color: 'var(--slate-500)' }}> · {why0.mdsItem} {displayMdsValue(why0.mdsItem, why0.value)}</span> : null}
         </span>
       </button>

@@ -169,17 +169,31 @@ function SummaryCard({ n, label, tone }) {
   );
 }
 
+const SEV_TONE = { severe: 'rose', moderate: 'amber', mild: 'sky' };
+const fmtGg = (v) => (v == null ? '—' : Number.isInteger(v) ? `${v}` : v.toFixed(1));
+
 function PatientRow({ patient, tone, pending, onOpen, onSnooze }) {
   const declines = patient.declines ?? [];
   return (
-    <div className="qmc-prow">
+    <div className="qmc-prow qmc-prow--fd">
       <span className={`qmc-prow__dot qmc-dot--${tone}`} />
       <button type="button" data-track="qm_drill_in" data-track-prop-measure-code="gg_decline" data-track-prop-view="resident" className="qmc-prow__main" onClick={onOpen}>
-        <span className="qmc-prow__name">{patient.patientName}</span>
-        <span className="qmc-prow__meta">
-          {patient.locationName ? `${patient.locationName} · ` : ''}{declines.length} item{declines.length === 1 ? '' : 's'} declined
-          {declines.length ? ` · ${declines.slice(0, 3).map((d) => d.name).join(', ')}${declines.length > 3 ? '…' : ''}` : ''}
+        <span className="qmc-prow__name-row">
+          <span className="qmc-prow__name">{patient.patientName}</span>
+          {patient.locationName && <span className="qmc-row__meta">{patient.locationName}</span>}
         </span>
+        <div className="qmc-fd-chips">
+          {declines.length === 0 && <span className="qmc-row__meta">decline flagged — open for detail</span>}
+          {declines.map((d) => {
+            const t = SEV_TONE[d.severity] ?? 'slate';
+            return (
+              <span key={d.mdsKey} className={`qmc-chip qmc-chip--${t}`} title={`${d.name}: baseline ${fmtGg(d.baseline)} → worst ${fmtGg(d.worstShiftAverage)} (−${fmtGg(d.declineMagnitude)})`}>
+                <span className="qmc-fd-chip__name">{d.name}</span>
+                <b className="qmc-fd-chip__val">{fmtGg(d.baseline)}<span className="qmc-fd-chip__arrow"> ↓ </span>{fmtGg(d.worstShiftAverage)}</b>
+              </span>
+            );
+          })}
+        </div>
       </button>
       <button type="button" data-track="qm_action_clicked" data-track-prop-measure-code="gg" data-track-prop-action="snooze_30d" className="qmc-undo" disabled={pending} onClick={onSnooze}>
         <Clock style={{ width: '14px', height: '14px' }} /> Snooze

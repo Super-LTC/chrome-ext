@@ -37,18 +37,26 @@ const SEVERITY_CLASS = {
   mild: 'qmb-chart-card__badge--mild',
 };
 
+// Line/area color when an item is declining — tracks severity so the dip reads.
+const SEV_COLOR = { severe: '#e11d48', moderate: '#d97706', mild: '#0284c7' };
+
 export function GgItemChart({ item, points, shiftColor = '#3b82f6' }) {
-  const W = 520, H = 200;
-  const PAD_LEFT = 52, PAD_RIGHT = 14, PAD_TOP = 14, PAD_BOTTOM = 24;
+  const W = 520, H = 196;
+  const PAD_LEFT = 46, PAD_RIGHT = 16, PAD_TOP = 16, PAD_BOTTOM = 22;
   const innerW = W - PAD_LEFT - PAD_RIGHT;
   const innerH = H - PAD_TOP - PAD_BOTTOM;
+  const bottomY = H - PAD_BOTTOM;
 
   const [hover, setHover] = useState(null); // { i, x, y }
   const svgRef = useRef(null);
 
   const declined = item.declineMagnitude && item.declineMagnitude >= 1;
+  const sevColor = declined ? (SEV_COLOR[item.severity] || SEV_COLOR.mild) : null;
+  const lineColor = sevColor || shiftColor;
+  const gid = `gg-grad-${item.mdsKey}`;
+
   const badge = declined
-    ? `↘ ${item.declineMagnitude.toFixed(item.declineMagnitude % 1 === 0 ? 0 : 1)}-pt`
+    ? `↓ ${item.declineMagnitude.toFixed(item.declineMagnitude % 1 === 0 ? 0 : 1)}pt`
     : 'Stable';
   const badgeCls = declined
     ? (SEVERITY_CLASS[item.severity] || 'qmb-chart-card__badge--mild')
@@ -66,11 +74,18 @@ export function GgItemChart({ item, points, shiftColor = '#3b82f6' }) {
   const linePath = hasLine
     ? points.map((p, i) => `${i ? 'L' : 'M'}${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(' ')
     : '';
+  // Filled area under the line (down to the chart floor).
+  const areaPath = hasLine
+    ? `${linePath} L${xFor(n - 1).toFixed(1)} ${bottomY} L${xFor(0).toFixed(1)} ${bottomY} Z`
+    : '';
+
+  // Worst (lowest) point — the eye should land on the dip.
+  let worstI = -1, worstV = Infinity;
+  points.forEach((p, i) => { if (p.value < worstV) { worstV = p.value; worstI = i; } });
 
   const firstDate = points[0]?.date || '';
   const lastDate = points[points.length - 1]?.date || '';
 
-  // Tooltip position — clamp so it doesn't fall off the right edge.
   const hoveredPoint = hover ? points[hover.i] : null;
   const tooltipOnLeft = hover && hover.x > W * 0.62;
 
@@ -83,7 +98,7 @@ export function GgItemChart({ item, points, shiftColor = '#3b82f6' }) {
             <div className="qmb-chart-card__sub">
               Baseline: <b>{baselineLabel}</b>
               {declined && item.worstShiftAverage != null && (
-                <> → Worst avg: <b style={{ color: '#b91c1c' }}>{item.worstShiftAverage.toFixed(1)}</b></>
+                <> → Worst avg: <b style={{ color: sevColor || '#b91c1c' }}>{item.worstShiftAverage.toFixed(1)}</b></>
               )}
             </div>
           )}
@@ -99,55 +114,45 @@ export function GgItemChart({ item, points, shiftColor = '#3b82f6' }) {
           preserveAspectRatio="xMidYMid meet"
           onMouseLeave={() => setHover(null)}
         >
-          {/* gridlines + Y labels */}
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color={lineColor} stop-opacity="0.16" />
+              <stop offset="100%" stop-color={lineColor} stop-opacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* light solid gridlines + Y labels */}
           {Y_LABELS.map(({ v, short }) => (
             <g key={v}>
-              <line
-                x1={PAD_LEFT} y1={yFor(v)}
-                x2={W - PAD_RIGHT} y2={yFor(v)}
-                stroke="#f3f4f6" strokeWidth="1" strokeDasharray="2 3"
-              />
-              <text x={PAD_LEFT - 8} y={yFor(v) + 4} fontSize="11" fill="#9ca3af" textAnchor="end">
-                {short}
-              </text>
+              <line x1={PAD_LEFT} y1={yFor(v)} x2={W - PAD_RIGHT} y2={yFor(v)} stroke="#f1f5f9" strokeWidth="1" />
+              <text x={PAD_LEFT - 8} y={yFor(v) + 3.5} fontSize="10" fill="#cbd5e1" textAnchor="end">{short}</text>
             </g>
           ))}
 
-          {/* baseline reference line */}
+          {/* baseline reference (faint, no overflowing label — the header states it) */}
           {item.baseline != null && (
-            <g>
-              <line
-                x1={PAD_LEFT} y1={yFor(item.baseline)}
-                x2={W - PAD_RIGHT} y2={yFor(item.baseline)}
-                stroke="#6366f1" strokeWidth="1.5" strokeDasharray="6 4" opacity="0.9"
-              />
-              <text
-                x={W - PAD_RIGHT - 4} y={yFor(item.baseline) + 14}
-                fontSize="10" fill="#6366f1" textAnchor="end" fontWeight="600"
-              >Baseline</text>
-            </g>
+            <line
+              x1={PAD_LEFT} y1={yFor(item.baseline)} x2={W - PAD_RIGHT} y2={yFor(item.baseline)}
+              stroke="#94a3b8" strokeWidth="1.25" strokeDasharray="5 4" opacity="0.7"
+            />
           )}
 
-          {/* data line */}
+          {/* area + line */}
           {hasLine && (
             <>
-              <path d={linePath} fill="none" stroke={shiftColor} strokeWidth="2" />
+              <path d={areaPath} fill={`url(#${gid})`} stroke="none" />
+              <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.25"
+                strokeLinejoin="round" strokeLinecap="round" />
+              {/* worst point highlight */}
+              {worstI >= 0 && declined && (
+                <circle cx={xFor(worstI)} cy={yFor(worstV)} r="5.5" fill="none" stroke={lineColor} strokeWidth="1.5" opacity="0.45" />
+              )}
               {points.map((p, i) => (
                 <g key={`${p.date}-${i}`}>
-                  {/* Visible circle */}
-                  <circle
-                    cx={xFor(i)} cy={yFor(p.value)}
-                    r={hover?.i === i ? 5 : 3.5}
-                    fill={shiftColor} stroke="#fff" strokeWidth="1.5"
-                  />
-                  {/* Larger invisible hit area */}
-                  <circle
-                    cx={xFor(i)} cy={yFor(p.value)}
-                    r="14"
-                    fill="transparent"
-                    onMouseEnter={() => setHover({ i, x: xFor(i), y: yFor(p.value) })}
-                    style={{ cursor: 'pointer' }}
-                  />
+                  <circle cx={xFor(i)} cy={yFor(p.value)} r={hover?.i === i ? 4.5 : 2.4}
+                    fill="#fff" stroke={lineColor} strokeWidth={hover?.i === i ? 2 : 1.5} />
+                  <circle cx={xFor(i)} cy={yFor(p.value)} r="14" fill="transparent"
+                    onMouseEnter={() => setHover({ i, x: xFor(i), y: yFor(p.value) })} style={{ cursor: 'pointer' }} />
                 </g>
               ))}
             </>
@@ -155,26 +160,17 @@ export function GgItemChart({ item, points, shiftColor = '#3b82f6' }) {
 
           {/* vertical guide on hovered point */}
           {hover && (
-            <line
-              x1={hover.x} y1={PAD_TOP}
-              x2={hover.x} y2={H - PAD_BOTTOM}
-              stroke="#9ca3af" strokeWidth="1" strokeDasharray="3 3" opacity="0.5"
-            />
+            <line x1={hover.x} y1={PAD_TOP} x2={hover.x} y2={bottomY} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
           )}
 
           {/* x-axis date labels */}
-          {firstDate && (
-            <text x={PAD_LEFT} y={H - 6} fontSize="10" fill="#9ca3af">{shortDate(firstDate)}</text>
-          )}
+          {firstDate && <text x={PAD_LEFT} y={H - 5} fontSize="10" fill="#cbd5e1">{shortDate(firstDate)}</text>}
           {lastDate && lastDate !== firstDate && (
-            <text x={W - PAD_RIGHT} y={H - 6} fontSize="10" fill="#9ca3af" textAnchor="end">{shortDate(lastDate)}</text>
+            <text x={W - PAD_RIGHT} y={H - 5} fontSize="10" fill="#cbd5e1" textAnchor="end">{shortDate(lastDate)}</text>
           )}
 
           {!hasLine && (
-            <text
-              x={PAD_LEFT + innerW / 2} y={PAD_TOP + innerH / 2}
-              fontSize="12" fill="#9ca3af" textAnchor="middle" fontStyle="italic"
-            >No scores in window</text>
+            <text x={PAD_LEFT + innerW / 2} y={PAD_TOP + innerH / 2} fontSize="12" fill="#cbd5e1" textAnchor="middle" fontStyle="italic">No scores in window</text>
           )}
         </svg>
 

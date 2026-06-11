@@ -72,6 +72,18 @@ export function soonestCliffDays(row) {
   return min;
 }
 
+/**
+ * Stay label for a resident meta line. The day-in-facility count only matters
+ * for short-stay residents (they're counting up toward day-101 / long-stay);
+ * for long-stay it's meaningless clutter, so show just "Long". Short reads
+ * "Short · Day {cdif}" so it's clear what day they're on.
+ */
+export function stayDayLabel(p) {
+  const stay = p.stayType === 'short' ? 'Short' : p.stayType === 'long' ? 'Long' : (p.stayType ?? '');
+  if (p.stayType === 'short' && p.cdif != null) return `${stay} · Day ${p.cdif}`;
+  return stay;
+}
+
 export function fullName(row) {
   const last = row.lastName ?? '';
   const first = row.firstName ?? '';

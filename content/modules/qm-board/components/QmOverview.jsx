@@ -17,7 +17,7 @@ import {
 } from '../lib/qm-view-model.js';
 import {
   URGENCY, CROSSING, STATUS_BUCKET, entryUrgency, soonestCliffDays,
-  crosserToDrill, fullName, prettyDate, quarterLabel,
+  crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel,
 } from '../lib/qm-tones.js';
 import { ShieldCheck, CalendarClock, Activity, ChevronRight, ChevronDown, CircleCheck, Search, X, TrendingDown } from './icons.jsx';
 
@@ -359,7 +359,7 @@ function ResidentRow({ item, delay, onOpenResident }) {
         <div className="qmc-row__name-line">
           <span className="qmc-row__name">{fullName(r)}</span>
           <span className="qmc-row__meta">
-            {r.stayType} · d{r.cdif}{r.payerClassification ? ` · ${r.payerClassification}` : ''}{r.target ? ` · MDS ${prettyDate(r.target.ardDate)}` : ''}
+            {stayDayLabel(r)}{r.payerClassification ? ` · ${r.payerClassification}` : ''}{r.target ? ` · MDS ${prettyDate(r.target.ardDate)}` : ''}
           </span>
         </div>
         <div className="qmc-row__pills">
@@ -394,7 +394,7 @@ function CrosserResidentRow({ patient, onOpenResident }) {
       <div className="qmc-row__body">
         <div className="qmc-row__name-line">
           <span className="qmc-row__name">{fullName(patient)}</span>
-          <span className="qmc-row__meta">short · d{patient.cdif}</span>
+          <span className="qmc-row__meta">{stayDayLabel(patient)}</span>
         </div>
         <div className="qmc-row__pills">
           {patient.projectedHits.map((h, i) => (
