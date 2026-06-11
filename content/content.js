@@ -24,7 +24,10 @@ import './components/toast.js';
 // 3.5. Import certifications API (makes window.CertAPI available for fab.js)
 import './modules/certifications/cert-api.js';
 
-// 3.6. Import notifications API (window.NotificationsAPI — badge + seen-state)
+// 3.6. Recertification API (window.RecertAPI for fab.js + managed-care module)
+import './modules/managed-care/recert-api.js';
+
+// 3.7. Import notifications API (window.NotificationsAPI — badge + seen-state)
 import './modules/notifications/notifications-api.js';
 
 // 4. Import query system
