@@ -32,10 +32,16 @@ function toast(msg, type = 'error') {
   catch { /* noop */ }
 }
 
-/** First signal's source+date as the "added" line, phrased by source. */
+/**
+ * Collapsed "added" date for a list row. Signals are sorted date-descending, so
+ * signals[0] is the most-recent and signals[0].date === latestSignalDate (the
+ * canonical "when this last showed up" — NOT first appearance, which isn't
+ * exposed). Verb tracks that most-recent signal's source. The modal shows the
+ * full per-signal breakdown with its own dated verb each.
+ */
 function addedLine(a) {
   const s = a.signals?.[0];
-  const date = s?.date || a.latestSignalDate;
+  const date = a.latestSignalDate || s?.date;
   if (!date) return '';
   return `${s ? signalDateVerb(s.source) : 'recorded'} ${prettyDate(date)}`;
 }
