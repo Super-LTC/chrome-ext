@@ -55,6 +55,7 @@ import ardEstimator from './css/ard-estimator.css?inline';
 import mdsPlanner from './css/mds-planner.css?inline';
 import udaModal from './css/uda-modal.css?inline';
 import qmBoard from './css/qm-board.css?inline';
+import managedCare from './css/managed-care.css?inline';
 import qmCommandCenter from './css/qm-command-center.css?inline';
 import ftagPrevention from './css/ftag-prevention.css?inline';
 import twentyFourHourReport from './css/24hr-report.css?inline';
@@ -95,6 +96,7 @@ const CSS_BUNDLE = [
   mdsPlanner,
   udaModal,
   qmBoard,
+  managedCare,
   qmCommandCenter,
   ftagPrevention,
   twentyFourHourReport,
