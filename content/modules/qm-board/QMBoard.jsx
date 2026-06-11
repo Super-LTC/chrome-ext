@@ -21,6 +21,7 @@ import { ResidentDrillIn } from './components/ResidentDrillIn.jsx';
 import { MeasureDetail } from './components/MeasureDetail.jsx';
 import { ClinicalSignalsView } from './components/ClinicalSignalsView.jsx';
 import { FunctionalDeclineView } from './FunctionalDecline.jsx';
+import { QmLoading } from './components/QmLoading.jsx';
 
 export function QMBoard({ facilityName, orgSlug, onClose }) {
   const [history, setHistory] = useState([{ kind: 'dashboard' }]);
@@ -77,7 +78,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
         </header>
 
         {loading ? (
-          <div className="qmc-loading">Loading QM board…</div>
+          <QmLoading title="Building your QM board" />
         ) : error ? (
           <div className="qmc-error">
             <div>Failed to load QM data</div>

@@ -14,6 +14,7 @@ import { track } from '../../utils/analytics.js';
 import { useGgDashboard } from './hooks/useGgDashboard.js';
 import { useSnooze } from './hooks/useSnooze.js';
 import { GgDeclineDetail } from './components/GgDeclineDetail.jsx';
+import { QmLoading } from './components/QmLoading.jsx';
 import { ChevronLeft, ChevronRight, Search, X, Clock, Undo2 } from './components/icons.jsx';
 
 const MODES = [
@@ -68,7 +69,7 @@ export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
       </div>
 
       {loading ? (
-        <div className="qmc-loading">Loading functional-decline roster…</div>
+        <QmLoading title="Loading functional-decline roster" />
       ) : error ? (
         <div className="qmc-error">
           <div>Failed to load decline data</div>

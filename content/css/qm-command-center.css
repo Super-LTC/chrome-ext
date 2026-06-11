@@ -406,3 +406,37 @@
 .qmc-ev__coded{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
 .qmc-ev__coded-lbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-400)}
 .qmc-ev__coded-date{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:var(--slate-700)}
+
+/* ── Playful loading scene ───────────────────────────────────────────────── */
+.qmc-load{align-items:center;justify-content:center;gap:0;min-height:380px;text-align:center;padding:32px 16px}
+.qmc-load__stage{position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.qmc-load__ring{position:absolute;inset:18px;border-radius:9999px;
+  background:radial-gradient(circle,rgba(14,165,233,.18),transparent 70%);
+  animation:qmc-load-glow 2s ease-in-out infinite}
+@keyframes qmc-load-glow{0%,100%{transform:scale(.85);opacity:.5}50%{transform:scale(1.15);opacity:1}}
+.qmc-load__shield{position:relative;width:64px;height:64px;border-radius:9999px;display:flex;align-items:center;
+  justify-content:center;color:#fff;background:linear-gradient(135deg,#0ea5e9,#6366f1);
+  box-shadow:0 10px 26px rgba(14,165,233,.4);animation:qmc-load-bob 1.6s ease-in-out infinite}
+.qmc-load__shield svg{width:30px;height:30px}
+@keyframes qmc-load-bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}
+.qmc-load__star{position:absolute;color:#f59e0b;font-size:14px;animation:qmc-twinkle 1.4s ease-in-out infinite}
+.qmc-load__star--a{top:6px;left:14px;animation-delay:0s;font-size:16px}
+.qmc-load__star--b{top:18px;right:8px;animation-delay:.45s}
+.qmc-load__star--c{bottom:12px;left:24px;animation-delay:.9s;font-size:12px}
+@keyframes qmc-twinkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.15)}}
+
+.qmc-load__chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:440px;margin:4px 0 18px}
+.qmc-load__chip{font-size:12px;animation:qmc-load-in .5s ease-out both,qmc-load-float 2.4s ease-in-out infinite}
+.qmc-load__chip:nth-child(2n){animation-duration:.5s,2.8s}
+.qmc-load__chip:nth-child(3n){animation-duration:.5s,2.1s}
+.qmc-load__code{margin-left:5px;font-family:ui-monospace,monospace;font-weight:700;opacity:.6}
+@keyframes qmc-load-in{from{opacity:0;transform:translateY(10px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes qmc-load-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+.qmc-load__title{font-size:15px;font-weight:700;color:var(--slate-800)}
+.qmc-load__quip{margin-top:4px;font-size:12px;color:var(--slate-400);min-height:16px;animation:qmc-quip .3s ease-out}
+@keyframes qmc-quip{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.qmc-load__bar{margin-top:16px;width:200px;height:6px;border-radius:9999px;background:var(--slate-100);overflow:hidden}
+.qmc-load__bar span{display:block;width:40%;height:100%;border-radius:9999px;
+  background:linear-gradient(90deg,#0ea5e9,#6366f1);animation:qmc-load-slide 1.3s ease-in-out infinite}
+@keyframes qmc-load-slide{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}

@@ -2,7 +2,11 @@
  * Inline SVG icons for the QM Command Center (the web app used lucide-react).
  * Each accepts a className; sizing is via CSS. Stroke-based, 24x24 viewBox.
  */
+// Default 16×16 so an icon used without a CSS size rule stays small instead of
+// stretching to fill its flex container. CSS `width`/`height` (e.g.
+// `.qmc-modal__close svg`) and inline styles still override these attributes.
 const base = {
+  width: 16, height: 16,
   viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
   'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
 };
