@@ -47,3 +47,6 @@ export const Undo2 = (p) => (
 export const TrendingDown = (p) => (
   <svg {...base} className={p.className}><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
 );
+export const Info = (p) => (
+  <svg {...base} className={p.className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+);

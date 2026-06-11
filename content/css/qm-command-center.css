@@ -449,3 +449,29 @@
 .qmc-fd-chip__name{font-weight:600}
 .qmc-fd-chip__val{font-family:ui-monospace,monospace;font-weight:700;font-variant-numeric:tabular-nums}
 .qmc-fd-chip__arrow{opacity:.55;font-weight:400}
+
+/* ── Functional Decline explainer ────────────────────────────────────────── */
+.qmc-info-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;
+  border:1px solid var(--slate-200);background:#fff;color:var(--slate-400);cursor:pointer}
+.qmc-info-btn:hover{border-color:var(--slate-300);color:var(--slate-600);background:var(--slate-50)}
+.qmc-info-btn--on{border-color:var(--sky-300,#7dd3fc);color:var(--sky-600);background:var(--sky-50)}
+.qmc-info-btn svg{width:16px;height:16px}
+
+.qmc-explain{position:relative;border-radius:14px;border:1px solid var(--sky-200);
+  background:linear-gradient(135deg,rgba(240,249,255,.7),#fff);padding:16px 18px;animation:qmc-rise .25s ease-out both}
+.qmc-explain__close{position:absolute;top:10px;right:10px;border:none;background:none;cursor:pointer;
+  color:var(--slate-400);border-radius:6px;padding:4px;display:flex}
+.qmc-explain__close:hover{background:var(--slate-100);color:var(--slate-600)}
+.qmc-explain__close svg{width:16px;height:16px}
+.qmc-explain__lead{font-size:13px;line-height:1.55;color:var(--slate-600);max-width:64ch;padding-right:24px}
+.qmc-explain__lead strong{color:var(--slate-800)}
+.qmc-explain__modes{margin-top:14px;display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:560px){.qmc-explain__modes{grid-template-columns:1fr 1fr}}
+.qmc-explain__mode{border-radius:10px;border:1px solid var(--slate-200);background:#fff;padding:12px 14px}
+.qmc-explain__mode--on{border-color:var(--slate-900);box-shadow:0 0 0 1px var(--slate-900)}
+.qmc-explain__mode-name{font-size:13px;font-weight:700;color:var(--slate-900)}
+.qmc-explain__mode-sub{margin-top:2px;font-size:12px;color:var(--slate-500)}
+.qmc-explain__list{margin:8px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:3px;
+  font-size:12px;color:var(--slate-600)}
+.qmc-explain__list b{color:var(--slate-800);font-variant-numeric:tabular-nums}
+.qmc-explain__foot{margin-top:12px;font-size:11px;line-height:1.5;color:var(--slate-400)}

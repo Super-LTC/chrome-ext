@@ -15,7 +15,7 @@ import { useGgDashboard } from './hooks/useGgDashboard.js';
 import { useSnooze } from './hooks/useSnooze.js';
 import { GgDeclineDetail } from './components/GgDeclineDetail.jsx';
 import { QmLoading } from './components/QmLoading.jsx';
-import { ChevronLeft, ChevronRight, Search, X, Clock, Undo2 } from './components/icons.jsx';
+import { ChevronLeft, ChevronRight, Search, X, Clock, Undo2, Info } from './components/icons.jsx';
 
 const MODES = [
   { value: 'therapy', label: 'Therapy Pickup' },
@@ -31,6 +31,7 @@ export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
   const [mode, setMode] = useState('therapy');
   const [query, setQuery] = useState('');
   const [showSnoozed, setShowSnoozed] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [selected, setSelected] = useState(null); // { patientId, name } | null
 
   useEffect(() => { track('functional_decline_opened', { source: 'qm_board' }); }, []);
@@ -80,12 +81,17 @@ export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
         <>
           {/* Mode toggle + search */}
           <div className="qmc-toolbar">
-            <div className="qmc-tabs">
-              {MODES.map((m) => (
-                <button key={m.value} type="button" className={mode === m.value ? 'qmc-tab qmc-tab--on' : 'qmc-tab'} onClick={() => { setMode(m.value); setQuery(''); }}> {/* NO_TRACK */}
-                  {m.label}
-                </button>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="qmc-tabs">
+                {MODES.map((m) => (
+                  <button key={m.value} type="button" className={mode === m.value ? 'qmc-tab qmc-tab--on' : 'qmc-tab'} onClick={() => { setMode(m.value); setQuery(''); }}> {/* NO_TRACK */}
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className={`qmc-info-btn ${showInfo ? 'qmc-info-btn--on' : ''}`} onClick={() => setShowInfo((v) => !v)} aria-label="What's this?"> {/* NO_TRACK */}
+                <Info />
+              </button>
             </div>
             <div className="qmc-search">
               <Search />
@@ -93,6 +99,8 @@ export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
               {query && <button type="button" className="qmc-search__clear" onClick={() => setQuery('')} aria-label="Clear search"><X /></button> /* NO_TRACK */}
             </div>
           </div>
+
+          {showInfo && <DeclineExplainer mode={mode} onClose={() => setShowInfo(false)} />}
 
           <div className="qmc-fd-summary">
             <SummaryCard n={summary.withDecline} label="With decline" tone="slate" />
@@ -156,6 +164,45 @@ export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function DeclineExplainer({ mode, onClose }) {
+  return (
+    <div className="qmc-explain">
+      <button type="button" className="qmc-explain__close" onClick={onClose} aria-label="Close"><X /></button> {/* NO_TRACK */}
+      <div className="qmc-explain__lead">
+        <strong>Functional Decline</strong> is an <em>early-warning</em> screen: it compares each resident's
+        <strong> daily CNA GG documentation</strong> against their <strong>baseline from the last completed MDS</strong> —
+        catching decline <em>before</em> it locks on the next assessment. (The QM Board, by contrast, reads CMS measures
+        off already-locked MDS pairs.)
+      </div>
+      <div className="qmc-explain__modes">
+        <div className={`qmc-explain__mode ${mode === 'therapy' ? 'qmc-explain__mode--on' : ''}`}>
+          <div className="qmc-explain__mode-name">Therapy Pickup</div>
+          <div className="qmc-explain__mode-sub">Find sustained declines worth a therapy eval — less noise.</div>
+          <ul className="qmc-explain__list">
+            <li><b>7-day</b> lookback of CNA scores</li>
+            <li><b>75%</b> of shift scores must be below baseline</li>
+            <li>≥3 scores per shift</li>
+          </ul>
+        </div>
+        <div className={`qmc-explain__mode ${mode === 'qm' ? 'qmc-explain__mode--on' : ''}`}>
+          <div className="qmc-explain__mode-name">QM Decline</div>
+          <div className="qmc-explain__mode-sub">Early warning before the ADL-Decline QM trips — more sensitive.</div>
+          <ul className="qmc-explain__list">
+            <li><b>3-day</b> lookback of CNA scores</li>
+            <li><b>100%</b> of shift scores must be below baseline</li>
+            <li>≥2 scores per shift</li>
+          </ul>
+        </div>
+      </div>
+      <div className="qmc-explain__foot">
+        Both modes track the same 5 GG items (Eating, Sit-to-Lying, Sit-to-Stand, Toilet Transfer, Walk&nbsp;10ft).
+        Alert when Walk&nbsp;10ft drops ≥1pt, or any other item drops ≥2pt (or ≥1pt across 2+ items). A resident can
+        surface here before the QM Board flags them — that's by design.
+      </div>
     </div>
   );
 }
