@@ -144,7 +144,15 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
       });
       onCreated(rec);
     } catch (e) {
-      setError(e.message); // surface backend 'required' messages inline
+      // Field-level hints from the backend's 400 `required` list; clear state
+      // for a 403 (gate can flip between page load and submit).
+      if (e.status === 403) {
+        setError("Managed Care isn't enabled for this facility.");
+      } else if (e.required?.length) {
+        setError(`Missing required fields: ${e.required.join(', ')}`);
+      } else {
+        setError(e.message);
+      }
     } finally { setSubmitting(false); }
   };
 

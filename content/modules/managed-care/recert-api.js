@@ -12,6 +12,16 @@ async function apiRequest(endpoint, options = {}) {
   return response;
 }
 
+// Background failure envelope is { success: false, error, status, body } —
+// keep status + the backend's `required` field list on the thrown error so
+// the wizard can render field-level hints and a clear 403 state.
+function apiError(res, fallback) {
+  const err = new Error(res?.error || fallback);
+  err.status = res?.status;
+  err.required = res?.body?.required;
+  return err;
+}
+
 function qs(params) {
   const clean = Object.fromEntries(
     Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -47,13 +57,13 @@ const RecertAPI = {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    if (!res?.success) throw new Error(res?.error || 'Failed to create clinical update');
+    if (!res?.success) throw apiError(res, 'Failed to create clinical update');
     return res.data?.recertification;
   },
 
   async generate(id) {
     const res = await apiRequest(`/api/extension/recertifications/${id}/generate`, { method: 'POST' });
-    if (!res?.success) throw new Error(res?.error || 'Failed to start generation');
+    if (!res?.success) throw apiError(res, 'Failed to start generation');
     return true;
   },
 
