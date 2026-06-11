@@ -1,17 +1,24 @@
 // content/modules/managed-care/ManagedCarePanel.jsx
 import { useState, useEffect } from 'preact/hooks';
 import { RunList } from './components/RunList.jsx';
+import { Wizard } from './components/Wizard.jsx';
 import { track } from '../../utils/analytics.js';
 
 export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, patientName, source, onClose }) => {
   const [refreshToken, setRefreshToken] = useState(0);
+  const [showWizard, setShowWizard] = useState(false);
 
   useEffect(() => {
     track('mc_panel_opened', { source, scope: patientId ? 'patient' : 'all' });
   }, []);
 
-  // Wizard arrives in Task 7; retry wiring in Task 8.
+  // Retry wiring lands in Task 8.
   const onRetry = () => {};
+
+  const onCreated = () => {
+    setShowWizard(false);
+    setRefreshToken((t) => t + 1);
+  };
 
   return (
     <div className="mc-panel-overlay">
@@ -26,17 +33,31 @@ export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, patientName
           <button className="mc-panel__close" aria-label="Close" onClick={onClose}>×</button>
         </div>
         <div className="mc-panel__body">
-          {patientId && (
-            {/* NO_TRACK — wizard mount emits mc_wizard_opened */}
-            <button className="mc-panel__new-btn" disabled>+ New Clinical Update</button>
+          {showWizard ? (
+            <Wizard
+              orgSlug={orgSlug}
+              patientId={patientId}
+              facilityName={facilityName}
+              onCreated={onCreated}
+              onCancel={() => setShowWizard(false)}
+            />
+          ) : (
+            <>
+              {patientId && (
+                /* NO_TRACK — wizard mount emits mc_wizard_opened */
+                <button className="mc-panel__new-btn" onClick={() => setShowWizard(true)}>
+                  + New Clinical Update
+                </button>
+              )}
+              <RunList
+                orgSlug={orgSlug}
+                patientId={patientId}
+                currentFacilityName={facilityName}
+                onRetry={onRetry}
+                refreshToken={refreshToken}
+              />
+            </>
           )}
-          <RunList
-            orgSlug={orgSlug}
-            patientId={patientId}
-            currentFacilityName={facilityName}
-            onRetry={onRetry}
-            refreshToken={refreshToken}
-          />
         </div>
       </div>
     </div>
