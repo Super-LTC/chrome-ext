@@ -13,7 +13,11 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
     try {
       const url = await RecertAPI.mintViewLink(run.id); // mint on click, never cached
       track('mc_view_link_opened');
-      window.open(url, '_blank', 'noopener');
+      // Dedicated window, not a tab — tabs confused nurses. Named so a second
+      // "Open" reuses the same window instead of stacking viewers.
+      const w = Math.min(1200, window.screen.availWidth - 80);
+      const h = Math.min(900, window.screen.availHeight - 80);
+      window.open(url, 'super-mc-viewer', `noopener,width=${w},height=${h},left=${(window.screen.availWidth - w) / 2},top=${(window.screen.availHeight - h) / 2}`);
     } catch (e) {
       window.SuperToast?.error(e.message || 'Could not open — try again');
     } finally { setBusy(false); }
