@@ -13,8 +13,9 @@
 import { useMemo, useState } from 'preact/hooks';
 import {
   bucketForActionability, isFiveStarMds, isWhatIfClearable, measureRate, ratePct,
-  shortLabel, measureCode, statusBucketForEntry, statusBucketForRow, statusRank,
+  shortLabel, measureCode, statusBucketForEntry, statusBucketForRow, statusRank, measureInLens,
 } from '../lib/qm-view-model.js';
+import { hasActiveQip, qipForState } from '../lib/qip-programs.js';
 import {
   URGENCY, CROSSING, STATUS_BUCKET, entryUrgency, soonestCliffDays,
   crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel,
@@ -47,6 +48,10 @@ export function QmOverview({
   data, upcoming, onOpenMeasure, onOpenResident, signalCount = 0, onOpenSignals, onOpenFunctional,
 }) {
   const { summary } = data;
+  const facilityState = data.facilityState;
+  const showLens = hasActiveQip(facilityState);
+  const program = qipForState(facilityState);
+  const [lens, setLens] = useState('five_star'); // QmLens — tiles only
   const [seg, setSeg] = useState(null);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState(new Set(['clearable', 'will_hit']));
@@ -92,13 +97,15 @@ export function QmOverview({
         }
         return { meta, counts, urgencies };
       })
-      .filter((x) => x.counts.applicable > 0);
+      // Lens filter: state-survey-only measures not in this state's QIP are
+      // dropped from the tiles entirely (the worklist still shows them).
+      .filter((x) => x.counts.applicable > 0 && measureInLens(x.meta.id, lens, facilityState));
     const sortFn = (a, b) => b.counts.triggering - a.counts.triggering;
     return {
       cms: withData.filter((x) => !x.meta.nonCms).sort(sortFn),
       non: withData.filter((x) => x.meta.nonCms).sort(sortFn),
     };
-  }, [data.measuresEvaluated, summary.byMeasure, data.patients]);
+  }, [data.measuresEvaluated, summary.byMeasure, data.patients, lens, facilityState]);
 
   const qLabel = quarterLabel(summary.currentQuarterEnd);
   const qDays = summary.daysUntilQuarterEnd;
@@ -215,7 +222,26 @@ export function QmOverview({
       {/* ── Measure tiles (hidden while a segment filters) ──────────────── */}
       {!seg && (
         <div>
-          <div className="qmc-seclabel"><Activity /> By measure <small>· click for detail + what-if</small></div>
+          <div className="qmc-seclabel qmc-seclabel--lens">
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Activity /> By measure <small>· click for detail + what-if</small>
+            </span>
+            {showLens && (
+              <div className="qmc-lens">
+                {[['five_star', 'Five-Star'], ['qip', 'QIP'], ['both', 'Both']].map(([v, lbl]) => (
+                  <button key={v} type="button" className={lens === v ? 'qmc-lens__btn qmc-lens__btn--on' : 'qmc-lens__btn'} onClick={() => setLens(v)}> {/* NO_TRACK */}
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {showLens && lens !== 'five_star' && program && (
+            <div className="qmc-qip-note">
+              <b>{program.programName}</b>
+              {program.clinicalShare !== 'all' && <span> · clinical portion only — staffing, survey &amp; $ are tracked elsewhere</span>}
+            </div>
+          )}
           <div className="qmc-tiles">
             {tiles.cms.map((x, i) => (
               <MeasureTile key={x.meta.id} {...x} soon={crosserByMeasure[x.meta.id] ?? 0} delay={i * 22} onClick={() => onOpenMeasure(x.meta.id)} />

@@ -7,6 +7,7 @@
  * scripts/test-qm-view-model.mjs. The components import these helpers; the test
  * imports them too. Keep it pure. TS types stripped for the JS bundle.
  */
+import { qipMeasureSet } from './qip-programs.js';
 
 // ── Bucketing ───────────────────────────────────────────────────────────────
 /**
@@ -118,6 +119,23 @@ const FIVE_STAR_MDS = new Set([
 
 export function isFiveStarMds(id) {
   return FIVE_STAR_MDS.has(id);
+}
+
+/**
+ * Which measure-set the "By measure" grid is showing:
+ *   five_star — the 10 MDS Five-Star QMs (default; the iQIES star measures)
+ *   qip       — the active state's QIP measures (Medicaid $ — varies by state)
+ *   both      — the union
+ * Measures that are neither Five-Star nor in this state's QIP (state-survey-only
+ * noise like Falls-Any / Behavior) never show under any lens. QmLens =
+ * 'five_star' | 'qip' | 'both'.
+ */
+export function measureInLens(id, lens, state) {
+  const five = isFiveStarMds(id);
+  if (lens === 'five_star') return five;
+  const inQip = qipMeasureSet(state).has(id);
+  if (lens === 'qip') return inQip;
+  return five || inQip; // both
 }
 
 // ── Rate math ───────────────────────────────────────────────────────────────

@@ -21,7 +21,9 @@ import {
   statusBucketForEntry,
   statusBucketForRow,
   displayMdsValue,
+  measureInLens,
 } from '../content/modules/qm-board/lib/qm-view-model.js';
+import { hasActiveQip, qipMeasureSet } from '../content/modules/qm-board/lib/qip-programs.js';
 
 /** Minimal triggering entry for bucketing tests. actionType `null` = no guidance. */
 function mkEntry(actionType, urgency) {
@@ -169,6 +171,21 @@ check('P0100E=2 → 2 (restraint frequency)', displayMdsValue('P0100E', '2') ===
 check('J1900C=1 → 1 (fall count, not allow-listed)', displayMdsValue('J1900C', '1') === '1');
 check('M0300B1=1 → 1 (ulcer count, not allow-listed)', displayMdsValue('M0300B1', '1') === '1');
 check('I8000=— → — (write-in untouched)', displayMdsValue('I8000', '—') === '—');
+
+// ── measureInLens / QIP registry ────────────────────────────────────────────
+check('five_star lens = Five-Star MDS only', measureInLens('uti', 'five_star', 'OH') === true && measureInLens('weight_loss', 'five_star', 'TX') === false);
+check('qip lens = state QIP set (OH uti)', measureInLens('uti', 'qip', 'OH') === true);
+check('qip lens excludes non-QIP (OH weight_loss)', measureInLens('weight_loss', 'qip', 'OH') === false);
+check('qip lens surfaces state-only (TX weight_loss)', measureInLens('weight_loss', 'qip', 'TX') === true);
+check('both lens = union (TX weight_loss in)', measureInLens('weight_loss', 'both', 'TX') === true);
+check('both lens keeps Five-Star (TX uti)', measureInLens('uti', 'both', 'TX') === true);
+check('no-QIP state → qip lens empty (WI)', measureInLens('uti', 'qip', 'WI') === false);
+check('no state → five_star fallback only', measureInLens('uti', 'qip', null) === false && measureInLens('uti', 'five_star', null) === true);
+check('state-survey-only never in any lens (falls_all)', measureInLens('falls_all', 'both', 'TX') === false);
+check('hasActiveQip OH true, WI false, null false', hasActiveQip('OH') === true && hasActiveQip('WI') === false && hasActiveQip(null) === false);
+check('hasActiveQip case-insensitive', hasActiveQip('oh') === true);
+check('qipMeasureSet TX size 10', qipMeasureSet('TX').size === 10);
+check('qipMeasureSet WI empty', qipMeasureSet('WI').size === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
