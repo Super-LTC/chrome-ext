@@ -195,6 +195,7 @@
 .qmc-clearchip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.85}
 .qmc-clearchip--emerald{background:var(--emerald-50);color:var(--emerald-700)}
 .qmc-clearchip--sky{background:var(--sky-50);color:var(--sky-700)}
+.qmc-clearchip--amber{background:var(--amber-50);color:var(--amber-700)}
 .qmc-clearchip--slate{background:var(--slate-100);color:var(--slate-500)}
 .qmc-row__right{display:flex;flex-shrink:0;align-items:center;gap:8px;align-self:center}
 .qmc-row__count{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--slate-900);text-align:right}
@@ -276,6 +277,9 @@
 .qmc-clearbanner--sky{background:var(--sky-50);border-color:var(--sky-200)}
 .qmc-clearbanner--sky .qmc-clearbanner__title{color:var(--sky-700)}
 .qmc-clearbanner--sky .qmc-clearbanner__sub{color:var(--sky-600)}
+.qmc-clearbanner--amber{background:var(--amber-50);border-color:var(--amber-200)}
+.qmc-clearbanner--amber .qmc-clearbanner__title{color:var(--amber-700)}
+.qmc-clearbanner--amber .qmc-clearbanner__sub{color:var(--amber-600)}
 .qmc-clearbanner--slate{background:var(--slate-50);border-color:var(--slate-200)}
 .qmc-clearbanner--slate .qmc-clearbanner__title{color:var(--slate-700)}
 .qmc-clearbanner--slate .qmc-clearbanner__sub{color:var(--slate-500)}

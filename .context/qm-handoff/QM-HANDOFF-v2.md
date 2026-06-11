@@ -17,6 +17,7 @@ This doc + these **pure, framework-free modules** (port near-verbatim; strip `@c
 | `qm-clinical-signals.ts` | Clinical Signals selectors (`signalResidents`, `actionableAlerts`, `qmStakes`, `alertName`, …) |
 | `qip-programs.ts` | per-state QIP registry (`qipForState`, `qipMeasureSet`, `hasActiveQip`) — `qm-view-model` imports it |
 | `qm-five-star.ts` *(optional)* | Five-Star points (`measurePoints`) — only if you show points |
+| `clearability.ts` | `deriveClearability(actionType)` + `clearabilityHasLever()` — fallback for the new backend `clearability` field (see §6A) |
 
 All are in this folder.
 
@@ -104,13 +105,14 @@ Rate %, num/den, quarter lock, **Five-Star points** (`measurePoints` — 10 MDS 
   - Opened **from the patient row** → show **all** (lens-filtered) at once, no accordion.
   - `primary = scopeMeasureId ? measures.filter(m=>m.id===scopeMeasureId) : measures; others = the rest`.
 - **Per measure:** status chip + name + code + 5★, then —
-  - **🔊 LOUD "clear timing" banner (superapp PR #652)** right under the measure name — the single
-    most important fact, color-coded, not a grey footnote. Needs facility-local today (`data.facilityDate`):
-    - **green · "Ready to clear now"** — `hasClearPath` and the earliest clean ARD is today/past
-      (`earliestClearDate` null or `≤ facilityDate`). Sub: "ARD a clean Quarterly/Annual today and it drops".
-    - **blue · "Can clear {date}"** — `hasClearPath` and `earliestClearDate ?? actionDeadline` is in the future.
-    - **slate · "Counts until {date}"** (time-based) / **"Locked to this stay"** (stay-locked) — no lever, calm.
+  - **🔊 LOUD "clear timing" banner (superapp PR #652 → corrected in #656)** right under the measure name —
+    the single most important fact, color-coded, not a grey footnote. **Key the label off `clearGuidance.actionType`, NOT off whether a cliff date exists** — a clinical measure's `earliestClearDate` is often "today" just because there's no MDS *coding* wait, but the wound still has to heal / the drug still has to be d/c'd. Use `clearTiming()` from the bundle:
+    - **green · "Ready to clear now"** — ONLY `actionType === 'modification'` (a pure coding fix, no clinical change). No standard evaluator emits this, so green is rare. **Never** show green for a measure that's still clinically triggering.
+    - **amber `conditional` · "Clears once resolved"** (chip "Needs clinical fix") — `actionType === 'clinical'`. Lead with the real gate (heal the ulcer, restorative ambulation, d/c the drug). This is the common case for pressure ulcer / walk-indep / weight-loss / PHQ-9.
+    - **amber `conditional` · "Clears on a Dx query"** (chip "Needs Dx query") — `actionType === 'dx_query'` (catheter, antianxiety-use).
+    - **slate · "Counts until {date}" / "Locked to this stay"** — time-based / stay-locked, no lever.
     - crossing → "Preventable before day-101" / "Carries over at day-101".
+    - ⚠️ Do NOT resurrect the old "ARD a clean Quarterly/Annual today and it drops" copy or the `nextObraPreview.wouldClear` signal — both over-promise that the clinical work is free.
   - **render EVERY evidence row** (not just the first) with the coded ARD date prominent
     (`[mdsItem] = value`, "Coded on MDS {ARD}"; booleans via `displayMdsValue`) — this is how the nurse
     sees exclusions, e.g. antipsychotic emits `I6000 = No · No schizophrenia Dx coded`.
@@ -142,6 +144,7 @@ cliffInfo?:   { cliffLabel, actionDeadline?, earliestClearDate?, daysUntilCliff,
                 urgency: 'at-risk'|'urgent'|'routine'|'stay-locked' }
 clearGuidance?: { actionType: 'time'|'clinical'|'modification'|'dx_query'|'stay_locked'|'none',
                   clearDate?, clearsOnNextObra: boolean, actions: {label,detail?,effectiveDate?}[] }
+clearability?: 'clear_now'|'needs_clinical'|'needs_query'|'time_based'|'stay_locked'|'none'  // NEW — see §6A
 nextObraPreview: { wouldClear: measureId[], wouldNotClear: measureId[] }
 
 // preventable-alerts → QmAlert
@@ -151,13 +154,34 @@ nextObraPreview: { wouldClear: measureId[], wouldNotClear: measureId[] }
   urgency:'high'|'medium'|'low', suggestedAction, snooze?: {id,snoozedUntil,…}|null }
 ```
 
-**Beat-3 (drill-in "clears/ages-out") — transcribe exactly** (`g=clearGuidance`, `c=cliffInfo`, `hasClearPath = !crossing && bucket!=='will_hit' && g.actionType∈{clinical,modification,dx_query}`):
+### 6A. `clearability` — the backend "how does this clear" field (read this, don't re-derive)
+
+The response now carries `clearability` on every triggering measure (superapp #657). **Prefer it; fall back to `deriveClearability(clearGuidance.actionType)` only when absent** (older responses):
+```ts
+const clr = entry.clearability ?? deriveClearability(entry.clearGuidance?.actionType);
 ```
-crossing                     → preventable? "Preventable before day-101" : "Carries over at day-101"
-hasClearPath && clearsOnObra → "Clears on the next OBRA" (· earliest ARD {earliestClearDate})
-hasClearPath                 → "Clears at the next clean assessment" (· ARD by {actionDeadline} / on {clearDate})
-g.actionType==='stay_locked' → "Locked to this stay"
-else                         → "Ages out of the window" ({clearDate} — counts until then)
+- `clear_now` — pure coding fix (Modification). The ONLY genuine "Clear now" (green). Rare.
+- `needs_clinical` — heal the ulcer / restore ambulation / d/c the drug. **Amber, NOT green.** Common.
+- `needs_query` — physician Dx query + sign. Amber.
+- `time_based` — ages out (UTI, falls). Slate.
+- `stay_locked` — locked this stay. Slate.
+- `none` — no path.
+
+`clearabilityHasLever(clr)` (`clear_now|needs_clinical|needs_query`) = "a lever exists" — use it for any **"show me all clearable"** filter so you match the backend exactly.
+
+**Beat-3 / clear-timing label — drive it off `clr`, NOT off dates** (`g=clearGuidance`, `c=cliffInfo`, `hasClearPath = !crossing && bucket!=='will_hit' && clearabilityHasLever(clr)`):
+```
+crossing                  → preventable? "Preventable before day-101" : "Carries over at day-101"
+clr==='clear_now'         → green  "Ready to clear now"      (sub: re-code, then re-ARD)
+clr==='needs_query'       → amber  "Clears on a Dx query"    (chip "Needs Dx query")
+hasClearPath (clinical)   → amber  "Clears once resolved"    (chip "Needs clinical fix"; sub = g.actions[0].label)
+clr==='stay_locked'       → slate  "Locked to this stay"
+time_based & cliffType==='comparison' → slate "Clears at the next assessment" / chip "Next assessment"
+                          (Walk-Indep, ADL Decline, Bowel/Bladder — they don't age out of a window;
+                           the decline drops at the next target if the resident holds/improves)
+else (Falls/UTI scan)     → slate  "Ages out of the window" ({clearDate} — counts until then)
+```
+⚠️ Do NOT key "now" off `earliestClearDate <= today` — a clinical measure's earliestClear is often *today* (no coding wait) even though the wound hasn't healed. Only `clear_now` is green.
 ```
 
 ## 7. Build order (each step shippable)

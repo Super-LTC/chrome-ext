@@ -20,7 +20,7 @@ import { hasActiveQip, qipForState } from '../lib/qip-programs.js';
 import {
   URGENCY, CROSSING, STATUS_BUCKET, entryUrgency, soonestCliffDays,
   crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel,
-  clearTiming, CLEAR_TONE, clearChipLabel,
+  clearTiming, CLEAR_TONE,
 } from '../lib/qm-tones.js';
 import { ShieldCheck, CalendarClock, Activity, ChevronRight, ChevronDown, CircleCheck, Search, X, TrendingDown } from './icons.jsx';
 
@@ -428,7 +428,7 @@ function ResidentRow({ item, facilityDate, delay, onOpenResident }) {
                   {shortLabel(m.id, m.label)}
                 </span>
                 {ct && (
-                  <span className={`qmc-clearchip qmc-clearchip--${CLEAR_TONE[ct.kind].badge}`}>{clearChipLabel(ct)}</span>
+                  <span className={`qmc-clearchip qmc-clearchip--${CLEAR_TONE[ct.kind].badge}`}>{ct.short}</span>
                 )}
               </span>
             );

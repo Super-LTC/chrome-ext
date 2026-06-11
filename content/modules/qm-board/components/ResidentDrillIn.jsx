@@ -80,35 +80,12 @@ export function ResidentDrillIn({ patient, entry, scopeMeasureId, lens, facility
   );
 }
 
-// Louder banner copy for a clear-timing kind (the row chip uses the terse
-// CLEAR_TONE label for the same kind — both off the one clearTiming decision).
-function clearBannerCopy(t, g) {
-  switch (t.kind) {
-    case 'ready':
-      return { title: 'Ready to clear now', sub: 'ARD a clean Quarterly/Annual today and it drops' };
-    case 'future':
-      return { title: `Can clear ${prettyDate(t.date)}`, sub: 'earliest clean OBRA ARD' };
-    case 'locked':
-      return { title: 'Locked to this stay', sub: 'clears at discharge or a new stay — nothing this stay removes it' };
-    case 'preventable':
-      return { title: 'Preventable before day-101', sub: g?.actions?.[0]?.label ?? 'clear the coding before they cross' };
-    case 'carries':
-      return { title: 'Carries over at day-101', sub: 'already coded — appears the moment CDIF reaches 101' };
-    case 'time':
-    default:
-      return t.date
-        ? { title: `Counts until ${prettyDate(t.date)}`, sub: 'counts until then; no action speeds it up' }
-        : { title: 'Ages out of the window', sub: 'rolls off once the lookback window passes' };
-  }
-}
-
 function MeasureSection({ patient, entry, facilityDate }) {
   const crossing = isCrossingEntry(entry);
   const bucket = statusBucketForEntry(entry);
   const tone = STATUS_BUCKET[bucket];
   const code = measureCode(entry.id);
   const fiveStar = isFiveStarMds(entry.id);
-  const g = entry.clearGuidance;
   const cliff = entry.cliffInfo;
 
   // Beat 2 — keep the small "Counting now · {cliffLabel}" line.
@@ -119,10 +96,12 @@ function MeasureSection({ patient, entry, facilityDate }) {
 
   // Clear-timing banner (web §5C) — loud, color-coded "can I clear this / when",
   // right under the measure name. Same `clearTiming` decision as the row chip
-  // (no drift); the banner just renders the louder title/sub for the kind.
+  // (no drift); it carries its own louder `big`/`sub` copy, keyed off the
+  // backend `clearability` field (never off dates — see §6A).
   const timing = clearTiming(entry, patient, facilityDate);
   const bannerTone = CLEAR_TONE[timing.kind].badge;
-  const { title: bannerTitle, sub: bannerSub } = clearBannerCopy(timing, g);
+  const bannerTitle = timing.big;
+  const bannerSub = timing.sub;
 
   const headTone = crossing ? CROSSING.tone : tone.tone;
   const headLabel = crossing ? 'Crossing day-101' : tone.label;

@@ -10,6 +10,7 @@ import type {
   QmUpcomingMeasureEntry,
   QmUpcomingPatientRow,
 } from '@core/types/qm-planner.types';
+import { deriveClearability } from '@core/services/qm-planner/clearability';
 import { entryIsActionable, statusBucketForEntry, type StatusBucket } from './qm-view-model';
 
 // ── Urgency tone (resident-level cliff urgency) ─────────────────────────────
@@ -251,7 +252,7 @@ export function prettyDate(iso: string): string {
 
 // ── Clear timing — "can this clear, and when" — shared by the worklist row and
 //    the drill-in banner so they always agree. ───────────────────────────────
-export type QmClearKind = 'now' | 'date' | 'wait' | 'locked';
+export type QmClearKind = 'now' | 'date' | 'conditional' | 'wait' | 'locked';
 
 export interface QmClearTiming {
   kind: QmClearKind;
@@ -266,6 +267,9 @@ export interface QmClearTiming {
 export const CLEAR_TONE: Record<QmClearKind, { box: string; chip: string; text: string; badge: string }> = {
   now: { box: 'border-emerald-200 bg-emerald-50', chip: 'bg-emerald-500', text: 'text-emerald-700', badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' },
   date: { box: 'border-sky-200 bg-sky-50', chip: 'bg-sky-500', text: 'text-sky-700', badge: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200' },
+  // Amber = a lever exists, but it's gated on clinical work / a Dx query that
+  // hasn't happened yet. Deliberately NOT green — it isn't clearable today.
+  conditional: { box: 'border-amber-200 bg-amber-50', chip: 'bg-amber-500', text: 'text-amber-700', badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
   wait: { box: 'border-slate-200 bg-slate-50', chip: 'bg-slate-400', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200' },
   locked: { box: 'border-slate-200 bg-slate-50', chip: 'bg-slate-400', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200' },
 };
@@ -281,8 +285,6 @@ export function clearTiming(
   const crossing = isCrossingEntry(entry);
   const bucket = statusBucketForEntry(entry);
   const hasClearPath = !crossing && bucket !== 'will_hit' && entryIsActionable(entry);
-  const clearsOnObra =
-    hasClearPath && (g?.clearsOnNextObra || patient.nextObraPreview.wouldClear.includes(entry.id));
 
   if (crossing) {
     const preventable = !!cliff?.clearableBeforeCliff;
@@ -291,26 +293,42 @@ export function clearTiming(
       : { kind: 'wait', big: 'Carries over at day-101', short: 'Carries over', sub: 'already coded — appears when CDIF reaches 101' };
   }
   if (hasClearPath) {
-    const date = cliff?.earliestClearDate ?? cliff?.actionDeadline ?? g?.clearDate ?? null;
-    const readyNow = !date || (!!facilityDate && date <= facilityDate);
-    if (readyNow) {
-      return {
-        kind: 'now',
-        big: 'Ready to clear now',
-        short: 'Clear now',
-        sub: clearsOnObra ? 'ARD a clean Quarterly/Annual today and it drops' : (g?.actions?.[0]?.label ?? 'code clean, then re-ARD'),
-      };
+    const action = g?.actions?.[0]?.label;
+    // Read the backend's clearability classification; fall back to deriving it
+    // locally for older responses that don't carry the field (backwards compat).
+    const clr = entry.clearability ?? deriveClearability(g?.actionType);
+    // The ONLY clear that needs no clinical change is a coding fix (Modification):
+    // re-code the MDS and it drops today. That's the one true "Clear now".
+    if (clr === 'clear_now') {
+      return { kind: 'now', big: 'Ready to clear now', short: 'Clear now', sub: action ?? 're-code the MDS, then re-ARD' };
     }
-    return {
-      kind: 'date',
-      big: `Can clear ${prettyDate(date!)}`,
-      short: `Clear ${prettyDate(date!)}`,
-      sub: clearsOnObra ? 'earliest clean OBRA ARD' : `code clean, then ARD by ${prettyDate(date!)}`,
-    };
+    // A physician Dx query can be started today, but only clears once it's
+    // signed back — not instant.
+    if (clr === 'needs_query') {
+      return { kind: 'conditional', big: 'Clears on a Dx query', short: 'Needs Dx query', sub: action ?? 'physician query + signed Dx, then re-ARD' };
+    }
+    // Clinical: gated on a clinical change (heal the wound, restore ambulation,
+    // stabilize the weight, d/c the drug, re-screen after improvement) that, by
+    // definition, hasn't happened yet — the measure is still triggering. A bare
+    // re-ARD today re-codes the same value and still triggers. So it is NOT
+    // "clear now"; lead with the clinical action.
+    return { kind: 'conditional', big: 'Clears once resolved', short: 'Needs clinical fix', sub: action ?? 'resolve the condition, then re-ARD' };
   }
   if (g?.actionType === 'stay_locked' || cliff?.urgency === 'stay-locked') {
     return { kind: 'locked', big: 'Locked to this stay', short: 'Stay-locked', sub: 'clears at discharge or a new stay' };
   }
+  // Change measures (Walk-Indep, ADL Decline, Bowel/Bladder) don't "age out" of
+  // a lookback window — each new target is judged against its own prior, so the
+  // decline drops at the next assessment if the resident holds or improves.
+  if (cliff?.cliffType === 'comparison') {
+    return {
+      kind: 'wait',
+      big: 'Clears at the next assessment',
+      short: 'Next assessment',
+      sub: 'drops if the next target holds or improves vs its own prior',
+    };
+  }
+  // Lookback-scan (Falls) / time-window (UTI): a coded event ages out by date.
   return {
     kind: 'wait',
     big: g?.clearDate ? `Counts until ${prettyDate(g.clearDate)}` : 'Ages out of the window',

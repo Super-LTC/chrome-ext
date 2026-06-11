@@ -61,6 +61,14 @@ export function isWhatIfClearable(b) {
  * cliff. `clinical` (d/c med, remove device, heal), `modification` (re-code),
  * and `dx_query` (physician query) are levers; `time` (age-out), `stay_locked`,
  * and `none` are not — those are destined.
+ *
+ * Note: a triggering `QmMeasureEntry` now also carries an optional backend-
+ * computed `clearability` field
+ * (`'clear_now'|'needs_clinical'|'needs_query'|'time_based'|'stay_locked'|'none'`,
+ * superapp #657). It is the source of truth for "how does this clear" — read it
+ * (falling back to `deriveClearability(clearGuidance.actionType)` when absent)
+ * via the helpers in `clearability.js` rather than re-deriving here. See
+ * `clearTiming` in qm-tones.js.
  */
 export function entryIsActionable(entry) {
   const t = entry.clearGuidance?.actionType;

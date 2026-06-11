@@ -3,6 +3,13 @@ dist/
 dist-prod/
 dist-store/
 demo-dist/
+# Accidental Vite chunk output in demo/ (demo:build should only produce *.built.{js,css})
+demo/index.es-*.js
+demo/html2canvas.esm-*.js
+demo/jspdf.es.min-*.js
+demo/jspdf.plugin.autotable-*.js
+demo/purify.es-*.js
+demo/pcc-demo-entry-*.js
 installed-users.csv
 .env
 *.log

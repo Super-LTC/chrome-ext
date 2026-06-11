@@ -8,7 +8,8 @@
  * (rose/sky/slate/violet/amber/emerald) that the extension CSS maps to colors
  * via `qm-tone-<key>` classes. Logic (ranks, derivations) is verbatim.
  */
-import { statusBucketForEntry, entryIsActionable } from './qm-view-model.js';
+import { statusBucketForEntry } from './qm-view-model.js';
+import { deriveClearability, clearabilityHasLever } from './clearability.js';
 
 // ── Urgency tone (resident-level cliff urgency) ─────────────────────────────
 // Tone = { tone, label, rank }  — `tone` is the semantic key for CSS.
@@ -49,47 +50,88 @@ export function isCrossingEntry(entry) {
   return entry.cliffInfo?.cliffLabel?.startsWith('Crosses to long-stay') ?? false;
 }
 
-// ── Clear timing (single source of truth — superapp PR #652) ────────────────
+// ── Clear timing (single source of truth — superapp #652 → corrected #656/#657)
 // ONE decision used by BOTH the worklist row chip and the drill-in banner, so
-// they can never disagree. Returns a `kind` (+ a date for the dated kinds);
-// CLEAR_TONE[kind] gives the chip color (`badge`) + terse label (`short`), and
-// the drill-in maps the same kind to its louder banner title/sub.
-//   ready       — a clean ARD today drops it (green "Clear now")
-//   future      — clears on a future clean OBRA ARD (blue "Clear {date}")
-//   locked      — stay-locked, no lever (slate "Stay-locked")
-//   time        — time-based, ages out (slate "Time-based")
-//   preventable — day-101 crosser, still preventable (green)
-//   carries     — day-101 crosser, already coded (slate)
+// they can never disagree. Driven off the backend `clearability` field (NOT off
+// dates) — a clinical measure's `earliestClearDate` is often "today" just
+// because there's no MDS *coding* wait, but the wound still has to heal / the
+// drug still has to be d/c'd, so date-keying falsely showed it green. Each
+// result carries its own `big` (banner headline), `short` (row-chip label), and
+// `sub` (banner sub-line); CLEAR_TONE[kind].badge gives the semantic color key.
+//   now         — pure coding fix (Modification) — the ONLY green "Clear now"
+//   date        — day-101 crosser still preventable before crossing (sky)
+//   conditional — a lever exists but it's gated on clinical work / a Dx query
+//                 that hasn't happened yet (amber — deliberately NOT green)
+//   wait        — time-based / day-101 carries-over, ages out (slate)
+//   locked      — stay-locked, no lever (slate)
 export const CLEAR_TONE = {
-  ready:       { badge: 'emerald', short: 'Clear now' },
-  future:      { badge: 'sky',     short: 'Clear' },        // consumer appends the date
-  locked:      { badge: 'slate',   short: 'Stay-locked' },
-  time:        { badge: 'slate',   short: 'Time-based' },
-  preventable: { badge: 'emerald', short: 'Preventable' },
-  carries:     { badge: 'slate',   short: 'Carries over' },
+  now:         { badge: 'emerald' },
+  date:        { badge: 'sky' },
+  conditional: { badge: 'amber' },
+  wait:        { badge: 'slate' },
+  locked:      { badge: 'slate' },
 };
 
+/**
+ * When/whether one measure clears, relative to facility-local today. Labels are
+ * keyed off the backend's `clearability` classification — fall back to deriving
+ * it locally for older responses that don't carry the field (backwards compat).
+ * Never key "now" off `earliestClearDate <= today`: only `clear_now`
+ * (Modification — a pure coding fix) is green; everything else with a lever is
+ * amber `conditional` because the clinical change / Dx query hasn't happened yet.
+ */
 export function clearTiming(entry, patient, facilityDate) {
   const g = entry.clearGuidance;
   const cliff = entry.cliffInfo;
-  if (isCrossingEntry(entry)) {
-    return { kind: cliff?.clearableBeforeCliff ? 'preventable' : 'carries', date: null };
-  }
-  const hasClearPath = statusBucketForEntry(entry) !== 'will_hit' && entryIsActionable(entry);
-  if (hasClearPath) {
-    const date = cliff?.earliestClearDate ?? cliff?.actionDeadline ?? g?.clearDate ?? null;
-    const readyNow = !date || (facilityDate && date <= facilityDate);
-    return readyNow ? { kind: 'ready', date: null } : { kind: 'future', date };
-  }
-  if (g?.actionType === 'stay_locked' || cliff?.urgency === 'stay-locked') {
-    return { kind: 'locked', date: null };
-  }
-  return { kind: 'time', date: g?.clearDate ?? null };
-}
+  const crossing = isCrossingEntry(entry);
+  const bucket = statusBucketForEntry(entry);
+  const clr = entry.clearability ?? deriveClearability(g?.actionType);
+  const hasClearPath = !crossing && bucket !== 'will_hit' && clearabilityHasLever(clr);
 
-/** Row-chip label for a clear-timing result (`Clear {date}` for the dated kind). */
-export function clearChipLabel(t) {
-  return t.kind === 'future' && t.date ? `Clear ${prettyDate(t.date)}` : CLEAR_TONE[t.kind].short;
+  if (crossing) {
+    return cliff?.clearableBeforeCliff
+      ? { kind: 'date', big: 'Preventable before day-101', short: 'Preventable', sub: g?.actions?.[0]?.label ?? 'clear the coding before they cross' }
+      : { kind: 'wait', big: 'Carries over at day-101', short: 'Carries over', sub: 'already coded — appears when CDIF reaches 101' };
+  }
+  if (hasClearPath) {
+    const action = g?.actions?.[0]?.label;
+    // The ONLY clear that needs no clinical change is a coding fix (Modification):
+    // re-code the MDS and it drops. That's the one true "Clear now".
+    if (clr === 'clear_now') {
+      return { kind: 'now', big: 'Ready to clear now', short: 'Clear now', sub: action ?? 're-code the MDS, then re-ARD' };
+    }
+    // A physician Dx query can be started today, but only clears once it's signed
+    // back — not instant.
+    if (clr === 'needs_query') {
+      return { kind: 'conditional', big: 'Clears on a Dx query', short: 'Needs Dx query', sub: action ?? 'physician query + signed Dx, then re-ARD' };
+    }
+    // Clinical: gated on a clinical change (heal the wound, restore ambulation,
+    // d/c the drug) that, by definition, hasn't happened yet — the measure is
+    // still triggering. A bare re-ARD re-codes the same value and still triggers.
+    // So it is NOT "clear now"; lead with the clinical action.
+    return { kind: 'conditional', big: 'Clears once resolved', short: 'Needs clinical fix', sub: action ?? 'resolve the condition, then re-ARD' };
+  }
+  if (clr === 'stay_locked' || g?.actionType === 'stay_locked' || cliff?.urgency === 'stay-locked') {
+    return { kind: 'locked', big: 'Locked to this stay', short: 'Stay-locked', sub: 'clears at discharge or a new stay' };
+  }
+  // Change measures (Walk-Indep, ADL Decline, Bowel/Bladder) don't "age out" of
+  // a lookback window — each new target is judged against its own prior, so the
+  // decline drops at the next assessment if the resident holds or improves.
+  if (cliff?.cliffType === 'comparison') {
+    return {
+      kind: 'wait',
+      big: 'Clears at the next assessment',
+      short: 'Next assessment',
+      sub: 'drops if the next target holds or improves vs its own prior',
+    };
+  }
+  // Lookback-scan (Falls) / time-window (UTI): a coded event ages out by date.
+  return {
+    kind: 'wait',
+    big: g?.clearDate ? `Counts until ${prettyDate(g.clearDate)}` : 'Ages out of the window',
+    short: g?.clearDate ? `Until ${prettyDate(g.clearDate)}` : 'Time-based',
+    sub: 'time-based — no action speeds it up',
+  };
 }
 
 // ── Small derivations ───────────────────────────────────────────────────────
