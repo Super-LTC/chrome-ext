@@ -188,6 +188,14 @@
   text-overflow:ellipsis;white-space:nowrap}
 .qmc-row__meta{flex-shrink:0;font-size:11px;color:var(--slate-400)}
 .qmc-row__pills{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
+/* Measure pill + its per-measure clear-timing chip, kept together when wrapping. */
+.qmc-pillgroup{display:inline-flex;align-items:center;gap:5px}
+.qmc-clearchip{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:1px 7px;
+  font-size:10.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap}
+.qmc-clearchip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.85}
+.qmc-clearchip--emerald{background:var(--emerald-50);color:var(--emerald-700)}
+.qmc-clearchip--sky{background:var(--sky-50);color:var(--sky-700)}
+.qmc-clearchip--slate{background:var(--slate-100);color:var(--slate-500)}
 .qmc-row__right{display:flex;flex-shrink:0;align-items:center;gap:8px;align-self:center}
 .qmc-row__count{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--slate-900);text-align:right}
 .qmc-row__days{font-size:10px;font-variant-numeric:tabular-nums;text-align:right}
@@ -248,6 +256,30 @@
 .qmc-btn--ghost:hover{background:var(--slate-50)}
 
 /* measure section + timeline */
+/* Scope-aware drill-in: collapsed "N other measures" accordion below the lead measure. */
+.qmc-othermeas{border-top:1px dashed var(--slate-200);margin-top:2px;padding-top:10px}
+.qmc-othermeas__head{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;
+  cursor:pointer;padding:6px 2px;font-size:13px;font-weight:600;color:var(--slate-600)}
+.qmc-othermeas__head:hover{color:var(--slate-900)}
+.qmc-othermeas__head svg{width:15px;height:15px;flex-shrink:0}
+.qmc-othermeas__body{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+
+/* Clear-timing banner — loud, color-coded "can I clear this / when" under the name. */
+.qmc-clearbanner{display:flex;align-items:flex-start;gap:9px;margin:0 0 14px;padding:10px 12px;
+  border-radius:10px;border:1px solid}
+.qmc-clearbanner .qmc-dot{width:9px;height:9px;margin-top:5px;flex-shrink:0}
+.qmc-clearbanner__title{font-size:14px;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.qmc-clearbanner__sub{font-size:12px;margin-top:2px;line-height:1.3}
+.qmc-clearbanner--emerald{background:var(--emerald-50);border-color:var(--emerald-200)}
+.qmc-clearbanner--emerald .qmc-clearbanner__title{color:var(--emerald-700)}
+.qmc-clearbanner--emerald .qmc-clearbanner__sub{color:var(--emerald-600)}
+.qmc-clearbanner--sky{background:var(--sky-50);border-color:var(--sky-200)}
+.qmc-clearbanner--sky .qmc-clearbanner__title{color:var(--sky-700)}
+.qmc-clearbanner--sky .qmc-clearbanner__sub{color:var(--sky-600)}
+.qmc-clearbanner--slate{background:var(--slate-50);border-color:var(--slate-200)}
+.qmc-clearbanner--slate .qmc-clearbanner__title{color:var(--slate-700)}
+.qmc-clearbanner--slate .qmc-clearbanner__sub{color:var(--slate-500)}
+
 .qmc-msec{border-radius:12px;border:1px solid var(--slate-200);background:#fff;padding:16px}
 .qmc-msec__head{margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .qmc-msec__title{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--slate-900)}
@@ -314,6 +346,8 @@
 
 /* static group head (non-collapsible) */
 .qmc-ghead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+/* Next-quarter crossers — de-emphasized (out-of-scope for this quarter's rate). */
+.qmc-cross-next{opacity:.66}
 
 /* person rows (Surface B) */
 .qmc-prow{display:flex;align-items:center;gap:12px;border-radius:9px;border:1px solid var(--slate-200);
@@ -360,7 +394,8 @@
 .qmc-sig__src{flex-shrink:0;margin-top:1px;border-radius:4px;background:var(--slate-100);padding:2px 6px;
   font-family:ui-monospace,monospace;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--slate-500)}
 .qmc-sig__text{min-width:0;flex:1;color:var(--slate-600)}
-.qmc-sig__date{flex-shrink:0;font-family:ui-monospace,monospace;font-size:10px;color:var(--slate-400)}
+.qmc-sig__date{flex-shrink:0;font-family:ui-monospace,monospace;font-size:12px;font-weight:600;
+  color:var(--slate-600);font-variant-numeric:tabular-nums}
 .qmc-action-box{margin-top:10px;border-radius:8px;background:var(--slate-50);border:1px solid var(--slate-100);
   padding:6px 10px;font-size:12px;line-height:1.5;color:var(--slate-600)}
 .qmc-action-box strong{color:var(--slate-700)}
@@ -389,6 +424,9 @@
 .qmc-sigblock__name:hover{text-decoration:underline}
 
 .qmc-sigline{border-radius:9px;border:1px solid var(--slate-200);background:#fff;padding:8px 12px}
+.qmc-sigline--clickable{cursor:pointer;transition:border-color .12s,box-shadow .12s,background .12s}
+.qmc-sigline--clickable:hover{border-color:var(--slate-300);background:var(--slate-50);box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.qmc-sigline--clickable:focus-visible{outline:2px solid var(--indigo-400,#818cf8);outline-offset:1px}
 .qmc-sigline--excluded{border-color:var(--emerald-200);background:rgba(236,253,245,.4)}
 .qmc-sigline__main{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .qmc-sigline__qm{font-size:13px;font-weight:600;color:var(--slate-800)}
@@ -486,3 +524,24 @@
 .qmc-lens__btn--on:hover{background:var(--slate-900)}
 .qmc-qip-note{margin:-2px 0 8px;font-size:12px;color:var(--slate-500)}
 .qmc-qip-note b{color:var(--slate-700)}
+
+/* ── Prominent top "Measure set" bar — the lens drives the WHOLE board ────── */
+.qmc-measureset{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;
+  padding:10px 14px;border:1px solid var(--slate-200);border-radius:12px;
+  background:linear-gradient(180deg,#fff,var(--slate-50))}
+.qmc-measureset__label{display:inline-flex;align-items:center;gap:7px;
+  font-size:12px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--slate-500)}
+.qmc-measureset__label svg{width:15px;height:15px}
+.qmc-measureset__seg{display:inline-flex;gap:3px;border:1px solid var(--slate-200);
+  background:#fff;border-radius:10px;padding:3px}
+.qmc-measureset__btn{border:none;background:none;cursor:pointer;border-radius:8px;
+  padding:7px 16px;font-size:13px;font-weight:700;color:var(--slate-600);transition:background .12s,color .12s,box-shadow .12s}
+.qmc-measureset__btn:hover{background:var(--slate-100)}
+.qmc-measureset__btn--on{color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.18)}
+.qmc-measureset__btn--on:hover{filter:brightness(1.03)}
+.qmc-measureset__btn--sky{background:var(--sky-600)}
+.qmc-measureset__btn--emerald{background:var(--emerald-600)}
+.qmc-measureset__btn--slate{background:var(--slate-700)}
+.qmc-measureset__note{font-size:12px;color:var(--slate-600)}
+.qmc-measureset__note b{color:var(--slate-800)}
+.qmc-measureset__caveat{color:var(--slate-400)}

@@ -21,14 +21,20 @@ export function useQmBoard({ facilityName, orgSlug }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchData = useCallback(async () => {
+  // `silent` = refresh in the background without flipping the full-screen loader
+  // or clobbering the board with an error screen. Used for post-mutation refetches
+  // (snooze/dismiss) which are already optimistic in the views — the user should
+  // never see "Building your QM board" again just for dismissing one signal.
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
     if (!facilityName || !orgSlug) {
       setError('Missing facility or organization context');
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     const params = new URLSearchParams({ facilityName, orgSlug });
 
@@ -67,17 +73,20 @@ export function useQmBoard({ facilityName, orgSlug }) {
         error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
         error_type: 'api_error',
       });
-      setError(err.message || 'Failed to load QM board');
+      // On a silent refresh keep the current board rather than swapping in an
+      // error screen — the optimistic view already reflects the user's action.
+      if (!silent) setError(err.message || 'Failed to load QM board');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [facilityName, orgSlug]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Refetch after snooze/unsnooze mutations anywhere in the app.
+  // Refetch after snooze/unsnooze mutations anywhere in the app — silently, so a
+  // dismiss never re-triggers the full-screen loader (the views are optimistic).
   useEffect(() => {
-    const handler = () => fetchData();
+    const handler = () => fetchData({ silent: true });
     window.addEventListener('super:qm-snooze-changed', handler);
     return () => window.removeEventListener('super:qm-snooze-changed', handler);
   }, [fetchData]);

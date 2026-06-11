@@ -221,6 +221,7 @@ export function ClinicalSignalsView({ preventableAlerts: data, currentlyTriggeri
                       {signals.map((a, i) => (
                         <SignalLine key={`${a.id}-${i}`} patient={p} alert={a} whatIf={whatIf}
                           skipped={skipped.has(signalKey(p.patientId, a.id))}
+                          onOpen={() => setOpenId(p.patientId)}
                           onSkip={() => setSkip(p.patientId, a.id, true)}
                           onCode={() => setSkip(p.patientId, a.id, false)}
                           onDismiss={() => dismiss(p.patientId, a.id)} />
@@ -243,11 +244,18 @@ export function ClinicalSignalsView({ preventableAlerts: data, currentlyTriggeri
   );
 }
 
-function SignalLine({ patient, alert: a, whatIf, skipped, onSkip, onCode, onDismiss }) {
+function SignalLine({ patient, alert: a, whatIf, skipped, onOpen, onSkip, onCode, onDismiss }) {
+  // Keep row clicks (open the detail modal) separate from the inline action buttons.
+  const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
+  const onKeyDown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } };
+  const rowProps = {
+    role: 'button', tabIndex: 0, onClick: onOpen, onKeyDown,
+    'aria-label': `${alertName(a)} — open detail`,
+  };
   if (alertIsExcluded(a)) {
     const ex = a.exclusions[0];
     return (
-      <div className="qmc-sigline qmc-sigline--excluded">
+      <div className="qmc-sigline qmc-sigline--excluded qmc-sigline--clickable" {...rowProps}>
         <div className="qmc-sigline__main">
           <span className="qmc-chip qmc-chip--emerald"><span className="qmc-dot qmc-dot--emerald" style={{ width: '6px', height: '6px' }} />{alertName(a)}</span>
           <span className="qmc-sigline__qm">→ {shortLabel(a.qmId, a.qmId)}</span>
@@ -259,7 +267,7 @@ function SignalLine({ patient, alert: a, whatIf, skipped, onSkip, onCode, onDism
   }
   const tone = ALERT_URGENCY[a.urgency]?.tone ?? 'slate';
   return (
-    <div className="qmc-sigline">
+    <div className="qmc-sigline qmc-sigline--clickable" {...rowProps}>
       <div className="qmc-sigline__main">
         <span className={`qmc-chip qmc-chip--${tone}`}><span className={`qmc-dot qmc-dot--${tone}`} style={{ width: '6px', height: '6px' }} />{alertName(a)}</span>
         <span className="qmc-sigline__qm">→ {shortLabel(a.qmId, a.qmId)}</span>
@@ -267,11 +275,11 @@ function SignalLine({ patient, alert: a, whatIf, skipped, onSkip, onCode, onDism
         <span className="qmc-sigline__date">{addedLine(a)}</span>
         {whatIf ? (
           <div className="qmc-toggle qmc-sigline__act">
-            <button type="button" className={skipped ? 'qmc-toggle--kept' : ''} onClick={onSkip}>Skip</button> {/* NO_TRACK */}
-            <button type="button" className={!skipped ? 'qmc-toggle--on' : ''} onClick={onCode}>Code</button> {/* NO_TRACK */}
+            <button type="button" className={skipped ? 'qmc-toggle--kept' : ''} onClick={stop(onSkip)}>Skip</button> {/* NO_TRACK */}
+            <button type="button" className={!skipped ? 'qmc-toggle--on' : ''} onClick={stop(onCode)}>Code</button> {/* NO_TRACK */}
           </div>
         ) : (
-          <button type="button" data-track="qm_action_clicked" data-track-prop-measure-code={a.qmId} data-track-prop-action="snooze_30d" className="qmc-dismiss qmc-sigline__act" onClick={onDismiss}>Dismiss</button>
+          <button type="button" data-track="qm_action_clicked" data-track-prop-measure-code={a.qmId} data-track-prop-action="snooze_30d" className="qmc-dismiss qmc-sigline__act" onClick={stop(onDismiss)}>Dismiss</button>
         )}
       </div>
     </div>

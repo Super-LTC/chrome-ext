@@ -9,23 +9,35 @@
 import { useState } from 'preact/hooks';
 import {
   isFiveStarMds, shortLabel, measureCode, displayMdsValue,
-  entryIsActionable, statusBucketForEntry, statusRank,
+  statusBucketForEntry, statusRank, measureInLens,
 } from '../lib/qm-view-model.js';
-import { STATUS_BUCKET, CROSSING, isCrossingEntry, fullName, prettyDate, stayDayLabel } from '../lib/qm-tones.js';
-import { X } from './icons.jsx';
+import { STATUS_BUCKET, CROSSING, isCrossingEntry, fullName, prettyDate, stayDayLabel, clearTiming, CLEAR_TONE } from '../lib/qm-tones.js';
+import { X, ChevronDown, ChevronRight } from './icons.jsx';
 
 function toast(msg) {
   try { if (window.SuperToast?.show) window.SuperToast.show({ message: msg, type: 'info' }); else console.info('[QM]', msg); }
   catch { /* noop */ }
 }
 
-export function ResidentDrillIn({ patient, entry, onClose }) {
+export function ResidentDrillIn({ patient, entry, scopeMeasureId, lens, facilityState, facilityDate, onClose }) {
   if (!patient) return null;
-  const triggering = patient.measures.filter((m) => m.triggers);
-  const measures = (triggering.length ? triggering : [entry])
+  // Lens-scope the modal: a resident opened in Five-Star mode must never reveal
+  // their state-survey-only measures. When no lens is supplied, show all.
+  const triggering = patient.measures.filter(
+    (m) => m.triggers && (!lens || measureInLens(m.id, lens, facilityState))
+  );
+  const all = (triggering.length ? triggering : [entry])
+    .filter(Boolean)
     .slice()
     .sort((a, b) => statusRank(statusBucketForEntry(a)) - statusRank(statusBucketForEntry(b)));
-  const anyDxQuery = measures.some((m) => m.clearGuidance?.actionType === 'dx_query');
+
+  // Scope-aware (superapp PR #652): opened FROM a measure → lead with it, tuck the
+  // rest under an accordion. Opened from a patient row (no scope) → show all.
+  // Fall back to "show all" if the scoped measure isn't in the lensed set.
+  const scoped = scopeMeasureId ? all.filter((m) => m.id === scopeMeasureId) : [];
+  const primary = scoped.length ? scoped : all;
+  const others = scoped.length ? all.filter((m) => m.id !== scopeMeasureId) : [];
+  const anyDxQuery = all.some((m) => m.clearGuidance?.actionType === 'dx_query');
 
   return (
     <div className="qmc qmc-modal-overlay" onClick={onClose}>
@@ -38,16 +50,22 @@ export function ResidentDrillIn({ patient, entry, onClose }) {
               {patient.payerClassification && ` · ${patient.payerClassification}`}
               {patient.externalPatientId && ` · ${patient.externalPatientId}`}
             </div>
-            <div className="qmc-modal__eyebrow">{measures.length} measure{measures.length === 1 ? '' : 's'} triggering</div>
+            <div className="qmc-modal__eyebrow">
+              {scoped.length
+                ? <>{shortLabel(primary[0].id, primary[0].label)}{others.length > 0 && ` · ${others.length} other${others.length === 1 ? '' : 's'} triggering`}</>
+                : <>{primary.length} measure{primary.length === 1 ? '' : 's'} triggering</>}
+            </div>
           </div>
           <button type="button" className="qmc-modal__close" onClick={onClose} aria-label="Close"><X /></button> {/* NO_TRACK */}
         </div>
 
         <div className="qmc-modal__body">
-          {measures.map((m, i) => <MeasureSection key={`${m.id}-${i}`} patient={patient} entry={m} />)}
+          {primary.map((m, i) => <MeasureSection key={`${m.id}-${i}`} patient={patient} entry={m} facilityDate={facilityDate} />)}
+
+          {others.length > 0 && <OtherMeasures patient={patient} others={others} facilityDate={facilityDate} />}
 
           <div className="qmc-modal__actions">
-            <button type="button" data-track="qm_evidence_opened" data-track-prop-measure-code={measures[0]?.id || '—'} className="qmc-btn qmc-btn--primary" onClick={() => toast('Open the full MDS from the MDS tab')}>
+            <button type="button" data-track="qm_evidence_opened" data-track-prop-measure-code={primary[0]?.id || '—'} className="qmc-btn qmc-btn--primary" onClick={() => toast('Open the full MDS from the MDS tab')}>
               View full MDS
             </button>
             {anyDxQuery && (
@@ -62,7 +80,29 @@ export function ResidentDrillIn({ patient, entry, onClose }) {
   );
 }
 
-function MeasureSection({ patient, entry }) {
+// Louder banner copy for a clear-timing kind (the row chip uses the terse
+// CLEAR_TONE label for the same kind — both off the one clearTiming decision).
+function clearBannerCopy(t, g) {
+  switch (t.kind) {
+    case 'ready':
+      return { title: 'Ready to clear now', sub: 'ARD a clean Quarterly/Annual today and it drops' };
+    case 'future':
+      return { title: `Can clear ${prettyDate(t.date)}`, sub: 'earliest clean OBRA ARD' };
+    case 'locked':
+      return { title: 'Locked to this stay', sub: 'clears at discharge or a new stay — nothing this stay removes it' };
+    case 'preventable':
+      return { title: 'Preventable before day-101', sub: g?.actions?.[0]?.label ?? 'clear the coding before they cross' };
+    case 'carries':
+      return { title: 'Carries over at day-101', sub: 'already coded — appears the moment CDIF reaches 101' };
+    case 'time':
+    default:
+      return t.date
+        ? { title: `Counts until ${prettyDate(t.date)}`, sub: 'counts until then; no action speeds it up' }
+        : { title: 'Ages out of the window', sub: 'rolls off once the lookback window passes' };
+  }
+}
+
+function MeasureSection({ patient, entry, facilityDate }) {
   const crossing = isCrossingEntry(entry);
   const bucket = statusBucketForEntry(entry);
   const tone = STATUS_BUCKET[bucket];
@@ -70,48 +110,22 @@ function MeasureSection({ patient, entry }) {
   const fiveStar = isFiveStarMds(entry.id);
   const g = entry.clearGuidance;
   const cliff = entry.cliffInfo;
-  const hasClearPath = !crossing && bucket !== 'will_hit' && entryIsActionable(entry);
 
-  // Beat 2
+  // Beat 2 — keep the small "Counting now · {cliffLabel}" line.
   const countingTitle = crossing ? 'Not counting yet' : 'Counting now';
   const countingDetail = crossing
     ? (cliff?.cliffLabel ?? 'starts when CDIF reaches 101')
     : (cliff?.cliffLabel ?? 'in the current measure window');
 
-  // Beat 3 — transcribed precisely from the parity spec.
-  const clearsOnObra = hasClearPath && (g?.clearsOnNextObra || patient.nextObraPreview?.wouldClear?.includes(entry.id));
-  let clearsTitle, clearsDetail;
-  if (crossing) {
-    const preventable = !!cliff?.clearableBeforeCliff;
-    clearsTitle = preventable ? 'Preventable before day-101' : 'Carries over at day-101';
-    clearsDetail = preventable
-      ? (g?.actions?.[0]?.label ?? 'clear the coding before they cross')
-      : 'already coded — it appears the moment CDIF reaches 101';
-  } else if (hasClearPath) {
-    if (clearsOnObra) {
-      clearsTitle = 'Clears on the next OBRA';
-      clearsDetail = cliff?.earliestClearDate
-        ? `any Quarterly/Annual coded clean · earliest ARD ${prettyDate(cliff.earliestClearDate)}`
-        : 'any Quarterly/Annual coded clean replaces the target';
-    } else {
-      clearsTitle = 'Clears at the next clean assessment';
-      clearsDetail = cliff?.actionDeadline
-        ? `code clean, then ARD by ${prettyDate(cliff.actionDeadline)}`
-        : g?.clearDate ? `on ${prettyDate(g.clearDate)}` : 'when the target is re-coded clean';
-    }
-  } else if (g?.actionType === 'stay_locked' || cliff?.urgency === 'stay-locked') {
-    clearsTitle = 'Locked to this stay';
-    clearsDetail = 'clears at discharge or a new stay — nothing this stay removes it';
-  } else {
-    clearsTitle = 'Ages out of the window';
-    clearsDetail = g?.clearDate
-      ? `${prettyDate(g.clearDate)} — counts until then; no action speeds it up`
-      : 'rolls off once the lookback window passes';
-  }
+  // Clear-timing banner (web §5C) — loud, color-coded "can I clear this / when",
+  // right under the measure name. Same `clearTiming` decision as the row chip
+  // (no drift); the banner just renders the louder title/sub for the kind.
+  const timing = clearTiming(entry, patient, facilityDate);
+  const bannerTone = CLEAR_TONE[timing.kind].badge;
+  const { title: bannerTitle, sub: bannerSub } = clearBannerCopy(timing, g);
 
   const headTone = crossing ? CROSSING.tone : tone.tone;
   const headLabel = crossing ? 'Crossing day-101' : tone.label;
-  const beat3Tone = hasClearPath ? 'emerald' : crossing ? CROSSING.tone : 'slate';
   const beat2Tone = crossing ? CROSSING.tone : tone.tone;
 
   return (
@@ -126,6 +140,14 @@ function MeasureSection({ patient, entry }) {
         {fiveStar
           ? <span className="qmc-tag qmc-tag--star">5★</span>
           : <span className="qmc-tag qmc-tag--state">state</span>}
+      </div>
+
+      <div className={`qmc-clearbanner qmc-clearbanner--${bannerTone}`}>
+        <span className={`qmc-dot qmc-dot--${bannerTone}`} />
+        <div className="qmc-clearbanner__text">
+          <div className="qmc-clearbanner__title">{bannerTitle}</div>
+          <div className="qmc-clearbanner__sub">{bannerSub}</div>
+        </div>
       </div>
 
       <ol className="qmc-timeline">
@@ -158,8 +180,27 @@ function MeasureSection({ patient, entry }) {
           )}
         </Beat>
         <Beat tone={beat2Tone} label={countingTitle}><div className="qmc-beat__body">{countingDetail}</div></Beat>
-        <Beat tone={beat3Tone} label={clearsTitle}><div className="qmc-beat__body">{clearsDetail}</div></Beat>
       </ol>
+    </div>
+  );
+}
+
+// Collapsed accordion of the resident's other triggering measures, shown when the
+// modal was opened scoped to one measure (§5C). Starts closed so the scoped
+// measure leads; the nurse can expand to see the rest in context.
+function OtherMeasures({ patient, others, facilityDate }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="qmc-othermeas">
+      <button type="button" className="qmc-othermeas__head" aria-expanded={open} onClick={() => setOpen((v) => !v)}> {/* NO_TRACK */}
+        {open ? <ChevronDown /> : <ChevronRight />}
+        <span>{others.length} other measure{others.length === 1 ? '' : 's'} triggering for this resident</span>
+      </button>
+      {open && (
+        <div className="qmc-othermeas__body">
+          {others.map((m, i) => <MeasureSection key={`${m.id}-${i}`} patient={patient} entry={m} facilityDate={facilityDate} />)}
+        </div>
+      )}
     </div>
   );
 }

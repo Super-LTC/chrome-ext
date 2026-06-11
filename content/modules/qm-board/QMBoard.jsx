@@ -28,6 +28,9 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   const view = history[history.length - 1];
   // Resident drill-in modal — layers over whatever view is showing.
   const [resident, setResident] = useState(null); // { patient, entry } | null
+  // Measure-set lens (Five-Star / QIP / Both) — owned here so it drives the whole
+  // board AND filters the resident drill-in no matter which surface opened it.
+  const [lens, setLens] = useState('five_star'); // QmLens
 
   useEffect(() => { track('qm_board_opened', { source: 'fab' }); }, []);
 
@@ -45,7 +48,10 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   const openMeasure = (measureId) => push({ kind: 'measure', measureId });
   const openSignals = () => push({ kind: 'signals' });
   const openFunctional = () => push({ kind: 'functional' });
-  const openResident = (patient, entry) => setResident({ patient, entry });
+  // scopeMeasureId: set when opened FROM a measure (measure-detail row / crosser),
+  // so the drill-in leads with that measure and tucks the rest under an accordion.
+  // Undefined from a worklist patient-row click → the modal shows all at once.
+  const openResident = (patient, entry, scopeMeasureId) => setResident({ patient, entry, scopeMeasureId });
   const closeResident = () => setResident(null);
 
   // Open the resident modal from a (patientId, measureId) pair — used by the
@@ -54,7 +60,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
     const p = currentlyTriggering?.patients?.find((x) => x.patientId === patientId);
     if (!p) return;
     const e = p.measures.find((m) => m.id === measureId) || p.measures.find((m) => m.triggers);
-    openResident(p, e);
+    openResident(p, e, measureId);
   };
 
   return (
@@ -94,6 +100,8 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 data={currentlyTriggering}
                 upcoming={upcoming}
                 signalCount={signalCount}
+                lens={lens}
+                onLensChange={setLens}
                 onOpenMeasure={openMeasure}
                 onOpenResident={openResident}
                 onOpenSignals={openSignals}
@@ -132,7 +140,11 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
       </div>
 
       {resident && (
-        <ResidentDrillIn patient={resident.patient} entry={resident.entry} onClose={closeResident} />
+        <ResidentDrillIn patient={resident.patient} entry={resident.entry}
+          scopeMeasureId={resident.scopeMeasureId}
+          lens={lens} facilityState={currentlyTriggering?.facilityState}
+          facilityDate={currentlyTriggering?.facilityDate}
+          onClose={closeResident} />
       )}
     </div>
   );

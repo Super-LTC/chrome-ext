@@ -138,6 +138,26 @@ export function measureInLens(id, lens, state) {
   return five || inQip; // both
 }
 
+/**
+ * Reduce a resident row to one lens: drop measures not in the lens and recompute
+ * `triggeringCount`. This is what makes the lens drive the WHOLE dashboard — the
+ * hero count, the At-risk / Clearable / Will-hit buckets, and the per-resident
+ * pills — not just the measure-tile grid. A resident whose only triggers are
+ * state-survey noise (Depression, Antianx, Falls-Any) drops to 0 under Five-Star.
+ */
+export function rowForLens(row, lens, state) {
+  const measures = row.measures.filter((m) => measureInLens(m.id, lens, state));
+  return { ...row, measures, triggeringCount: measures.filter((m) => m.triggers).length };
+}
+
+/** Same idea for a day-101 crosser: keep only projected hits in the lens. */
+export function crosserForLens(crosser, lens, state) {
+  return {
+    ...crosser,
+    projectedHits: crosser.projectedHits.filter((h) => measureInLens(h.id, lens, state)),
+  };
+}
+
 // ── Rate math ───────────────────────────────────────────────────────────────
 /**
  * Facility observed rate for one measure. denominator = residents with a
@@ -157,6 +177,41 @@ export function projectedNum(num, clearedCount) {
 /** Percentage form of a rate; 0 when the denominator is 0. */
 export function ratePct(num, den) {
   return den > 0 ? (100 * num) / den : 0;
+}
+
+// ── What-if scoping (superapp PR #654) ──────────────────────────────────────
+/**
+ * A short-stay resident only counts toward a measure once they reach long-stay
+ * (day-101); if that crossing falls after the quarter locks, they become
+ * long-stay in the NEXT quarter and cannot move the current quarter's rate at
+ * all. Both args are ISO `YYYY-MM-DD`, so a lexical compare is a correct date
+ * compare.
+ */
+export function crosserCountsThisQuarter(crossingDate, quarterEndIso) {
+  return crossingDate <= quarterEndIso;
+}
+
+/**
+ * PatientIds of residents the what-if can pre-clear **for free** — the trigger
+ * is purely a coding error correctable by an MDS Modification (`actionType ===
+ * 'modification'`), needing NO clinical change, NO physician query, and NO wait.
+ *
+ * This is the ONLY honest default-seed set. `nextObraPreview.wouldClear` is the
+ * wrong signal: it's `true` on antipsychotic and pressure-ulcer (both
+ * `actionType: 'clinical'`) because it assumes the new MDS is coded clean — i.e.
+ * it presumes the drug was stopped / the wound healed, projecting a fake 0%. So
+ * the seed is restricted to `modification`; clinical / dx_query / time-based /
+ * stay-locked triggers are never auto-resolved (the nurse can still toggle them
+ * by hand). No standard evaluator emits `modification`, so in practice this is
+ * empty and the what-if opens clean.
+ */
+export function reCodeClearableIds(patients, measureId) {
+  const out = [];
+  for (const p of patients) {
+    const e = p.measures.find((m) => m.id === measureId);
+    if (e?.triggers && e.clearGuidance?.actionType === 'modification') out.push(p.patientId);
+  }
+  return out;
 }
 
 // ── Urgency tally (for the measure-tile dot strip) ──────────────────────────

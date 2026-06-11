@@ -8,6 +8,7 @@
  * (rose/sky/slate/violet/amber/emerald) that the extension CSS maps to colors
  * via `qm-tone-<key>` classes. Logic (ranks, derivations) is verbatim.
  */
+import { statusBucketForEntry, entryIsActionable } from './qm-view-model.js';
 
 // ── Urgency tone (resident-level cliff urgency) ─────────────────────────────
 // Tone = { tone, label, rank }  — `tone` is the semantic key for CSS.
@@ -46,6 +47,49 @@ export const STATUS_BUCKET = {
 /** True when this entry is a synthetic day-101 crosser (built by crosserToDrill). */
 export function isCrossingEntry(entry) {
   return entry.cliffInfo?.cliffLabel?.startsWith('Crosses to long-stay') ?? false;
+}
+
+// ── Clear timing (single source of truth — superapp PR #652) ────────────────
+// ONE decision used by BOTH the worklist row chip and the drill-in banner, so
+// they can never disagree. Returns a `kind` (+ a date for the dated kinds);
+// CLEAR_TONE[kind] gives the chip color (`badge`) + terse label (`short`), and
+// the drill-in maps the same kind to its louder banner title/sub.
+//   ready       — a clean ARD today drops it (green "Clear now")
+//   future      — clears on a future clean OBRA ARD (blue "Clear {date}")
+//   locked      — stay-locked, no lever (slate "Stay-locked")
+//   time        — time-based, ages out (slate "Time-based")
+//   preventable — day-101 crosser, still preventable (green)
+//   carries     — day-101 crosser, already coded (slate)
+export const CLEAR_TONE = {
+  ready:       { badge: 'emerald', short: 'Clear now' },
+  future:      { badge: 'sky',     short: 'Clear' },        // consumer appends the date
+  locked:      { badge: 'slate',   short: 'Stay-locked' },
+  time:        { badge: 'slate',   short: 'Time-based' },
+  preventable: { badge: 'emerald', short: 'Preventable' },
+  carries:     { badge: 'slate',   short: 'Carries over' },
+};
+
+export function clearTiming(entry, patient, facilityDate) {
+  const g = entry.clearGuidance;
+  const cliff = entry.cliffInfo;
+  if (isCrossingEntry(entry)) {
+    return { kind: cliff?.clearableBeforeCliff ? 'preventable' : 'carries', date: null };
+  }
+  const hasClearPath = statusBucketForEntry(entry) !== 'will_hit' && entryIsActionable(entry);
+  if (hasClearPath) {
+    const date = cliff?.earliestClearDate ?? cliff?.actionDeadline ?? g?.clearDate ?? null;
+    const readyNow = !date || (facilityDate && date <= facilityDate);
+    return readyNow ? { kind: 'ready', date: null } : { kind: 'future', date };
+  }
+  if (g?.actionType === 'stay_locked' || cliff?.urgency === 'stay-locked') {
+    return { kind: 'locked', date: null };
+  }
+  return { kind: 'time', date: g?.clearDate ?? null };
+}
+
+/** Row-chip label for a clear-timing result (`Clear {date}` for the dated kind). */
+export function clearChipLabel(t) {
+  return t.kind === 'future' && t.date ? `Clear ${prettyDate(t.date)}` : CLEAR_TONE[t.kind].short;
 }
 
 // ── Small derivations ───────────────────────────────────────────────────────
@@ -120,6 +164,14 @@ export function quarterLabel(iso) {
   const m = Number(iso.slice(5, 7));
   const q = Math.floor((m - 1) / 3) + 1;
   return `Q${q} ${iso.slice(0, 4)}`;
+}
+
+/** Label of the quarter AFTER the one this date falls in, e.g. Jun 30 → "Q3 2026". */
+export function nextQuarterLabel(iso) {
+  const year = Number(iso.slice(0, 4));
+  const m = Number(iso.slice(5, 7));
+  const q = Math.floor((m - 1) / 3) + 1;
+  return q === 4 ? `Q1 ${year + 1}` : `Q${q + 1} ${year}`;
 }
 
 /** One projected day-101 hit → the QmMeasureEntry shape the drill-in renders. */

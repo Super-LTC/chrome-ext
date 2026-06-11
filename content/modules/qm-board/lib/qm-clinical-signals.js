@@ -55,11 +55,18 @@ export function actionableAlerts(p) {
   return [...p.events, ...p.canaries].filter((a) => !a.suppressedByExistingCoding && !a.snooze);
 }
 
-/** Residents with ≥1 actionable signal, most-signals first. */
+/**
+ * Residents with ≥1 actionable signal, ordered to mirror the server
+ * (preventable-alerts.service): actionable-signal count DESC, then lastName ASC.
+ * The lastName tiebreak is explicit (not relying on stable sort) so equal-count
+ * residents stay deterministic after a client-side snooze/dismiss re-sort.
+ */
 export function signalResidents(data) {
   return data.patients
     .filter((p) => actionableAlerts(p).length > 0)
-    .sort((a, b) => actionableAlerts(b).length - actionableAlerts(a).length);
+    .sort((a, b) =>
+      actionableAlerts(b).length - actionableAlerts(a).length ||
+      (a.lastName ?? '').localeCompare(b.lastName ?? ''));
 }
 
 /**

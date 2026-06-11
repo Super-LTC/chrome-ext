@@ -9,11 +9,11 @@
  */
 import { useMemo, useState } from 'preact/hooks';
 import {
-  bucketForActionability, isFiveStarMds, isWhatIfClearable, measureRate,
+  isFiveStarMds, measureRate, crosserCountsThisQuarter, reCodeClearableIds,
   projectedNum, ratePct, shortLabel, measureCode, statusBucketForEntry, displayMdsValue,
 } from '../lib/qm-view-model.js';
 import { fiveStarMeasure, pointsForRate, nextTier } from '../lib/qm-five-star.js';
-import { CROSSING, STATUS_BUCKET, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel } from '../lib/qm-tones.js';
+import { CROSSING, STATUS_BUCKET, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel, nextQuarterLabel, stayDayLabel } from '../lib/qm-tones.js';
 import { ChevronLeft, ChevronRight } from './icons.jsx';
 
 const GROUP_DEFS = [
@@ -28,8 +28,6 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
   const [prevented, setPrevented] = useState(() => new Set());
 
   const meta = data.measuresEvaluated.find((m) => m.id === measureId);
-  const bucket = bucketForActionability(meta?.clearProfile?.actionability);
-  const clearable = isWhatIfClearable(bucket);
   const fiveStar = isFiveStarMds(measureId);
   const counts = data.summary.byMeasure[measureId] ?? { triggering: 0, excluded: 0, applicable: 0 };
   const rate = measureRate(counts);
@@ -54,6 +52,18 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
     return out.sort((a, b) => a.hit.daysUntilCrossing - b.hit.daysUntilCrossing);
   }, [upcoming, measureId]);
 
+  // Quarter-scope the crossers (PR #654): a resident who reaches day-101 AFTER
+  // the quarter locks becomes long-stay next quarter and can't move this rate.
+  const qEnd = data.summary.currentQuarterEnd;
+  const crossersThisQ = crossers.filter((c) => crosserCountsThisQuarter(c.hit.crossingDate, qEnd));
+  const crossersNextQ = crossers.filter((c) => !crosserCountsThisQuarter(c.hit.crossingDate, qEnd));
+
+  // The ONLY honest what-if seed: residents whose trigger is a free MDS coding
+  // fix (actionType 'modification'). NOT nextObraPreview.wouldClear — that
+  // assumes the clinical work (d/c the drug, heal the wound) is already done and
+  // projects a fake 0%. Empty for every standard measure → what-if opens clean.
+  const seed = useMemo(() => reCodeClearableIds(data.patients, measureId), [data.patients, measureId]);
+
   const projNum = projectedNum(rate.num, cleared.size);
   const moved = wif && cleared.size > 0;
   const projPct = ratePct(projNum, rate.den);
@@ -73,7 +83,13 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
   const togglePrevented = toggleSet(setPrevented);
 
   function toggleWif() {
-    if (wif) { setCleared(new Set()); setPrevented(new Set()); }
+    if (wif) {
+      setCleared(new Set());
+      setPrevented(new Set());
+    } else {
+      // Seed only the free re-code clears (empty for standard measures).
+      setCleared(new Set(seed));
+    }
     setWif((v) => !v);
   }
 
@@ -133,8 +149,14 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
         </div>
         {wif && (
           <div className="qmc-wif-note">
-            {cleared.size === 0 && prevented.size === 0 && (
-              <span style={{ color: 'var(--slate-500)' }}>Mark <strong>Cleared</strong> on residents you'll clear before the cliff — the rate updates live.</span>
+            {seed.length > 0 && (
+              <div className="qmc-wif-note__row">
+                <span className="qmc-wif-pill qmc-wif-pill--emerald">seeded</span>
+                <span style={{ color: 'var(--slate-500)' }}>Pre-checked the {seed.length} resident{seed.length === 1 ? '' : 's'} whose trigger is a free MDS re-code — uncheck any you can't fix.</span>
+              </div>
+            )}
+            {cleared.size === 0 && prevented.size === 0 && seed.length === 0 && (
+              <span style={{ color: 'var(--slate-500)' }}>Mark <strong>Cleared</strong> on residents you'll clear before the cliff — this models the rate only; the clinical work (d/c the drug, heal the wound, query a Dx) still has to happen first.</span>
             )}
             {cleared.size > 0 && (
               <div className="qmc-wif-note__row">
@@ -167,31 +189,36 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
               </div>
               <div className="qmc-rows">
                 {rows.map(({ patient, entry }) => (
-                  <PersonRow key={patient.patientId} patient={patient} entry={entry} wif={wif} clearable={clearable}
+                  <PersonRow key={patient.patientId} patient={patient} entry={entry} wif={wif}
                     cleared={cleared.has(patient.patientId)} onToggle={(v) => toggleCleared(patient.patientId, v)}
-                    onOpen={() => onOpenResident(patient, entry)} />
+                    onOpen={() => onOpenResident(patient, entry, measureId)} />
                 ))}
               </div>
             </div>
           );
         })}
-        {crossers.length > 0 && (
-          <div>
+        {[
+          { rows: crossersThisQ, tone: 'violet', muted: false, label: 'Going to trigger soon',
+            sub: `Not counting yet · cross day-101 before ${qLabel} locks` },
+          { rows: crossersNextQ, tone: 'slate', muted: true, label: `Crosses after ${qLabel} locks`,
+            sub: `counts in ${nextQuarterLabel(qEnd)} · today's rate unchanged` },
+        ].map((grp) => grp.rows.length > 0 && (
+          <div key={grp.label} className={grp.muted ? 'qmc-cross-next' : undefined}>
             <div className="qmc-ghead">
-              <span className="qmc-dot qmc-dot--violet" />
-              <span className="qmc-group__label">Going to trigger soon</span>
-              <span className="qmc-group__count">{crossers.length}</span>
-              <span className="qmc-group__sub">· Not counting yet · starts when they cross day-101</span>
+              <span className={`qmc-dot qmc-dot--${grp.tone}`} />
+              <span className="qmc-group__label">{grp.label}</span>
+              <span className="qmc-group__count">{grp.rows.length}</span>
+              <span className="qmc-group__sub">· {grp.sub}</span>
             </div>
             <div className="qmc-rows">
-              {crossers.map(({ patient, hit }) => (
+              {grp.rows.map(({ patient, hit }) => (
                 <CrosserRow key={patient.patientId} patient={patient} hit={hit} wif={wif}
                   prevented={prevented.has(patient.patientId)} onToggle={(v) => togglePrevented(patient.patientId, v)}
-                  onOpen={() => { const d = crosserToDrill(patient, hit); onOpenResident(d.patient, d.entry); }} />
+                  onOpen={() => { const d = crosserToDrill(patient, hit); onOpenResident(d.patient, d.entry, measureId); }} />
               ))}
             </div>
           </div>
-        )}
+        ))}
         {people.length === 0 && crossers.length === 0 && (
           <div className="qmc-allclear">No residents triggering {label}.</div>
         )}
@@ -200,8 +227,14 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
   );
 }
 
-function PersonRow({ patient, entry, wif, clearable, cleared, onToggle, onOpen }) {
-  const tone = STATUS_BUCKET[statusBucketForEntry(entry)].tone;
+function PersonRow({ patient, entry, wif, cleared, onToggle, onOpen }) {
+  const rowBucket = statusBucketForEntry(entry);
+  const tone = STATUS_BUCKET[rowBucket].tone;
+  // Clearability is PER RESIDENT, not per measure: only a resident with a lever
+  // this stay (not in the will-hit bucket) can be marked Cleared. A will-hit
+  // resident is destined to count — letting them be "cleared" would wrongly drop
+  // the projected rate (the bug this fixes).
+  const rowClearable = rowBucket !== 'will_hit';
   const micro = clearMicrocopy(entry);
   const why0 = entry.evidence[0];
   const ard = patient.target?.ardDate;
@@ -217,8 +250,8 @@ function PersonRow({ patient, entry, wif, clearable, cleared, onToggle, onOpen }
       </button>
       <span className={`qmc-prow__cta ${cleared ? '' : `qmc-text--${tone}`}`}>{cleared ? 'cleared' : micro}</span>
       {wif ? (
-        clearable ? <ClearToggle cleared={cleared} onToggle={onToggle} onLabel="Cleared" />
-                  : <span className="qmc-locked">Locked</span>
+        rowClearable ? <ClearToggle cleared={cleared} onToggle={onToggle} onLabel="Cleared" />
+                     : <span className="qmc-locked">Locked</span>
       ) : <ChevronRight className="qmc-row__chev" />}
     </div>
   );
