@@ -174,6 +174,7 @@ export function Icd10QueryFlow({
               onUpdateNote={batch.updateNote}
               onUpdateIcd10={batch.updateIcd10}
               onSend={batch.sendAll}
+              onPrint={batch.printAll}
               onBack={onClose}
               isSending={batch.state === 'sending'}
               progress={batch.progress}

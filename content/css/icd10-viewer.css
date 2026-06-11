@@ -750,6 +750,12 @@
   overflow-y: auto;
 }
 
+/* Let practitioner dropdown menu escape the sheet scroll clip */
+.icd10-query-flow__sheet:has(.super-dropdown--open),
+.icd10-query-flow__sheet-body:has(.super-dropdown--open) {
+  overflow: visible;
+}
+
 .icd10-query-flow__spinner {
   width: 28px;
   height: 28px;

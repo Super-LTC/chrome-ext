@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'preact/hooks';
+import { useMemo } from 'preact/hooks';
 
 /**
  * Inline review page shown after queries are generated.
@@ -18,60 +18,6 @@ export const BatchReviewPage = ({
   isSending,
   progress
 }) => {
-  const dropdownRef = useRef(null);
-  const dropdownMounted = useRef(false);
-
-  // Mount SuperDropdown for practitioner selection
-  useEffect(() => {
-    if (!dropdownRef.current || practitioners.length === 0 || dropdownMounted.current) return;
-
-    dropdownRef.current.innerHTML = '';
-
-    const items = practitioners.map(p => ({
-      id: p.id,
-      label: formatPractitionerName(p),
-      subtitle: p.title || p.specialty || ''
-    }));
-
-    if (typeof window.SuperDropdown?.create === 'function') {
-      window.SuperDropdown.create(dropdownRef.current, {
-        items,
-        placeholder: 'Select a practitioner...',
-        searchPlaceholder: 'Search practitioners...',
-        onSelect: (item) => {
-          onSelectPractitioner(item.id);
-        }
-      });
-      dropdownMounted.current = true;
-    } else {
-      // Fallback: render a native <select> when SuperDropdown isn't available (e.g. demo)
-      const select = document.createElement('select');
-      select.className = 'qr__physician-select-fallback';
-      select.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:14px;color:#344054;background:#fff;cursor:pointer;';
-      const defaultOpt = document.createElement('option');
-      defaultOpt.value = '';
-      defaultOpt.textContent = 'Select a practitioner...';
-      defaultOpt.disabled = true;
-      defaultOpt.selected = true;
-      select.appendChild(defaultOpt);
-      items.forEach(item => {
-        const opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = item.label + (item.subtitle ? ` — ${item.subtitle}` : '');
-        select.appendChild(opt);
-      });
-      select.addEventListener('change', (e) => {
-        onSelectPractitioner(e.target.value);
-      });
-      dropdownRef.current.appendChild(select);
-      dropdownMounted.current = true;
-    }
-
-    return () => {
-      dropdownMounted.current = false;
-    };
-  }, [practitioners, onSelectPractitioner]);
-
   const canSend = selectedPractitionerId && generatedQueries.length > 0 && !isSending;
   const canPrint = generatedQueries.length > 0 && !isSending;
 
@@ -93,7 +39,9 @@ export const BatchReviewPage = ({
           {isSending && (
             <div className="qr__sending-status">
               <div className="qr__sending-spinner" />
-              Sending {progress.current + 1}/{progress.total}
+              {progress.label === 'printing'
+                ? `Printing ${progress.current + 1}/${progress.total}`
+                : `Sending ${progress.current + 1}/${progress.total}`}
             </div>
           )}
           <button
@@ -134,7 +82,26 @@ export const BatchReviewPage = ({
           </svg>
           Physician
         </div>
-        <div className="qr__physician-dropdown" ref={dropdownRef} />
+        <select
+          className="qr__physician-select"
+          value={selectedPractitionerId ? String(selectedPractitionerId) : ''}
+          onChange={(e) => onSelectPractitioner(e.target.value)}
+          disabled={isSending || practitioners.length === 0}
+        >
+          <option value="" disabled>
+            Select a practitioner...
+          </option>
+          {practitioners.map(p => {
+            const id = getPractitionerId(p);
+            const label = formatPractitionerName(p);
+            const subtitle = p.title || p.specialty || '';
+            return (
+              <option key={id} value={id}>
+                {label}{subtitle ? ` — ${subtitle}` : ''}
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       {/* Form body */}
@@ -257,6 +224,10 @@ const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled })
     </div>
   );
 };
+
+function getPractitionerId(p) {
+  return p.id ?? p.practitionerId ?? p.personId ?? '';
+}
 
 function formatPractitionerName(p) {
   if (p.firstName && p.lastName) {

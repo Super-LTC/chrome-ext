@@ -4,6 +4,16 @@
 const SuperDropdown = {
   activeDropdown: null,
 
+  /** Normalize IDs for comparisons (DOM data-* attrs are always strings). */
+  _idKey(id) {
+    return id == null ? '' : String(id);
+  },
+
+  _findItem(items, id) {
+    const key = this._idKey(id);
+    return items.find(i => this._idKey(i.id) === key);
+  },
+
   /**
    * Create a searchable dropdown
    * @param {HTMLElement} container - Container element to render into
@@ -26,7 +36,7 @@ const SuperDropdown = {
     } = options;
 
     // Find selected item
-    const selectedItem = items.find(i => i.id === selectedId);
+    const selectedItem = this._findItem(items, selectedId);
 
     const dropdown = document.createElement('div');
     dropdown.className = 'super-dropdown';
@@ -91,8 +101,8 @@ const SuperDropdown = {
   setValue(dropdown, id) {
     if (!dropdown) return;
 
-    const item = dropdown._items.find(i => i.id === id);
-    dropdown._selectedId = id;
+    const item = this._findItem(dropdown._items, id);
+    dropdown._selectedId = item ? item.id : id;
 
     const valueEl = dropdown.querySelector('.super-dropdown__value');
     if (item) {
@@ -102,8 +112,9 @@ const SuperDropdown = {
     }
 
     // Update selected state in list
+    const selectedKey = this._idKey(dropdown._selectedId);
     dropdown.querySelectorAll('.super-dropdown__item').forEach(el => {
-      el.classList.toggle('super-dropdown__item--selected', el.dataset.id === id);
+      el.classList.toggle('super-dropdown__item--selected', this._idKey(el.dataset.id) === selectedKey);
     });
   },
 
@@ -114,9 +125,10 @@ const SuperDropdown = {
       return '<div class="super-dropdown__no-items">No options available</div>';
     }
 
+    const selectedKey = this._idKey(selectedId);
     return items.map(item => `
       <div
-        class="super-dropdown__item ${item.id === selectedId ? 'super-dropdown__item--selected' : ''}"
+        class="super-dropdown__item ${this._idKey(item.id) === selectedKey ? 'super-dropdown__item--selected' : ''}"
         data-id="${item.id}"
         role="option"
         tabindex="-1"
@@ -134,7 +146,7 @@ const SuperDropdown = {
           <div class="super-dropdown__item-label">${item.label}</div>
           ${item.subtitle ? `<div class="super-dropdown__item-subtitle">${item.subtitle}</div>` : ''}
         </div>
-        ${item.id === selectedId ? '<span class="super-dropdown__check">&#10003;</span>' : ''}
+        ${this._idKey(item.id) === selectedKey ? '<span class="super-dropdown__check">&#10003;</span>' : ''}
       </div>
     `).join('');
   },
@@ -206,10 +218,10 @@ const SuperDropdown = {
     };
 
     const selectItem = (id) => {
-      const item = dropdown._items.find(i => i.id === id);
+      const item = this._findItem(dropdown._items, id);
       if (!item) return;
 
-      this.setValue(dropdown, id);
+      this.setValue(dropdown, item.id);
       close();
 
       if (dropdown._onSelect) {
@@ -274,6 +286,8 @@ const SuperDropdown = {
     list.addEventListener('click', (e) => {
       const item = e.target.closest('.super-dropdown__item');
       if (item) {
+        e.preventDefault();
+        e.stopPropagation();
         selectItem(item.dataset.id);
       }
     });

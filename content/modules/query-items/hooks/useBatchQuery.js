@@ -223,7 +223,9 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
       setState('complete');
 
       if (onComplete) {
-        const practitioner = practitioners.find(p => p.id === selectedPractitionerId);
+        const practitioner = practitioners.find(
+          p => String(p.id ?? p.practitionerId ?? p.personId) === String(selectedPractitionerId)
+        );
         const practitionerName = practitioner
           ? (practitioner.firstName && practitioner.lastName
             ? `${practitioner.firstName} ${practitioner.lastName}${practitioner.title ? `, ${practitioner.title}` : ''}`
@@ -252,19 +254,20 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
 
     setState('sending'); // reuse sending state so the progress UI shows
     setError(null);
-    setProgress({ current: 0, total: generatedQueries.length });
+    setProgress({ current: 0, total: generatedQueries.length, label: 'printing' });
     abortRef.current = false;
+
+    let printed = 0;
+    let lastError = null;
 
     try {
       for (let i = 0; i < generatedQueries.length; i++) {
         if (abortRef.current) break;
 
         const { item, noteText, selectedIcd10, preferredIcd10 } = generatedQueries[i];
-        setProgress({ current: i, total: generatedQueries.length });
+        setProgress({ current: i, total: generatedQueries.length, label: 'printing' });
 
         const icd10Code = selectedIcd10 || preferredIcd10?.code || item.icd10Code || null;
-        // Same non-empty-description guarantee as sendAll (see note there) —
-        // printQueryPdf also throws if code/description are missing.
         const recommendedIcd10 = buildRecommendedIcd10(item, icd10Code, preferredIcd10);
         const icd10Description = recommendedIcd10[0]?.description || '';
 
@@ -296,7 +299,9 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
             description: icd10Description,
             filename
           });
+          printed++;
         } catch (err) {
+          lastError = err;
           console.error(`[BatchQuery] Failed to print query for ${item.mdsItem}:`, err);
           window.SuperAnalytics?.track?.('error_caught', {
             surface: 'batch_query_print_item',
@@ -305,8 +310,17 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
         }
       }
 
-      setProgress({ current: generatedQueries.length, total: generatedQueries.length });
+      setProgress({ current: generatedQueries.length, total: generatedQueries.length, label: 'printing' });
       setState('reviewing'); // return to review state — user may still want to send
+
+      if (printed > 0) {
+        window.SuperToast?.success?.(
+          printed === 1 ? 'Print preview downloaded' : `${printed} print previews downloaded`
+        );
+      } else if (lastError) {
+        setError(lastError.message);
+        window.SuperToast?.error?.(`Failed to print: ${lastError.message}`);
+      }
     } catch (err) {
       console.error('[BatchQuery] Print failed:', err);
       window.SuperAnalytics?.track?.('error_shown', {

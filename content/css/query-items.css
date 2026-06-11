@@ -1018,10 +1018,32 @@
   flex-shrink: 0;
 }
 
-.qr__physician-dropdown {
+.qr__physician-select {
   flex: 1;
   max-width: 400px;
-  min-height: 38px;
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  padding: 9px 32px 9px 12px;
+  border: 1px solid var(--super-gray-200);
+  border-radius: var(--super-radius);
+  font-size: 14px;
+  font-family: var(--super-font);
+  font-weight: 500;
+  color: var(--super-gray-700);
+  background: white url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239CA3AF' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.qr__physician-select:focus {
+  outline: none;
+  border-color: var(--super-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.qr__physician-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Shared field label ── */
