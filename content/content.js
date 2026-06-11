@@ -63,6 +63,7 @@ import './super-menu/context.js';
 import './super-menu/mds-run-now.js';
 import './super-menu/session.js';
 import './super-menu/fab.js';
+import './super-menu/managed-care-header.js';
 import './super-menu/panel.js';
 import './super-menu/navigation.js';
 import './super-menu/dashboard-state.js';
