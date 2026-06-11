@@ -92,5 +92,6 @@ const RecertAPI = {
   },
 };
 
-window.RecertAPI = RecertAPI;
+// Guarded: run-tracker tests pull this module in under node where window doesn't exist.
+if (typeof window !== 'undefined') window.RecertAPI = RecertAPI;
 export { RecertAPI };

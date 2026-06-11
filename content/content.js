@@ -26,6 +26,8 @@ import './modules/certifications/cert-api.js';
 
 // 3.6. Recertification API (window.RecertAPI for fab.js + managed-care module)
 import './modules/managed-care/recert-api.js';
+// Run tracker singleton (window.McRunTracker) — fab.js calls init(orgSlug)
+import './modules/managed-care/lib/run-tracker.js';
 
 // 3.7. Import notifications API (window.NotificationsAPI — badge + seen-state)
 import './modules/notifications/notifications-api.js';
