@@ -20,6 +20,12 @@ function createBubbles() {
         <path d="m9 12 2 2 4-4"/>
       </svg>
     </button>
+    <!-- Managed Care (recert generation + run tracking) — facility-scoped.
+         Hidden until module-status reports the module is enabled. -->
+    <button id="super-mc-action" class="super-dial__action super-dial__action--mc" aria-label="Managed Care" style="display:none;" data-track="fab_clicked" data-track-prop-fab="managed_care">
+      MC
+      <span class="super-dial__action-badge" id="super-mc-badge" style="display:none;"></span>
+    </button>
     <button id="super-qm-action" class="super-dial__action super-dial__action--qm" aria-label="QM Board" data-track="fab_clicked" data-track-prop-fab="qm_board">QM</button>
     <button id="super-24hr-action" class="super-dial__action super-dial__action--24hr" aria-label="24-Hour Report" data-track="fab_clicked" data-track-prop-fab="24hr">24H<span class="super-dial__action-dot" id="super-24hr-dot" style="display:none;"></span></button>
     <!-- Care Plan Coverage FAB (patient shield) — temporarily hidden (kept for easy re-enable).
@@ -89,6 +95,18 @@ function createBubbles() {
   //   }
   // });
 
+  // Managed Care button → toggles the Managed Care panel (unscoped)
+  const mcAction = document.getElementById('super-mc-action');
+  mcAction.addEventListener('click', (e) => {
+    e.stopPropagation();
+    container.classList.remove('super-dial--open');
+    if (ManagedCareLauncher.isOpen()) {
+      ManagedCareLauncher.close();
+    } else {
+      ManagedCareLauncher.open({ source: 'fab' });
+    }
+  });
+
   // QM Board button → toggles QM Board modal
   qmAction.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -145,6 +163,12 @@ function createBubbles() {
   // yet. Retry a few times until facility context appears (then the cache keeps
   // it to one request per facility).
   retryFtagModuleStatus();
+  retryMcModuleStatus();
+
+  // Managed Care run tracker → MC action badge + completion toasts.
+  // Badge counts across ALL the user's locations regardless of any panel
+  // toggle — a run finishing at her other building still ticks the badge.
+  initMcRunTracking();
 
   // Load badge count
   updateMDSBadge();
@@ -202,6 +226,9 @@ function updateBubblesContext() {
 
   // F-Tag Prevention FAB is gated per-facility by the module-status endpoint.
   updateFtagModuleStatus();
+
+  // Managed Care FAB has the same per-facility gate.
+  updateMcModuleStatus();
 }
 
 // Per-facility cache of the F-Tag module flag so navigation within the same
@@ -261,6 +288,87 @@ function retryFtagModuleStatus(attempt = 0) {
   }
   if (attempt >= 10) return; // ~5s of retries at 500ms
   setTimeout(() => retryFtagModuleStatus(attempt + 1), 500);
+}
+
+// ---- Managed Care FAB gating (same model as F-Tag above) ----
+const _mcModuleStatusCache = new Map();
+
+async function updateMcModuleStatus() {
+  const btn = document.getElementById('super-mc-action');
+  if (!btn) return;
+
+  let facilityName, orgSlug;
+  try {
+    facilityName = getChatFacilityInfo();
+    orgSlug = getOrg()?.org;
+  } catch (_) { /* fall through */ }
+
+  if (!facilityName || !orgSlug) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  const key = `${orgSlug}::${facilityName}`;
+  if (_mcModuleStatusCache.has(key)) {
+    btn.style.display = _mcModuleStatusCache.get(key) ? '' : 'none';
+    return;
+  }
+
+  try {
+    const enabled = await window.RecertAPI.moduleStatus({ facilityName, orgSlug });
+    _mcModuleStatusCache.set(key, enabled);
+    btn.style.display = enabled ? '' : 'none';
+  } catch (err) {
+    console.warn('[ManagedCare] module-status check failed:', err);
+    btn.style.display = 'none';
+  }
+}
+
+function retryMcModuleStatus(attempt = 0) {
+  let hasFacility = false;
+  try { hasFacility = !!(getChatFacilityInfo() && getOrg()?.org); } catch (_) {}
+  if (hasFacility) {
+    updateMcModuleStatus();
+    return;
+  }
+  if (attempt >= 10) return; // ~5s of retries at 500ms
+  setTimeout(() => retryMcModuleStatus(attempt + 1), 500);
+}
+
+// ---- Managed Care run tracking → badge + toasts ----
+let _mcTrackingInitialized = false;
+
+function initMcRunTracking(attempt = 0) {
+  if (_mcTrackingInitialized) return;
+  let orgSlug = null;
+  try { orgSlug = getOrg()?.org; } catch (_) {}
+  if (!orgSlug) {
+    if (attempt < 10) setTimeout(() => initMcRunTracking(attempt + 1), 500);
+    return;
+  }
+  if (!window.McRunTracker) return;
+  _mcTrackingInitialized = true;
+
+  window.McRunTracker.init(orgSlug);
+  window.McRunTracker.subscribe(({ inFlight, unseenDone, transitions }) => {
+    const badge = document.getElementById('super-mc-badge');
+    if (badge) {
+      const n = inFlight + unseenDone;
+      badge.style.display = n ? '' : 'none';
+      badge.textContent = String(n);
+      badge.classList.toggle('super-dial__action-badge--running', inFlight > 0);
+    }
+    for (const t of transitions) {
+      // Tray is the durable answer; the toast is a bonus. No patient name in
+      // the toast — the list row carries it; keeping it PHI-free by design.
+      if (t.status === 'completed') {
+        window.SuperToast?.success('A clinical update is ready — open Managed Care to view it');
+      } else {
+        window.SuperToast?.error('A clinical update failed — open Managed Care to retry');
+      }
+      window.SuperAnalytics?.track('mc_run_completed_toast', { status: t.status });
+    }
+  });
 }
 
 // Module-level hasDragged so the main button click handler can read it
@@ -490,6 +598,77 @@ const QMBoardLauncher = {
       this._preactUnmount = () => render(null, overlayEl);
     } catch (err) {
       console.error('[QMBoard] Failed to load module:', err);
+      overlayEl.remove();
+      this._overlayEl = null;
+    }
+  },
+
+  close() {
+    if (this._escapeHandler) {
+      document.removeEventListener('keydown', this._escapeHandler);
+      this._escapeHandler = null;
+    }
+    if (this._preactUnmount) {
+      this._preactUnmount();
+      this._preactUnmount = null;
+    }
+    if (this._overlayEl) {
+      this._overlayEl.remove();
+      this._overlayEl = null;
+    }
+  },
+
+  isOpen() { return !!this._overlayEl; }
+};
+
+// Managed Care Launcher — dynamic import pattern (same as QMBoardLauncher).
+// Two doors, one panel: the FAB opens it unscoped, the resident-header button
+// passes { patientId, patientName } to scope it to one patient.
+const ManagedCareLauncher = {
+  _overlayEl: null,
+  _preactUnmount: null,
+
+  async open(opts = {}) {
+    if (this._overlayEl) return;
+
+    let facilityName, orgSlug;
+    try {
+      const orgResponse = getOrg();
+      orgSlug = orgResponse?.org;
+      facilityName = getChatFacilityInfo();
+    } catch (e) {
+      console.error('[ManagedCare] Could not get org/facility:', e);
+    }
+
+    const overlayEl = document.createElement('div');
+    overlayEl.id = 'mc-panel-overlay-root';
+    document.body.appendChild(overlayEl);
+    this._overlayEl = overlayEl;
+
+    this._escapeHandler = (e) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this._escapeHandler);
+
+    try {
+      const [{ render, h }, { ManagedCarePanel }] = await Promise.all([
+        import('preact'),
+        import('../modules/managed-care/ManagedCarePanel.jsx')
+      ]);
+
+      render(
+        h(ManagedCarePanel, {
+          orgSlug: orgSlug || '',
+          facilityName: facilityName || '',
+          patientId: opts.patientId || null,
+          patientName: opts.patientName || null,
+          source: opts.source || 'fab',
+          onClose: () => this.close()
+        }),
+        overlayEl
+      );
+
+      this._preactUnmount = () => render(null, overlayEl);
+    } catch (err) {
+      console.error('[ManagedCare] Failed to load module:', err);
       overlayEl.remove();
       this._overlayEl = null;
     }
@@ -964,6 +1143,7 @@ window.updateBubblesContext = updateBubblesContext;
 window.ChatOverlayLauncher = ChatOverlayLauncher;
 window.CoveragePanelLauncher = CoveragePanelLauncher;
 window.QMBoardLauncher = QMBoardLauncher;
+window.ManagedCareLauncher = ManagedCareLauncher;
 window.FTagPreventionLauncher = FTagPreventionLauncher;
 window.TwentyFourHourReportLauncher = TwentyFourHourReportLauncher;
 window.FeedbackLauncher = FeedbackLauncher;
