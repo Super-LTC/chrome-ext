@@ -821,7 +821,8 @@ function injectBadge(questionEl, result) {
     case 'dismissed':
       if (result.userDecision?.decision === 'disagree') {
         badge.classList.add('super-badge--mismatch', 'super-badge--dismissed', 'super-badge--disagreed');
-        badge.innerHTML = `<span class="super-badge__icon">&#10007;</span> Dismissed`;
+        const hasNote = !!(result.userDecision?.note && String(result.userDecision.note).trim());
+        badge.innerHTML = `<span class="super-badge__icon">&#10007;</span> Dismissed${hasNote ? ' <span class="super-badge__note-cue" aria-hidden="true">&#128172;</span>' : ''}`;
       } else {
         badge.classList.add('super-badge--match', 'super-badge--dismissed');
         badge.innerHTML = `<span class="super-badge__icon">&#10003;</span> Super: ${answerText}`;
@@ -839,6 +840,12 @@ function injectBadge(questionEl, result) {
     });
     showPopover(badge, result);
   });
+
+  // For items the user disagreed with, hovering the badge reveals the reason
+  // they left (with inline edit). Note may be empty if they cleared it.
+  if (result.status === 'dismissed' && result.userDecision?.decision === 'disagree') {
+    attachDismissTooltip(badge, result);
+  }
 
   // Find the best place to insert the badge based on question type
   const questionType = questionEl.getAttribute('data-questiontype');
@@ -875,6 +882,189 @@ function injectBadge(questionEl, result) {
   // Uses QueryBadges module which shows status if query exists, or "Query" button if not
   if (result.mdsItem && result.mdsItem.startsWith('I')) {
     QueryBadges.injectQueryBadge(questionEl, result, badge);
+  }
+}
+
+// ============================================
+// Dismissal Comment Tooltip (hover to view, inline edit)
+// ============================================
+// A single shared floating card, anchored under the hovered "Dismissed"
+// badge. Shows the reason the user left when they disagreed, with a light
+// inline edit. The note round-trips from the server, so it survives reloads.
+let dismissTipEl = null;
+let dismissTipHideTimer = null;
+
+function attachDismissTooltip(badge, result) {
+  badge.addEventListener('mouseenter', () => showDismissTooltip(badge, result));
+  badge.addEventListener('mouseleave', () => scheduleDismissTooltipHide());
+}
+
+function ensureDismissTipEl() {
+  if (dismissTipEl) return dismissTipEl;
+  const el = document.createElement('div');
+  el.className = 'super-dismiss-tip';
+  el.style.display = 'none';
+  // Keep the card open while the pointer is over it (so Edit is clickable);
+  // hide once the pointer leaves both the badge and the card.
+  el.addEventListener('mouseenter', () => {
+    if (dismissTipHideTimer) { clearTimeout(dismissTipHideTimer); dismissTipHideTimer = null; }
+  });
+  el.addEventListener('mouseleave', () => scheduleDismissTooltipHide());
+  document.body.appendChild(el);
+  dismissTipEl = el;
+  return el;
+}
+
+function scheduleDismissTooltipHide() {
+  if (dismissTipHideTimer) clearTimeout(dismissTipHideTimer);
+  // Don't auto-hide while the user is actively editing the note.
+  dismissTipHideTimer = setTimeout(() => {
+    if (dismissTipEl && dismissTipEl.querySelector('.super-dismiss-tip__input')) return;
+    hideDismissTooltip();
+  }, 200);
+}
+
+function hideDismissTooltip() {
+  if (dismissTipHideTimer) { clearTimeout(dismissTipHideTimer); dismissTipHideTimer = null; }
+  if (dismissTipEl) dismissTipEl.style.display = 'none';
+}
+
+function showDismissTooltip(badge, result) {
+  if (dismissTipHideTimer) { clearTimeout(dismissTipHideTimer); dismissTipHideTimer = null; }
+  const el = ensureDismissTipEl();
+  renderDismissTipView(el, result);
+  el.style.display = 'block';
+  positionDismissTip(el, badge);
+}
+
+function positionDismissTip(el, badge) {
+  const rect = badge.getBoundingClientRect();
+  el.style.position = 'fixed';
+  el.style.visibility = 'hidden';
+  el.style.display = 'block';
+  const tipRect = el.getBoundingClientRect();
+
+  let top = rect.bottom + 8;
+  let left = rect.left;
+
+  const maxLeft = window.innerWidth - tipRect.width - 12;
+  if (left > maxLeft) left = Math.max(12, maxLeft);
+  if (left < 12) left = 12;
+
+  // Flip above the badge if there isn't room below.
+  if (top + tipRect.height > window.innerHeight - 12) {
+    const above = rect.top - tipRect.height - 8;
+    if (above > 12) top = above;
+  }
+
+  el.style.top = `${top}px`;
+  el.style.left = `${left}px`;
+  el.style.visibility = 'visible';
+}
+
+function renderDismissTipView(el, result) {
+  const note = (result.userDecision?.note || '').trim();
+  el.innerHTML = `
+    <div class="super-dismiss-tip__header">
+      <span class="super-dismiss-tip__title">Your reason</span>
+      <!-- NO_TRACK: switches the dismissal tooltip into edit mode; no decision change yet -->
+      <button class="super-dismiss-tip__edit" type="button">Edit</button>
+    </div>
+    <div class="super-dismiss-tip__body">${note ? escapeHTML(note) : '<em>No reason given.</em>'}</div>
+  `;
+  el.querySelector('.super-dismiss-tip__edit')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    renderDismissTipEdit(el, result);
+  });
+}
+
+function renderDismissTipEdit(el, result) {
+  const note = (result.userDecision?.note || '').trim();
+  el.innerHTML = `
+    <div class="super-dismiss-tip__header">
+      <span class="super-dismiss-tip__title">Edit your reason</span>
+    </div>
+    <textarea class="super-dismiss-tip__input" rows="3" placeholder="Describe your reasoning..."></textarea>
+    <div class="super-dismiss-tip__error" style="display:none;"></div>
+    <div class="super-dismiss-tip__actions">
+      <!-- NO_TRACK: discards the inline edit; no decision change -->
+      <button class="super-dismiss-tip__cancel" type="button">Cancel</button>
+      <!-- NO_TRACK: saveDismissTooltipEdit() fires mds_item_decision on success -->
+      <button class="super-dismiss-tip__save" type="button">Save</button>
+    </div>
+  `;
+  const textarea = el.querySelector('.super-dismiss-tip__input');
+  if (textarea) {
+    textarea.value = note;
+    textarea.focus();
+    // Put the cursor at the end.
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }
+
+  el.querySelector('.super-dismiss-tip__cancel')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    renderDismissTipView(el, result);
+  });
+  el.querySelector('.super-dismiss-tip__save')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    saveDismissTooltipEdit(el, result, textarea.value.trim());
+  });
+  textarea?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      saveDismissTooltipEdit(el, result, textarea.value.trim());
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      renderDismissTipView(el, result);
+    }
+  });
+}
+
+async function saveDismissTooltipEdit(el, result, newNote) {
+  const saveBtn = el.querySelector('.super-dismiss-tip__save');
+  const cancelBtn = el.querySelector('.super-dismiss-tip__cancel');
+  const errEl = el.querySelector('.super-dismiss-tip__error');
+  if (errEl) errEl.style.display = 'none';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<span class="super-btn__spinner"></span> Save'; }
+  if (cancelBtn) cancelBtn.disabled = true;
+
+  try {
+    // Re-POST the same disagree decision with the new note; the backend
+    // upserts by (assessment, item, column), so this overwrites in place.
+    await postItemDecision(result, 'disagree', newNote);
+
+    // Keep in-memory state in sync so the note persists across re-renders.
+    result.userDecision = { ...(result.userDecision || {}), decision: 'disagree', note: newNote };
+    const decisionKey = result.column ? `${result.mdsItem}${result.column}` : result.mdsItem;
+    SuperOverlay.serverDecisions[decisionKey] = {
+      ...(SuperOverlay.serverDecisions[decisionKey] || {}),
+      decision: 'disagree',
+      note: newNote,
+    };
+
+    // Re-render the badge so the 💬 cue reflects whether a note now exists.
+    // injectBadge re-attaches the hover handlers to the fresh badge element.
+    injectBadge(result.element, result);
+
+    window.SuperAnalytics?.track?.('mds_item_decision', {
+      item_code: String(result.mdsItem || ''),
+      column: String(result.column || ''),
+      decision: 'disagree',
+      has_reason: !!(newNote && newNote.length > 0),
+      surface: 'mds_dismiss_tooltip',
+    });
+
+    renderDismissTipView(el, result);
+  } catch (err) {
+    console.error('Super LTC: Failed to update dismissal comment:', err);
+    window.SuperAnalytics?.track?.('error_shown', {
+      surface: 'mds_dismiss_tooltip',
+      error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+      error_type: 'api_error',
+    });
+    if (errEl) { errEl.textContent = err.message || 'Failed to save'; errEl.style.display = 'block'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Save'; }
+    if (cancelBtn) cancelBtn.disabled = false;
   }
 }
 
