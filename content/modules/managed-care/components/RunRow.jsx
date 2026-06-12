@@ -5,11 +5,12 @@ import { isInProgress, isStuck, STATUS_LABELS } from '../lib/recert-utils.js';
 import { track } from '../../../utils/analytics.js';
 
 export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) => {
+  const [opening, setOpening] = useState(false);
   const [busy, setBusy] = useState(false);
   const stuck = isStuck(run);
 
   const openOnDashboard = async () => {
-    setBusy(true);
+    setOpening(true);
     try {
       const url = await RecertAPI.mintViewLink(run.id); // mint on click, never cached
       track('mc_view_link_opened');
@@ -20,7 +21,7 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
       window.open(url, 'super-mc-viewer', `noopener,width=${w},height=${h},left=${(window.screen.availWidth - w) / 2},top=${(window.screen.availHeight - h) / 2}`);
     } catch (e) {
       window.SuperToast?.error(e.message || 'Could not open — try again');
-    } finally { setBusy(false); }
+    } finally { setOpening(false); }
   };
 
   const archive = async () => {
@@ -30,7 +31,7 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
       track('mc_run_archived', { from_status: run.status });
       onArchived(run.id);
     } catch (e) {
-      window.SuperToast?.error(e.message || 'Archive failed');
+      window.SuperToast?.error(e.message || 'Could not hide this run');
     } finally { setBusy(false); }
   };
 
@@ -40,16 +41,24 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
 
   return (
     <div className={`mc-run-row mc-run-row${mod}`}>
-      <div className="mc-run-row__main">
-        <span className="mc-run-row__patient">{run.patientName}</span>
-        {run.payerName && <span className="mc-run-row__payer">{run.payerName}</span>}
-        {showFacility && (run.facilityName || run.locationId) && (
-          <span className="mc-run-row__facility-chip">{run.facilityName || run.locationId}</span>
-        )}
-        {showCreator && run.createdByName && <span className="mc-run-row__creator">{run.createdByName}</span>}
-        <span className="mc-run-row__status">
-          {stuck ? `Taking longer than expected (started ${minutesAgo(run.createdAt)}m ago)` : STATUS_LABELS[run.status] || run.status}
-        </span>
+      <div className="mc-run-row__body">
+        <div className="mc-run-row__line1">
+          <span className="mc-run-row__patient">{run.patientName}</span>
+          {run.payerName && <span className="mc-run-row__payer">{run.payerName}</span>}
+          {/* Only a real facility name is worth a chip — never the internal locationId. */}
+          {showFacility && run.facilityName && (
+            <span className="mc-run-row__facility-chip">{run.facilityName}</span>
+          )}
+        </div>
+        <div className="mc-run-row__line2">
+          <span className="mc-run-row__time">{fmtRunTime(run.createdAt)}</span>
+          {showCreator && run.createdByName && (
+            <span className="mc-run-row__creator">{run.createdByName}</span>
+          )}
+          <span className="mc-run-row__status">
+            {stuck ? `Taking longer than expected (started ${minutesAgo(run.createdAt)}m ago)` : STATUS_LABELS[run.status] || run.status}
+          </span>
+        </div>
         {run.status === 'failed' && run.errorMessage && (
           <div className="mc-run-row__error">{run.errorMessage}</div>
         )}
@@ -57,7 +66,10 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
       <div className="mc-run-row__actions">
         {run.status === 'completed' && (
           // NO_TRACK — handler emits mc_view_link_opened
-          <button disabled={busy} onClick={openOnDashboard}>Open on dashboard →</button>
+          <button className="mc-run-row__primary" disabled={opening} onClick={openOnDashboard}>
+            {opening ? <span className="mc-btn-spinner" aria-hidden="true" /> : null}
+            {opening ? 'Opening…' : 'Open on dashboard →'}
+          </button>
         )}
         {run.status === 'failed' && (
           // NO_TRACK — retry flow emits mc_run_retried on completion
@@ -67,9 +79,26 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
           // NO_TRACK — handler emits mc_run_archived
           <button disabled={busy} onClick={archive}>Archive</button>
         )}
+        {run.status === 'completed' && (
+          // NO_TRACK — handler emits mc_run_archived
+          <button className="mc-run-row__hide" disabled={busy} onClick={archive} title="Remove from this list">
+            Hide
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
 const minutesAgo = (iso) => Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+
+// Today → "3:42 PM"; everything older → "Jun 8, 3:42 PM".
+function fmtRunTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const now = new Date();
+  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  if (sameDay) return time;
+  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${time}`;
+}

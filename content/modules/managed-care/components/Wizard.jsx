@@ -499,26 +499,43 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
       {step === 3 && (
         <div className="mc-wizard__step">
           <div className="mc-wizard__section">
-            <div className="mc-wizard__section-title">Review</div>
-            <div className="mc-wizard__review">
-              <div><span className="mc-wizard__review-label">Payer:</span>{config.payerName}</div>
-              <div><span className="mc-wizard__review-label">Days requested:</span>{config.daysRequested}</div>
-              <div><span className="mc-wizard__review-label">Document window:</span>{fmtDate(config.documentStartDate)} → {fmtDate(config.documentEndDate)}</div>
-              <div>
-                <span className="mc-wizard__review-label">Documents:</span>
-                {config.requestedDocumentTypes.length === allTypes.length
-                  ? `All types (${allTypes.length})`
-                  : `${config.requestedDocumentTypes.length} of ${allTypes.length} types`}
+            <div className="mc-wizard__section-title">Review & Generate</div>
+            <div className="mc-wizard__section-hint">Double-check the request, then generate the clinical update.</div>
+            <div className="mc-review-grid">
+              <div className="mc-review-item">
+                <div className="mc-review-item__label">Payer</div>
+                <div className="mc-review-item__value">{config.payerName}</div>
+              </div>
+              <div className="mc-review-item">
+                <div className="mc-review-item__label">Days requested</div>
+                <div className="mc-review-item__value">{config.daysRequested} days</div>
+              </div>
+              <div className="mc-review-item mc-review-item--wide">
+                <div className="mc-review-item__label">Document window</div>
+                <div className="mc-review-item__value">{fmtDate(config.documentStartDate)} → {fmtDate(config.documentEndDate)}</div>
+              </div>
+              <div className="mc-review-item">
+                <div className="mc-review-item__label">Documents</div>
+                <div className="mc-review-item__value">
+                  {config.requestedDocumentTypes.length === allTypes.length
+                    ? `All types (${allTypes.length})`
+                    : `${config.requestedDocumentTypes.length} of ${allTypes.length} types`}
+                </div>
+              </div>
+              <div className="mc-review-item">
+                <div className="mc-review-item__label">MDS assessment</div>
+                <div className="mc-review-item__value">
+                  {includeMds && config.mdsSections.length ? `Sections ${config.mdsSections.join(', ')}` : 'Not included'}
+                </div>
               </div>
               {Object.keys(config.documentTypeRangeOverrides).length > 0 && (
-                <div>
-                  <span className="mc-wizard__review-label">Custom ranges:</span>
-                  {Object.entries(config.documentTypeRangeOverrides)
-                    .map(([t, r]) => `${displayNames[t] || t} (${r.start || '…'} → ${r.end || '…'})`).join(', ')}
+                <div className="mc-review-item mc-review-item--wide">
+                  <div className="mc-review-item__label">Custom date ranges</div>
+                  <div className="mc-review-item__value">
+                    {Object.entries(config.documentTypeRangeOverrides)
+                      .map(([t, r]) => `${displayNames[t] || t}: ${fmtDate(r.start)} → ${fmtDate(r.end)}`).join(' · ')}
+                  </div>
                 </div>
-              )}
-              {includeMds && config.mdsSections.length > 0 && (
-                <div><span className="mc-wizard__review-label">MDS sections:</span>{config.mdsSections.join(', ')}</div>
               )}
             </div>
             {error && <div className="mc-wizard__error">{error}</div>}
