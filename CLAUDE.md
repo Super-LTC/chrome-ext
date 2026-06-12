@@ -67,6 +67,23 @@ npm run build
 
 **Important:** Always load from `dist/`, never from the source folder.
 
+### Testing Worktree Builds (Conductor / multiple branches)
+
+Each worktree builds its own `dist/`, and Chrome treats every "Load unpacked" path as a separate extension — with a **different extension ID** (derived from the folder path). Extension ID changes break `chrome.storage` continuity (auth token = logged out) and can break OAuth. Also, two enabled copies inject duplicate content scripts into PCC.
+
+**Preferred: one symlink, one extension entry.** Chrome is loaded (once) against `~/super-ext-active`, a symlink switched with the `super-ext` command (`~/bin/super-ext`):
+
+```bash
+super-ext              # show current target + list worktrees
+super-ext lagos-v1     # point at ~/conductor/workspaces/chrome-ext/lagos-v1/dist
+super-ext main         # point at the main checkout's dist/
+# then: chrome://extensions → Reload on the Super LTC entry → refresh PCC
+```
+
+One stable extension ID, auth survives switching, no duplicate injection.
+
+**If you load multiple dists side by side instead:** keep exactly one enabled at a time (toggle, don't delete), and tell them apart by the path on the extension card — the names are all identical.
+
 ---
 
 ## 📂 File Organization
