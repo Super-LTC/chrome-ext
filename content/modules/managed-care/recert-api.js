@@ -15,11 +15,12 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 // Background failure envelope is { success: false, error, status, body } —
-// keep status on the thrown error so callers can special-case 403 (module
-// off / no access) with a clear message.
+// keep status + the backend's `required` field list on the thrown error so
+// the wizard can render field-level hints and a clear 403 state.
 function apiError(res, fallback) {
   const err = new Error(res?.error || fallback);
   err.status = res?.status;
+  err.required = res?.body?.required;
   return err;
 }
 
@@ -56,6 +57,40 @@ const RecertAPI = {
     });
     if (!res?.success) throw apiError(res, 'Could not start a clinical update');
     return res.data?.url;
+  },
+
+  // ---- In-extension create wizard (the dashboard handoff is for OPENING
+  // runs after the fact; creation lives here in the extension) ----
+
+  // patientId = PCC external client id; drives the prefill block.
+  async formData({ orgSlug, patientId }) {
+    const res = await apiRequest(`/api/extension/recertifications/form-data?${qs({ orgSlug, patientId })}`, { method: 'GET' });
+    if (!res?.success) throw apiError(res, 'Failed to load form data');
+    return res.data?.formData;
+  },
+
+  async create(body) {
+    const res = await apiRequest('/api/extension/recertifications', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (!res?.success) throw apiError(res, 'Failed to create clinical update');
+    return res.data?.recertification;
+  },
+
+  async generate(id) {
+    const res = await apiRequest(`/api/extension/recertifications/${id}/generate`, { method: 'POST' });
+    if (!res?.success) throw apiError(res, 'Failed to start generation');
+    return true;
+  },
+
+  async savePreset({ orgSlug, name, ...config }) {
+    const res = await apiRequest('/api/extension/recertifications/presets', {
+      method: 'POST',
+      body: JSON.stringify({ orgSlug, name, ...config }),
+    });
+    if (!res?.success) throw new Error(res?.error || 'Failed to save preset');
+    return res.data?.preset;
   },
 
   async archive(id) {
