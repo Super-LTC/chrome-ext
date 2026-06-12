@@ -66,6 +66,22 @@ export function groupByDay(runs, now = new Date()) {
     .map((label) => ({ label, runs: buckets[label] }));
 }
 
+// Tray layout: Today is always shown (empty state when quiet), the rest of
+// the last 7 days sits below it, anything older collapses into an accordion.
+export function groupForTray(runs, now = new Date()) {
+  const todayKey = localDayKey(now);
+  const weekCutoff = new Date(now);
+  weekCutoff.setDate(weekCutoff.getDate() - 7);
+  const out = { today: [], week: [], older: [] };
+  for (const run of runs) {
+    const d = new Date(run.createdAt);
+    if (localDayKey(d) === todayKey) out.today.push(run);
+    else if (d >= weekCutoff) out.week.push(run);
+    else out.older.push(run);
+  }
+  return out;
+}
+
 export function runBadgeCounts(runs, unseenIds) {
   let inFlight = 0, unseenDone = 0;
   for (const run of runs) {

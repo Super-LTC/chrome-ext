@@ -45,9 +45,10 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived }) => {
         <div className="mc-run-row__line1">
           <span className="mc-run-row__patient">{run.patientName}</span>
           {run.payerName && <span className="mc-run-row__payer">{run.payerName}</span>}
-          {/* Only a real facility name is worth a chip — never the internal locationId. */}
-          {showFacility && run.facilityName && (
-            <span className="mc-run-row__facility-chip">{run.facilityName}</span>
+          {/* Only a real facility name is worth a chip — never the internal locationId.
+              (Backend ask pending: include facilityName/locationName on list rows.) */}
+          {showFacility && (run.facilityName || run.locationName) && (
+            <span className="mc-run-row__facility-chip">{run.facilityName || run.locationName}</span>
           )}
         </div>
         <div className="mc-run-row__line2">

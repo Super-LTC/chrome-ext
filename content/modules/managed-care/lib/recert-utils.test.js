@@ -1,7 +1,7 @@
 // content/modules/managed-care/lib/recert-utils.test.js
 import { describe, it, expect } from 'vitest';
 import {
-  resolveRelativeDate, isInProgress, isStuck, groupByDay, runBadgeCounts
+  resolveRelativeDate, isInProgress, isStuck, groupByDay, groupForTray, runBadgeCounts
 } from './recert-utils.js';
 
 const NOW = new Date('2026-06-11T18:00:00Z');
@@ -48,6 +48,24 @@ describe('groupByDay', () => {
   });
   it('omits empty groups', () => {
     expect(groupByDay([{ id: 'a', createdAt: '2026-06-11T14:00:00Z' }], NOW).map(g => g.label)).toEqual(['Today']);
+  });
+});
+
+describe('groupForTray', () => {
+  it('splits today / this week / older', () => {
+    const runs = [
+      { id: 'a', createdAt: '2026-06-11T14:00:00Z' },  // today
+      { id: 'b', createdAt: '2026-06-08T10:00:00Z' },  // 3 days ago → this week
+      { id: 'c', createdAt: '2026-05-20T08:00:00Z' },  // weeks ago → older
+      { id: 'd', createdAt: '2026-06-10T23:00:00Z' },  // yesterday → this week
+    ];
+    const tray = groupForTray(runs, NOW);
+    expect(tray.today.map(r => r.id)).toEqual(['a']);
+    expect(tray.week.map(r => r.id)).toEqual(['b', 'd']);
+    expect(tray.older.map(r => r.id)).toEqual(['c']);
+  });
+  it('handles empty list', () => {
+    expect(groupForTray([], NOW)).toEqual({ today: [], week: [], older: [] });
   });
 });
 

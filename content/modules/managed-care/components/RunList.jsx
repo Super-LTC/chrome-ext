@@ -1,7 +1,7 @@
 // content/modules/managed-care/components/RunList.jsx
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { RecertAPI } from '../recert-api.js';
-import { isInProgress, groupByDay } from '../lib/recert-utils.js';
+import { isInProgress, groupForTray } from '../lib/recert-utils.js';
 import { RunRow } from './RunRow.jsx';
 import { track } from '../../../utils/analytics.js';
 
@@ -22,6 +22,32 @@ const ListSkeleton = () => (
   </div>
 );
 
+// Calm "nothing today" state — a clipboard with a sun peeking over it.
+const EmptyToday = () => (
+  <div className="mc-empty-today">
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+      <circle cx="40" cy="14" r="7" fill="#fde68a" />
+      <g stroke="#f59e0b" stroke-width="2" stroke-linecap="round">
+        <line x1="40" y1="2.5" x2="40" y2="5" />
+        <line x1="40" y1="23" x2="40" y2="25.5" />
+        <line x1="28.5" y1="14" x2="31" y2="14" />
+        <line x1="49" y1="14" x2="51.5" y2="14" />
+        <line x1="32" y1="6" x2="33.8" y2="7.8" />
+        <line x1="46.2" y1="20.2" x2="48" y2="22" />
+        <line x1="48" y1="6" x2="46.2" y2="7.8" />
+        <line x1="33.8" y1="20.2" x2="32" y2="22" />
+      </g>
+      <rect x="10" y="14" width="26" height="36" rx="4" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2" />
+      <rect x="17" y="10" width="12" height="8" rx="2" fill="#a7f3d0" stroke="#6ee7b7" stroke-width="2" />
+      <line x1="16" y1="26" x2="30" y2="26" stroke="#6ee7b7" stroke-width="2" stroke-linecap="round" />
+      <line x1="16" y1="33" x2="30" y2="33" stroke="#6ee7b7" stroke-width="2" stroke-linecap="round" />
+      <line x1="16" y1="40" x2="24" y2="40" stroke="#6ee7b7" stroke-width="2" stroke-linecap="round" />
+    </svg>
+    <div className="mc-empty-today__title">No clinical updates today</div>
+    <div className="mc-empty-today__hint">Start one with “New Clinical Update” on a resident's page.</div>
+  </div>
+);
+
 const PAGE_SIZE = 50;
 // Pipeline runs take minutes — 15s steady-state, 3s only in the short window
 // after a Generate while the nurse is watching the new row.
@@ -39,6 +65,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
     () => localStorage.getItem(LOCATION_MODE_KEY) || 'this'
   );
   const [mineOnly, setMineOnly] = useState(true);
+  const [olderOpen, setOlderOpen] = useState(false);
   const runsRef = useRef(runs);
   runsRef.current = runs;
   const lastCreateRef = useRef(0);
@@ -137,7 +164,16 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
   if (runs === null) return <ListSkeleton />;
 
   const showFacility = !patientId && locationMode === 'all';
-  const groups = groupByDay(runs);
+  const tray = groupForTray(runs);
+  const rowFor = (run) => (
+    <RunRow
+      key={run.id}
+      run={run}
+      showFacility={showFacility}
+      showCreator={!mineOnly}
+      onArchived={onArchived}
+    />
+  );
 
   return (
     <div className="mc-run-list">
@@ -166,22 +202,29 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
         </div>
       )}
 
-      {groups.length === 0 && <div className="mc-list-empty">No clinical updates yet</div>}
+      <div className="mc-run-group">
+        <div className="mc-run-group__label">Today</div>
+        {tray.today.length ? tray.today.map(rowFor) : <EmptyToday />}
+      </div>
 
-      {groups.map((group) => (
-        <div className="mc-run-group" key={group.label}>
-          <div className="mc-run-group__label">{group.label}</div>
-          {group.runs.map((run) => (
-            <RunRow
-              key={run.id}
-              run={run}
-              showFacility={showFacility}
-              showCreator={!mineOnly}
-              onArchived={onArchived}
-            />
-          ))}
+      {tray.week.length > 0 && (
+        <div className="mc-run-group">
+          <div className="mc-run-group__label">Earlier this week</div>
+          {tray.week.map(rowFor)}
         </div>
-      ))}
+      )}
+
+      {tray.older.length > 0 && (
+        <div className="mc-run-group">
+          {/* NO_TRACK — list disclosure, not a feature signal */}
+          <button className="mc-older-toggle" onClick={() => setOlderOpen(!olderOpen)}>
+            <span className={`mc-older-toggle__chevron ${olderOpen ? 'mc-older-toggle__chevron--open' : ''}`}>›</span>
+            Older
+            <span className="mc-older-toggle__count">{tray.older.length}</span>
+          </button>
+          {olderOpen && tray.older.map(rowFor)}
+        </div>
+      )}
 
       {hasMore && (
         // NO_TRACK — pagination, not a feature signal
