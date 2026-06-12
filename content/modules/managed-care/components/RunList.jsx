@@ -23,7 +23,11 @@ const ListSkeleton = () => (
 );
 
 const PAGE_SIZE = 50;
-const REFRESH_MS = 10000;
+// Pipeline runs take minutes — 15s steady-state, 3s only in the short window
+// after a Generate while the nurse is watching the new row.
+const REFRESH_MS = 15000;
+const FAST_REFRESH_MS = 3000;
+const FAST_WINDOW_MS = 30000;
 const LOCATION_MODE_KEY = 'super-mc-location-mode';
 
 export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refreshToken }) => {
@@ -37,6 +41,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refr
   const [mineOnly, setMineOnly] = useState(true);
   const runsRef = useRef(runs);
   runsRef.current = runs;
+  const lastCreateRef = useRef(0);
 
   const listParams = useCallback((offset = 0) => ({
     orgSlug,
@@ -60,15 +65,42 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refr
   // Initial fetch + refetch on toggle change or external refresh request.
   useEffect(() => { fetchRuns(); }, [fetchRuns, refreshToken]);
 
-  // Poll while anything visible is in flight; also refetch on tracker transitions.
+  // refreshToken bumps when a Generate just happened — open the fast window.
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (runsRef.current?.some((r) => isInProgress(r.status))) fetchRuns();
-    }, REFRESH_MS);
+    if (refreshToken > 0) lastCreateRef.current = Date.now();
+  }, [refreshToken]);
+
+  // Poll while anything visible is in flight; re-evaluated every tick, paused
+  // in hidden tabs (catch-up fetch on return), 3s right after a Generate then
+  // 15s. Also refetch on tracker transitions.
+  useEffect(() => {
+    let timer;
+    const schedule = () => {
+      const fast = Date.now() - lastCreateRef.current < FAST_WINDOW_MS;
+      timer = setTimeout(() => {
+        if (document.visibilityState === 'visible'
+            && runsRef.current?.some((r) => isInProgress(r.status))) {
+          fetchRuns();
+        }
+        schedule();
+      }, fast ? FAST_REFRESH_MS : REFRESH_MS);
+    };
+    schedule();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible'
+          && runsRef.current?.some((r) => isInProgress(r.status))) {
+        fetchRuns();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
     const unsubscribe = window.McRunTracker?.subscribe(({ transitions }) => {
       if (transitions.length) fetchRuns();
     });
-    return () => { clearInterval(interval); unsubscribe?.(); };
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      unsubscribe?.();
+    };
   }, [fetchRuns]);
 
   const loadMore = async () => {

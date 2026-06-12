@@ -7,7 +7,11 @@ import { RecertAPI } from '../recert-api.js';
 import { isInProgress } from './recert-utils.js';
 
 const STORAGE_KEY = 'superMcRunTracker'; // { statuses: {id: status}, unseen: [id] }
-const POLL_MS = 10000;
+// The pipeline takes minutes — slow base cadence, with a short fast window
+// right after a Generate when the nurse is actually watching.
+const POLL_MS = 15000;
+const FAST_POLL_MS = 3000;
+const FAST_WINDOW_MS = 30000;
 
 export function diffTransitions(prevStatuses, runs) {
   const out = [];
@@ -30,6 +34,8 @@ export const RunTracker = {
   _listeners: new Set(),
   _orgSlug: null,
   _loaded: false,
+  _lastGenerateAt: 0,
+  _visWired: false,
 
   async init(orgSlug) {
     this._orgSlug = orgSlug;
@@ -39,6 +45,17 @@ export const RunTracker = {
       this._unseen = new Set(stored.unseen || []);
       this._loaded = true;
     }
+    // Pause polling in hidden tabs; resume (and catch up immediately) when
+    // the nurse comes back and something is still in flight.
+    if (!this._visWired && typeof document !== 'undefined') {
+      this._visWired = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible'
+            && Object.values(this._statuses).some(isInProgress)) {
+          this._startPolling();
+        }
+      });
+    }
     this._notify();
     if (Object.values(this._statuses).some(isInProgress)) this._startPolling();
   },
@@ -46,6 +63,7 @@ export const RunTracker = {
   // Call right after create+generate succeeds.
   track(run) {
     this._statuses[run.id] = run.status;
+    this._lastGenerateAt = Date.now();
     this._persist();
     this._notify();
     this._startPolling();
@@ -78,25 +96,38 @@ export const RunTracker = {
 
   _startPolling() {
     if (this._timer) return;
-    this._timer = setInterval(() => this._poll(), POLL_MS);
-    this._poll();
+    this._loop(0); // immediate first poll, then adaptive cadence
   },
 
-  async _poll() {
-    const trackedIds = Object.keys(this._statuses);
-    if (!trackedIds.some((id) => isInProgress(this._statuses[id]))) {
-      clearInterval(this._timer);
+  // setTimeout chain (not setInterval) so each round can pick its own delay:
+  // 3s while the nurse just hit Generate, 15s steady-state. Re-evaluates
+  // "anything still active?" after every response and stops when all
+  // tracked runs are terminal. Hidden tab → park; visibilitychange resumes.
+  _loop(delay) {
+    this._timer = setTimeout(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        this._timer = null;
+        return;
+      }
+      const stillActive = await this._poll();
       this._timer = null;
-      return;
-    }
+      if (!stillActive) return;
+      this._loop(Date.now() - this._lastGenerateAt < FAST_WINDOW_MS ? FAST_POLL_MS : POLL_MS);
+    }, delay);
+  },
+
+  // Returns whether any tracked run is still in progress (keep polling).
+  async _poll() {
+    if (!Object.values(this._statuses).some(isInProgress)) return false;
     const runs = await RecertAPI.list({ orgSlug: this._orgSlug, mine: true, limit: 50 });
-    if (!runs) return; // transient failure — keep polling
+    if (!runs) return true; // transient failure — keep polling
     const tracked = runs.filter((r) => r.id in this._statuses);
     const transitions = diffTransitions(this._statuses, tracked);
     for (const r of tracked) this._statuses[r.id] = r.status;
     for (const t of transitions) this._unseen.add(t.id);
     if (transitions.length) this._persist();
     this._notify(transitions, runs);
+    return Object.values(this._statuses).some(isInProgress);
   },
 
   _persist() {
