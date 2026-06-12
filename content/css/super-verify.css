@@ -7,3 +7,70 @@
  * QM visuals reuse the `qmc-` tone classes from css/qm-command-center.css;
  * new QM classes here are prefixed `svq-`.
  */
+
+/* --- Full-screen modal shell ------------------------------------------- */
+.sv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483600;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  background: rgba(15, 23, 42, 0.55);
+  overflow-y: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.sv-modal {
+  width: 100%;
+  max-width: 900px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+}
+
+.sv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+}
+
+.sv-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.sv-close {
+  appearance: none;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sv-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.sv-body {
+  padding: 22px;
+  overflow-y: auto;
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.5;
+}
