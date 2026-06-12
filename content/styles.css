@@ -117,6 +117,143 @@
   font-size: 10px;
 }
 
+.super-badge__note-cue {
+  font-size: 10px;
+  margin-left: 2px;
+  /* The badge itself is line-through + dimmed; keep the cue legible. */
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+/* ============================================
+   Dismissal Comment Tooltip (hover + inline edit)
+   ============================================ */
+.super-dismiss-tip {
+  position: fixed;
+  z-index: 100000;
+  width: 260px;
+  max-width: calc(100vw - 24px);
+  background: #ffffff;
+  border: 1px solid var(--super-gray-200, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.16);
+  padding: 10px 12px;
+  font-family: var(--super-font);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--super-gray-600, #334155);
+}
+
+.super-dismiss-tip__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.super-dismiss-tip__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--super-gray-500, #64748b);
+}
+
+.super-dismiss-tip__edit {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--super-font);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--super-primary, #6366f1);
+}
+
+.super-dismiss-tip__edit:hover {
+  text-decoration: underline;
+}
+
+.super-dismiss-tip__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--super-gray-600, #334155);
+}
+
+.super-dismiss-tip__body em {
+  color: var(--super-gray-400, #94a3b8);
+}
+
+.super-dismiss-tip__input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 56px;
+  padding: 6px 8px;
+  font-family: var(--super-font);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--super-gray-600, #334155);
+  border: 1px solid var(--super-gray-200, #e2e8f0);
+  border-radius: 6px;
+  outline: none;
+}
+
+.super-dismiss-tip__input:focus {
+  border-color: var(--super-primary, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.super-dismiss-tip__error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--super-mismatch, #dc2626);
+}
+
+.super-dismiss-tip__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.super-dismiss-tip__cancel,
+.super-dismiss-tip__save {
+  cursor: pointer;
+  font-family: var(--super-font);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.super-dismiss-tip__cancel {
+  background: var(--super-gray-100, #f1f5f9);
+  color: var(--super-gray-600, #334155);
+  border-color: var(--super-gray-200, #e2e8f0);
+}
+
+.super-dismiss-tip__cancel:hover {
+  background: var(--super-gray-200, #e2e8f0);
+}
+
+.super-dismiss-tip__save {
+  background: var(--super-primary, #6366f1);
+  color: #ffffff;
+}
+
+.super-dismiss-tip__save:hover {
+  filter: brightness(0.95);
+}
+
+.super-dismiss-tip__save:disabled,
+.super-dismiss-tip__cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ============================================
    Highlight Animation
    ============================================ */
