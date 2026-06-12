@@ -38,18 +38,22 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
     RecertAPI.formData({ orgSlug, patientId: targetPatientId })
       .then((data) => {
         setFd(data);
-        track('mc_wizard_opened', { prefilled: !!data?.managedCareStay });
+        track('mc_wizard_opened', { prefilled: !!data?.prefill });
         if (prefillConfig) {
           // Retry path: the failed run's stored config wins wholesale.
           setConfig({ ...EMPTY_CONFIG, ...prefillConfig });
-        } else if (data?.managedCareStay) {
-          const stay = data.managedCareStay;
+        } else if (data?.prefill) {
+          // Server-computed Step-1 autofill (handoff §3.2) — mirrors the
+          // dashboard's fallback chain so the two can't drift. Don't read
+          // managedCareStay directly for this.
+          const p = data.prefill;
           setConfig((c) => ({
             ...c,
-            payerName: stay.payerName || '',
-            daysRequested: stay.requestedDays ?? '',
-            documentStartDate: stay.authStartDate || '',
-            documentEndDate: stay.authEndDate || '',
+            payerName: p.payerName || '',
+            payerType: p.payerType || '',
+            daysRequested: p.daysRequested ?? 7,  // dashboard's hardcoded default
+            documentStartDate: p.documentStartDate || '',
+            documentEndDate: p.documentEndDate || '',
           }));
         }
       })
@@ -109,11 +113,24 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
   };
 
   const savePreset = async () => {
+    // Preset save requires non-empty documentTypes (handoff §3.7) — and the
+    // preset shape uses `documentTypes`, not the create body's
+    // `requestedDocumentTypes`.
+    if (!config.requestedDocumentTypes.length) {
+      window.SuperToast?.error('Pick at least one document type before saving a preset');
+      return;
+    }
     const name = window.prompt('Preset name:');
     if (!name) return;
     setSavingPreset(true);
     try {
-      await RecertAPI.savePreset({ orgSlug, name, ...cleanConfig(config) });
+      const body = { orgSlug, name, documentTypes: config.requestedDocumentTypes };
+      if (config.payerType) body.payerType = config.payerType;
+      if (config.daysRequested !== '') body.daysRequested = Number(config.daysRequested);
+      if (config.authorizationType) body.authorizationType = config.authorizationType;
+      if (Object.keys(config.documentTypeRangeOverrides).length) body.documentTypeRangeOverrides = config.documentTypeRangeOverrides;
+      if (config.mdsSections.length) body.mdsSections = config.mdsSections;
+      await RecertAPI.savePreset(body);
       track('mc_preset_saved');
       window.SuperToast?.success('Preset saved');
     } catch (e) {
@@ -197,7 +214,7 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
               <label>Preset</label>
               <select onChange={(e) => applyPreset(presets.find((p) => p.id === e.target.value))}>
                 <option value="">— None —</option>
-                {['org', 'personal'].map((scope) => {
+                {['org', 'user'].map((scope) => {
                   const scoped = presets.filter((p) => p.scope === scope);
                   return scoped.length ? (
                     <optgroup key={scope} label={scope === 'org' ? 'Organization' : 'Personal'}>
