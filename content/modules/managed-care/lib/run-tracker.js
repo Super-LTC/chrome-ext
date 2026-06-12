@@ -12,6 +12,9 @@ const STORAGE_KEY = 'superMcRunTracker'; // { statuses: {id: status}, unseen: [i
 const POLL_MS = 15000;
 const FAST_POLL_MS = 3000;
 const FAST_WINDOW_MS = 30000;
+// After launching the dashboard create wizard we don't know if/when the nurse
+// hits Generate over there — watch the mine=true list for new runs this long.
+const WATCH_NEW_MS = 10 * 60 * 1000;
 
 export function diffTransitions(prevStatuses, runs) {
   const out = [];
@@ -35,6 +38,7 @@ export const RunTracker = {
   _orgSlug: null,
   _loaded: false,
   _lastGenerateAt: 0,
+  _watchUntil: 0,
   _visWired: false,
 
   async init(orgSlug) {
@@ -66,6 +70,14 @@ export const RunTracker = {
     this._lastGenerateAt = Date.now();
     this._persist();
     this._notify();
+    this._startPolling();
+  },
+
+  // Runs are created in the REAL dashboard wizard now — after launching it,
+  // watch the mine=true list and auto-track any new in-progress run that
+  // appears, so badges/toasts work without the extension seeing the create.
+  watchForNew(durationMs = WATCH_NEW_MS) {
+    this._watchUntil = Date.now() + durationMs;
     this._startPolling();
   },
 
@@ -116,18 +128,32 @@ export const RunTracker = {
     }, delay);
   },
 
-  // Returns whether any tracked run is still in progress (keep polling).
+  // Returns whether to keep polling: any tracked run in progress, or we're
+  // inside the watch-for-new window after a dashboard wizard launch.
   async _poll() {
-    if (!Object.values(this._statuses).some(isInProgress)) return false;
+    const watching = Date.now() < this._watchUntil;
+    if (!watching && !Object.values(this._statuses).some(isInProgress)) return false;
     const runs = await RecertAPI.list({ orgSlug: this._orgSlug, mine: true, limit: 50 });
     if (!runs) return true; // transient failure — keep polling
+    let discovered = 0;
+    if (watching) {
+      for (const r of runs) {
+        if (!(r.id in this._statuses) && isInProgress(r.status)) {
+          this._statuses[r.id] = r.status;
+          discovered += 1;
+        }
+      }
+      // Found what we were watching for — stop the open-ended watch; normal
+      // in-flight polling carries it the rest of the way.
+      if (discovered) this._watchUntil = 0;
+    }
     const tracked = runs.filter((r) => r.id in this._statuses);
     const transitions = diffTransitions(this._statuses, tracked);
     for (const r of tracked) this._statuses[r.id] = r.status;
     for (const t of transitions) this._unseen.add(t.id);
-    if (transitions.length) this._persist();
-    this._notify(transitions, runs);
-    return Object.values(this._statuses).some(isInProgress);
+    if (transitions.length || discovered) this._persist();
+    this._notify(transitions, runs, discovered);
+    return Date.now() < this._watchUntil || Object.values(this._statuses).some(isInProgress);
   },
 
   _persist() {
@@ -136,8 +162,8 @@ export const RunTracker = {
     });
   },
 
-  _notify(transitions = [], runs = null) {
-    const payload = { ...this.counts(), transitions, runs };
+  _notify(transitions = [], runs = null, discovered = 0) {
+    const payload = { ...this.counts(), transitions, runs, discovered };
     for (const fn of this._listeners) {
       try { fn(payload); } catch (e) { console.error('[RunTracker] listener error', e); }
     }

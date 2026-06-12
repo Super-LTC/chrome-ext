@@ -58,15 +58,12 @@ export const EVENT_SCHEMA = {
   uda_viewer_opened: ['source'],
   icd10_viewer_opened: ['source'],
 
-  // === Managed Care (recert generation + tracking) ===
+  // === Managed Care (launcher: run tray + dashboard handoff links) ===
   mc_panel_opened: ['source', 'scope'],        // source: 'fab'|'header'; scope: 'patient'|'all'
-  mc_wizard_opened: ['prefilled'],             // prefilled: managedCareStay found?
-  mc_run_created: ['payer_type', 'doc_type_count', 'used_preset'],
-  mc_run_retried: [],
+  mc_create_launched: [],                      // opened the real dashboard create wizard
+  mc_run_opened: ['status'],                   // opened the real dashboard editor for a run
   mc_run_archived: ['from_status'],
-  mc_view_link_opened: [],
   mc_location_mode_changed: ['mode'],          // 'this'|'all'
-  mc_preset_saved: [],
   mc_run_completed_toast: ['status'],          // 'completed'|'failed'
 
   // === Drill-ins & engagement ===

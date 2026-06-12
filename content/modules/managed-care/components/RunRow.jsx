@@ -4,21 +4,18 @@ import { RecertAPI } from '../recert-api.js';
 import { isInProgress, isStuck, STATUS_LABELS } from '../lib/recert-utils.js';
 import { track } from '../../../utils/analytics.js';
 
-export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) => {
+export const RunRow = ({ run, showFacility, showCreator, onArchived }) => {
   const [opening, setOpening] = useState(false);
   const [busy, setBusy] = useState(false);
   const stuck = isStuck(run);
 
-  const openOnDashboard = async () => {
+  const openInDashboard = async () => {
     setOpening(true);
     try {
-      const url = await RecertAPI.mintViewLink(run.id); // mint on click, never cached
-      track('mc_view_link_opened');
-      // Dedicated window, not a tab — tabs confused nurses. Named so a second
-      // "Open" reuses the same window instead of stacking viewers.
-      const w = Math.min(1200, window.screen.availWidth - 80);
-      const h = Math.min(900, window.screen.availHeight - 80);
-      window.open(url, 'super-mc-viewer', `noopener,width=${w},height=${h},left=${(window.screen.availWidth - w) / 2},top=${(window.screen.availHeight - h) / 2}`);
+      // One-time 5-min login link into the real editor — mint on click.
+      const url = await RecertAPI.openLink(run.id);
+      track('mc_run_opened', { status: run.status });
+      openDashWindow(url);
     } catch (e) {
       window.SuperToast?.error(e.message || 'Could not open — try again');
     } finally { setOpening(false); }
@@ -38,6 +35,9 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
   const mod = run.status === 'failed' ? '--failed'
     : stuck ? '--stuck'
     : isInProgress(run.status) ? '--running' : '--done';
+
+  // Failed runs open the real editor too — that's where retry lives now.
+  const canOpen = run.status === 'completed' || run.status === 'failed';
 
   return (
     <div className={`mc-run-row mc-run-row${mod}`}>
@@ -64,16 +64,12 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
         )}
       </div>
       <div className="mc-run-row__actions">
-        {run.status === 'completed' && (
-          // NO_TRACK — handler emits mc_view_link_opened
-          <button className="mc-run-row__primary" disabled={opening} onClick={openOnDashboard}>
+        {canOpen && (
+          // NO_TRACK — handler emits mc_run_opened
+          <button className="mc-run-row__primary" disabled={opening} onClick={openInDashboard}>
             {opening ? <span className="mc-btn-spinner" aria-hidden="true" /> : null}
-            {opening ? 'Opening…' : 'Open on dashboard →'}
+            {opening ? 'Opening…' : 'Open →'}
           </button>
-        )}
-        {run.status === 'failed' && (
-          // NO_TRACK — retry flow emits mc_run_retried on completion
-          <button disabled={busy} onClick={() => onRetry(run)}>Retry</button>
         )}
         {(run.status === 'failed' || stuck) && (
           // NO_TRACK — handler emits mc_run_archived
@@ -89,6 +85,14 @@ export const RunRow = ({ run, showFacility, showCreator, onArchived, onRetry }) 
     </div>
   );
 };
+
+// Shared dashboard window: launch links land in the real app — reuse one named
+// window so repeated opens don't stack viewers (tabs confused nurses).
+export function openDashWindow(url) {
+  const w = Math.min(1280, window.screen.availWidth - 60);
+  const h = Math.min(940, window.screen.availHeight - 60);
+  window.open(url, 'super-mc-dashboard', `noopener,width=${w},height=${h},left=${(window.screen.availWidth - w) / 2},top=${(window.screen.availHeight - h) / 2}`);
+}
 
 const minutesAgo = (iso) => Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 

@@ -286,6 +286,12 @@
   border-radius: 50%;
   animation: mc-spin 0.8s linear infinite;
   flex-shrink: 0;
+  display: inline-block;
+}
+.mc-btn-spinner--light {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  margin-right: 6px;
 }
 
 /* ---- List meta states ---- */

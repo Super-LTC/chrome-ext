@@ -30,7 +30,7 @@ const FAST_REFRESH_MS = 3000;
 const FAST_WINDOW_MS = 30000;
 const LOCATION_MODE_KEY = 'super-mc-location-mode';
 
-export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refreshToken }) => {
+export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken }) => {
   const [runs, setRuns] = useState(null);       // null = not loaded yet
   const [loadError, setLoadError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -93,8 +93,10 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refr
       }
     };
     document.addEventListener('visibilitychange', onVisible);
-    const unsubscribe = window.McRunTracker?.subscribe(({ transitions }) => {
-      if (transitions.length) fetchRuns();
+    const unsubscribe = window.McRunTracker?.subscribe(({ transitions, discovered }) => {
+      // Refetch on terminal transitions AND when the watcher spots a run the
+      // nurse just created over in the dashboard.
+      if (transitions.length || discovered) fetchRuns();
     });
     return () => {
       clearTimeout(timer);
@@ -176,7 +178,6 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refr
               showFacility={showFacility}
               showCreator={!mineOnly}
               onArchived={onArchived}
-              onRetry={onRetry}
             />
           ))}
         </div>
