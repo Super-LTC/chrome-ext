@@ -89,6 +89,22 @@ export function parseSectionHtml(input) {
   return { answers };
 }
 
+/**
+ * Parse the section-listing page (`/clinical/mds3/sectionlisting.xhtml`).
+ *
+ * Real PCC structure per box (validated against demo/mds-summary.html):
+ *   <div class="section_box complete|notapplicable|disabled"
+ *        onclick="location.href='section.xhtml?ESOLassessid=…&sectioncode=A';"
+ *        title="Identification Information (Signed)">
+ *     <div class="section_label">Identification Information</div>   ← NAME, not code
+ *     <h2>A</h2>                                                    ← the section CODE
+ *     <div class="section_status">Complete</div>
+ *   </div>
+ *
+ * So: code comes from <h2> (fallback: the sectioncode= param in onclick),
+ * the human status comes from the title parenthetical ("… (Signed)"), and a
+ * section is skippable when its class is notapplicable/disabled.
+ */
 export function parseSectionListing(input) {
   const doc = toDoc(input);
   let boxes = doc.querySelectorAll('#mdssectionlist .section_box');
@@ -96,12 +112,25 @@ export function parseSectionListing(input) {
 
   const out = [];
   for (const box of boxes) {
-    const label = box.querySelector('.section_label');
-    if (!label) continue;
-    const code = collapse(label.textContent).replace(/^Section\s+/i, '').trim();
-    if (!code) continue;
-    const status = collapse(box.querySelector('.section_status')?.textContent);
-    out.push({ code, status, disabled: /not applicable/i.test(status) });
+    let code = collapse(box.querySelector('h2')?.textContent);
+    if (!code) {
+      const m = /sectioncode=([A-Za-z0-9]+)/i.exec(box.getAttribute('onclick') || '');
+      if (m) code = m[1].toUpperCase();
+    }
+    if (!code || !/^[A-Z]+[0-9]*$/.test(code)) continue;
+
+    // Prefer the status word PCC puts in the title — "… (Signed)" / "…
+    // (Not Applicable)" / "… (In Progress)" — else the section_status text.
+    const title = box.getAttribute('title') || '';
+    const paren = /\(([^)]+)\)\s*$/.exec(title);
+    const status = paren
+      ? collapse(paren[1])
+      : collapse(box.querySelector('.section_status')?.textContent);
+
+    const cls = box.getAttribute('class') || '';
+    const disabled = /\b(notapplicable|disabled)\b/.test(cls) || /not applicable/i.test(status);
+
+    out.push({ code, status, disabled });
   }
   return out;
 }

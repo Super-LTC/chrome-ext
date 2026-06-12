@@ -98,10 +98,16 @@ describe('parseSectionHtml — against a real saved PCC section page', () => {
 });
 
 describe('parseSectionListing', () => {
-  it('parses code + status per section_box and flags Not Applicable as disabled', () => {
+  // Markup mirrors real PCC: code in <h2>, name in .section_label, human
+  // status in the title parenthetical, notapplicable encoded in the class.
+  it('reads code from <h2>, status from the title, and flags notapplicable as disabled', () => {
     const html = `<div id="mdssectionlist">
-      <div class="section_box"><span class="section_label">Section A</span><h2>Identification</h2><span class="section_status">Signed</span></div>
-      <div class="section_box"><span class="section_label">Section GG</span><h2>Functional</h2><span class="section_status">Not Applicable</span></div>
+      <div class="section_box complete" onclick="location.href='section.xhtml?ESOLassessid=1&sectioncode=A';" title="Identification Information (Signed)">
+        <div class="section_label">Identification Information</div><h2>A</h2><div class="section_status">Complete</div>
+      </div>
+      <div class="section_box notapplicable" title="Functional Status (Not Applicable)">
+        <div class="section_label">Functional Status</div><h2>GG</h2><div class="section_status">Remaining: 0</div>
+      </div>
     </div>`;
     expect(parseSectionListing(html)).toEqual([
       { code: 'A', status: 'Signed', disabled: false },
@@ -109,13 +115,42 @@ describe('parseSectionListing', () => {
     ]);
   });
 
-  it('accepts a Document and trims the "Section " prefix off the label', () => {
+  it('flags a box with the disabled class even when the title is absent', () => {
     const html = `<div id="mdssectionlist">
-      <div class="section_box"><span class="section_label">Section C</span><span class="section_status">Unsigned</span></div>
+      <div class="section_box disabled"><div class="section_label">Correction Request</div><h2>X</h2><div class="section_status">Complete</div></div>
+    </div>`;
+    expect(parseSectionListing(html)).toEqual([
+      { code: 'X', status: 'Complete', disabled: true },
+    ]);
+  });
+
+  it('falls back to the onclick sectioncode when <h2> is missing, and accepts a Document', () => {
+    const html = `<div id="mdssectionlist">
+      <div class="section_box complete" onclick="location.href='section.xhtml?ESOLassessid=1&sectioncode=C';" title="Cognitive Patterns (In Progress)">
+        <div class="section_label">Cognitive Patterns</div><div class="section_status">Remaining: 3</div>
+      </div>
     </div>`;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     expect(parseSectionListing(doc)).toEqual([
-      { code: 'C', status: 'Unsigned', disabled: false },
+      { code: 'C', status: 'In Progress', disabled: false },
     ]);
+  });
+});
+
+describe('parseSectionListing — against a real saved listing page', () => {
+  const summary = readFileSync('demo/mds-summary.html', 'utf8');
+  const sections = parseSectionListing(summary);
+
+  it('finds the full section list with valid codes', () => {
+    expect(sections.length).toBeGreaterThan(15);
+    for (const s of sections) expect(s.code).toMatch(/^[A-Z]+[0-9]*$/);
+  });
+
+  it('marks Identification (A) enabled and includes disabled (Not Applicable) sections', () => {
+    const a = sections.find((s) => s.code === 'A');
+    expect(a).toBeDefined();
+    expect(a.disabled).toBe(false);
+    expect(sections.some((s) => s.disabled)).toBe(true);
+    expect(sections.some((s) => !s.disabled)).toBe(true);
   });
 });

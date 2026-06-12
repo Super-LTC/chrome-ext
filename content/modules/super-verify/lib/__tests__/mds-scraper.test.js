@@ -5,15 +5,15 @@ import {
   SessionExpiredError,
 } from '../mds-scraper.js';
 
-// Build a section-listing Document with the given sections.
-// sections: [{ code, status, disabled? }]
+// Build a section-listing Document with the given sections, mirroring the real
+// PCC markup (code in <h2>, status in the title parenthetical, notapplicable
+// encoded in the class). sections: [{ code, status, disabled? }]
 function listingDoc(sections) {
   const boxes = sections
     .map(
       (s) =>
-        `<div class="section_box">
-           <span class="section_label">Section ${s.code}</span>
-           <span class="section_status">${s.status}</span>
+        `<div class="section_box ${s.disabled ? 'notapplicable' : 'complete'}" title="Section ${s.code} (${s.status})">
+           <div class="section_label">Section ${s.code}</div><h2>${s.code}</h2>
          </div>`,
     )
     .join('');
