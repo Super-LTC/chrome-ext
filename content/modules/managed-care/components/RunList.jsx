@@ -66,6 +66,9 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
   );
   const [mineOnly, setMineOnly] = useState(true);
   const [olderOpen, setOlderOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');   // all | active | done | failed
+  const [locationFilter, setLocationFilter] = useState('all');
   const runsRef = useRef(runs);
   runsRef.current = runs;
   const lastCreateRef = useRef(0);
@@ -164,7 +167,22 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
   if (runs === null) return <ListSkeleton />;
 
   const showFacility = !patientId && locationMode === 'all';
-  const tray = groupForTray(runs);
+
+  // Client-side filters over the loaded page — search, status, location.
+  const locationNames = showFacility
+    ? [...new Set(runs.map((r) => r.locationName || r.facilityName).filter(Boolean))].sort()
+    : [];
+  const q = query.trim().toLowerCase();
+  const filtered = runs.filter((r) => {
+    if (q && !`${r.patientName || ''} ${r.payerName || ''}`.toLowerCase().includes(q)) return false;
+    if (statusFilter === 'active' && !isInProgress(r.status)) return false;
+    if (statusFilter === 'done' && r.status !== 'completed') return false;
+    if (statusFilter === 'failed' && r.status !== 'failed') return false;
+    if (locationFilter !== 'all' && (r.locationName || r.facilityName) !== locationFilter) return false;
+    return true;
+  });
+  const isFiltering = q || statusFilter !== 'all' || locationFilter !== 'all';
+  const tray = groupForTray(filtered);
   const rowFor = (run) => (
     <RunRow
       key={run.id}
@@ -199,12 +217,35 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
               onClick={() => setMineOnly(false)}
             >Everyone</button>
           </div>
+          <input
+            className="mc-filter-search"
+            type="search"
+            placeholder="Search patient or payer…"
+            value={query}
+            onInput={(e) => setQuery(e.target.value)}
+          />
+          <select className="mc-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="active">In progress</option>
+            <option value="done">Done</option>
+            <option value="failed">Failed</option>
+          </select>
+          {showFacility && locationNames.length > 0 && (
+            <select className="mc-filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+              <option value="all">All locations</option>
+              {locationNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
         </div>
       )}
 
       <div className="mc-run-group">
         <div className="mc-run-group__label">Today</div>
-        {tray.today.length ? tray.today.map(rowFor) : <EmptyToday />}
+        {tray.today.length
+          ? tray.today.map(rowFor)
+          : isFiltering
+            ? <div className="mc-list-empty">No runs today match your filters</div>
+            : <EmptyToday />}
       </div>
 
       {tray.week.length > 0 && (

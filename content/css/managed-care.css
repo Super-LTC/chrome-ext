@@ -294,6 +294,31 @@
   margin-right: 6px;
 }
 
+/* Toolbar filters */
+.mc-filter-search {
+  flex: 1;
+  min-width: 160px;
+  border: 1px solid var(--super-gray-300, #d1d5db);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.mc-filter-search:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+.mc-filter-select {
+  border: 1px solid var(--super-gray-300, #d1d5db);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--super-gray-700, #374151);
+}
+
 /* Empty-today state */
 .mc-empty-today {
   display: flex;
