@@ -25,7 +25,13 @@ function getPatientFromHeader() {
   return { patientId, patientName };
 }
 
+// In-flight guard: pageshow fires on normal loads too, so the initial start()
+// and the pageshow start() race — both can pass the id check while the first
+// is still awaiting module-status, double-injecting the chip.
+let injecting = false;
+
 async function tryInject() {
+  if (injecting) return false;                             // another attempt is mid-await
   if (document.getElementById(BTN_ID)) return true;        // idempotent
   const nameEl = document.querySelector('.residentName#name, .residentName');
   if (!nameEl) return false;
@@ -37,8 +43,15 @@ async function tryInject() {
   const facilityName = facLink?.title || facLink?.textContent?.trim();
   if (!orgSlug || !facilityName) return false;
 
-  const enabled = await RecertAPI.moduleStatus({ facilityName, orgSlug });
+  injecting = true;
+  let enabled;
+  try {
+    enabled = await RecertAPI.moduleStatus({ facilityName, orgSlug });
+  } finally {
+    injecting = false;
+  }
   if (!enabled) return true; // resolved: gated off, stop polling
+  if (document.getElementById(BTN_ID)) return true; // raced with another attempt
 
   // A labeled chip right beside the resident's name — the icon-group placement
   // shipped first and was invisible next to PCC's own identical document icons.
