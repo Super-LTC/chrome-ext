@@ -37,6 +37,8 @@ const GROUP_RANGE_PILLS = [
   { key: 'custom', label: 'Custom' },
 ];
 
+const DEFAULT_MDS_SECTIONS = ['B', 'C', 'GG']; // dashboard's default selection
+
 const today = () => resolveRelativeDate('today');
 const daysAgo = (n) => resolveRelativeDate(`-${n}d`);
 const fmtDate = (iso) => {
@@ -58,7 +60,9 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
   const [daysMode, setDaysMode] = useState('7');
   const [rangeMode, setRangeMode] = useState('7days');
   const [groupRanges, setGroupRanges] = useState({});   // groupKey → pill key
+  const [openRanges, setOpenRanges] = useState({});     // groupKey → expander open?
   const [includeMds, setIncludeMds] = useState(false);
+  const [customizeMds, setCustomizeMds] = useState(false);
 
   // Retry path targets the failed run's patient/location, not the page we're on.
   const targetPatientId = retryTarget?.externalPatientId || patientId;
@@ -384,6 +388,48 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
               </button>
             </div>
 
+            {(fd.mdsSectionOptions || []).length > 0 && (
+              <div className={`mc-mds-row ${includeMds ? 'mc-mds-row--on' : ''}`}>
+                <label className="mc-doc-card__head">
+                  <input type="checkbox" checked={includeMds}
+                    onChange={(e) => {
+                      setIncludeMds(e.target.checked);
+                      set({ mdsSections: e.target.checked ? DEFAULT_MDS_SECTIONS : [] });
+                      setCustomizeMds(false);
+                    }} />
+                  <span className="mc-doc-card__label">Include MDS Assessment</span>
+                  {includeMds && (
+                    <span className="mc-mds-row__summary">
+                      Sections: {config.mdsSections.length ? config.mdsSections.join(', ') : 'none'}
+                    </span>
+                  )}
+                  {includeMds && (
+                    // NO_TRACK — form micro-interaction
+                    <button type="button" className="mc-link-btn"
+                      onClick={(e) => { e.preventDefault(); setCustomizeMds(!customizeMds); }}>
+                      {customizeMds ? 'Done' : 'Customize sections'}
+                    </button>
+                  )}
+                </label>
+                {includeMds && customizeMds && (
+                  <div className="mc-wizard__mds-grid">
+                    {(fd.mdsSectionOptions || []).map((o) => (
+                      <label className="mc-wizard__doc-type" key={optVal(o)}>
+                        <input type="checkbox" checked={config.mdsSections.includes(optVal(o))}
+                          onChange={(e) => toggleMdsSection(optVal(o), e.target.checked)} />
+                        {' '}{optLabel(o)}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {includeMds && (
+                  <div className="mc-mds-row__hint">
+                    The system will find the most recent qualifying MDS assessment and include only the selected sections.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mc-doc-grid">
               {Object.entries(groups).map(([key, group]) => {
                 const multi = group.types.length > 1;
@@ -391,6 +437,8 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                 const allOn = onCount === group.types.length;
                 const groupSelected = onCount > 0;
                 const rMode = groupRanges[key] || 'all';
+                const rangeOpen = !!openRanges[key];
+                const rangeLabel = GROUP_RANGE_PILLS.find((p) => p.key === rMode)?.label || 'All';
                 const firstOverride = config.documentTypeRangeOverrides[group.types[0]] || {};
                 return (
                   <div key={key}
@@ -400,6 +448,13 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                         onChange={(e) => toggleTypes(group.types, e.target.checked)} />
                       <span className="mc-doc-card__label">{group.label}</span>
                       {multi && <span className="mc-doc-card__count">{onCount}/{group.types.length}</span>}
+                      {groupSelected && (
+                        // NO_TRACK — form micro-interaction
+                        <button type="button" className="mc-link-btn"
+                          onClick={(e) => { e.preventDefault(); setOpenRanges((r) => ({ ...r, [key]: !rangeOpen })); }}>
+                          {rMode === 'all' && !rangeOpen ? 'Date range' : rangeLabel} {rangeOpen ? '▴' : '▾'}
+                        </button>
+                      )}
                     </label>
                     {multi && groupSelected && (
                       <div className="mc-doc-card__subtypes">
@@ -412,9 +467,8 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                         ))}
                       </div>
                     )}
-                    {groupSelected && (
+                    {groupSelected && rangeOpen && (
                       <div className="mc-doc-card__range">
-                        <div className="mc-doc-card__range-label">Date range for this category</div>
                         <div className="mc-pills mc-pills--small">
                           {GROUP_RANGE_PILLS.map((p) => (
                             // NO_TRACK — form micro-interaction
@@ -439,27 +493,6 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
               })}
             </div>
           </div>
-
-          {(fd.mdsSectionOptions || []).length > 0 && (
-            <div className={`mc-wizard__section mc-doc-card ${includeMds ? 'mc-doc-card--on' : ''}`} style={{ padding: '12px 16px' }}>
-              <label className="mc-doc-card__head">
-                <input type="checkbox" checked={includeMds}
-                  onChange={(e) => { setIncludeMds(e.target.checked); if (!e.target.checked) set({ mdsSections: [] }); }} />
-                <span className="mc-doc-card__label">Include MDS Assessment</span>
-              </label>
-              {includeMds && (
-                <div className="mc-wizard__mds-grid">
-                  {(fd.mdsSectionOptions || []).map((o) => (
-                    <label className="mc-wizard__doc-type" key={optVal(o)}>
-                      <input type="checkbox" checked={config.mdsSections.includes(optVal(o))}
-                        onChange={(e) => toggleMdsSection(optVal(o), e.target.checked)} />
-                      {' '}{optLabel(o)}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
