@@ -27,8 +27,8 @@ function getPatientFromHeader() {
 
 async function tryInject() {
   if (document.getElementById(BTN_ID)) return true;        // idempotent
-  const iconGroup = document.querySelector('.residentHeaderDetails .rh-icon-buttons');
-  if (!iconGroup) return false;
+  const nameEl = document.querySelector('.residentName#name, .residentName');
+  if (!nameEl) return false;
   const { patientId, patientName } = getPatientFromHeader();
   if (!patientId) return false;
 
@@ -40,19 +40,20 @@ async function tryInject() {
   const enabled = await RecertAPI.moduleStatus({ facilityName, orgSlug });
   if (!enabled) return true; // resolved: gated off, stop polling
 
-  const wrapper = document.createElement('div');
-  wrapper.className = 'rh-icon-menu-wrapper';
+  // A labeled chip right beside the resident's name — the icon-group placement
+  // shipped first and was invisible next to PCC's own identical document icons.
+  const wrapper = document.createElement('span');
+  wrapper.className = 'mc-header-chip-wrapper';
   wrapper.innerHTML = `
     <!-- NO_TRACK: panel mount emits mc_panel_opened (source flows through props) -->
-    <button type="button" id="${BTN_ID}" class="rh-icon-btn mc-header-btn" aria-label="Managed Care">
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/><path d="M12 12v6"/>
+    <button type="button" id="${BTN_ID}" class="mc-header-btn" aria-label="Managed Care">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10 6V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"/><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M12 10v6"/><path d="M9 13h6"/>
       </svg>
+      Managed Care
       <span class="mc-header-btn__badge" id="super-mc-header-badge" style="display:none;"></span>
-      <div class="rh-hover-details">Managed Care</div>
     </button>`;
-  // Before PCC's print button so ours reads as part of the group.
-  iconGroup.prepend(wrapper);
+  nameEl.appendChild(wrapper);
 
   document.getElementById(BTN_ID).addEventListener('click', (e) => {
     e.stopPropagation();
