@@ -157,7 +157,23 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
   };
 
   if (loadError) return <div className="mc-wizard"><div className="mc-wizard__error">{loadError}</div></div>;
-  if (!fd) return <div className="mc-list-loading">Loading…</div>;
+  if (!fd) {
+    // Field-shaped shimmer so the wizard frame doesn't jump when form-data lands.
+    return (
+      <div className="mc-wizard" aria-hidden="true">
+        <div className="mc-skel mc-skel--label" />
+        <div className="mc-skel mc-skel--field" />
+        <div className="mc-wizard__row">
+          <div className="mc-skel mc-skel--field" style={{ flex: 1 }} />
+          <div className="mc-skel mc-skel--field" style={{ flex: 1 }} />
+        </div>
+        <div className="mc-wizard__row">
+          <div className="mc-skel mc-skel--field" style={{ flex: 1 }} />
+          <div className="mc-skel mc-skel--field" style={{ flex: 1 }} />
+        </div>
+      </div>
+    );
+  }
 
   const presets = fd.presets || [];
   const groups = fd.documentTypeGroups || {};

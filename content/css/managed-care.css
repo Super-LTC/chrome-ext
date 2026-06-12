@@ -279,6 +279,30 @@
   cursor: pointer;
 }
 
+/* ---- Loading skeletons ---- */
+@keyframes mc-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+.mc-skel {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--super-gray-100, #f3f4f6) 25%,
+    var(--super-gray-200, #e5e7eb) 50%,
+    var(--super-gray-100, #f3f4f6) 75%
+  );
+  background-size: 200% 100%;
+  animation: mc-shimmer 1.4s ease-in-out infinite;
+}
+.mc-skel--label { width: 64px; height: 11px; margin-bottom: 10px; }
+.mc-skel--name  { height: 14px; }
+.mc-skel--meta  { height: 11px; }
+.mc-skel--btn   { width: 120px; height: 28px; border-radius: 7px; flex-shrink: 0; }
+.mc-skel--field { height: 58px; border-radius: 8px; margin-bottom: 2px; }
+.mc-skel-row { border-color: var(--super-gray-100, #f3f4f6); }
+.mc-skel-row .mc-run-row__main { gap: 10px; }
+
 /* ---- Wizard ---- */
 .mc-wizard { display: flex; flex-direction: column; gap: 14px; }
 .mc-wizard__steps {

@@ -5,6 +5,23 @@ import { isInProgress, groupByDay } from '../lib/recert-utils.js';
 import { RunRow } from './RunRow.jsx';
 import { track } from '../../../utils/analytics.js';
 
+// Shimmer placeholder mirroring the grouped run-list layout, so the panel
+// doesn't pop from a bare "Loading…" into a different shape.
+const ListSkeleton = () => (
+  <div className="mc-skeleton" aria-hidden="true">
+    <div className="mc-skel mc-skel--label" />
+    {[88, 72, 80].map((w, i) => (
+      <div className="mc-run-row mc-skel-row" key={i}>
+        <div className="mc-run-row__main">
+          <div className="mc-skel mc-skel--name" style={{ width: `${w + 60}px` }} />
+          <div className="mc-skel mc-skel--meta" style={{ width: `${w}px` }} />
+        </div>
+        <div className="mc-skel mc-skel--btn" />
+      </div>
+    ))}
+  </div>
+);
+
 const PAGE_SIZE = 50;
 const REFRESH_MS = 10000;
 const LOCATION_MODE_KEY = 'super-mc-location-mode';
@@ -83,7 +100,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, onRetry, refr
       </div>
     );
   }
-  if (runs === null) return <div className="mc-list-loading">Loading…</div>;
+  if (runs === null) return <ListSkeleton />;
 
   const showFacility = !patientId && locationMode === 'all';
   const groups = groupByDay(runs);
