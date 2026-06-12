@@ -1,0 +1,121 @@
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { parseSectionHtml, parseSectionListing } from '../mds-section-parser.js';
+
+// vitest cwd is the repo root; read fixtures by repo-relative path (jsdom sets
+// import.meta.url to a non-file URL, so new URL(...) can't be used here).
+const SAMPLE = readFileSync(
+  'content/modules/super-verify/lib/__tests__/fixtures/section-sample.html',
+  'utf8',
+);
+
+describe('parseSectionHtml — real PCC value shapes', () => {
+  const { answers } = parseSectionHtml(SAMPLE);
+
+  it('extracts a locked radio value from the selected anchor data-value', () => {
+    expect(answers.I0020).toEqual({ value: '12', isLocked: true });
+  });
+
+  it('extracts a locked yes/no value from the selected anchor (No → "0")', () => {
+    expect(answers.I0100).toEqual({ value: '0', isLocked: true });
+  });
+
+  it('extracts a locked free value from readonlyquestionvalue, collapsing whitespace', () => {
+    expect(answers.I0020B.isLocked).toBe(true);
+    expect(answers.I0020B.value).toBe(
+      'J44.9 CHRONIC OBSTRUCTIVE PULMONARY DISEASE, UNSPECIFIED',
+    );
+  });
+
+  it('extracts a locked numeric readonly value', () => {
+    expect(answers.N0300).toEqual({ value: '0', isLocked: true });
+  });
+
+  it('extracts an editable (in-progress) radio value, isLocked false', () => {
+    expect(answers.GG0130A1).toEqual({ value: '04', isLocked: false });
+  });
+
+  it('extracts an editable text/number input value, isLocked false', () => {
+    expect(answers.GG0130B1).toEqual({ value: '04', isLocked: false });
+  });
+
+  it('coerces a blank editable input to empty string', () => {
+    expect(answers.C0700).toEqual({ value: '', isLocked: false });
+  });
+
+  it('keeps ack_ acknowledgement keys verbatim', () => {
+    expect(answers.ack_I0020).toEqual({ value: '', isLocked: false });
+  });
+
+  it('keeps underscore-composite keys verbatim', () => {
+    expect(answers.A_SHORTA).toEqual({ value: '1', isLocked: false });
+  });
+
+  it('ignores elements whose ids do not look like MDS items', () => {
+    expect(answers.saveBtn).toBeUndefined();
+    expect(answers.facSearchKeyword).toBeUndefined();
+    expect(answers.refreshMDSDataButton).toBeUndefined();
+  });
+});
+
+describe('parseSectionHtml — input handling', () => {
+  it('accepts a Document as well as an HTML string', () => {
+    const doc = new DOMParser().parseFromString(SAMPLE, 'text/html');
+    expect(parseSectionHtml(doc).answers.I0020).toEqual({ value: '12', isLocked: true });
+  });
+
+  it('falls back to the nobr leading code when the selected anchor lacks data-value', () => {
+    const html = `<div class="question" id="J1800_wrapper" data-questiontype="rad">
+      <ul class="responses">
+        <li><a class="selected"><nobr>1. Yes</nobr></a></li>
+      </ul></div>`;
+    expect(parseSectionHtml(html).answers.J1800.value).toBe('1');
+  });
+
+  it('returns an empty answers map for non-MDS markup', () => {
+    expect(parseSectionHtml('<div><span id="saveBtn">hi</span></div>').answers).toEqual({});
+  });
+});
+
+describe('parseSectionHtml — against a real saved PCC section page', () => {
+  // demo/ lives at repo root (outside the check-tracking scan); vitest cwd is
+  // the repo root, so a plain relative read works.
+  const realI = readFileSync('demo/mds-section-i.html', 'utf8');
+  const { answers } = parseSectionHtml(realI);
+
+  it('pulls a non-trivial number of real items off the page', () => {
+    expect(Object.keys(answers).length).toBeGreaterThan(20);
+  });
+
+  it('reads the locked primary-condition radio (I0020 = 12)', () => {
+    expect(answers.I0020).toEqual({ value: '12', isLocked: true });
+  });
+
+  it('reads a locked diagnosis popup value (I0020B starts with the ICD code)', () => {
+    expect(answers.I0020B.isLocked).toBe(true);
+    expect(answers.I0020B.value.startsWith('J44.9')).toBe(true);
+  });
+});
+
+describe('parseSectionListing', () => {
+  it('parses code + status per section_box and flags Not Applicable as disabled', () => {
+    const html = `<div id="mdssectionlist">
+      <div class="section_box"><span class="section_label">Section A</span><h2>Identification</h2><span class="section_status">Signed</span></div>
+      <div class="section_box"><span class="section_label">Section GG</span><h2>Functional</h2><span class="section_status">Not Applicable</span></div>
+    </div>`;
+    expect(parseSectionListing(html)).toEqual([
+      { code: 'A', status: 'Signed', disabled: false },
+      { code: 'GG', status: 'Not Applicable', disabled: true },
+    ]);
+  });
+
+  it('accepts a Document and trims the "Section " prefix off the label', () => {
+    const html = `<div id="mdssectionlist">
+      <div class="section_box"><span class="section_label">Section C</span><span class="section_status">Unsigned</span></div>
+    </div>`;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    expect(parseSectionListing(doc)).toEqual([
+      { code: 'C', status: 'Unsigned', disabled: false },
+    ]);
+  });
+});

@@ -1,0 +1,101 @@
+<!--
+  Condensed real-PCC MDS section markup, extracted from demo/mds-section-i.html
+  and demo/mds-section-n.html (synthetic "Doe, Jane" data). Covers every value
+  shape the parser must handle. Keep markup idioms faithful to live PCC:
+   - item id lives on `<div class="question" id="{ITEM}_wrapper" data-questiontype="...">`
+   - locked single-/multi-choice: selected `<a data-value="X" class="selected">`
+   - locked free-value (pop/num/dte): `<div class="readonlyquestionvalue"><b>…</b></div>`
+   - editable (in-progress) inputs carry the raw value
+   - every question also emits a hidden `ack_{ITEM}` acknowledgement input
+-->
+<div id="mdsform">
+
+  <!-- LOCKED radio: value comes from the selected anchor's data-value -->
+  <div class="question" id="I0020_wrapper" data-questiontype="rad">
+    <div class="locked_response">
+      <div class="signed_response">Signed by: <b>ldenius2</b> on <b>Mon Jan 19, 2026</b></div>
+      <div class="question_content">
+        <input type="hidden" name="ack_I0020" id="ack_I0020" value="">
+        <ul class="responses">
+          <li><a href="javascript:;" data-value="11"><nobr>11. Other Orthopedic Conditions</nobr></a></li>
+          <li><a href="javascript:;" data-value="12" class="selected"><nobr>12. Debility, Cardiorespiratory Conditions</nobr></a></li>
+          <li><a href="javascript:;" data-value="13"><nobr>13. Medically Complex Conditions</nobr></a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCKED checkbox/yes-no: selected "No" → data-value "0" -->
+  <div class="question" id="I0100_wrapper" data-questiontype="chk">
+    <div class="locked_response">
+      <div class="question_content">
+        <input type="hidden" name="ack_I0100" id="ack_I0100" value="">
+        <ul class="responses">
+          <li><a href="javascript:;" data-value="1"><nobr>Yes</nobr></a></li>
+          <li><a href="javascript:;" data-value="0" class="selected"><nobr>No</nobr></a></li>
+          <li><a href="javascript:;" data-value="-"><nobr>-</nobr></a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCKED diagnosis popup: free value in readonlyquestionvalue (code + desc) -->
+  <div class="question" id="I0020B_wrapper" data-questiontype="pop">
+    <div class="locked_response">
+      <div class="signed_response">Signed by: <b>ldenius2</b></div>
+      <div class="question_content">
+        <input type="hidden" name="ack_I0020B" id="ack_I0020B" value="">
+        <div class="readonlyquestionvalue"><b>
+          J44.9&nbsp;&nbsp;&nbsp;&nbsp;CHRONIC OBSTRUCTIVE PULMONARY DISEASE, UNSPECIFIED
+        </b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCKED numeric: readonlyquestionvalue holds the coded number -->
+  <div class="question" id="N0300_wrapper" data-questiontype="num">
+    <div class="locked_response">
+      <div class="question_content">
+        <input type="hidden" name="ack_N0300" id="ack_N0300" value="">
+        <div class="readonlyquestionvalue"><b>
+          0
+        </b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDITABLE (in-progress) radio: selected anchor, not locked -->
+  <div class="question" id="GG0130A1_wrapper" data-questiontype="rad">
+    <div class="question_content">
+      <input type="hidden" name="ack_GG0130A1" id="ack_GG0130A1" value="">
+      <ul class="responses">
+        <li><a href="javascript:;" data-value="05"><nobr>05. Setup or clean-up assistance</nobr></a></li>
+        <li><a href="javascript:;" data-value="04" class="selected"><nobr>04. Partial/moderate assistance</nobr></a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- EDITABLE numeric input with a value -->
+  <div class="question" id="GG0130B1_wrapper" data-questiontype="num">
+    <div class="question_content">
+      <input type="hidden" name="ack_GG0130B1" id="ack_GG0130B1" value="">
+      <table><tr><td><input type="text" id="GG0130B1" name="GG0130B1" value="04"></td></tr></table>
+    </div>
+  </div>
+
+  <!-- EDITABLE input left blank → value "" -->
+  <div class="question" id="C0700_wrapper" data-questiontype="num">
+    <div class="question_content">
+      <input type="text" id="C0700" name="C0700" value="">
+    </div>
+  </div>
+
+  <!-- Underscore-composite key emitted as a standalone hidden input -->
+  <input type="hidden" name="A_SHORTA" id="A_SHORTA" value="1">
+
+  <!-- Non-MDS ids that must be ignored -->
+  <input type="hidden" id="saveBtn" value="x">
+  <a id="refreshMDSDataButton" href="#">Refresh</a>
+  <input type="text" id="facSearchKeyword" value="should-ignore">
+
+</div>
