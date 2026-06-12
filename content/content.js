@@ -95,6 +95,7 @@ import './modules/care-plan-stamp/pcc-stamp.js';
 import './modules/care-plan-stamp/inject-button.js';
 import './modules/care-plan-stamp/audit-banner.js';
 import './modules/care-plan-stamp/audit-review-button.js';
+import './modules/super-verify/inject-button.js';
 
 // 6.4. MDS Interview Auto-Scheduler — on the New/Change MDS popup, intercept
 //      Save and offer to create the BIMS/PHQ/GG/Pain UDAs this ARD requires.

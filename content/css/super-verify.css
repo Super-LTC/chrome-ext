@@ -1,0 +1,9 @@
+/* Super Verify — MDS section-listing verify button + full-screen results modal.
+ *
+ * Loaded via content/css-bootstrap.js (`?inline` import → single <style> tag,
+ * so it renders in PostHog session replays). Do NOT add to manifest.json.
+ *
+ * Styles land in Tasks 5–8 (button, modal shell, PDPM findings, QM preview).
+ * QM visuals reuse the `qmc-` tone classes from css/qm-command-center.css;
+ * new QM classes here are prefixed `svq-`.
+ */
