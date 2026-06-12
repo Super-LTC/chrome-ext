@@ -130,7 +130,9 @@ export function parseSectionListing(input) {
     const cls = box.getAttribute('class') || '';
     const disabled = /\b(notapplicable|disabled)\b/.test(cls) || /not applicable/i.test(status);
 
-    out.push({ code, status, disabled });
+    const name = collapse(box.querySelector('.section_label')?.textContent);
+
+    out.push({ code, name, status, disabled });
   }
   return out;
 }

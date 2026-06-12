@@ -110,8 +110,8 @@ describe('parseSectionListing', () => {
       </div>
     </div>`;
     expect(parseSectionListing(html)).toEqual([
-      { code: 'A', status: 'Signed', disabled: false },
-      { code: 'GG', status: 'Not Applicable', disabled: true },
+      { code: 'A', name: 'Identification Information', status: 'Signed', disabled: false },
+      { code: 'GG', name: 'Functional Status', status: 'Not Applicable', disabled: true },
     ]);
   });
 
@@ -120,7 +120,7 @@ describe('parseSectionListing', () => {
       <div class="section_box disabled"><div class="section_label">Correction Request</div><h2>X</h2><div class="section_status">Complete</div></div>
     </div>`;
     expect(parseSectionListing(html)).toEqual([
-      { code: 'X', status: 'Complete', disabled: true },
+      { code: 'X', name: 'Correction Request', status: 'Complete', disabled: true },
     ]);
   });
 
@@ -132,7 +132,7 @@ describe('parseSectionListing', () => {
     </div>`;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     expect(parseSectionListing(doc)).toEqual([
-      { code: 'C', status: 'In Progress', disabled: false },
+      { code: 'C', name: 'Cognitive Patterns', status: 'In Progress', disabled: false },
     ]);
   });
 });
