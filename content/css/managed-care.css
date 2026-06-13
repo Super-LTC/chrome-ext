@@ -821,32 +821,59 @@
 
 /* ---- Resident-header chip (sits inline next to the resident's name) ---- */
 .mc-header-chip-wrapper {
-  display: inline-block;
+  display: inline-flex !important;
+  align-items: center !important;
   margin-left: 12px;
   vertical-align: middle;
 }
-.mc-header-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  line-height: 1;
-  cursor: pointer;
-  white-space: nowrap;
+/* When dropped into PCC's .rh-icon-buttons group it's a flex row of icons —
+   no left margin needed, just sit inline with the others. */
+.rh-icon-buttons .mc-header-chip-wrapper {
+  margin-left: 0 !important;
+  margin-right: 8px !important;
 }
-.mc-header-btn:hover {
-  background: #d1fae5;
-  border-color: #6ee7b7;
+.mc-header-btn__text { display: inline !important; }
+/* Scoped + !important throughout: this button is injected INTO PCC's own
+   resident-header DOM, so PCC's header styles cascade into it. Without these
+   guards PCC's button/typography rules override ours and the chip renders as a
+   plain grey native button. */
+.mc-header-chip-wrapper .mc-header-btn {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  background: #059669 !important;
+  color: #ffffff !important;
+  border: 1px solid #059669 !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  font-family: inherit !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  box-shadow: 0 1px 2px rgba(5, 150, 105, 0.25) !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  white-space: nowrap !important;
+  transition: background 0.12s ease, border-color 0.12s ease !important;
 }
-.mc-header-btn svg { flex-shrink: 0; }
+.mc-header-chip-wrapper .mc-header-btn:hover {
+  background: #047857 !important;
+  border-color: #047857 !important;
+}
+.mc-header-chip-wrapper .mc-header-btn:active {
+  background: #065f46 !important;
+}
+.mc-header-chip-wrapper .mc-header-btn svg {
+  flex-shrink: 0 !important;
+  width: 15px !important;
+  height: 15px !important;
+  vertical-align: middle !important;
+}
 .mc-header-btn__badge {
   position: absolute;
   top: -4px;
