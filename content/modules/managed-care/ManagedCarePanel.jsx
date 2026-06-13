@@ -23,10 +23,10 @@ export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, patientName
   return (
     <div className="mc-panel-overlay">
       <div className="mc-panel-overlay__backdrop" onClick={onClose} />
-      <div className="mc-panel" role="dialog" aria-label="Managed Care">
+      <div className="mc-panel" role="dialog" aria-label="Clinical Update">
         <div className="mc-panel__header">
           <div className="mc-panel__title">
-            Managed Care
+            Clinical Update
             {patientName && <span className="mc-panel__patient">{patientName}</span>}
           </div>
           {/* NO_TRACK — close mirrors mc_panel_opened; no close event in schema */}

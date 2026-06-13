@@ -239,7 +239,7 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
       // Field-level hints from the backend's 400 `required` list; clear state
       // for a 403 (gate can flip between page load and submit).
       if (e.status === 403) {
-        setError("Managed Care isn't enabled for this facility.");
+        setError("Clinical Updates aren't enabled for this facility.");
       } else if (e.required?.length) {
         setError(`Missing required fields: ${e.required.join(', ')}`);
       } else {
@@ -440,6 +440,8 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                 const rangeOpen = !!openRanges[key];
                 const rangeLabel = GROUP_RANGE_PILLS.find((p) => p.key === rMode)?.label || 'All';
                 const firstOverride = config.documentTypeRangeOverrides[group.types[0]] || {};
+                // Only Progress Note exposes a per-type date range; all others use the global range.
+                const allowsRange = key === 'progress-note' || /progress note/i.test(group.label || '');
                 return (
                   <div key={key}
                     className={`mc-doc-card ${groupSelected ? 'mc-doc-card--on' : ''} ${multi ? 'mc-doc-card--multi' : ''}`}>
@@ -448,7 +450,7 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                         onChange={(e) => toggleTypes(group.types, e.target.checked)} />
                       <span className="mc-doc-card__label">{group.label}</span>
                       {multi && <span className="mc-doc-card__count">{onCount}/{group.types.length}</span>}
-                      {groupSelected && (
+                      {groupSelected && allowsRange && (
                         // NO_TRACK — form micro-interaction
                         <button type="button" className="mc-link-btn"
                           onClick={(e) => { e.preventDefault(); setOpenRanges((r) => ({ ...r, [key]: !rangeOpen })); }}>
@@ -467,7 +469,7 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                         ))}
                       </div>
                     )}
-                    {groupSelected && rangeOpen && (
+                    {groupSelected && allowsRange && rangeOpen && (
                       <div className="mc-doc-card__range">
                         <div className="mc-pills mc-pills--small">
                           {GROUP_RANGE_PILLS.map((p) => (
