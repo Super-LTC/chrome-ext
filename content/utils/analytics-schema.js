@@ -89,6 +89,11 @@ export const EVENT_SCHEMA = {
   mds_run_completed: ['surface', 'code', 'sections_total', 'duration_ms_bucket'],
   mds_run_failed: ['surface', 'code', 'duration_ms_bucket'],
 
+  // Interview-coverage chips on the PCC MDS List → In Progress screen.
+  // `_shown` fires once per batch round trip; `_row_clicked` opens the detail popover.
+  mds_list_coverage_shown: ['rows', 'ok', 'not_synced'],
+  mds_list_coverage_row_clicked: ['required', 'needed'],
+
   facility_dashboard_tab_switched: ['from_tab', 'to_tab'],
   facility_dashboard_resident_clicked: [],
 
