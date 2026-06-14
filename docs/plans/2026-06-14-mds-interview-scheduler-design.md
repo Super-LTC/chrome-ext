@@ -169,20 +169,26 @@ free because the coverage endpoint is stateless and re-reads the live UDA list.
 
 ## Library matching
 
-Facility assessment names are **not uniform** — they vary per facility (e.g.
-`HCG- BRIEF INTERVIEW FOR MENTAL STATUS (3.0 BIMS)`, `HCG- PHQ-9 (MDS 3.0)`,
-`Nursing GG Evaluation`, `HCG-Pain Assessment (3.0)`). We keyword-match the
-`std_assessment` options to interview types:
+Facility assessment names are **not uniform** — they vary per facility. The scorer in
+`lib/library-match.js` was tuned against **three real facility libraries** (`library-match.test.js`
+is the corpus). Lessons baked into the scoring:
 
-- **BIMS** → `bims`, `brief interview for mental status`
-- **PHQ** → `phq`, `phq-9`, `phq-2 to 9`, `mood`
-- **GG** → `gg`, `functional`, `section gg`
-- **Pain** → `pain`, `section j`
+- **Penalize "Staff Assessment"** — it's the fallback for when a resident *can't* be
+  interviewed, never what we want to schedule (e.g. `BIMS (Staff Assessment)` must lose
+  to `BIMS (MDS 3.0)`).
+- **Boost "Interview" / "3.0"** — distinguishes the real MDS resident interview from a
+  clinical eval (`Pain Interview (MDS 3.0)` beats `Pain Evaluation`).
+- **Word-boundary short tokens** — `gg` is matched as `\bgg\b`, so it won't fire inside
+  "Luggage"/"Triggering".
+- **Section GG is A0310-type-aware** — facilities carry per-type functional forms
+  (`Functional Abilities – IDT Determination: Admission | Discharge | OBRA/IPA`); we use the
+  ARD's assessment type to prefer the right variant. Matching therefore runs **at Save**
+  (final type known), not at prefetch (which just caches the raw library).
 
-Matching is best-effort and a known weak point. When **no** library match is found for a
-needed interview, surface it in the modal as *"couldn't find a GG assessment in your
-library — schedule manually"* rather than silently dropping it. Matching rules live in one
-place so facility-specific aliases can be tuned.
+Matching is still best-effort, so the **modal renders a full-library override `<select>` per
+needed interview**, pre-selected to the keyword match. Wrong or missing guesses are a
+one-click fix; "no match" rows default to "schedule manually" until the nurse picks one.
+This is the real robustness mechanism — the keyword score is just a smart default.
 
 ## UDA creation POST
 
