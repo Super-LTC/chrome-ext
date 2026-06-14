@@ -22,14 +22,13 @@ function _isNewMdsPopup() {
   return window.location.href.includes('/clinical/mds3_popup/newmds.xhtml');
 }
 
-let _matchesPromise = null;     // started on load, awaited at Save
+let _libraryPromise = null;     // raw options, fetched on load (the slow part)
 function _prefetchLibrary() {
   const { patientId } = window.MdsSchedulerForm.readFormState();
   if (!patientId) return;
-  _matchesPromise = window.MdsSchedulerLibrary
+  _libraryPromise = window.MdsSchedulerLibrary
     .fetchAssessmentLibrary(patientId)
-    .then((opts) => matchLibraryToInterviews(opts))
-    .catch((e) => { console.warn('[mds-sched] library prefetch failed', e); return null; });
+    .catch((e) => { console.warn('[mds-sched] library prefetch failed', e); return []; });
 }
 
 function _teardown(overlay) {
@@ -53,7 +52,10 @@ async function _onSave(proceedWithSave) {
   const needed = (coverage?.interviews || []).filter((i) => i.status === 'needed');
   if (needed.length === 0) return proceedWithSave();   // silent passthrough
 
-  const matches = (await _matchesPromise) || { bims: null, phq: null, gg: null, pain: null };
+  // Keyword-match the library NOW, with the final A0310 type (so the GG variant
+  // is right for this ARD). Matching is cheap+pure; only the fetch was slow.
+  const options = (await _libraryPromise) || [];
+  const matches = matchLibraryToInterviews(options, { a0310a: form.a0310a, a0310f: form.a0310f });
   const nUnmatched = needed.filter((i) => !matches[i.type]).length;
   const desc = coverage?.description || '';
 
@@ -114,7 +116,7 @@ async function _onSave(proceedWithSave) {
     proceed();
   };
 
-  render(h(SchedulerModal, { coverage, matches, isoToPccDate, onConfirm, onSkip }), overlay);
+  render(h(SchedulerModal, { coverage, matches, libraryOptions: options, isoToPccDate, onConfirm, onSkip }), overlay);
 }
 
 // --- Save interception via DOM events --------------------------------------
