@@ -43,6 +43,9 @@ import './queries/query-send-modal.js';
 // 4.5. Import MDS overlay (depends on queries, evidence-viewers, section-transformers)
 import './mds-overlay.js';
 
+// 4.55. MDS In-Progress list interview-coverage overlay
+import './mds-list-coverage.js';
+
 // 4.6. Super MDS Mode — full-screen one-item-at-a-time blitz overlay
 import './modules/super-mds-mode/SuperMDSMode.jsx';
 
