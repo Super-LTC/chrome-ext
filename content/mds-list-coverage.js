@@ -7,7 +7,10 @@ import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { showRowDetail } from './mds-list-coverage/detail.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
-const esc = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s ?? ''));
+// Prefer the shared global escaper; fall back to a local escape so a missing
+// global degrades safely (raw String() would make server fields an XSS sink).
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s ?? '').replace(/[&<>"']/g, (c) => ESC_MAP[c]));
 
 /** True only on the MDS list with the "In Progress" tab active. */
 function isInProgressList() {
@@ -66,14 +69,21 @@ function ensureRowCell(rowEl) {
 
 function renderRow(rowEl, result, rowMeta) {
   const cell = ensureRowCell(rowEl);
-  if (!result) { cell.innerHTML = '<span class="super-ilc-loading">…</span>'; return; }
-  const chips = toChips(result);
-  cell.innerHTML = chips.map((c) =>
-    `<span class="super-ilc-chip super-ilc-chip--${c.kind}" title="${esc(c.title)}">` +
-    `${c.kind === 'covered' ? '✓ ' : c.kind === 'needed' ? '⚠ ' : ''}${esc(c.label)}` +
-    `${c.sub ? ` <span class="super-ilc-chip__sub">${esc(c.sub)}</span>` : ''}</span>`
-  ).join('');
-  if (result.status === 'ok') {
+  const html = !result
+    ? '<span class="super-ilc-loading">…</span>'
+    : toChips(result).map((c) =>
+        `<span class="super-ilc-chip super-ilc-chip--${c.kind}" title="${esc(c.title)}">` +
+        `${c.kind === 'covered' ? '✓ ' : c.kind === 'needed' ? '⚠ ' : ''}${esc(c.label)}` +
+        `${c.sub ? ` <span class="super-ilc-chip__sub">${esc(c.sub)}</span>` : ''}</span>`
+      ).join('');
+  // Only touch the DOM when the markup actually changes. Writing innerHTML
+  // mutates #msg1, which our own MutationObserver watches — an unconditional
+  // write would re-trigger the observer and spin a re-render loop.
+  if (cell.__ilcSig !== html) {
+    cell.innerHTML = html;
+    cell.__ilcSig = html;
+  }
+  if (result && result.status === 'ok') {
     cell.style.cursor = 'pointer';
     cell.onclick = (e) => {
       e.stopPropagation();
@@ -83,6 +93,9 @@ function renderRow(rowEl, result, rowMeta) {
       });
       showRowDetail(cell, result, rowMeta);
     };
+  } else {
+    cell.style.cursor = '';
+    cell.onclick = null;
   }
 }
 
@@ -151,7 +164,18 @@ if (document.readyState === 'loading') {
 
 // PCC re-renders the table in place on unit/floor/status filter + screen change.
 let ilcDebounce = null;
-const ilcObserver = new MutationObserver(() => {
+const isOurNode = (n) => n && n.nodeType === 1 &&
+  (n.classList?.contains('super-ilc-cell') || n.classList?.contains('super-ilc-th') || n.closest?.('.super-ilc-cell'));
+const ilcObserver = new MutationObserver((muts) => {
+  // Ignore mutations we caused ourselves (chip writes into our cells, header th)
+  // so our own DOM writes don't re-trigger a render cycle.
+  const external = muts.some((m) => {
+    if (m.target?.closest?.('.super-ilc-cell')) return false;
+    const added = [...m.addedNodes];
+    if (added.length && added.every(isOurNode)) return false;
+    return true;
+  });
+  if (!external) return;
   clearTimeout(ilcDebounce);
   ilcDebounce = setTimeout(() => { if (isInProgressList()) runCoverage(); }, 350);
 });
