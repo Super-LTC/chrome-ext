@@ -20,9 +20,16 @@ function isInProgressList() {
 
 /** The PCC data table that holds the rows (the one with the Name/Type columns). */
 function findListTable() {
-  const candidate = [...document.querySelectorAll('table')]
-    .find((t) => t.querySelector('a[href*="cp_mds.jsp"]') && t.querySelector('a[href*="sectionlisting.xhtml"], a[href*="launchCopyMDSAssessment"]'));
-  return candidate || null;
+  // The data rows live in the table inside #msg1. Anchor there so we don't
+  // match the outer wrapper tables (which contain the data table as a
+  // descendant and would yield a phantom wrapper "row").
+  const inMsg = document.querySelector('#msg1 table');
+  if (inMsg && inMsg.querySelector('a[href*="sectionlisting.xhtml"], a[href*="launchCopyMDSAssessment"]')) return inMsg;
+  // Fallback: the innermost matching table (one with no nested <table>).
+  const matches = [...document.querySelectorAll('table')].filter((t) =>
+    t.querySelector('a[href*="cp_mds.jsp"]') &&
+    t.querySelector('a[href*="sectionlisting.xhtml"], a[href*="launchCopyMDSAssessment"]'));
+  return [...matches].reverse().find((t) => !t.querySelector('table')) || matches[matches.length - 1] || null;
 }
 
 function getContext() {
