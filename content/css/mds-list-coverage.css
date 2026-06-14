@@ -1,0 +1,25 @@
+/* MDS In-Progress list interview-coverage chips */
+.super-ilc-cell { white-space: nowrap; }
+.super-ilc-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  font: 600 11px/1 -apple-system, system-ui, sans-serif;
+  padding: 2px 6px; margin: 1px 2px; border-radius: 10px; cursor: default;
+  border: 1px solid transparent;
+}
+.super-ilc-chip--covered { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.super-ilc-chip--needed  { background: #fef3c7; color: #b45309; border-color: #fcd34d; cursor: pointer; }
+.super-ilc-chip--neutral { background: #f1f5f9; color: #94a3b8; }
+.super-ilc-chip--error   { background: #fee2e2; color: #b91c1c; }
+.super-ilc-chip__sub { font-weight: 500; opacity: .85; }
+.super-ilc-loading { color: #94a3b8; font: 500 11px/1 system-ui; }
+
+/* row detail popover */
+.super-ilc-pop {
+  position: fixed; z-index: 2147483600; max-width: 360px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15,23,42,.18); padding: 12px 14px;
+  font: 13px/1.5 -apple-system, system-ui, sans-serif; color: #1e293b;
+}
+.super-ilc-pop__title { font-weight: 700; margin-bottom: 6px; }
+.super-ilc-pop__iv { padding: 6px 0; border-top: 1px solid #f1f5f9; }
+.super-ilc-pop__iv:first-of-type { border-top: 0; }
