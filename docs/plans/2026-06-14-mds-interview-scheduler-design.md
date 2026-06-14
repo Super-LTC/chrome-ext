@@ -80,6 +80,32 @@ what the `care-plan-stamp` module already does:
 
 We reuse this shape for creating UDAs via the `newassess.jsp` POST.
 
+## Interception mechanism (isolated world)
+
+Chrome MV3 content scripts run in an **isolated JS world** — they share the DOM
+with the page but not its `window`/function scope. So we cannot wrap the page's
+global `submitSave()` from the content script. Instead we intercept at the **DOM
+level**, which crosses the world boundary:
+
+- A **capture-phase** `click` listener on `document` fires before the Save button's
+  inline `onclick`. We `preventDefault()` + `stopImmediatePropagation()` to block
+  PCC's native handler, run our async flow, then **resume** by re-dispatching
+  `button.click()` behind a `_resuming` flag so our own listener passes it through
+  and PCC's native `onclick` (validation → confirm flow → `submitSave`) runs intact.
+
+**Known v1 gaps (acceptable):**
+- **CTRL-SHIFT-S keyboard save** calls `submitSave()` directly in page context (not a
+  button click), so it bypasses the interceptor — a keyboard-only blind spot.
+- **Server-confirm auto-resubmit** (COT/ARD-change roundtrip) also calls `submitSave()`
+  directly on reload. Fine: our UDAs were already created on the click pass, and the
+  coverage re-check is idempotent, so the save just proceeds.
+- We schedule UDAs *before* PCC's `canProceedWithSubmission()` validation runs (we
+  can't call it cross-world). If the form is invalid the nurse sees PCC's alert after,
+  and any created UDAs are the same low-harm strays noted below.
+
+A later hardening pass could inject a `world: "MAIN"` bridge script to wrap
+`submitSave()` directly and close all three gaps.
+
 ## The save choke point
 
 The `newmds.xhtml` popup's Save button is:

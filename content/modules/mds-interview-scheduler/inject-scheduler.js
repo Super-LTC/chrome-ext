@@ -3,9 +3,11 @@
  *
  * On the New/Change MDS popup (newmds.xhtml):
  *   - silently prefetch + keyword-match the facility UDA library on load
- *   - wrap the popup's global submitSave() so that at Save we evaluate
- *     interview coverage once, and if anything is needed, show a confirm modal
- *     that creates the chosen UDAs before letting PCC persist the MDS.
+ *   - intercept the Save button click (capture phase, since content scripts run
+ *     in an isolated world and can't wrap the page's submitSave()) so that at
+ *     Save we evaluate interview coverage once, and if anything is needed, show
+ *     a confirm modal that creates the chosen UDAs before re-dispatching the
+ *     click to let PCC persist the MDS with its native flow.
  *
  * See docs/plans/2026-06-14-mds-interview-scheduler-design.md.
  */
@@ -35,21 +37,21 @@ function _teardown(overlay) {
   overlay.remove();
 }
 
-async function _onSave(originalSubmitSave) {
+async function _onSave(proceedWithSave) {
   const form = window.MdsSchedulerForm.readFormState();
   const query = buildCoverageQuery(form);
-  if (!query) return originalSubmitSave();
+  if (!query) return proceedWithSave();
 
   let coverage;
   try {
     coverage = await window.MdsSchedulerAPI.fetchInterviewCoverage(query);
   } catch (e) {
     console.warn('[mds-sched] coverage fetch failed; saving without scheduling', e);
-    return originalSubmitSave();
+    return proceedWithSave();
   }
 
   const needed = (coverage?.interviews || []).filter((i) => i.status === 'needed');
-  if (needed.length === 0) return originalSubmitSave();   // silent passthrough
+  if (needed.length === 0) return proceedWithSave();   // silent passthrough
 
   const matches = (await _matchesPromise) || { bims: null, phq: null, gg: null, pain: null };
   const nUnmatched = needed.filter((i) => !matches[i.type]).length;
@@ -69,7 +71,7 @@ async function _onSave(originalSubmitSave) {
   overlay.id = OVERLAY_ID;
   document.body.appendChild(overlay);
 
-  const proceed = () => { _markHandled(); originalSubmitSave(); };
+  const proceed = () => proceedWithSave();
 
   const onSkip = () => {
     window.SuperAnalytics?.track?.('mds_interview_scheduler_skipped', {
@@ -106,35 +108,61 @@ async function _onSave(originalSubmitSave) {
   render(h(SchedulerModal, { coverage, matches, isoToPccDate, onConfirm, onSkip }), overlay);
 }
 
-let _handled = false;
-function _markHandled() { _handled = true; }
+// --- Save interception via DOM events --------------------------------------
+//
+// Content scripts run in an ISOLATED world, so we can't wrap the page's global
+// submitSave()/canProceedWithSubmission(). DOM events + element.click() DO cross
+// the world boundary, so we intercept the Save button click in the CAPTURE phase
+// (fires before PCC's inline onclick), run our async flow, then "resume" the real
+// save by re-dispatching a click that bypasses our own listener — letting PCC's
+// native onclick (validation + confirm flow + submitSave) run untouched.
+//
+// Known v1 gaps (documented in the design doc): the CTRL-SHIFT-S keyboard save
+// and the server-confirm auto-resubmit call submitSave() directly in page context
+// (not via a button click), so they bypass this interceptor. The first creates a
+// rare keyboard-only blind spot; the second is fine — our UDAs were already
+// created on the click pass, and the coverage re-check is idempotent anyway.
 
-function _installSaveHook() {
-  if (typeof window.submitSave !== 'function') return false;
-  if (window.submitSave.__superWrapped) return true;
-  const original = window.submitSave;
-  const wrapped = function () {
-    if (_handled) return original.apply(this, arguments);   // our resume / re-entrancy
-    // Intercept: run our async flow, suppress the native save until we decide.
-    _onSave(() => original.apply(this, arguments));
-    return undefined;
+const SAVE_BTN_ID = 'idSaveBtn';
+let _resuming = false;     // true while we re-dispatch the click to let PCC save
+let _busy = false;         // guard against re-entrant intercepts mid-flow
+
+function _onCaptureClick(e) {
+  if (_resuming) return;                       // our own resume click — let it through
+  const btn = e.target?.closest?.(`#${SAVE_BTN_ID}`);
+  if (!btn) return;
+  if (_busy) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+
+  // Block PCC's inline onclick for now; we'll re-trigger it after our flow.
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  _busy = true;
+
+  const resume = () => {
+    _busy = false;
+    _resuming = true;
+    btn.click();                               // runs PCC's native onclick natively
+    _resuming = false;
   };
-  wrapped.__superWrapped = true;
-  wrapped.__superOriginal = original;
-  window.submitSave = wrapped;
-  return true;
+
+  _onSave(resume).catch((err) => {
+    console.warn('[mds-sched] save flow errored; saving anyway', err);
+    resume();
+  });
+}
+
+let _listenerInstalled = false;
+function _installSaveHook() {
+  if (_listenerInstalled) return;
+  // Capture phase on document → fires before the button's inline onclick.
+  document.addEventListener('click', _onCaptureClick, true);
+  _listenerInstalled = true;
 }
 
 function _init() {
   if (!_isNewMdsPopup()) return;
   _prefetchLibrary();
-  // submitSave is defined in the popup's own script; poll briefly until present.
-  if (_installSaveHook()) return;
-  let tries = 0;
-  const id = setInterval(() => {
-    tries += 1;
-    if (_installSaveHook() || tries >= 20) clearInterval(id);
-  }, 150);
+  _installSaveHook();
 }
 
 if (document.readyState === 'loading') {
