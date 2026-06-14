@@ -99,9 +99,18 @@ async function _onSave(proceedWithSave) {
       n_created: res?.created?.length || 0,
       n_failed: res?.errors?.length || 0,
     });
-    // Even on partial error, proceed to save the MDS (UDAs are independent).
-    if (res && !res.ok) console.warn('[mds-sched] some UDAs failed', res.errors);
     _teardown(overlay);
+    // Never block the MDS save (UDAs are independent) — but if any failed, make
+    // sure the nurse SEES it (otherwise they'd assume it scheduled). A blocking
+    // alert here is appropriate: it pauses before the save-navigation.
+    const failedTypes = (res && !res.ok)
+      ? picks.filter((p) => !res.created.includes(p.type)).map((p) => p.label)
+      : (!res ? picks.map((p) => p.label) : []);
+    if (failedTypes.length > 0) {
+      console.warn('[mds-sched] some UDAs failed', res?.errors);
+      // eslint-disable-next-line no-alert
+      alert(`Super LTC: scheduled ${res?.created?.length || 0} of ${picks.length} interviews.\n\nCouldn't schedule: ${failedTypes.join(', ')}.\nPlease add ${failedTypes.length === 1 ? 'it' : 'these'} manually. The MDS will still save.`);
+    }
     proceed();
   };
 
