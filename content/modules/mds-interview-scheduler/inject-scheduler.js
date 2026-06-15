@@ -138,6 +138,19 @@ async function _onSave(proceedWithSave) {
 
   const proceed = () => proceedWithSave();
 
+  // Best-effort deep-link to an existing UDA (covered / in-progress / out-of-window).
+  // Opens in a NEW TAB so it can't disturb the MDS popup. UNVERIFIED URL pattern —
+  // PCC's UDA opener for these encoded ids isn't confirmed; verify by clicking.
+  const openUda = (uda) => {
+    if (!uda?.id) return;
+    const cid = form.patientId;
+    const url = `/clinical/interaction/app.xhtml?ESOLassessid=${encodeURIComponent(uda.id)}`
+      + `&retURL=${encodeURIComponent('/admin/client/cp_assessment.jsp')}`
+      + `&ESOLclientid=${encodeURIComponent(cid)}&ESOLtabType=C&ESOLinquiryid=-1`
+      + `&templateId=null&writable=true#/interactions/${encodeURIComponent(uda.id)}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
   const onSkip = () => {
     window.SuperAnalytics?.track?.('mds_interview_scheduler_skipped', {
       description: desc, n_needed: needed.length,
@@ -189,7 +202,7 @@ async function _onSave(proceedWithSave) {
     proceed();
   };
 
-  render(h(SchedulerModal, { coverage, matches, libraryOptions: options, isoToPccDate, onConfirm, onSkip }), overlay);
+  render(h(SchedulerModal, { coverage, matches, libraryOptions: options, isoToPccDate, openUda, onConfirm, onSkip }), overlay);
 }
 
 // --- Save interception via DOM events --------------------------------------
