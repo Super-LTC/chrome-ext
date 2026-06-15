@@ -2,6 +2,47 @@
 // Transforms API responses to overlay format for each MDS section
 
 /**
+ * Classify *why* a column landed on needs_review, so the overlay can show a
+ * calm informational badge instead of a yellow "take a look" nag for the cases
+ * that don't actually need the nurse's judgement.
+ *
+ * Currently detects ONE reason: `ordered_not_administered` — there's a relevant
+ * ORDER in the lookback but no administration record (e.g. a PRN oxygen order
+ * never given). That's the AI explaining why it isn't coding, not a question.
+ *
+ * Heuristic over data the solver already persisted (no re-run needed):
+ *   needs_review  AND  no firstAdministered/lastAdministered  AND
+ *   (an order in the evidence  OR  rationale that explicitly says "order, no admin").
+ * Returns null for every other needs_review (those stay normal yellow), and for
+ * sections that don't carry order/administration evidence (safe no-op).
+ *
+ * NOTE: this is a heuristic on existing data. The bulletproof version is the
+ * solver emitting an explicit `reviewReason` — when that lands, prefer it:
+ *   columnData.reviewReason || deriveReviewReason(columnData)
+ */
+function deriveReviewReason(columnData) {
+  if (!columnData) return null;
+  if (columnData.reviewReason) return columnData.reviewReason; // server-provided wins
+  const answer = String(columnData.answer ?? '').toLowerCase();
+  const isReview = answer === 'needs_review' || columnData.status === 'needs_review';
+  if (!isReview) return null;
+
+  const hasAdministration = !!(columnData.firstAdministered || columnData.lastAdministered);
+  if (hasAdministration) return null;
+
+  const evidence = Array.isArray(columnData.evidence) ? columnData.evidence : [];
+  const hasOrderEvidence = evidence.some(
+    (e) => String(e?.sourceType ?? '').toLowerCase() === 'order'
+  );
+  const rationale = String(columnData.rationale ?? '').toLowerCase();
+  const rationaleSaysOrderNoAdmin =
+    /\border\b/.test(rationale) &&
+    /(no admin|not administered|no administration|without admin|insufficient to code)/.test(rationale);
+
+  return hasOrderEvidence || rationaleSaysOrderNoAdmin ? 'ordered_not_administered' : null;
+}
+
+/**
  * Transform Section O API response to overlay format
  */
 function transformSectionO(results) {
@@ -25,6 +66,7 @@ function transformSectionO(results) {
                 confidence: columnData.confidence,
                 rationale: columnData.rationale,
                 evidenceCount: columnData.evidenceCount || 0,
+                reviewReason: deriveReviewReason(columnData),
                 userDecision: columnData.userDecision || null
               }
             }
@@ -51,6 +93,7 @@ function transformSectionO(results) {
                   confidence: columnData.confidence,
                   rationale: columnData.rationale,
                   evidenceCount: columnData.evidenceCount || 0,
+                  reviewReason: deriveReviewReason(columnData),
                   userDecision: columnData.userDecision || null
                 }
               }
@@ -696,6 +739,10 @@ function transformSectionN(results) {
               confidence: col1.confidence,
               rationale: col1.rationale,
               evidenceCount: 0,
+              // Forward an EXPLICIT solver-provided reason only (no heuristic for N —
+              // its payload lacks the order/admin evidence to derive one safely). Null
+              // today; lights up the calm info badge if the N solver ever sets it.
+              reviewReason: col1.reviewReason || null,
               medicationsTaken: col1.medicationsTaken
             }
           }
@@ -713,6 +760,7 @@ function transformSectionN(results) {
               confidence: col2.confidence,
               rationale: col2.rationale,
               evidenceCount: 0,
+              reviewReason: col2.reviewReason || null, // explicit solver reason only (see col 1)
               medicationsWithIndication: col2.medicationsWithIndication
             }
           }

@@ -58,6 +58,18 @@
   background: #fde68a;
 }
 
+/* Informational (e.g. "ordered, not administered") — calm blue, not a warning.
+   States the reason and is clickable to view the MAR/TAR; never demands action. */
+.super-badge--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.super-badge--info:hover {
+  background: #dbeafe;
+}
+
 .super-badge--dismissed {
   opacity: 0.5;
   text-decoration: line-through;

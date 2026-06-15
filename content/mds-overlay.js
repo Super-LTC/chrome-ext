@@ -613,6 +613,13 @@ function processQuestion(questionEl, item, column, aiAnswer) {
   // Get PCC's current answer
   const pccAnswer = getPCCAnswer(questionEl);
 
+  // Carve-out: a skip-gated / not-applicable question (e.g. M0300 ulcer-stage
+  // counts when M0210 = No) has nothing for the nurse to act on — PCC marks it
+  // disabled. Render no badge at all rather than nagging yellow.
+  if (isQuestionSkipped(questionEl)) {
+    return;
+  }
+
   // Determine comparison status
   const status = determineStatus(aiAnswer, pccAnswer);
 
@@ -656,6 +663,21 @@ function processQuestion(questionEl, item, column, aiAnswer) {
   injectBadge(questionEl, result);
 }
 
+/**
+ * A question is "skipped" (not applicable per PCC's own skip logic, e.g. M0300
+ * ulcer-stage counts when M0210 = No). PCC marks the question's `_wrapper` with
+ * the `disabled_question` class and injects a `.question_content_overlay`
+ * ("Question X disabled by question Y"). Either signal is definitive — there's
+ * nothing for the nurse to act on, so the overlay renders no badge. This holds
+ * even on signed assessments (a skipped item is still skipped after signing).
+ */
+function isQuestionSkipped(questionEl) {
+  return (
+    questionEl.classList.contains('disabled_question') ||
+    questionEl.querySelector('.question_content_overlay') !== null
+  );
+}
+
 function getPCCAnswer(questionEl) {
   // Look for selected response - return raw data-value
   const selectedResponse = questionEl.querySelector('.responses a.selected');
@@ -675,10 +697,23 @@ function getPCCAnswer(questionEl) {
     return lockedResponse.getAttribute('data-value');
   }
 
-  // Check for numeric input (like K0200 height/weight)
+  // Check for numeric input (like K0200 height/weight) on a SIGNED assessment.
+  // PCC fills empty readonly values with &nbsp; ( ), which trim() leaves
+  // intact — strip those so a blank signed item reads as "not coded", not as a
+  // whitespace value that would falsely mismatch the AI.
   const numericInput = questionEl.querySelector('.readonlyquestionvalue b');
   if (numericInput) {
-    return numericInput.textContent?.trim();
+    const val = numericInput.textContent?.replace(/\u00a0/g, ' ').trim();
+    if (val) return val;
+  }
+
+  // Open / in-progress MDS: numeric & text answers (e.g. K0200 weight,
+  // N0300/N0350 insulin day-counts) live in a live <input>, not in
+  // .readonlyquestionvalue. Without reading this, the overlay can't see what the
+  // nurse just typed, so an answer that matches the AI would wrongly stay yellow.
+  const editableInput = questionEl.querySelector('input[type="text"], input[type="number"]');
+  if (editableInput && editableInput.value != null && editableInput.value.trim() !== '') {
+    return editableInput.value.trim();
   }
 
   return null;
@@ -724,47 +759,32 @@ function formatAnswerForDisplay(answer, isNumeric = false) {
 }
 
 function determineStatus(aiAnswer, pccAnswer) {
-  // Check if dismissed
+  // 1. Dismissed — the nurse already acted on this one.
   const key = `${aiAnswer.mdsItem}-${aiAnswer.column}`;
   if (SuperOverlay.dismissedItems.has(key)) {
     return 'dismissed';
   }
 
-  // Section I: Handle special status values (code, needs_physician_query, dont_code, needs_review)
-  if (aiAnswer.status === 'needs_physician_query' || aiAnswer.status === 'needs_review') {
+  // 2a. Informational needs_review (e.g. "ordered, not administered"): the AI is
+  //     EXPLAINING why it isn't coding, not asking for a judgement. Render a calm
+  //     info badge — clickable to view evidence/MAR-TAR — instead of a yellow nag.
+  if (aiAnswer.reviewReason === 'ordered_not_administered') {
+    return 'info';
+  }
+
+  // 2b. Carve-out: Section I physician-query / other needs-review items keep their
+  //     own "review" state even if the coded value happens to match — sending a
+  //     query is a distinct workflow, not a simple agree/disagree.
+  if (
+    aiAnswer.status === 'needs_physician_query' ||
+    aiAnswer.status === 'needs_review' ||
+    aiAnswer.answer?.toLowerCase() === 'needs_review'
+  ) {
     return 'review';
   }
 
-  // Section I: code/dont_code statuses are definitive - skip confidence check
-  const hasDefinitiveStatus = aiAnswer.status === 'code' || aiAnswer.status === 'dont_code';
-
-  // Section M: Use comparisonStatus from API if available
-  if (aiAnswer.comparisonStatus) {
-    switch (aiAnswer.comparisonStatus) {
-      case 'match':
-        return 'match';
-      case 'mismatch':
-        return 'mismatch';
-      case 'needs_review':
-      case 'not_coded':
-        return 'review';
-    }
-  }
-
-  // Needs review if low/medium confidence or needs_review answer
-  // BUT skip this check if we have a definitive status (code/dont_code)
-  if (!hasDefinitiveStatus) {
-    if (aiAnswer.confidence === 'low' || aiAnswer.confidence === 'medium') {
-      return 'review';
-    }
-
-    if (aiAnswer.answer?.toLowerCase() === 'needs_review') {
-      return 'review';
-    }
-  }
-
-  // Normalize both answers for comparison
-  // Use status field to derive answer for Section I items (code=Yes, dont_code=No)
+  // 3. Derive the AI's effective value. Section I encodes it as a status
+  //    (code = Yes, dont_code = No); every other section carries it in `answer`.
   let aiValue;
   if (aiAnswer.status === 'dont_code') {
     aiValue = '0'; // No
@@ -775,15 +795,19 @@ function determineStatus(aiAnswer, pccAnswer) {
   }
   const pccValue = normalizeAnswer(pccAnswer);
 
-  if (!pccValue) {
-    return 'review'; // No PCC answer yet
+  // 4. AGREEMENT WINS. If the nurse has already coded a value on the page,
+  //    compare to THAT first — regardless of the AI's confidence or any backend
+  //    comparison status. Matching her on-screen answer is always green; a real
+  //    difference is always red. (Previously a low/medium-confidence item, or a
+  //    stale backend `comparisonStatus`, forced yellow even when she'd entered
+  //    the identical answer — that's the "yellow even though I agree" bug.)
+  if (pccValue) {
+    return aiValue === pccValue ? 'match' : 'mismatch';
   }
 
-  if (aiValue === pccValue) {
-    return 'match';
-  }
-
-  return 'mismatch';
+  // 5. Nothing coded yet → a heads-up, not an error. Yellow ("take a look"),
+  //    never red. Nothing is wrong; she simply hasn't filled it in.
+  return 'review';
 }
 
 // ============================================
@@ -817,6 +841,12 @@ function injectBadge(questionEl, result) {
     case 'review':
       badge.classList.add('super-badge--review');
       badge.innerHTML = `<span class="super-badge__icon">&#9888;</span> Super: ${answerText}`;
+      break;
+    case 'info':
+      // Calm informational badge — e.g. "ordered, not administered". Not a nag;
+      // states the reason on its face and is clickable to view the MAR/TAR.
+      badge.classList.add('super-badge--info');
+      badge.innerHTML = `<span class="super-badge__icon">&#9432;</span> Super: Ordered · not given`;
       break;
     case 'dismissed':
       if (result.userDecision?.decision === 'disagree') {
