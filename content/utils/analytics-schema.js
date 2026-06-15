@@ -199,6 +199,7 @@ export const EVENT_SCHEMA = {
   mds_interview_scheduler_shown: ['description', 'n_needed', 'n_covered', 'n_in_progress', 'n_unmatched', 'operation'],
   mds_interview_scheduler_confirmed: ['description', 'n_selected', 'n_needed'],
   mds_interview_scheduler_skipped: ['description', 'n_needed'],
+  mds_interview_scheduler_hidden: ['description', 'n_needed'],
   mds_interview_scheduler_scheduled: ['n_selected', 'n_created', 'n_failed'],
   care_plan_audit_partial_stamped: ['source', 'n_interventions', 'caa'],
   care_plan_audit_remove_kept: [],

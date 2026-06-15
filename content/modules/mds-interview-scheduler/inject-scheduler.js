@@ -79,7 +79,7 @@ function _teardown(overlay) {
   overlay.remove();
 }
 
-async function _onSave(proceedWithSave) {
+async function _onSave(proceedWithSave, abortSave) {
   if (_isHidden()) return proceedWithSave();   // nurse opted out — never interrupt
   const form = window.MdsSchedulerForm.readFormState();
   const query = buildCoverageQuery(form);
@@ -138,6 +138,18 @@ async function _onSave(proceedWithSave) {
     proceed();
   };
 
+  // "Don't show this again" — hide for the future AND just close our modal,
+  // handing control back to the PCC form (no save). The nurse clicks Save
+  // themselves and it goes through untouched (now suppressed).
+  const onDismiss = () => {
+    window.SuperAnalytics?.track?.('mds_interview_scheduler_hidden', {
+      description: desc, n_needed: needed.length,
+    });
+    _setHidden(true);
+    _teardown(overlay);
+    abortSave?.();
+  };
+
   const onConfirm = async (picks, setProgress) => {
     window.SuperAnalytics?.track?.('mds_interview_scheduler_confirmed', {
       description: desc, n_selected: picks?.length || 0, n_needed: needed.length,
@@ -173,8 +185,7 @@ async function _onSave(proceedWithSave) {
   };
 
   render(h(SchedulerModal, {
-    coverage, matches, libraryOptions: options, isoToPccDate, openUda, onConfirm, onSkip,
-    onHideFuture: (checked) => _setHidden(checked),
+    coverage, matches, libraryOptions: options, isoToPccDate, openUda, onConfirm, onSkip, onDismiss,
   }), overlay);
 }
 
@@ -214,8 +225,9 @@ function _onCaptureClick(e) {
     btn.click();                               // runs PCC's native onclick natively
     _resuming = false;
   };
+  const abort = () => { _busy = false; };       // close our modal, hand control back to the form (no save)
 
-  _onSave(resume).catch((err) => {
+  _onSave(resume, abort).catch((err) => {
     console.warn('[mds-sched] save flow errored; saving anyway', err);
     resume();
   });

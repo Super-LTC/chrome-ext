@@ -14,7 +14,7 @@ import { Combobox } from './Combobox.jsx';
  *
  * Props:
  *   coverage, matches, libraryOptions, isoToPccDate, openUda(uda), onConfirm, onSkip,
- *   onHideFuture(checked)  — nurse ticked "don't show this again"
+ *   onDismiss()  — "Don't show this again": hide + close our modal (no save)
  */
 const TYPE_LABEL = { bims: 'BIMS', phq: 'PHQ-9', gg: 'Section GG', pain: 'Pain (Section J)' };
 
@@ -52,14 +52,13 @@ const S = {
   progress: 'flex-shrink:0;margin:0 20px 10px;padding:9px 11px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:600;',
   progressErr: 'flex-shrink:0;margin:0 20px 10px;padding:9px 11px;border-radius:8px;background:#fef2f2;color:#b91c1c;font-size:12px;font-weight:600;',
   foot: 'flex-shrink:0;padding:12px 20px;border-top:1px solid #eef2f6;display:flex;justify-content:flex-end;gap:9px;align-items:center;background:#fff;',
-  hideLabel: 'flex:1;display:flex;align-items:center;gap:6px;font-size:11.5px;color:#64748b;cursor:pointer;user-select:none;',
-  hideCheck: 'width:13px;height:13px;margin:0;flex-shrink:0;cursor:pointer;accent-color:#64748b;',
+  dismiss: 'flex:1;font-size:11.5px;color:#94a3b8;cursor:pointer;text-decoration:underline;text-underline-offset:2px;',
   btnGhost: 'padding:9px 15px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;white-space:nowrap;',
   btnPrimary: 'padding:9px 17px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #4338ca;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3);white-space:nowrap;',
   disabled: 'opacity:.5;cursor:default;box-shadow:none;',
 };
 
-export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate, openUda, onConfirm, onSkip, onHideFuture }) {
+export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate, openUda, onConfirm, onSkip, onDismiss }) {
   const interviews = coverage?.interviews || [];
   const options = libraryOptions || [];
   const order = { needed: 0, in_progress: 1, covered: 2 };
@@ -74,7 +73,6 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
     }]))
   );
   const [progress, setProgress] = useState(null);
-  const [hide, setHide] = useState(false);
 
   const busy = !!progress && progress.phase !== 'error';
   const set = (type, patch) => setState((s) => ({ ...s, [type]: { ...s[type], ...patch } }));
@@ -111,7 +109,7 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
     <div style={S.backdrop}>
       <div style={S.card}>
         <div style={S.head}>
-          <h2 style={S.h2}>Schedule MDS interviews</h2>
+          <h2 style={S.h2}>Would you like to auto-schedule these assessments?</h2>
           <p style={S.sub}>
             {coverage?.description || 'This assessment'} · <strong style="color:#b91c1c;">{neededCount} needed</strong>
             {coveredCount > 0 ? <>, <strong style="color:#15803d;">{coveredCount} covered</strong></> : null}. Pick assessment & date, then save.
@@ -162,19 +160,21 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
         )}
 
         <div style={S.foot}>
-          <label style={S.hideLabel} title="Stop showing this on future MDS saves (you can turn it back on)">
-            <input type="checkbox" style={S.hideCheck} checked={hide} disabled={busy}
-              onChange={() => { const v = !hide; setHide(v); onHideFuture?.(v); }} />
+          <span style={busy ? S.dismiss + 'opacity:.5;cursor:default;' : S.dismiss}
+            title="Stop showing this (you can turn it back on); closes this box so you can save normally"
+            onClick={() => !busy && onDismiss?.()}>
             Don't show this again
-          </label>
-          {/* NO_TRACK — fired as mds_interview_scheduler_skipped in orchestrator */}
-          <button style={busy ? S.btnGhost + S.disabled : S.btnGhost} disabled={busy} onClick={onSkip}>
-            Save MDS only
-          </button>
+          </span>
+          {picks.length > 0 && (
+            /* NO_TRACK — fired as mds_interview_scheduler_skipped in orchestrator */
+            <button style={busy ? S.btnGhost + S.disabled : S.btnGhost} disabled={busy} onClick={onSkip}>
+              Just create MDS
+            </button>
+          )}
           {/* NO_TRACK — fired as mds_interview_scheduler_confirmed in orchestrator */}
           <button style={busy ? S.btnPrimary + S.disabled : S.btnPrimary} disabled={busy}
             onClick={() => onConfirm(picks, setProgress)}>
-            {picks.length > 0 ? `Create ${picks.length} & save MDS` : 'Save MDS'}
+            {picks.length > 0 ? `Create ${picks.length} assessment${picks.length > 1 ? 's' : ''} + MDS` : 'Create MDS'}
           </button>
         </div>
       </div>
