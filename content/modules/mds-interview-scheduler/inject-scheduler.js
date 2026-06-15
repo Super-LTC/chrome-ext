@@ -22,64 +22,47 @@ function _isNewMdsPopup() {
   return window.location.href.includes('/clinical/mds3_popup/newmds.xhtml');
 }
 
-// --- Safe mode (dry-run) ----------------------------------------------------
-// While ON, we run the FULL flow (coverage fetch, library match, modal) but
-// create NO UDAs and block the real MDS save — so you can verify everything
-// without writing real data. Persisted in same-origin localStorage; toggle via
-// the on-page badge or `window.MdsScheduler.setSafeMode(false)` in the console.
-//
-// ⚠ Defaults ON for the test phase. BEFORE MERGE: default to OFF (or remove the
-// gating + badge) so the feature actually creates records in production.
-const DRY_RUN_KEY = 'superMdsSchedulerDryRun';
-function _isSafeMode() {
-  const v = localStorage.getItem(DRY_RUN_KEY);
-  return v === null ? true : v === 'true';
+// --- "Don't show again" suppression -----------------------------------------
+// A nurse can hide the scheduler via the modal's checkbox. Persisted in
+// same-origin localStorage (NOTE: per workstation, not per nurse — shared
+// computers share it). When hidden, Save just proceeds normally and the only
+// thing we show is a small "turn on" pill so it's always recoverable.
+const HIDDEN_KEY = 'superMdsSchedulerHidden';
+function _isHidden() {
+  return localStorage.getItem(HIDDEN_KEY) === 'true';
 }
-function _setSafeMode(on) {
-  localStorage.setItem(DRY_RUN_KEY, on ? 'true' : 'false');
-  _renderBadge();
+function _setHidden(on) {
+  localStorage.setItem(HIDDEN_KEY, on ? 'true' : 'false');
+  _renderResetPill();
 }
 
-function _notice(msg, tone) {
+function _notice(msg) {
   const el = document.createElement('div');
   el.textContent = msg;
   el.style.cssText = `position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483646;`
-    + `background:${tone === 'warn' ? '#b45309' : '#1d4ed8'};color:#fff;padding:9px 14px;border-radius:8px;`
+    + `background:#1d4ed8;color:#fff;padding:9px 14px;border-radius:8px;`
     + `font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:90vw;text-align:center;`;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(() => el.remove(), 3200);
 }
 
-// --- On-page badge: confirms our build is active + shows/toggles the mode -----
-const BADGE_ID = 'super-mds-sched-badge';
-function _renderBadge() {
+// Small "turn on" pill — shown ONLY when the scheduler has been hidden, so the
+// nurse can always get it back. Nothing shows while the scheduler is active.
+const PILL_ID = 'super-mds-sched-pill';
+function _renderResetPill() {
   if (!_isNewMdsPopup()) return;
-  let b = document.getElementById(BADGE_ID);
-  if (!b) {
-    b = document.createElement('div');
-    b.id = BADGE_ID;
-    b.title = 'Super LTC MDS Scheduler — click to toggle Safe Mode';
-    b.addEventListener('click', _toggleSafeMode);
-    document.body.appendChild(b);
-  }
-  const safe = _isSafeMode();
-  b.style.cssText = `position:fixed;left:8px;bottom:8px;z-index:2147483640;cursor:pointer;padding:6px 10px;`
-    + `border-radius:8px;font:600 11px/1.35 -apple-system,BlinkMacSystemFont,sans-serif;color:#fff;`
-    + `box-shadow:0 4px 14px rgba(0,0,0,.28);max-width:230px;background:${safe ? '#0f766e' : '#b91c1c'};`;
-  b.innerHTML = safe
-    ? '🧪 Super Scheduler · SAFE MODE<br><span style="font-weight:400;opacity:.9">Save creates nothing · click to go LIVE</span>'
-    : '● Super Scheduler · LIVE<br><span style="font-weight:400;opacity:.9">Save will create real records · click for Safe Mode</span>';
-}
-function _toggleSafeMode() {
-  if (_isSafeMode()) {
-    // eslint-disable-next-line no-alert
-    if (!confirm('Turn OFF Safe Mode?\n\nSave will then create REAL UDAs and a REAL MDS in PointClickCare.')) return;
-    _setSafeMode(false);
-    _notice('LIVE MODE — Save will create real records.', 'warn');
-  } else {
-    _setSafeMode(true);
-    _notice('SAFE MODE — nothing will be created.');
-  }
+  const existing = document.getElementById(PILL_ID);
+  if (!_isHidden()) { existing?.remove(); return; }
+  if (existing) return;
+  const p = document.createElement('div');
+  p.id = PILL_ID;
+  p.title = 'Turn the Super interview scheduler back on';
+  p.style.cssText = `position:fixed;left:8px;bottom:8px;z-index:2147483640;cursor:pointer;padding:6px 10px;`
+    + `border-radius:8px;font:600 11px/1.3 -apple-system,BlinkMacSystemFont,sans-serif;color:#475569;`
+    + `background:#fff;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(0,0,0,.16);`;
+  p.innerHTML = 'Interview scheduler off · <span style="color:#4f46e5;">Turn on</span>';
+  p.addEventListener('click', () => { _setHidden(false); _notice('Interview scheduler turned back on.'); });
+  document.body.appendChild(p);
 }
 
 let _libraryPromise = null;     // raw options, fetched on load (the slow part)
@@ -97,6 +80,7 @@ function _teardown(overlay) {
 }
 
 async function _onSave(proceedWithSave) {
+  if (_isHidden()) return proceedWithSave();   // nurse opted out — never interrupt
   const form = window.MdsSchedulerForm.readFormState();
   const query = buildCoverageQuery(form);
   if (!query) return proceedWithSave();
@@ -160,15 +144,6 @@ async function _onSave(proceedWithSave) {
     });
     if (!picks || picks.length === 0) { _teardown(overlay); proceed(); return; }
 
-    if (_isSafeMode()) {
-      const lines = picks.map((p) => `• ${p.label} → ${p.assessmentLabel || '(no form selected)'} on ${p.assessDatePcc || '?'}`).join('\n');
-      _teardown(overlay);
-      // eslint-disable-next-line no-alert
-      alert(`SAFE MODE — nothing was created.\n\nWould schedule ${picks.length}:\n${lines}\n\nThe MDS save is also blocked in Safe Mode. Click the badge (bottom-left) to go LIVE.`);
-      proceed();   // no-op in safe mode (resume blocks + notices)
-      return;
-    }
-
     let res;
     try {
       res = await window.MdsSchedulerCreate.scheduleInterviews({
@@ -197,7 +172,10 @@ async function _onSave(proceedWithSave) {
     proceed();
   };
 
-  render(h(SchedulerModal, { coverage, matches, libraryOptions: options, isoToPccDate, openUda, onConfirm, onSkip }), overlay);
+  render(h(SchedulerModal, {
+    coverage, matches, libraryOptions: options, isoToPccDate, openUda, onConfirm, onSkip,
+    onHideFuture: (checked) => _setHidden(checked),
+  }), overlay);
 }
 
 // --- Save interception via DOM events --------------------------------------
@@ -232,7 +210,6 @@ function _onCaptureClick(e) {
 
   const resume = () => {
     _busy = false;
-    if (_isSafeMode()) { _notice('SAFE MODE: MDS save blocked (nothing created).', 'warn'); return; }
     _resuming = true;
     btn.click();                               // runs PCC's native onclick natively
     _resuming = false;
@@ -254,9 +231,8 @@ function _installSaveHook() {
 
 function _init() {
   if (!_isNewMdsPopup()) return;
-  // Render the badge FIRST so a prefetch/hook error can never suppress it —
-  // it's also our "is the right build active?" signal.
-  try { _renderBadge(); } catch (e) { console.warn('[mds-sched] badge render failed', e); }
+  // Only shows the "turn on" pill if the scheduler was hidden; nothing otherwise.
+  try { _renderResetPill(); } catch (e) { console.warn('[mds-sched] pill render failed', e); }
   try { _prefetchLibrary(); } catch (e) { console.warn('[mds-sched] prefetch failed', e); }
   try { _installSaveHook(); } catch (e) { console.warn('[mds-sched] save hook failed', e); }
 }
@@ -269,6 +245,7 @@ if (document.readyState === 'loading') {
 
 window.MdsSchedulerInject = { init: _init };
 window.MdsScheduler = {
-  setSafeMode: (on) => _setSafeMode(!!on),   // false → LIVE (creates real records)
-  isSafeMode: _isSafeMode,
+  hide: () => _setHidden(true),     // stop showing the scheduler modal
+  show: () => _setHidden(false),    // re-enable it
+  isHidden: _isHidden,
 };
