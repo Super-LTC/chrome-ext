@@ -138,17 +138,12 @@ async function _onSave(proceedWithSave) {
 
   const proceed = () => proceedWithSave();
 
-  // Best-effort deep-link to an existing UDA (covered / in-progress / out-of-window).
-  // Opens in a NEW TAB so it can't disturb the MDS popup. UNVERIFIED URL pattern —
-  // PCC's UDA opener for these encoded ids isn't confirmed; verify by clicking.
+  // Deep-link to an existing UDA (covered / in-progress / out-of-window).
+  // Relative URL → works on any PCC host (www19/www21/…). New tab so it can't
+  // disturb the MDS popup.
   const openUda = (uda) => {
     if (!uda?.id) return;
-    const cid = form.patientId;
-    const url = `/clinical/interaction/app.xhtml?ESOLassessid=${encodeURIComponent(uda.id)}`
-      + `&retURL=${encodeURIComponent('/admin/client/cp_assessment.jsp')}`
-      + `&ESOLclientid=${encodeURIComponent(cid)}&ESOLtabType=C&ESOLinquiryid=-1`
-      + `&templateId=null&writable=true#/interactions/${encodeURIComponent(uda.id)}`;
-    window.open(url, '_blank', 'noopener');
+    window.open(`/care/chart/mds/mdssection.jsp?ESOLassessid=${encodeURIComponent(uda.id)}`, '_blank', 'noopener');
   };
 
   const onSkip = () => {
