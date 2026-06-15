@@ -67,9 +67,10 @@ export function buildCoverageQuery(form) {
     orgSlug: form.orgSlug || '',
     ardDate,
     description: deriveDescription(form),
-    // forward-compat: backend may switch to code-based requirements
+    // forward-compat: backend may switch to code-based requirements (esp. discharge)
     a0310a: form.a0310a || '', a0310b: form.a0310b || '',
     a0310c: form.a0310c || '', a0310f: form.a0310f || '',
+    a0310gCode: form.a0310g || '', a0310h: form.a0310h || '',
   };
   const g = deriveA0310g(form.a0310g);
   if (g) q.a0310g = g;

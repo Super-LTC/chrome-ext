@@ -38,6 +38,7 @@ function readFormState() {
     a0310c: _val('a0310c'),
     a0310f: _val('a0310f'),
     a0310g: _val('a0310g'),
+    a0310h: _val('a0310h'),   // SNF Part A PPS Discharge (radio: 0/1) — affects discharge GG
     miniToken: _val('ESOLminiToken'),
     operation: _val('operation'),         // 'N' new, 'X' change
     facilityName: _facilityFromOpener(),
