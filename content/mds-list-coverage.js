@@ -4,13 +4,9 @@
 import { scrapeRows } from './mds-list-coverage/scrape.js';
 import { toChips } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
-import { showRowDetail } from './mds-list-coverage/detail.js';
+import { showInterviewDetail } from './mds-list-coverage/detail.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
-// Prefer the shared global escaper; fall back to a local escape so a missing
-// global degrades safely (raw String() would make server fields an XSS sink).
-const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s ?? '').replace(/[&<>"']/g, (c) => ESC_MAP[c]));
 
 /** True only on the MDS list with the "In Progress" tab active. */
 function isInProgressList() {
@@ -69,34 +65,52 @@ function ensureRowCell(rowEl) {
 
 function renderRow(rowEl, result, rowMeta) {
   const cell = ensureRowCell(rowEl);
-  const html = !result
-    ? '<span class="super-ilc-loading">…</span>'
-    : toChips(result).map((c) =>
-        `<span class="super-ilc-chip super-ilc-chip--${c.kind}" title="${esc(c.title)}">` +
-        `${c.kind === 'covered' ? '✓ ' : c.kind === 'needed' ? '⚠ ' : ''}${esc(c.label)}` +
-        `${c.sub ? ` <span class="super-ilc-chip__sub">${esc(c.sub)}</span>` : ''}</span>`
-      ).join('');
-  // Only touch the DOM when the markup actually changes. Writing innerHTML
-  // mutates #msg1, which our own MutationObserver watches — an unconditional
-  // write would re-trigger the observer and spin a re-render loop.
-  if (cell.__ilcSig !== html) {
-    cell.innerHTML = html;
-    cell.__ilcSig = html;
+  const chips = result ? toChips(result) : null;
+  // Dirty-check by signature: only rebuild when content changes. Rebuilding
+  // mutates #msg1, which our own MutationObserver watches — skipping no-op
+  // writes is what stops the re-render loop.
+  const sig = result ? JSON.stringify(chips) : 'loading';
+  if (cell.__ilcSig === sig) return;
+  cell.__ilcSig = sig;
+  cell.textContent = '';
+
+  if (!result) {
+    const s = document.createElement('span');
+    s.className = 'super-ilc-loading';
+    s.textContent = '…';
+    cell.appendChild(s);
+    return;
   }
-  if (result && result.status === 'ok') {
-    cell.style.cursor = 'pointer';
-    cell.onclick = (e) => {
-      e.stopPropagation();
-      window.SuperAnalytics?.track?.('mds_list_coverage_row_clicked', {
-        required: Number(result.coverage?.summary?.required || 0),
-        needed: Number(result.coverage?.summary?.needed || 0),
+
+  // Each interview is its own chip: hover (title) shows that one's summary;
+  // clicking opens a popover anchored to that chip.
+  const interviews = result.status === 'ok' ? (result.coverage?.interviews || []) : [];
+  chips.forEach((c, i) => {
+    const chip = document.createElement('span');
+    chip.className = `super-ilc-chip super-ilc-chip--${c.kind}`;
+    if (c.title) chip.title = c.title;
+    const icon = c.kind === 'covered' ? '✓ ' : c.kind === 'needed' ? '⚠ ' : '';
+    chip.append(`${icon}${c.label}`);
+    if (c.sub) {
+      const sub = document.createElement('span');
+      sub.className = 'super-ilc-chip__sub';
+      sub.textContent = ` ${c.sub}`;
+      chip.appendChild(sub);
+    }
+    const iv = interviews[i];
+    if (iv) {
+      chip.classList.add('super-ilc-chip--clickable');
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.SuperAnalytics?.track?.('mds_list_coverage_row_clicked', {
+          required: Number(result.coverage?.summary?.required || 0),
+          needed: Number(result.coverage?.summary?.needed || 0),
+        });
+        showInterviewDetail(chip, iv);
       });
-      showRowDetail(cell, result, rowMeta);
-    };
-  } else {
-    cell.style.cursor = '';
-    cell.onclick = null;
-  }
+    }
+    cell.appendChild(chip);
+  });
 }
 
 async function runCoverage() {
