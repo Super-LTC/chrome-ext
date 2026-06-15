@@ -22,6 +22,66 @@ function _isNewMdsPopup() {
   return window.location.href.includes('/clinical/mds3_popup/newmds.xhtml');
 }
 
+// --- Safe mode (dry-run) ----------------------------------------------------
+// While ON, we run the FULL flow (coverage fetch, library match, modal) but
+// create NO UDAs and block the real MDS save — so you can verify everything
+// without writing real data. Persisted in same-origin localStorage; toggle via
+// the on-page badge or `window.MdsScheduler.setSafeMode(false)` in the console.
+//
+// ⚠ Defaults ON for the test phase. BEFORE MERGE: default to OFF (or remove the
+// gating + badge) so the feature actually creates records in production.
+const DRY_RUN_KEY = 'superMdsSchedulerDryRun';
+function _isSafeMode() {
+  const v = localStorage.getItem(DRY_RUN_KEY);
+  return v === null ? true : v === 'true';
+}
+function _setSafeMode(on) {
+  localStorage.setItem(DRY_RUN_KEY, on ? 'true' : 'false');
+  _renderBadge();
+}
+
+function _notice(msg, tone) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = `position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483646;`
+    + `background:${tone === 'warn' ? '#b45309' : '#1d4ed8'};color:#fff;padding:9px 14px;border-radius:8px;`
+    + `font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:90vw;text-align:center;`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// --- On-page badge: confirms our build is active + shows/toggles the mode -----
+const BADGE_ID = 'super-mds-sched-badge';
+function _renderBadge() {
+  if (!_isNewMdsPopup()) return;
+  let b = document.getElementById(BADGE_ID);
+  if (!b) {
+    b = document.createElement('div');
+    b.id = BADGE_ID;
+    b.title = 'Super LTC MDS Scheduler — click to toggle Safe Mode';
+    b.addEventListener('click', _toggleSafeMode);
+    document.body.appendChild(b);
+  }
+  const safe = _isSafeMode();
+  b.style.cssText = `position:fixed;left:8px;bottom:8px;z-index:2147483640;cursor:pointer;padding:6px 10px;`
+    + `border-radius:8px;font:600 11px/1.35 -apple-system,BlinkMacSystemFont,sans-serif;color:#fff;`
+    + `box-shadow:0 4px 14px rgba(0,0,0,.28);max-width:230px;background:${safe ? '#0f766e' : '#b91c1c'};`;
+  b.innerHTML = safe
+    ? '🧪 Super Scheduler · SAFE MODE<br><span style="font-weight:400;opacity:.9">Save creates nothing · click to go LIVE</span>'
+    : '● Super Scheduler · LIVE<br><span style="font-weight:400;opacity:.9">Save will create real records · click for Safe Mode</span>';
+}
+function _toggleSafeMode() {
+  if (_isSafeMode()) {
+    // eslint-disable-next-line no-alert
+    if (!confirm('Turn OFF Safe Mode?\n\nSave will then create REAL UDAs and a REAL MDS in PointClickCare.')) return;
+    _setSafeMode(false);
+    _notice('LIVE MODE — Save will create real records.', 'warn');
+  } else {
+    _setSafeMode(true);
+    _notice('SAFE MODE — nothing will be created.');
+  }
+}
+
 let _libraryPromise = null;     // raw options, fetched on load (the slow part)
 function _prefetchLibrary() {
   const { patientId } = window.MdsSchedulerForm.readFormState();
@@ -89,6 +149,16 @@ async function _onSave(proceedWithSave) {
       description: desc, n_selected: picks?.length || 0, n_needed: needed.length,
     });
     if (!picks || picks.length === 0) { _teardown(overlay); proceed(); return; }
+
+    if (_isSafeMode()) {
+      const lines = picks.map((p) => `• ${p.label} → ${p.assessmentLabel || '(no form selected)'} on ${p.assessDatePcc || '?'}`).join('\n');
+      _teardown(overlay);
+      // eslint-disable-next-line no-alert
+      alert(`SAFE MODE — nothing was created.\n\nWould schedule ${picks.length}:\n${lines}\n\nThe MDS save is also blocked in Safe Mode. Click the badge (bottom-left) to go LIVE.`);
+      proceed();   // no-op in safe mode (resume blocks + notices)
+      return;
+    }
+
     let res;
     try {
       res = await window.MdsSchedulerCreate.scheduleInterviews({
@@ -152,6 +222,7 @@ function _onCaptureClick(e) {
 
   const resume = () => {
     _busy = false;
+    if (_isSafeMode()) { _notice('SAFE MODE: MDS save blocked (nothing created).', 'warn'); return; }
     _resuming = true;
     btn.click();                               // runs PCC's native onclick natively
     _resuming = false;
@@ -175,6 +246,7 @@ function _init() {
   if (!_isNewMdsPopup()) return;
   _prefetchLibrary();
   _installSaveHook();
+  _renderBadge();
 }
 
 if (document.readyState === 'loading') {
@@ -184,3 +256,7 @@ if (document.readyState === 'loading') {
 }
 
 window.MdsSchedulerInject = { init: _init };
+window.MdsScheduler = {
+  setSafeMode: (on) => _setSafeMode(!!on),   // false → LIVE (creates real records)
+  isSafeMode: _isSafeMode,
+};
