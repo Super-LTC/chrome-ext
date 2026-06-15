@@ -47,3 +47,8 @@
 .super-ilc-pop--needed      .super-ilc-pop__h { color: #b45309; }
 .super-ilc-pop--upcoming    .super-ilc-pop__h { color: #64748b; }
 .super-ilc-pop__l { color: #64748b; }
+.super-ilc-pop__link {
+  display: inline-block; margin-top: 7px;
+  font-weight: 600; font-size: 12px; color: #2563eb; text-decoration: none;
+}
+.super-ilc-pop__link:hover { text-decoration: underline; }

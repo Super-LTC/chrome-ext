@@ -22,16 +22,31 @@ function onDocClick(e) { if (popEl && !popEl.contains(e.target)) close(); }
 function showFor(anchorEl, iv) {
   close();
   const d = interviewDetail(iv);
+  // When the backend returns the UDA's id (== PCC ESOLassessid), offer a deep
+  // link straight to that form in a new tab.
+  const link = d.udaId
+    ? `<a class="super-ilc-pop__link" href="${esc(udaUrl(d.udaId))}" target="_blank" rel="noopener">View in PCC ↗</a>`
+    : '';
   popEl = document.createElement('div');
   popEl.className = `super-ilc-pop super-ilc-pop--${d.status}`;
   popEl.innerHTML =
     `<div class="super-ilc-pop__h">${esc(d.heading)}</div>` +
-    d.lines.map((l) => `<div class="super-ilc-pop__l">${esc(l)}</div>`).join('');
+    d.lines.map((l) => `<div class="super-ilc-pop__l">${esc(l)}</div>`).join('') +
+    link;
+  popEl.querySelector('.super-ilc-pop__link')?.addEventListener('click', () => {
+    window.SuperAnalytics?.track?.('mds_list_coverage_uda_opened', { status: d.status });
+  });
   // Keep it open while the pointer is over the popover itself.
   popEl.addEventListener('mouseenter', cancelHide);
   popEl.addEventListener('mouseleave', scheduleHide);
   document.body.appendChild(popEl);
   position(popEl, anchorEl);
+}
+
+// PCC opens a UDA/assessment at this path; the UDA id IS the ESOLassessid.
+// Use the live page origin (PCC host varies per customer: www21, www10, …).
+function udaUrl(id) {
+  return `${location.origin}/care/chart/mds/mdssection.jsp?ESOLassessid=${encodeURIComponent(id)}`;
 }
 
 /** Wire hover + click for one interview chip. `onClick` fires the analytics signal. */

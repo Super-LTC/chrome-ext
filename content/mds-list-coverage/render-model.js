@@ -75,7 +75,7 @@ export function interviewDetail(iv) {
     if (u?.date) lines.push(`Completed ${shortDate(u.date)} · ${isLocked(u) ? 'locked' : 'open'}`);
     else if (u) lines.push(isLocked(u) ? 'Locked' : 'Open');
     lines.push(w ? `Window ${w}` : 'In window');
-    return { label, status: 'covered', heading: `${label} · Done`, lines };
+    return { label, status: 'covered', heading: `${label} · Done`, lines, udaId: u?.id };
   }
 
   if (iv.status === 'in_progress') {
@@ -85,7 +85,7 @@ export function interviewDetail(iv) {
     lines.push(u?.date ? `Started ${shortDate(u.date)} · not signed` : 'Started — not signed yet');
     if (iv.recommendedScheduleDate) lines.push(`Sign by ${shortDate(iv.recommendedScheduleDate)}`);
     if (w) lines.push(`Window ${w}`);
-    return { label, status: 'in_progress', heading: `${label} · In progress`, lines };
+    return { label, status: 'in_progress', heading: `${label} · In progress`, lines, udaId: u?.id };
   }
 
   if (iv.status === 'upcoming') {
@@ -101,5 +101,5 @@ export function interviewDetail(iv) {
   if (iv.outOfWindowUda?.date) {
     lines.push(`Earlier one from ${shortDate(iv.outOfWindowUda.date)} is outside this window.`);
   }
-  return { label, status: 'needed', heading: `${label} · Schedule`, lines };
+  return { label, status: 'needed', heading: `${label} · Schedule`, lines, udaId: iv.outOfWindowUda?.id };
 }

@@ -93,6 +93,7 @@ export const EVENT_SCHEMA = {
   // `_shown` fires once per batch round trip; `_row_clicked` opens the detail popover.
   mds_list_coverage_shown: ['rows', 'ok', 'not_synced'],
   mds_list_coverage_row_clicked: ['required', 'needed'],
+  mds_list_coverage_uda_opened: ['status'],
 
   facility_dashboard_tab_switched: ['from_tab', 'to_tab'],
   facility_dashboard_resident_clicked: [],
