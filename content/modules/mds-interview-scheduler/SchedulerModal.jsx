@@ -35,6 +35,7 @@ const S = {
   note: 'margin-top:3px;font-size:12px;color:#b45309;line-height:1.35;',
   select: 'margin-top:7px;width:100%;max-width:100%;box-sizing:border-box;font-size:12.5px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;',
   covered: 'padding:8px 12px;border-radius:8px;background:#f0fdf4;color:#15803d;font-size:13px;',
+  inProgress: 'padding:8px 12px;border-radius:8px;background:#fffbeb;color:#b45309;font-size:13px;',
   progress: 'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;',
   progressErr: 'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fef2f2;color:#b91c1c;font-size:13px;',
   actions: 'display:flex;justify-content:flex-end;gap:10px;',
@@ -46,6 +47,7 @@ const S = {
 export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate, onConfirm, onSkip }) {
   const interviews = coverage?.interviews || [];
   const needed = interviews.filter((i) => i.status === 'needed');
+  const inProgress = interviews.filter((i) => i.status === 'in_progress');
   const covered = interviews.filter((i) => i.status === 'covered');
   const options = libraryOptions || [];
 
@@ -85,7 +87,8 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
         <h2 style={S.h2}>Schedule MDS interviews</h2>
         <p style={S.sub}>
           This {coverage?.description || 'assessment'} needs {needed.length} interview{needed.length === 1 ? '' : 's'}.
-          {covered.length > 0 ? ` ${covered.length} already covered ✓.` : ''} Confirm or change the assessment for each, then save.
+          {covered.length > 0 ? ` ${covered.length} already covered ✓.` : ''}
+          {inProgress.length > 0 ? ` ${inProgress.length} in progress ◐.` : ''} Confirm or change the assessment for each, then save.
         </p>
 
         <ul style={S.list}>
@@ -122,6 +125,12 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
                   ))}
                 </select>
               </div>
+            </li>
+          ))}
+          {inProgress.map((i) => (
+            <li key={i.type} style={S.inProgress}>
+              ◐ {TYPE_LABEL[i.type] || i.type} in progress — started, not signed
+              {i.inProgressUda?.date ? ` (${isoToPccDate(i.inProgressUda.date) || i.inProgressUda.date})` : ''}. Sign it to cover this MDS.
             </li>
           ))}
           {covered.map((i) => (

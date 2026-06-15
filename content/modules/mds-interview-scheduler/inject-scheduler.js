@@ -63,6 +63,7 @@ async function _onSave(proceedWithSave) {
     description: desc,
     n_needed: needed.length,
     n_covered: (coverage?.interviews || []).filter((i) => i.status === 'covered').length,
+    n_in_progress: (coverage?.interviews || []).filter((i) => i.status === 'in_progress').length,
     n_unmatched: nUnmatched,
     operation: form.operation || '',
   });

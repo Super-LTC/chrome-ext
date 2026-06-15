@@ -196,7 +196,7 @@ export const EVENT_SCHEMA = {
 
   // === MDS Interview Auto-Scheduler (newmds.xhtml popup) ===
   // Counts + the assessment description carry the signal; no patient ids.
-  mds_interview_scheduler_shown: ['description', 'n_needed', 'n_covered', 'n_unmatched', 'operation'],
+  mds_interview_scheduler_shown: ['description', 'n_needed', 'n_covered', 'n_in_progress', 'n_unmatched', 'operation'],
   mds_interview_scheduler_confirmed: ['description', 'n_selected', 'n_needed'],
   mds_interview_scheduler_skipped: ['description', 'n_needed'],
   mds_interview_scheduler_scheduled: ['n_selected', 'n_created', 'n_failed'],
