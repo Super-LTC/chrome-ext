@@ -43,8 +43,12 @@ describe('matchLibraryToInterviews — Facility A (GSHC)', () => {
   const m = matchLibraryToInterviews(FACILITY_A_GSHC, { a0310a: '02' });
   it('BIMS', () => expect(m.bims?.id).toBe('23760'));
   it('PHQ (PHQ-2 to 9)', () => expect(m.phq?.id).toBe('23227'));
-  it('GG (explicit Section GG beats generic Functional Abilities)', () => expect(m.gg?.id).toBe('12507'));
+  it('GG (type-matched Functional Abilities Interim beats generic Section GG for a quarterly)', () => expect(m.gg?.id).toBe('12539'));
   it('Pain', () => expect(m.pain?.id).toBe('16330'));
+  it('GG follows ARD type — admission → Admission variant', () => {
+    const adm = matchLibraryToInterviews(FACILITY_A_GSHC, { a0310a: '01' });
+    expect(adm.gg?.id).toBe('12537');
+  });
 });
 
 describe('matchLibraryToInterviews — Facility B (staff-assessment + interview collisions)', () => {

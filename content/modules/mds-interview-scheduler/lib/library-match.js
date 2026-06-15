@@ -68,7 +68,11 @@ function _scoreFor(type, label, context) {
   if (/3\.0/.test(label)) score += 2;             // MDS 3.0 form signal
 
   if (type === 'gg' && context) {
-    if (_ggPreferenceRegex(context).test(label)) score += 4; // right variant for this ARD type
+    // A type-matched "Functional Abilities … {Admission|Discharge|Interim/OBRA/IPA}"
+    // form (the real CMS GG data-collection form for THIS ARD type) should beat a
+    // generic "Section GG" form (base 10) — facilities actually chart on the
+    // variant. +6 puts a variant-matched functional form (5) at 11 > 10.
+    if (_ggPreferenceRegex(context).test(label)) score += 6;
   }
   return score;
 }
