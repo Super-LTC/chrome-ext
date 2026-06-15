@@ -7,6 +7,8 @@ import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewHover } from './mds-list-coverage/detail.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
+// Per-state chip glyph (upcoming is intentionally bare/subtle, never an ✗).
+const CHIP_ICONS = { covered: '✓ ', in_progress: '◐ ', needed: '⚠ ', upcoming: '' };
 
 /** True only on the MDS list with the "In Progress" tab active. */
 function isInProgressList() {
@@ -89,7 +91,7 @@ function renderRow(rowEl, result, rowMeta) {
     const chip = document.createElement('span');
     chip.className = `super-ilc-chip super-ilc-chip--${c.kind}`;
     if (c.title) chip.title = c.title;
-    const icon = c.kind === 'covered' ? '✓ ' : c.kind === 'needed' ? '⚠ ' : '';
+    const icon = CHIP_ICONS[c.kind] || '';
     chip.append(`${icon}${c.label}`);
     if (c.sub) {
       const sub = document.createElement('span');

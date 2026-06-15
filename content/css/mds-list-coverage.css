@@ -8,11 +8,21 @@
 }
 .super-ilc-chip--clickable { cursor: pointer; }
 
-/* covered = quiet: no pill, muted gray; only brightens on hover */
+/* severity gradient (quiet → loud): upcoming · covered · in_progress · needed */
+
+/* upcoming = window not open yet: faintest, no icon, never an ✗ */
+.super-ilc-chip--upcoming { color: #cbd5e1; font-weight: 500; }
+.super-ilc-chip--upcoming:hover { color: #94a3b8; }
+
+/* covered = done: quiet muted gray, brightens green on hover */
 .super-ilc-chip--covered { color: #9aa5b4; font-weight: 500; }
 .super-ilc-chip--covered:hover { color: #15803d; }
 
-/* needed = the only chip that pops */
+/* in_progress = started, not signed: amber text (no pill) — attention, underway */
+.super-ilc-chip--in_progress { color: #b45309; font-weight: 600; }
+.super-ilc-chip--in_progress:hover { color: #92400e; }
+
+/* needed = nothing started: the only chip that pops, a solid amber pill */
 .super-ilc-chip--needed {
   color: #b45309; background: #fef3c7; border: 1px solid #fcd34d;
   border-radius: 10px; padding: 2px 7px;
@@ -32,6 +42,8 @@
   font: 12px/1.45 -apple-system, system-ui, sans-serif; color: #475569;
 }
 .super-ilc-pop__h { font-weight: 700; font-size: 12px; margin-bottom: 3px; color: #1e293b; }
-.super-ilc-pop--covered .super-ilc-pop__h { color: #15803d; }
-.super-ilc-pop--needed  .super-ilc-pop__h { color: #b45309; }
+.super-ilc-pop--covered     .super-ilc-pop__h { color: #15803d; }
+.super-ilc-pop--in_progress .super-ilc-pop__h { color: #b45309; }
+.super-ilc-pop--needed      .super-ilc-pop__h { color: #b45309; }
+.super-ilc-pop--upcoming    .super-ilc-pop__h { color: #64748b; }
 .super-ilc-pop__l { color: #64748b; }
