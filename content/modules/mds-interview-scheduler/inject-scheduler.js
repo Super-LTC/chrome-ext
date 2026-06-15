@@ -12,7 +12,7 @@
  * See docs/plans/2026-06-14-mds-interview-scheduler-design.md.
  */
 import { render, h } from 'preact';
-import { SchedulerModal } from './SchedulerModal.jsx';
+import { SchedulerModal, SchedulerLoading } from './SchedulerModal.jsx';
 import { buildCoverageQuery, isoToPccDate } from './lib/coverage-query.js';
 import { matchLibraryToInterviews } from './lib/library-match.js';
 
@@ -101,16 +101,24 @@ async function _onSave(proceedWithSave) {
   const query = buildCoverageQuery(form);
   if (!query) return proceedWithSave();
 
+  // Show the spinner the instant Save is clicked, while we fetch coverage.
+  document.getElementById(OVERLAY_ID)?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = OVERLAY_ID;
+  document.body.appendChild(overlay);
+  render(h(SchedulerLoading), overlay);
+
   let coverage;
   try {
     coverage = await window.MdsSchedulerAPI.fetchInterviewCoverage(query);
   } catch (e) {
     console.warn('[mds-sched] coverage fetch failed; saving without scheduling', e);
+    _teardown(overlay);
     return proceedWithSave();
   }
 
   const needed = (coverage?.interviews || []).filter((i) => i.status === 'needed');
-  if (needed.length === 0) return proceedWithSave();   // silent passthrough
+  if (needed.length === 0) { _teardown(overlay); return proceedWithSave(); }   // silent passthrough
 
   // Keyword-match the library NOW, with the final A0310 type (so the GG variant
   // is right for this ARD). Matching is cheap+pure; only the fetch was slow.
@@ -127,12 +135,6 @@ async function _onSave(proceedWithSave) {
     n_unmatched: nUnmatched,
     operation: form.operation || '',
   });
-
-  // Mount modal.
-  document.getElementById(OVERLAY_ID)?.remove();
-  const overlay = document.createElement('div');
-  overlay.id = OVERLAY_ID;
-  document.body.appendChild(overlay);
 
   const proceed = () => proceedWithSave();
 

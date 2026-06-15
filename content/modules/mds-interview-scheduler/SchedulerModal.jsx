@@ -1,145 +1,157 @@
 import { useState } from 'preact/hooks';
+import { Combobox } from './Combobox.jsx';
 
 /**
  * Confirm-create modal shown at Save when interviews need scheduling.
  *
- * Self-contained inline styles — the newmds.xhtml popup carries none of our
- * bundled CSS, and it's a cramped ~700x650 window, so we keep it compact.
+ * Refined-clinical: calm card, status pills, a searchable combobox + editable
+ * date per row, unmistakable actions. Self-contained inline styles — the
+ * newmds.xhtml popup carries none of our bundled CSS.
  *
- * Per needed interview we render a checkbox + a dropdown of the WHOLE facility
- * library, pre-selected to our keyword match. Names vary per facility and the
- * match is a best-guess, so the nurse can always correct it (or pick one for a
- * row we couldn't match) before creating.
+ * Every interview row is creatable (even covered / in-progress ones — the nurse
+ * can schedule a fresh one anyway). Needed rows default ON; covered/in-progress
+ * default OFF but can be turned on.
  *
  * Props:
- *   coverage: { description, interviews: [{type,status,window,recommendedScheduleDate,outOfWindowUda,coveringUda}] }
+ *   coverage: { description, interviews: [{type,status,window,recommendedScheduleDate,outOfWindowUda,coveringUda,inProgressUda}] }
  *   matches:  { bims, phq, gg, pain }  (each { id, label } | null)
- *   libraryOptions: [{ id, label }]   the full std_assessment list
+ *   libraryOptions: [{ id, label }]
  *   isoToPccDate: (iso) => 'M/D/YYYY' | null
- *   onConfirm(picks, setProgress)  picks: [{ type, stdAssessmentId, assessDatePcc, label }]
+ *   onConfirm(picks, setProgress)  picks: [{ type, stdAssessmentId, assessDatePcc, label, assessmentLabel }]
  *   onSkip()
  */
 const TYPE_LABEL = { bims: 'BIMS', phq: 'PHQ-9', gg: 'Section GG', pain: 'Pain (Section J)' };
 
+const STATUS = {
+  needed:      { text: 'Needed',      bg: '#fef2f2', fg: '#b91c1c', dot: '#ef4444' },
+  in_progress: { text: 'In progress', bg: '#fffbeb', fg: '#b45309', dot: '#f59e0b' },
+  covered:     { text: 'Covered',     bg: '#f0fdf4', fg: '#15803d', dot: '#22c55e' },
+};
+
+function _todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 const S = {
-  backdrop: 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:12px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
-  card: 'background:#fff;border-radius:12px;max-width:580px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.35);padding:20px 22px;box-sizing:border-box;',
-  h2: 'margin:0 0 4px;font-size:17px;font-weight:700;color:#0f172a;',
-  sub: 'margin:0 0 14px;font-size:13px;color:#475569;line-height:1.4;',
-  list: 'list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:10px;',
-  row: 'display:flex;gap:9px;align-items:flex-start;padding:11px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;',
-  rowMain: 'flex:1;min-width:0;',
-  rowTitle: 'font-size:13.5px;color:#0f172a;line-height:1.4;cursor:pointer;',
-  meta: 'color:#475569;font-weight:400;',
-  warn: 'color:#b45309;font-weight:400;',
-  note: 'margin-top:3px;font-size:12px;color:#b45309;line-height:1.35;',
-  select: 'margin-top:7px;width:100%;max-width:100%;box-sizing:border-box;font-size:12.5px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;',
-  covered: 'padding:8px 12px;border-radius:8px;background:#f0fdf4;color:#15803d;font-size:13px;',
-  inProgress: 'padding:8px 12px;border-radius:8px;background:#fffbeb;color:#b45309;font-size:13px;',
-  progress: 'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;',
-  progressErr: 'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fef2f2;color:#b91c1c;font-size:13px;',
-  actions: 'display:flex;justify-content:flex-end;gap:10px;',
-  btn: 'padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;',
-  btnPrimary: 'padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #4338ca;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;',
-  btnDisabled: 'opacity:0.55;cursor:default;',
+  backdrop: 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
+  card: 'background:#fff;border-radius:14px;max-width:600px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 24px 60px rgba(0,0,0,0.4);box-sizing:border-box;',
+  head: 'padding:20px 22px 14px;border-bottom:1px solid #eef2f6;',
+  h2: 'margin:0 0 4px;font-size:17px;font-weight:700;color:#0f172a;letter-spacing:-.01em;',
+  sub: 'margin:0;font-size:13px;color:#64748b;line-height:1.45;',
+  body: 'padding:14px 22px;display:flex;flex-direction:column;gap:9px;',
+  row: 'border:1px solid #e7ebf0;border-radius:10px;padding:11px 13px;background:#fbfcfe;',
+  rowTop: 'display:flex;align-items:center;gap:9px;',
+  check: 'width:16px;height:16px;margin:0;flex-shrink:0;cursor:pointer;accent-color:#4f46e5;',
+  name: 'font-size:14px;font-weight:650;color:#0f172a;flex:1;cursor:pointer;',
+  pill: (s) => `display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:650;background:${s.bg};color:${s.fg};`,
+  dot: (s) => `width:6px;height:6px;border-radius:50%;background:${s.dot};`,
+  last: 'margin:6px 0 0 25px;font-size:11.5px;color:#94a3b8;',
+  fields: 'margin:10px 0 2px 25px;display:flex;flex-direction:column;gap:8px;',
+  fieldRow: 'display:flex;gap:9px;align-items:center;',
+  dateLabel: 'font-size:11.5px;color:#64748b;font-weight:600;flex-shrink:0;',
+  date: 'padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:12.5px;color:#0f172a;font-family:inherit;',
+  warn: 'margin:6px 0 0 25px;font-size:11.5px;color:#b45309;',
+  foot: 'padding:14px 22px 18px;border-top:1px solid #eef2f6;display:flex;justify-content:flex-end;gap:10px;align-items:center;',
+  note: 'flex:1;font-size:11.5px;color:#94a3b8;',
+  btnGhost: 'padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;',
+  btnPrimary: 'padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #4338ca;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3);',
+  disabled: 'opacity:.5;cursor:default;box-shadow:none;',
+  progress: 'margin:0 22px 14px;padding:10px 12px;border-radius:9px;background:#eff6ff;color:#1d4ed8;font-size:12.5px;font-weight:600;',
+  progressErr: 'margin:0 22px 14px;padding:10px 12px;border-radius:9px;background:#fef2f2;color:#b91c1c;font-size:12.5px;font-weight:600;',
 };
 
 export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate, onConfirm, onSkip }) {
   const interviews = coverage?.interviews || [];
-  const needed = interviews.filter((i) => i.status === 'needed');
-  const inProgress = interviews.filter((i) => i.status === 'in_progress');
-  const covered = interviews.filter((i) => i.status === 'covered');
   const options = libraryOptions || [];
 
-  // Per-type pick (std_assessment id) and whether to create it. Default to the
-  // keyword match; checked on when we have a guess, off (await a pick) otherwise.
-  const [selected, setSelected] = useState(
-    Object.fromEntries(needed.map((i) => [i.type, matches[i.type]?.id || '']))
+  // Order: needed first, then in-progress, then covered.
+  const order = { needed: 0, in_progress: 1, covered: 2 };
+  const rows = [...interviews].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+
+  const defaultDate = (i) => i.recommendedScheduleDate || i.window?.end || _todayIso();
+
+  const [state, setState] = useState(() =>
+    Object.fromEntries(interviews.map((i) => [i.type, {
+      create: i.status === 'needed',
+      assessmentId: matches[i.type]?.id || '',
+      dateIso: defaultDate(i),
+    }]))
   );
-  const [checked, setChecked] = useState(
-    Object.fromEntries(needed.map((i) => [i.type, !!matches[i.type]]))
-  );
-  const [progress, setProgress] = useState(null); // {index,total,label,phase,error}
+  const [progress, setProgress] = useState(null);
 
   const busy = !!progress && progress.phase !== 'error';
-  const toggle = (t) => setChecked((c) => ({ ...c, [t]: !c[t] }));
-  const pick = (t, id) => {
-    setSelected((s) => ({ ...s, [t]: id }));
-    // Auto-check when a real assessment is chosen; auto-uncheck on "manually".
-    setChecked((c) => ({ ...c, [t]: !!id }));
-  };
-
+  const set = (type, patch) => setState((s) => ({ ...s, [type]: { ...s[type], ...patch } }));
   const labelFor = (id) => options.find((o) => o.id === id)?.label || '';
 
-  const picks = needed
-    .filter((i) => checked[i.type] && selected[i.type])
+  const picks = interviews
+    .filter((i) => state[i.type].create && state[i.type].assessmentId)
     .map((i) => ({
       type: i.type,
-      stdAssessmentId: selected[i.type],
-      assessDatePcc: isoToPccDate(i.recommendedScheduleDate) || isoToPccDate(i.window?.end),
+      stdAssessmentId: state[i.type].assessmentId,
+      assessDatePcc: isoToPccDate(state[i.type].dateIso),
       label: TYPE_LABEL[i.type] || i.type,
-      assessmentLabel: labelFor(selected[i.type]),
+      assessmentLabel: labelFor(state[i.type].assessmentId),
     }));
+
+  const neededCount = interviews.filter((i) => i.status === 'needed').length;
+  const coveredCount = interviews.filter((i) => i.status === 'covered').length;
 
   return (
     <div style={S.backdrop}>
       <div style={S.card}>
-        <h2 style={S.h2}>Schedule MDS interviews</h2>
-        <p style={S.sub}>
-          This {coverage?.description || 'assessment'} needs {needed.length} interview{needed.length === 1 ? '' : 's'}.
-          {covered.length > 0 ? ` ${covered.length} already covered ✓.` : ''}
-          {inProgress.length > 0 ? ` ${inProgress.length} in progress ◐.` : ''} Confirm or change the assessment for each, then save.
-        </p>
+        <div style={S.head}>
+          <h2 style={S.h2}>Schedule MDS interviews</h2>
+          <p style={S.sub}>
+            {coverage?.description || 'This assessment'} needs <strong style="color:#b91c1c;">{neededCount}</strong>
+            {coveredCount > 0 ? <> · <strong style="color:#15803d;">{coveredCount}</strong> covered</> : null}. Pick the assessment & date for each, then save.
+          </p>
+        </div>
 
-        <ul style={S.list}>
-          {needed.map((i) => (
-            <li key={i.type} style={S.row}>
-              <input
-                type="checkbox"
-                checked={!!checked[i.type]}
-                disabled={!selected[i.type] || busy}
-                onChange={() => toggle(i.type)}
-                style="margin-top:3px;"
-                id={`super-mds-sched-${i.type}`}
-              />
-              <div style={S.rowMain}>
-                <label style={S.rowTitle} for={`super-mds-sched-${i.type}`}>
-                  <strong>{TYPE_LABEL[i.type] || i.type}</strong>
-                  <span style={S.meta}> — schedule by {isoToPccDate(i.recommendedScheduleDate) || '—'}</span>
-                  {!matches[i.type] && <span style={S.warn}> · no library match — pick one below</span>}
-                </label>
-                {i.outOfWindowUda && (
-                  <div style={S.note}>
-                    You have one from {isoToPccDate(i.outOfWindowUda.date) || i.outOfWindowUda.date}, but this ARD's window pushed it out of range.
+        <div style={S.body}>
+          {rows.map((i) => {
+            const st = state[i.type];
+            const s = STATUS[i.status] || STATUS.needed;
+            const existing = i.coveringUda || i.inProgressUda || i.outOfWindowUda;
+            const cbId = `super-mds-sched-${i.type}`;
+            return (
+              <div key={i.type} style={S.row}>
+                <div style={S.rowTop}>
+                  <input type="checkbox" id={cbId} style={S.check}
+                    checked={st.create} disabled={busy}
+                    onChange={() => set(i.type, { create: !st.create })} />
+                  <label for={cbId} style={S.name}>{TYPE_LABEL[i.type] || i.type}</label>
+                  <span style={S.pill(s)}><span style={S.dot(s)} />{s.text}</span>
+                </div>
+
+                {existing && (
+                  <div style={S.last}>
+                    {i.status === 'covered' && `Done ${isoToPccDate(existing.date) || existing.date}`}
+                    {i.status === 'in_progress' && `Started ${isoToPccDate(existing.date) || existing.date} — not signed`}
+                    {i.status === 'needed' && i.outOfWindowUda && `Last ${isoToPccDate(existing.date) || existing.date} · out of window`}
                   </div>
                 )}
-                <select
-                  style={S.select}
-                  disabled={busy}
-                  value={selected[i.type] || ''}
-                  onChange={(e) => pick(i.type, e.target.value)}
-                >
-                  <option value="">— schedule manually (don't create) —</option>
-                  {options.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
-                </select>
+
+                {st.create && (
+                  <div style={S.fields}>
+                    <Combobox
+                      options={options}
+                      value={st.assessmentId}
+                      disabled={busy}
+                      onChange={(id) => set(i.type, { assessmentId: id })}
+                    />
+                    <div style={S.fieldRow}>
+                      <span style={S.dateLabel}>Schedule date</span>
+                      <input type="date" style={S.date} value={st.dateIso} disabled={busy}
+                        onInput={(e) => set(i.type, { dateIso: e.target.value })} />
+                    </div>
+                    {!st.assessmentId && <div style={S.warn}>Pick an assessment above to schedule this.</div>}
+                  </div>
+                )}
               </div>
-            </li>
-          ))}
-          {inProgress.map((i) => (
-            <li key={i.type} style={S.inProgress}>
-              ◐ {TYPE_LABEL[i.type] || i.type} in progress — started, not signed
-              {i.inProgressUda?.date ? ` (${isoToPccDate(i.inProgressUda.date) || i.inProgressUda.date})` : ''}. Sign it to cover this MDS.
-            </li>
-          ))}
-          {covered.map((i) => (
-            <li key={i.type} style={S.covered}>
-              {'✓'} {TYPE_LABEL[i.type] || i.type} already covered
-              {i.coveringUda?.date ? ` (${isoToPccDate(i.coveringUda.date) || i.coveringUda.date})` : ''}
-            </li>
-          ))}
-        </ul>
+            );
+          })}
+        </div>
 
         {progress && (
           <div style={progress.phase === 'error' ? S.progressErr : S.progress}>
@@ -149,21 +161,34 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
           </div>
         )}
 
-        <div style={S.actions}>
+        <div style={S.foot}>
+          <span style={S.note}>{picks.length > 0 ? `${picks.length} to create` : 'Nothing selected'}</span>
           {/* NO_TRACK — fired as mds_interview_scheduler_skipped in orchestrator */}
-          <button style={busy ? S.btn + S.btnDisabled : S.btn} disabled={busy} onClick={onSkip}>
-            Skip &amp; Save
+          <button style={busy ? S.btnGhost + S.disabled : S.btnGhost} disabled={busy} onClick={onSkip}>
+            Don't schedule
           </button>
           {/* NO_TRACK — fired as mds_interview_scheduler_confirmed in orchestrator */}
-          <button
-            style={busy ? S.btnPrimary + S.btnDisabled : S.btnPrimary}
-            disabled={busy}
-            onClick={() => onConfirm(picks, setProgress)}
-            title={picks.length === 0 ? 'Nothing selected — this will just save the MDS' : ''}
-          >
-            {picks.length > 0 ? `Create ${picks.length} & Save` : 'Save'}
+          <button style={busy ? S.btnPrimary + S.disabled : S.btnPrimary} disabled={busy}
+            onClick={() => onConfirm(picks, setProgress)}>
+            {picks.length > 0 ? `Create ${picks.length} & save MDS` : 'Save MDS'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Lightweight loading card shown the instant Save is clicked, while we fetch
+ * coverage. Same backdrop so the transition into the modal is seamless.
+ */
+export function SchedulerLoading() {
+  return (
+    <div style={S.backdrop}>
+      <style>{'@keyframes superMdsSpin{to{transform:rotate(360deg)}}'}</style>
+      <div style={'background:#fff;border-radius:14px;padding:26px 30px;box-shadow:0 24px 60px rgba(0,0,0,.4);display:flex;align-items:center;gap:14px;'}>
+        <span style={'width:22px;height:22px;border-radius:50%;border:3px solid #e0e7ff;border-top-color:#4f46e5;display:inline-block;animation:superMdsSpin .7s linear infinite;'} />
+        <span style={'font:600 14px -apple-system,BlinkMacSystemFont,sans-serif;color:#334155;'}>Checking which interviews this MDS needs…</span>
       </div>
     </div>
   );
