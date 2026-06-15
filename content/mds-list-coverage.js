@@ -7,8 +7,8 @@ import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewHover } from './mds-list-coverage/detail.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
-// Per-state chip glyph (upcoming is intentionally bare/subtle, never an ✗).
-const CHIP_ICONS = { covered: '✓ ', in_progress: '◐ ', needed: '⚠ ', upcoming: '' };
+// Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
+const CHIP_ICONS = { covered: '✓ ', in_progress: '◐ ', needed: '⚠ ', upcoming: '· ' };
 
 /** True only on the MDS list with the "In Progress" tab active. */
 function isInProgressList() {
@@ -84,25 +84,17 @@ function renderRow(rowEl, result, rowMeta) {
     return;
   }
 
-  // Each interview is its own chip: hover (title) shows that one's summary;
-  // clicking opens a popover anchored to that chip.
-  const interviews = result.status === 'ok' ? (result.coverage?.interviews || []) : [];
-  chips.forEach((c, i) => {
+  // Each interview is its own chip (icon + label, no inline dates). Hover/click
+  // opens the detail popover anchored to that chip. The source interview rides
+  // on `c.iv` so we don't depend on a fragile index zip.
+  chips.forEach((c) => {
     const chip = document.createElement('span');
     chip.className = `super-ilc-chip super-ilc-chip--${c.kind}`;
-    if (c.title) chip.title = c.title;
     const icon = CHIP_ICONS[c.kind] || '';
     chip.append(`${icon}${c.label}`);
-    if (c.sub) {
-      const sub = document.createElement('span');
-      sub.className = 'super-ilc-chip__sub';
-      sub.textContent = c.sub;
-      chip.appendChild(sub);
-    }
-    const iv = interviews[i];
-    if (iv) {
+    if (c.iv) {
       chip.classList.add('super-ilc-chip--clickable');
-      attachInterviewHover(chip, iv, () => {
+      attachInterviewHover(chip, c.iv, () => {
         window.SuperAnalytics?.track?.('mds_list_coverage_row_clicked', {
           required: Number(result.coverage?.summary?.required || 0),
           needed: Number(result.coverage?.summary?.needed || 0),

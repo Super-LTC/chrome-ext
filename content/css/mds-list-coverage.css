@@ -4,34 +4,31 @@
 .super-ilc-chip {
   display: inline-flex; align-items: center;
   font: 600 11px/1 -apple-system, system-ui, sans-serif;
-  margin-right: 8px; cursor: default;
+  margin-right: 9px; cursor: default;
 }
 .super-ilc-chip--clickable { cursor: pointer; }
 
-/* severity gradient (quiet → loud): upcoming · covered · in_progress · needed */
+/* Color budget: saturated color is reserved for what needs action. Done is a
+   quiet low-sat green; upcoming is nearly invisible. (quiet → loud) */
 
-/* upcoming = window not open yet: faintest, no icon, never an ✗ */
-.super-ilc-chip--upcoming { color: #cbd5e1; font-weight: 500; }
+/* upcoming = look-back not open yet: nearly invisible, never an ✗ */
+.super-ilc-chip--upcoming { color: #d4d8de; font-weight: 500; }
 .super-ilc-chip--upcoming:hover { color: #94a3b8; }
 
-/* covered = done: quiet muted gray, brightens green on hover */
-.super-ilc-chip--covered { color: #9aa5b4; font-weight: 500; }
+/* covered = done: quiet, low-saturation green */
+.super-ilc-chip--covered { color: #7ba293; font-weight: 500; }
 .super-ilc-chip--covered:hover { color: #15803d; }
 
-/* in_progress = started, not signed: amber text (no pill) — attention, underway */
+/* in_progress = started, not signed (rare): amber */
 .super-ilc-chip--in_progress { color: #b45309; font-weight: 600; }
 .super-ilc-chip--in_progress:hover { color: #92400e; }
 
-/* needed = nothing started: the only chip that pops, a solid amber pill */
-.super-ilc-chip--needed {
-  color: #b45309; background: #fef3c7; border: 1px solid #fcd34d;
-  border-radius: 10px; padding: 2px 7px;
-}
-.super-ilc-chip--needed:hover { background: #fde9b8; }
+/* needed = nothing started: the one thing that should grab the eye */
+.super-ilc-chip--needed { color: #c2410c; font-weight: 600; }
+.super-ilc-chip--needed:hover { color: #9a3412; }
 
 .super-ilc-chip--neutral { color: #cbd5e1; font-weight: 500; }
 .super-ilc-chip--error   { color: #b91c1c; }
-.super-ilc-chip__sub { font-weight: 500; opacity: .85; margin-left: 4px; }
 .super-ilc-loading { color: #cbd5e1; font: 500 11px/1 system-ui; }
 
 /* per-interview detail popover (anchored to the clicked chip) */
