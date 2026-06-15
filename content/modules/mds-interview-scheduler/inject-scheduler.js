@@ -244,9 +244,11 @@ function _installSaveHook() {
 
 function _init() {
   if (!_isNewMdsPopup()) return;
-  _prefetchLibrary();
-  _installSaveHook();
-  _renderBadge();
+  // Render the badge FIRST so a prefetch/hook error can never suppress it —
+  // it's also our "is the right build active?" signal.
+  try { _renderBadge(); } catch (e) { console.warn('[mds-sched] badge render failed', e); }
+  try { _prefetchLibrary(); } catch (e) { console.warn('[mds-sched] prefetch failed', e); }
+  try { _installSaveHook(); } catch (e) { console.warn('[mds-sched] save hook failed', e); }
 }
 
 if (document.readyState === 'loading') {
