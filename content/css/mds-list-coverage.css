@@ -21,7 +21,7 @@
 
 .super-ilc-chip--neutral { color: #cbd5e1; font-weight: 500; }
 .super-ilc-chip--error   { color: #b91c1c; }
-.super-ilc-chip__sub { font-weight: 500; opacity: .85; }
+.super-ilc-chip__sub { font-weight: 500; opacity: .85; margin-left: 4px; }
 .super-ilc-loading { color: #cbd5e1; font: 500 11px/1 system-ui; }
 
 /* per-interview detail popover (anchored to the clicked chip) */

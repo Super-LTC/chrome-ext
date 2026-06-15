@@ -4,7 +4,7 @@
 import { scrapeRows } from './mds-list-coverage/scrape.js';
 import { toChips } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
-import { showInterviewDetail } from './mds-list-coverage/detail.js';
+import { attachInterviewHover } from './mds-list-coverage/detail.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
 
@@ -94,20 +94,20 @@ function renderRow(rowEl, result, rowMeta) {
     if (c.sub) {
       const sub = document.createElement('span');
       sub.className = 'super-ilc-chip__sub';
-      sub.textContent = ` ${c.sub}`;
+      sub.textContent = c.sub;
       chip.appendChild(sub);
     }
     const iv = interviews[i];
     if (iv) {
       chip.classList.add('super-ilc-chip--clickable');
-      chip.addEventListener('click', (e) => {
-        e.stopPropagation();
+      attachInterviewHover(chip, iv, () => {
         window.SuperAnalytics?.track?.('mds_list_coverage_row_clicked', {
           required: Number(result.coverage?.summary?.required || 0),
           needed: Number(result.coverage?.summary?.needed || 0),
         });
-        showInterviewDetail(chip, iv);
       });
+    } else if (c.title) {
+      chip.title = c.title; // neutral / error chips keep a plain tooltip
     }
     cell.appendChild(chip);
   });
