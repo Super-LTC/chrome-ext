@@ -49,6 +49,14 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
 
   useEffect(() => { track('qm_board_opened', { source: 'fab' }); }, []);
 
+  // Freeze the PCC page scroll while the board (and any nested modal) is open, so
+  // the wheel scrolls our content — not the page behind. Restore on close.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // Changing surface (push/pop a view, or flip mode) should land at the top of
   // the new page — otherwise the scroll position from the board carries over and
   // you open a detail page already scrolled into its middle.

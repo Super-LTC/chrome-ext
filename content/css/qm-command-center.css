@@ -247,7 +247,10 @@
 .qmc-modal__close{border:none;background:none;cursor:pointer;border-radius:8px;padding:6px;color:var(--slate-400);display:flex}
 .qmc-modal__close:hover{background:var(--slate-100)}
 .qmc-modal__close svg{width:20px;height:20px}
-.qmc-modal__body{overflow-y:auto;background:rgba(248,250,252,.5);padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.qmc-modal__body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;background:rgba(248,250,252,.5);padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+/* Children keep their natural height (don't let an overflow:hidden child — e.g. the
+   DFS items list — get squeezed); the BODY is the scroll region. */
+.qmc-modal__body > *{flex-shrink:0}
 .qmc-modal__actions{display:flex;gap:8px;padding-top:2px}
 
 .qmc-btn{border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent}
