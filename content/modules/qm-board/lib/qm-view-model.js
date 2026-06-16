@@ -8,102 +8,116 @@
  * imports them too. Keep it pure. TS types stripped for the JS bundle.
  */
 import { qipMeasureSet } from './qip-programs.js';
+import { deriveClearability } from './clearability.js';
 
-// ── Bucketing ───────────────────────────────────────────────────────────────
+// ── Clear group — the one honest axis ────────────────────────────────────────
 /**
- * The honest worklist buckets the UI groups residents into. Driven entirely by
- * `clearProfile.actionability` (a measure-level property), never hand-assigned.
- *   clearable    — team can act today (GDR/d-c/remove/query) + fresh MDS
- *   trajectory   — clears only if the resident clinically improves
- *   cant_clear   — time-based; falls/UTI age out, no action accelerates
- *   locked       — locked to this stay/season
- *   coming_soon  — Phase-2 crossers (short-stay coding that will trip long-stay)
- * MeasureBucket = 'clearable' | 'trajectory' | 'cant_clear' | 'locked' | 'coming_soon'
+ * Lori's three worklist groups: the SINGLE classification the whole board, the
+ * By-measure grid, and the drill-in all share. This replaces the two axes that
+ * used to disagree on the same measure — the urgency-based
+ * at_risk/clearable/will_hit and the actionability-based clearable/trajectory/…
+ * (which, e.g., put ADL Decline in "will_hit / no lever" while the chip said
+ * "clears next assessment").
+ *
+ *   clear_mds — the MDS coordinator can knock it off by scheduling an
+ *               assessment (UTI, ADL Decline, Walk-Indep, Bowel/Bladder) or a
+ *               pure re-code (Modification). The actionable, green group.
+ *   clinical  — the clinical team / physician must act first (antipsychotic
+ *               GDR, catheter Dx/DC, pressure-ulcer healing, weight/PHQ/…).
+ *               Not the coordinator's to schedule away. Amber.
+ *   locked    — counts no matter what this stay (Falls 275-day scan,
+ *               stay-locked measures); FYI only, never a to-do. Slate.
+ *
+ * ClearGroup = 'clear_mds' | 'clinical' | 'locked'
  */
-export function bucketForActionability(a) {
-  switch (a) {
-    case 'team_decision':
-      return 'clearable';
-    case 'clinical_trajectory':
-      return 'trajectory';
-    case 'time_only':
-      return 'cant_clear';
-    case 'stay_locked':
+const CLEAR_GROUP_RANK = { clear_mds: 0, clinical: 1, locked: 2 };
+
+/** Sort key: clear_mds (0) < clinical (1) < locked (2). */
+export function clearGroupRank(g) {
+  return CLEAR_GROUP_RANK[g];
+}
+
+/**
+ * Measure-level group from the evaluator's `clearMechanism` — drives the
+ * By-measure tile so the tile descriptor and the worklist rows always agree.
+ */
+export function clearGroupForMechanism(mech) {
+  switch (mech) {
+    case 'time_only': // UTI — 30-day window can be re-ARD'd past
+    case 'next_target_compare': // ADL, Walk-Indep, Bowel/Bladder — next target re-baselines
+      return 'clear_mds';
+    case 'discontinue_medication': // antipsychotic, antianxiety, hypnotic
+    case 'remove_device': // catheter
+    case 'heal_wound': // pressure ulcer
+    case 'change_clinical_state': // weight, PHQ-9, restraints, behavior
+      return 'clinical';
+    case 'time_lookback_scan': // Falls — can't accelerate the 275-day scan
+    case 'stay_locked': // antipsychotic-new, PU-short, DFS, influenza
       return 'locked';
     default:
-      return 'clearable';
+      return 'clinical';
   }
 }
 
 /**
- * Whether the what-if "Cleared" control is offerable. Only buckets where an
- * action (or the resident improving / being prevented) can move the measure.
- * For `cant_clear` and `locked`, the UI shows a disabled "Locked" pill instead.
+ * Resident-level group for one triggering entry. Reads the backend-derived
+ * `clearability` (single source of truth; falls back to deriving it from the
+ * action type for older responses). `time_based` splits on cliffType: a
+ * lookback scan (Falls) is locked, but a point-in-time window (UTI) or a
+ * comparison (ADL/Walk/B&B) is MDS-clearable.
  */
-export function isWhatIfClearable(b) {
-  return b === 'clearable' || b === 'trajectory' || b === 'coming_soon';
+export function clearGroupForEntry(entry) {
+  const c = entry.clearability ?? deriveClearability(entry.clearGuidance?.actionType);
+  switch (c) {
+    case 'needs_clinical':
+    case 'needs_query':
+      return 'clinical';
+    case 'clear_now':
+      return 'clear_mds';
+    case 'time_based':
+      return entry.cliffInfo?.cliffType === 'lookback_scan' ? 'locked' : 'clear_mds';
+    case 'stay_locked':
+    case 'none':
+    default:
+      return 'locked';
+  }
 }
 
-/**
- * The honest worklist split the VP actually cares about: *can anyone still do
- * anything about this?* It crosses two axes already present on a triggering
- * entry — whether a lever exists (`clearGuidance.actionType`) and how close the
- * cliff is (`cliffInfo.urgency`):
- *   at_risk    — a lever exists AND the cliff is near. The real worklist.
- *   clearable  — a lever exists, runway is still long.
- *   will_hit   — no lever this stay (time-only / locked). Destined to count no
- *                matter what; awareness/forecasting only, never a to-do.
- * StatusBucket = 'at_risk' | 'clearable' | 'will_hit'
- */
-
-/**
- * Whether the team has a lever that can still move this measure before the
- * cliff. `clinical` (d/c med, remove device, heal), `modification` (re-code),
- * and `dx_query` (physician query) are levers; `time` (age-out), `stay_locked`,
- * and `none` are not — those are destined.
- *
- * Note: a triggering `QmMeasureEntry` now also carries an optional backend-
- * computed `clearability` field
- * (`'clear_now'|'needs_clinical'|'needs_query'|'time_based'|'stay_locked'|'none'`,
- * superapp #657). It is the source of truth for "how does this clear" — read it
- * (falling back to `deriveClearability(clearGuidance.actionType)` when absent)
- * via the helpers in `clearability.js` rather than re-deriving here. See
- * `clearTiming` in qm-tones.js.
- */
-export function entryIsActionable(entry) {
-  const t = entry.clearGuidance?.actionType;
-  return t === 'clinical' || t === 'modification' || t === 'dx_query';
-}
-
-/** Status bucket for a single triggering measure entry. */
-export function statusBucketForEntry(entry) {
-  if (!entryIsActionable(entry)) return 'will_hit';
-  const u = entry.cliffInfo?.urgency ?? 'routine';
-  if (u === 'at-risk' || u === 'urgent') return 'at_risk';
-  if (u === 'routine') return 'clearable';
-  return 'will_hit'; // actionable on paper but stay-locked timing — no path this stay
-}
-
-const STATUS_RANK = { at_risk: 0, clearable: 1, will_hit: 2 };
-
-/** Sort key: at_risk (0) < clearable (1) < will_hit (2). */
-export function statusRank(b) {
-  return STATUS_RANK[b];
-}
-
-/**
- * Resident-level bucket = the most actionable+urgent across their triggering
- * measures. A resident lands in `at_risk` if *any* trigger is actionable and
- * near the cliff; `will_hit` only when *every* trigger is destined.
- */
-export function statusBucketForRow(row) {
-  let best = 'will_hit';
+/** Most-actionable group across a resident's triggering measures. */
+export function clearGroupForRow(row) {
+  let best = 'locked';
   for (const m of row.measures) {
     if (!m.triggers) continue;
-    const b = statusBucketForEntry(m);
-    if (STATUS_RANK[b] < STATUS_RANK[best]) best = b;
+    const g = clearGroupForEntry(m);
+    if (CLEAR_GROUP_RANK[g] < CLEAR_GROUP_RANK[best]) best = g;
   }
   return best;
+}
+
+/**
+ * Whether a clear_mds entry can clear within the CURRENT quarter — the green
+ * "this quarter" vs "next quarter (misses the cutoff)" split. Uses the earliest
+ * clearing ARD / time-window clear date when known; a comparison measure with
+ * no computed window yet is assumed schedulable this quarter.
+ *
+ * Both args are ISO YYYY-MM-DD, so the lexical compare is a correct date compare.
+ */
+export function clearsThisQuarter(entry, quarterEndIso) {
+  const ref = entry.cliffInfo?.earliestClearDate ?? entry.clearGuidance?.clearDate ?? null;
+  return ref ? ref <= quarterEndIso : true;
+}
+
+/**
+ * Row-level green split: whether a resident has at least one MDS-clearable
+ * (clear_mds) trigger that clears on/before the quarter lock. Drives the green
+ * group's "This quarter · do now" vs "Next quarter only" partition (and Focus
+ * mode's "Clear this week"). Clinical / locked triggers don't count — the MDS
+ * coordinator can't move them this quarter.
+ */
+export function rowClearsThisQuarter(row, quarterEndIso) {
+  return row.measures.some(
+    (m) => m.triggers && clearGroupForEntry(m) === 'clear_mds' && clearsThisQuarter(m, quarterEndIso)
+  );
 }
 
 // ── Five-Star tag ───────────────────────────────────────────────────────────

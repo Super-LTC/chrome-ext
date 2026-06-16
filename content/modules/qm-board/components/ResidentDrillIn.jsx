@@ -9,9 +9,10 @@
 import { useState } from 'preact/hooks';
 import {
   isFiveStarMds, shortLabel, measureCode, displayMdsValue,
-  statusBucketForEntry, statusRank, measureInLens,
+  clearGroupForEntry, clearGroupRank, measureInLens,
 } from '../lib/qm-view-model.js';
-import { STATUS_BUCKET, CROSSING, isCrossingEntry, fullName, prettyDate, stayDayLabel, clearTiming, CLEAR_TONE } from '../lib/qm-tones.js';
+import { CLEAR_GROUP, CROSSING, isCrossingEntry, fullName, prettyDate, stayDayLabel, clearTiming, CLEAR_TONE } from '../lib/qm-tones.js';
+import { ggComparisonLines, isGgComparisonMeasure } from '../lib/qm-evidence-view.js';
 import { X, ChevronDown, ChevronRight } from './icons.jsx';
 
 function toast(msg) {
@@ -29,7 +30,7 @@ export function ResidentDrillIn({ patient, entry, scopeMeasureId, lens, facility
   const all = (triggering.length ? triggering : [entry])
     .filter(Boolean)
     .slice()
-    .sort((a, b) => statusRank(statusBucketForEntry(a)) - statusRank(statusBucketForEntry(b)));
+    .sort((a, b) => clearGroupRank(clearGroupForEntry(a)) - clearGroupRank(clearGroupForEntry(b)));
 
   // Scope-aware (superapp PR #652): opened FROM a measure → lead with it, tuck the
   // rest under an accordion. Opened from a patient row (no scope) → show all.
@@ -82,8 +83,8 @@ export function ResidentDrillIn({ patient, entry, scopeMeasureId, lens, facility
 
 function MeasureSection({ patient, entry, facilityDate }) {
   const crossing = isCrossingEntry(entry);
-  const bucket = statusBucketForEntry(entry);
-  const tone = STATUS_BUCKET[bucket];
+  const group = clearGroupForEntry(entry);
+  const tone = CLEAR_GROUP[group];
   const code = measureCode(entry.id);
   const fiveStar = isFiveStarMds(entry.id);
   const cliff = entry.cliffInfo;
@@ -133,6 +134,8 @@ function MeasureSection({ patient, entry, facilityDate }) {
         <Beat tone="slate900" label="Triggered by">
           {entry.evidence.length === 0 ? (
             <div className="qmc-beat__muted">No evidence emitted by the evaluator.</div>
+          ) : isGgComparisonMeasure(entry.id) ? (
+            <GgEvidence evidence={entry.evidence} />
           ) : (
             <div className="qmc-evlist">
               {entry.evidence.map((ev, i) => (
@@ -180,6 +183,41 @@ function OtherMeasures({ patient, others, facilityDate }) {
           {others.map((m, i) => <MeasureSection key={`${m.id}-${i}`} patient={patient} entry={m} facilityDate={facilityDate} />)}
         </div>
       )}
+    </div>
+  );
+}
+
+// Translated GG before→after lines for ADL Decline / Walk-Indep, replacing the
+// raw paired-row dump (where `88` reads like a high/good number). One line per
+// declining item, biggest drop first: name | prior (code) → now (code) | ▼ drop.
+function GgEvidence({ evidence }) {
+  const view = ggComparisonLines(evidence);
+  if (view.lines.length === 0) {
+    return <div className="qmc-beat__muted">No GG decline detail emitted by the evaluator.</div>;
+  }
+  return (
+    <div className="qmc-evlist">
+      {(view.targetType || view.targetArd || view.priorArd) && (
+        <div className="qmc-ev__sub" style={{ marginBottom: '2px' }}>
+          {view.targetType ?? 'Target'}{view.targetArd ? ` ${prettyDate(view.targetArd)}` : ''}
+          {view.priorArd ? ` · vs prior ${prettyDate(view.priorArd)}` : ''}
+        </div>
+      )}
+      {view.lines.map((line) => (
+        <div key={line.baseKey} className="qmc-ev">
+          <div className="qmc-ev__left">
+            <div className="qmc-ev__row">
+              <span className="qmc-ev__item">{line.name}</span>
+            </div>
+            <div className="qmc-ev__sub">
+              {line.priorLabel} ({line.priorCode}) → {line.nowLabel} ({line.nowCode})
+            </div>
+          </div>
+          <div className="qmc-ev__coded">
+            <span className="qmc-ev__coded-lbl qmc-text--rose">▼ {line.drop} pt{line.drop === 1 ? '' : 's'}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

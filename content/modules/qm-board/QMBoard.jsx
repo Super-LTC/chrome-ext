@@ -2,43 +2,70 @@
  * QMBoard — root of the QM Command Center overlay (parity rebuild, PR #626).
  *
  * Surfaces (single-overlay view stack + a resident modal that layers on top):
- *   'dashboard' — Surface A (QmOverview): hero, status segments, measure tiles,
- *                 actionability-bucketed worklist. Default view.
+ *   'dashboard' — Surface A (QmOverview): hero, clear-group segments, the
+ *                 predicted Five-Star card, measure tiles, clear-group worklist.
  *   'measure'   — Surface B (MeasureDetail): one measure's residents + what-if.
  *   'signals'   — Surface D (ClinicalSignalsView): Mode-0 clinical signals.
+ *   'simulator' — Surface E (WhatIfSimulator): every LS five-star trigger as a
+ *                 lever; flip switches → predicted star moves live (client-only).
  *   resident modal — Surface C (ResidentDrillIn): every triggering measure for
  *                 one resident, each as a 3-beat timeline. Overlays any view.
  *
- * Buckets by actionability (at-risk / clearable / will-hit) via the pure
- * view-model, not raw cliff urgency.
+ * Focus mode (the landing) surfaces a predicted-★ chip; the full board carries
+ * the predictor card + the what-if simulator. The predictor is lazy-fetched.
+ *
+ * Groups by the one honest ClearGroup axis (Clear with an MDS / Needs a clinical
+ * fix / Locked this quarter) via the pure view-model, not raw cliff urgency.
  */
-import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'preact/hooks';
 import { useQmBoard } from './hooks/useQmBoard.js';
+import { useFiveStar } from './hooks/useFiveStar.js';
+import { useDfs } from './hooks/useDfs.js';
 import { track } from '../../utils/analytics.js';
 import { totalActionable } from './lib/qm-clinical-signals.js';
 import { QmOverview } from './components/QmOverview.jsx';
+import { QmFocus } from './components/QmFocus.jsx';
 import { ResidentDrillIn } from './components/ResidentDrillIn.jsx';
 import { MeasureDetail } from './components/MeasureDetail.jsx';
 import { ClinicalSignalsView } from './components/ClinicalSignalsView.jsx';
+import { WhatIfSimulator } from './components/WhatIfSimulator.jsx';
+import { DfsPage } from './components/DfsPage.jsx';
 import { FunctionalDeclineView } from './FunctionalDecline.jsx';
 import { QmLoading } from './components/QmLoading.jsx';
 
 export function QMBoard({ facilityName, orgSlug, onClose }) {
+  // Two modes off one fetch (web PR #672): Focus is the landing ("what to do this
+  // week"); QM Board is the full board. The Focus | QM Board switch is always
+  // visible — the full board must never feel hidden.
+  const [mode, setMode] = useState('focus'); // 'focus' | 'board'
   const [history, setHistory] = useState([{ kind: 'dashboard' }]);
   const view = history[history.length - 1];
   // Resident drill-in modal — layers over whatever view is showing.
   const [resident, setResident] = useState(null); // { patient, entry } | null
-  // Measure-set lens (Five-Star / QIP / Both) — owned here so it drives the whole
-  // board AND filters the resident drill-in no matter which surface opened it.
+  // Measure-set lens (Five-Star / QIP / Both) — board-only; owned here so it
+  // drives the whole board AND filters the resident drill-in no matter which
+  // surface opened it. Focus is implicitly the Five-Star "what to do now" view.
   const [lens, setLens] = useState('five_star'); // QmLens
 
   useEffect(() => { track('qm_board_opened', { source: 'fab' }); }, []);
+
+  // Changing surface (push/pop a view, or flip mode) should land at the top of
+  // the new page — otherwise the scroll position from the board carries over and
+  // you open a detail page already scrolled into its middle.
+  const scrollRef = useRef(null);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [view, mode]);
 
   const push = useCallback((v) => setHistory((h) => [...h, v]), []);
   const pop = useCallback(() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h)), []);
 
   const { currentlyTriggering, preventableAlerts, upcoming, loading, error, retry } =
     useQmBoard({ facilityName, orgSlug });
+  // Predicted Five-Star QM — lazy-fetched separately so the board renders first
+  // and the predictor card fills in (it does a double facility-rate pass).
+  const { prediction } = useFiveStar({ facilityName, orgSlug });
+  // Discharge Function Score card — also lazy (rolling-12-mo short-stay measure,
+  // its own service + cache). Board renders first; the DFS card fills in.
+  const { dfs } = useDfs({ facilityName, orgSlug });
 
   const signalCount = useMemo(
     () => (preventableAlerts ? totalActionable(preventableAlerts) : 0),
@@ -46,8 +73,13 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   );
 
   const openMeasure = (measureId) => push({ kind: 'measure', measureId });
-  const openSignals = () => push({ kind: 'signals' });
+  const openSignals = (patientId) => push({ kind: 'signals', patientId });
   const openFunctional = () => push({ kind: 'functional' });
+  const openSimulator = () => push({ kind: 'simulator' });
+  const openDfs = () => push({ kind: 'dfs' });
+  // From Focus: jump to the full board's signals view (switch mode + push).
+  const openSignalsFromFocus = (patientId) => { setMode('board'); push({ kind: 'signals', patientId }); };
+  const openBoard = () => setMode('board');
   // scopeMeasureId: set when opened FROM a measure (measure-detail row / crosser),
   // so the drill-in leads with that measure and tucks the rest under an accordion.
   // Undefined from a worklist patient-row click → the modal shows all at once.
@@ -94,21 +126,53 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
         ) : !currentlyTriggering ? (
           <div className="qmc-loading">No QM data for this facility.</div>
         ) : (
-          <div className="qmc-scroll">
-            {view.kind === 'dashboard' && (
+          <div className="qmc-scroll" ref={scrollRef}>
+            {/* Persistent Focus ⇄ QM Board switch — its own pill row at the top of
+                the content (matches web), so neither mode ever feels hidden. Shown
+                at each mode's top level; deeper board views carry their own back bar. */}
+            {(mode === 'focus' || view.kind === 'dashboard') && (
+              <div className="qmc qmb__modebar">
+                <div className="qmb__modeswitch" role="tablist" aria-label="QM view mode">
+                  <button type="button" role="tab" aria-selected={mode === 'focus'} /* NO_TRACK */
+                    className={`qmb__modebtn ${mode === 'focus' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('focus')}>Focus</button>
+                  <button type="button" role="tab" aria-selected={mode === 'board'} /* NO_TRACK */
+                    className={`qmb__modebtn ${mode === 'board' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('board')}>QM Board</button>
+                </div>
+              </div>
+            )}
+            {mode === 'focus' && (
+              <QmFocus
+                data={currentlyTriggering}
+                upcoming={upcoming}
+                alerts={preventableAlerts}
+                prediction={prediction}
+                lens="five_star"
+                facilityState={currentlyTriggering?.facilityState}
+                facilityName={facilityName}
+                orgSlug={orgSlug}
+                onOpenBoard={openBoard}
+                onOpenResident={openResident}
+                onOpenSignals={openSignalsFromFocus}
+              />
+            )}
+            {mode === 'board' && view.kind === 'dashboard' && (
               <QmOverview
                 data={currentlyTriggering}
                 upcoming={upcoming}
                 signalCount={signalCount}
                 lens={lens}
                 onLensChange={setLens}
+                prediction={prediction}
+                dfs={dfs}
+                onOpenDfs={openDfs}
                 onOpenMeasure={openMeasure}
                 onOpenResident={openResident}
                 onOpenSignals={openSignals}
                 onOpenFunctional={openFunctional}
+                onOpenSimulator={openSimulator}
               />
             )}
-            {view.kind === 'measure' && (
+            {mode === 'board' && view.kind === 'measure' && (
               <MeasureDetail
                 measureId={view.measureId}
                 currentlyTriggering={currentlyTriggering}
@@ -119,17 +183,35 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onOpenResidentById={openResidentById}
               />
             )}
-            {view.kind === 'signals' && (
+            {mode === 'board' && view.kind === 'signals' && (
               <ClinicalSignalsView
                 preventableAlerts={preventableAlerts}
                 currentlyTriggering={currentlyTriggering}
                 facilityName={facilityName}
                 orgSlug={orgSlug}
                 onBack={pop}
+                initialOpenPatientId={view.patientId}
               />
             )}
-            {view.kind === 'functional' && (
+            {mode === 'board' && view.kind === 'simulator' && (
+              <WhatIfSimulator
+                prediction={prediction}
+                data={currentlyTriggering}
+                upcoming={upcoming}
+                onBack={pop}
+                onOpenResident={openResident}
+              />
+            )}
+            {mode === 'board' && view.kind === 'functional' && (
               <FunctionalDeclineView
+                facilityName={facilityName}
+                orgSlug={orgSlug}
+                onBack={pop}
+              />
+            )}
+            {mode === 'board' && view.kind === 'dfs' && (
+              <DfsPage
+                dfs={dfs}
                 facilityName={facilityName}
                 orgSlug={orgSlug}
                 onBack={pop}

@@ -10,16 +10,16 @@
 import { useMemo, useState } from 'preact/hooks';
 import {
   isFiveStarMds, measureRate, crosserCountsThisQuarter, reCodeClearableIds,
-  projectedNum, ratePct, shortLabel, measureCode, statusBucketForEntry, displayMdsValue,
+  projectedNum, ratePct, shortLabel, measureCode, clearGroupForEntry, displayMdsValue,
 } from '../lib/qm-view-model.js';
 import { fiveStarMeasure, pointsForRate, nextTier } from '../lib/qm-five-star.js';
-import { CROSSING, STATUS_BUCKET, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel, nextQuarterLabel, stayDayLabel } from '../lib/qm-tones.js';
+import { CROSSING, CLEAR_GROUP, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel, nextQuarterLabel, stayDayLabel } from '../lib/qm-tones.js';
 import { ChevronLeft, ChevronRight } from './icons.jsx';
 
 const GROUP_DEFS = [
-  { key: 'at_risk',   label: STATUS_BUCKET.at_risk.label,   sub: STATUS_BUCKET.at_risk.sub,   tone: 'rose' },
-  { key: 'clearable', label: STATUS_BUCKET.clearable.label, sub: STATUS_BUCKET.clearable.sub, tone: 'sky' },
-  { key: 'will_hit',  label: STATUS_BUCKET.will_hit.label,  sub: STATUS_BUCKET.will_hit.sub,  tone: 'slate' },
+  { key: 'clear_mds', label: CLEAR_GROUP.clear_mds.label, sub: CLEAR_GROUP.clear_mds.sub, tone: CLEAR_GROUP.clear_mds.tone },
+  { key: 'clinical',  label: CLEAR_GROUP.clinical.label,  sub: CLEAR_GROUP.clinical.sub,  tone: CLEAR_GROUP.clinical.tone },
+  { key: 'locked',    label: CLEAR_GROUP.locked.label,    sub: CLEAR_GROUP.locked.sub,    tone: CLEAR_GROUP.locked.tone },
 ];
 
 export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, onOpenResident, upcoming }) {
@@ -37,7 +37,7 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
     for (const p of data.patients) {
       const entry = p.measures.find((m) => m.id === measureId);
       if (!entry?.triggers) continue;
-      out.push({ patient: p, entry, status: statusBucketForEntry(entry) });
+      out.push({ patient: p, entry, status: clearGroupForEntry(entry) });
     }
     return out;
   }, [data.patients, measureId]);
@@ -188,11 +188,17 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
                 <span className="qmc-group__sub">· {g.sub}</span>
               </div>
               <div className="qmc-rows">
-                {rows.map(({ patient, entry }) => (
-                  <PersonRow key={patient.patientId} patient={patient} entry={entry} wif={wif}
-                    cleared={cleared.has(patient.patientId)} onToggle={(v) => toggleCleared(patient.patientId, v)}
-                    onOpen={() => onOpenResident(patient, entry, measureId)} />
-                ))}
+                {rows.map(({ patient, entry }) => {
+                  // A clear-with-MDS row whose earliest clear date lands AFTER the
+                  // quarter locks can't help this quarter's number — flag it.
+                  const cd = entry.cliffInfo?.earliestClearDate ?? entry.clearGuidance?.clearDate;
+                  const afterLock = g.key === 'clear_mds' && !!cd && cd.slice(0, 10) > qEnd.slice(0, 10);
+                  return (
+                    <PersonRow key={patient.patientId} patient={patient} entry={entry} wif={wif}
+                      cleared={cleared.has(patient.patientId)} afterLock={afterLock} onToggle={(v) => toggleCleared(patient.patientId, v)}
+                      onOpen={() => onOpenResident(patient, entry, measureId)} />
+                  );
+                })}
               </div>
             </div>
           );
@@ -227,14 +233,13 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
   );
 }
 
-function PersonRow({ patient, entry, wif, cleared, onToggle, onOpen }) {
-  const rowBucket = statusBucketForEntry(entry);
-  const tone = STATUS_BUCKET[rowBucket].tone;
-  // Clearability is PER RESIDENT, not per measure: only a resident with a lever
-  // this stay (not in the will-hit bucket) can be marked Cleared. A will-hit
-  // resident is destined to count — letting them be "cleared" would wrongly drop
-  // the projected rate (the bug this fixes).
-  const rowClearable = rowBucket !== 'will_hit';
+function PersonRow({ patient, entry, wif, cleared, afterLock, onToggle, onOpen }) {
+  const group = clearGroupForEntry(entry);
+  const tone = CLEAR_GROUP[group].tone;
+  // Only a resident with a path this stay (clear_mds or clinical) can be marked
+  // Cleared. A locked resident is destined to count — letting them be "cleared"
+  // would wrongly drop the projected rate (the bug this fixes).
+  const rowClearable = group !== 'locked';
   const micro = clearMicrocopy(entry);
   const why0 = entry.evidence[0];
   const ard = patient.target?.ardDate;
@@ -248,7 +253,10 @@ function PersonRow({ patient, entry, wif, cleared, onToggle, onOpen }) {
           {why0 ? <span style={{ color: 'var(--slate-500)' }}> · {why0.mdsItem} {displayMdsValue(why0.mdsItem, why0.value)}</span> : null}
         </span>
       </button>
-      <span className={`qmc-prow__cta ${cleared ? '' : `qmc-text--${tone}`}`}>{cleared ? 'cleared' : micro}</span>
+      <span className={`qmc-prow__cta ${cleared ? '' : afterLock ? 'qmc-text--slate' : `qmc-text--${tone}`}`}>
+        {cleared ? 'cleared' : micro}
+        {afterLock && !cleared && <span className="qmc-prow__nextq">next quarter</span>}
+      </span>
       {wif ? (
         rowClearable ? <ClearToggle cleared={cleared} onToggle={onToggle} onLabel="Cleared" />
                      : <span className="qmc-locked">Locked</span>

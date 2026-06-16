@@ -8,8 +8,12 @@
  * Usage: node scripts/test-qm-view-model.mjs
  */
 import {
-  bucketForActionability,
-  isWhatIfClearable,
+  clearGroupForEntry,
+  clearGroupForRow,
+  clearGroupForMechanism,
+  clearGroupRank,
+  clearsThisQuarter,
+  rowClearsThisQuarter,
   isFiveStarMds,
   measureRate,
   projectedNum,
@@ -17,9 +21,6 @@ import {
   urgencyTally,
   shortLabel,
   measureCode,
-  entryIsActionable,
-  statusBucketForEntry,
-  statusBucketForRow,
   displayMdsValue,
   measureInLens,
 } from '../content/modules/qm-board/lib/qm-view-model.js';
@@ -73,19 +74,19 @@ function check(label, cond, got) {
   else { console.log(`  FAIL  ${label}${got !== undefined ? `\n        got ${JSON.stringify(got)}` : ''}`); fail++; }
 }
 
-// ── bucketForActionability ──────────────────────────────────────────────────
-check('team_decision → clearable', bucketForActionability('team_decision') === 'clearable');
-check('time_only → cant_clear', bucketForActionability('time_only') === 'cant_clear');
-check('clinical_trajectory → trajectory', bucketForActionability('clinical_trajectory') === 'trajectory');
-check('stay_locked → locked', bucketForActionability('stay_locked') === 'locked');
-check('undefined → clearable (safe default)', bucketForActionability(undefined) === 'clearable');
+// ── clearGroupForMechanism (By-measure tile axis) ───────────────────────────
+check('time_only → clear_mds', clearGroupForMechanism('time_only') === 'clear_mds');
+check('next_target_compare → clear_mds', clearGroupForMechanism('next_target_compare') === 'clear_mds');
+check('discontinue_medication → clinical', clearGroupForMechanism('discontinue_medication') === 'clinical');
+check('remove_device → clinical', clearGroupForMechanism('remove_device') === 'clinical');
+check('heal_wound → clinical', clearGroupForMechanism('heal_wound') === 'clinical');
+check('change_clinical_state → clinical', clearGroupForMechanism('change_clinical_state') === 'clinical');
+check('time_lookback_scan → locked', clearGroupForMechanism('time_lookback_scan') === 'locked');
+check('stay_locked → locked', clearGroupForMechanism('stay_locked') === 'locked');
+check('undefined → clinical (safe default)', clearGroupForMechanism(undefined) === 'clinical');
 
-// ── isWhatIfClearable ───────────────────────────────────────────────────────
-check('clearable is what-if clearable', isWhatIfClearable('clearable') === true);
-check('trajectory is what-if clearable', isWhatIfClearable('trajectory') === true);
-check('coming_soon is what-if clearable', isWhatIfClearable('coming_soon') === true);
-check('cant_clear is NOT what-if clearable', isWhatIfClearable('cant_clear') === false);
-check('locked is NOT what-if clearable', isWhatIfClearable('locked') === false);
+// ── clearGroupRank ──────────────────────────────────────────────────────────
+check('rank clear_mds < clinical < locked', clearGroupRank('clear_mds') < clearGroupRank('clinical') && clearGroupRank('clinical') < clearGroupRank('locked'));
 
 // ── isFiveStarMds ───────────────────────────────────────────────────────────
 check('antipsychotic_long is Five-Star MDS', isFiveStarMds('antipsychotic_long') === true);
@@ -126,29 +127,62 @@ check('ratePct 0 den → 0', ratePct(3, 0) === 0);
   check('urgencyTally empty all-zero', t['at-risk'] === 0 && t.urgent === 0 && t.routine === 0 && t['stay-locked'] === 0, t);
 }
 
-// ── entryIsActionable ───────────────────────────────────────────────────────
-check('clinical actionType is actionable', entryIsActionable(mkEntry('clinical', 'urgent')) === true);
-check('modification actionType is actionable', entryIsActionable(mkEntry('modification', 'routine')) === true);
-check('dx_query actionType is actionable', entryIsActionable(mkEntry('dx_query', 'routine')) === true);
-check('time actionType is NOT actionable', entryIsActionable(mkEntry('time', 'at-risk')) === false);
-check('stay_locked actionType is NOT actionable', entryIsActionable(mkEntry('stay_locked', 'routine')) === false);
-check('none actionType is NOT actionable', entryIsActionable(mkEntry('none', 'at-risk')) === false);
-check('missing guidance is NOT actionable', entryIsActionable(mkEntry(null, 'at-risk')) === false);
+// ── clearGroupForEntry (falls back to deriveClearability(actionType)) ───────
+// mkEntry sets cliffType 'point_in_time', so a `time` trigger is NOT a lookback
+// scan → clear_mds (MDS-clearable). A Falls lookback scan would be locked.
+check('modification → clear_mds (pure re-code)', clearGroupForEntry(mkEntry('modification', 'routine')) === 'clear_mds');
+check('time (point_in_time, e.g. UTI) → clear_mds', clearGroupForEntry(mkEntry('time', 'at-risk')) === 'clear_mds');
+check('clinical → clinical (clinical team must act)', clearGroupForEntry(mkEntry('clinical', 'urgent')) === 'clinical');
+check('dx_query → clinical (needs a query)', clearGroupForEntry(mkEntry('dx_query', 'routine')) === 'clinical');
+check('stay_locked → locked', clearGroupForEntry(mkEntry('stay_locked', 'routine')) === 'locked');
+check('none / missing guidance → locked', clearGroupForEntry(mkEntry(null, 'at-risk')) === 'locked');
+{
+  const falls = mkEntry('time', 'routine');
+  falls.cliffInfo.cliffType = 'lookback_scan';
+  check('time + lookback_scan (Falls) → locked', clearGroupForEntry(falls) === 'locked');
+}
+{
+  const e = mkEntry('clinical', 'routine');
+  e.clearability = 'clear_now'; // backend field wins over actionType fallback
+  check('backend clearability overrides actionType', clearGroupForEntry(e) === 'clear_mds');
+}
 
-// ── statusBucketForEntry ────────────────────────────────────────────────────
-check('clinical + at-risk → at_risk', statusBucketForEntry(mkEntry('clinical', 'at-risk')) === 'at_risk');
-check('clinical + urgent → at_risk', statusBucketForEntry(mkEntry('clinical', 'urgent')) === 'at_risk');
-check('dx_query + routine → clearable', statusBucketForEntry(mkEntry('dx_query', 'routine')) === 'clearable');
-check('time + at-risk → will_hit (destined, not at_risk)', statusBucketForEntry(mkEntry('time', 'at-risk')) === 'will_hit');
-check('stay_locked actionType → will_hit', statusBucketForEntry(mkEntry('stay_locked', 'routine')) === 'will_hit');
-check('none actionType → will_hit', statusBucketForEntry(mkEntry('none', 'at-risk')) === 'will_hit');
-check('actionable but stay-locked urgency → will_hit', statusBucketForEntry(mkEntry('clinical', 'stay-locked')) === 'will_hit');
+// ── clearGroupForRow (best across a resident's triggers) ────────────────────
+check('row with a clear_mds trigger → clear_mds', clearGroupForRow(mkRow([mkEntry('stay_locked', 'routine'), mkEntry('modification', 'routine')])) === 'clear_mds');
+check('row best is clinical (no green)', clearGroupForRow(mkRow([mkEntry('stay_locked', 'routine'), mkEntry('clinical', 'routine')])) === 'clinical');
+check('row of only locked triggers → locked', clearGroupForRow(mkRow([mkEntry('stay_locked', 'routine'), mkEntry('none', 'routine')])) === 'locked');
+check('row ignores non-triggering measures', clearGroupForRow(mkRow([{ ...mkEntry('modification', 'routine'), triggers: false }, mkEntry('stay_locked', 'routine')])) === 'locked');
 
-// ── statusBucketForRow (best across a resident's triggers) ───────────────────
-check('row with an actionable-near trigger → at_risk', statusBucketForRow(mkRow([mkEntry('time', 'at-risk'), mkEntry('clinical', 'at-risk')])) === 'at_risk');
-check('row actionable-but-runway → clearable', statusBucketForRow(mkRow([mkEntry('time', 'at-risk'), mkEntry('clinical', 'routine')])) === 'clearable');
-check('row of only destined triggers → will_hit', statusBucketForRow(mkRow([mkEntry('time', 'at-risk'), mkEntry('stay_locked', 'routine')])) === 'will_hit');
-check('row ignores non-triggering measures', statusBucketForRow(mkRow([{ ...mkEntry('clinical', 'at-risk'), triggers: false }, mkEntry('time', 'at-risk')])) === 'will_hit');
+// ── clearsThisQuarter (green this-q vs next-q split) ─────────────────────────
+{
+  const e = mkEntry('time', 'routine');
+  e.cliffInfo.earliestClearDate = '2026-06-20';
+  check('earliest before quarter-end → this quarter', clearsThisQuarter(e, '2026-06-30') === true);
+  e.cliffInfo.earliestClearDate = '2026-07-15';
+  check('earliest after quarter-end → next quarter', clearsThisQuarter(e, '2026-06-30') === false);
+}
+check('no earliest/clearDate → assume this quarter', clearsThisQuarter(mkEntry('modification', 'routine'), '2026-06-30') === true);
+
+// ── rowClearsThisQuarter (row-level green split) ─────────────────────────────
+{
+  // A clear_mds trigger (time + point_in_time) that clears before the lock → true.
+  const soon = mkEntry('time', 'routine');
+  soon.cliffInfo.earliestClearDate = '2026-06-20';
+  check('row with a green trigger clearing this quarter → true', rowClearsThisQuarter(mkRow([soon]), '2026-06-30') === true);
+
+  // Same green trigger but clearing after the lock → false.
+  const late = mkEntry('time', 'routine');
+  late.cliffInfo.earliestClearDate = '2026-07-15';
+  check('row whose only green trigger clears next quarter → false', rowClearsThisQuarter(mkRow([late]), '2026-06-30') === false);
+
+  // A clinical trigger that "clears" this quarter does NOT count (not the coordinator's lever).
+  const clinical = mkEntry('clinical', 'routine');
+  clinical.cliffInfo.earliestClearDate = '2026-06-20';
+  check('clinical trigger never counts toward this-quarter green', rowClearsThisQuarter(mkRow([clinical]), '2026-06-30') === false);
+
+  // Mixed: a late-green + a this-quarter-green → true (some()).
+  check('row with any this-quarter green trigger → true', rowClearsThisQuarter(mkRow([late, soon]), '2026-06-30') === true);
+}
 
 // ── shortLabel / measureCode ────────────────────────────────────────────────
 check('shortLabel known id wins over server label', shortLabel('antipsychotic_long', 'Antipsychotic Medication (long-stay)') === 'Antipsychotic');

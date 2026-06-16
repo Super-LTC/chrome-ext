@@ -2,17 +2,16 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
 import { unwrap } from '../utils/api.js';
 
 /**
- * useQmBoard — parallel fetch of Currently Triggering + Preventable Alerts
- * (+ best-effort Upcoming day-101 crossers) from the extension QM endpoints.
+ * useQmBoard — ONE round-trip for the whole QM board (web PR #672).
  *
- *   GET /api/extension/qm-planner/currently-triggering?facilityName&orgSlug
- *   GET /api/extension/qm-planner/preventable-alerts?facilityName&orgSlug
- *   GET /api/extension/qm-planner/upcoming?facilityName&orgSlug   (best-effort)
+ *   GET /api/extension/qm-planner/board?facilityName&orgSlug
+ *     → { success, data: { currentlyTriggering, upcoming, alerts } }
  *
- * `upcoming` powers the "+N soon" tile pills, the "Coming soon" worklist group,
- * and the crosser-prevent what-if. It is fetched best-effort: if the endpoint
- * isn't deployed (or errors), the board still loads and crosser features stay
- * gracefully empty.
+ * Both modes (Focus + full board) + inline dismiss read from this single cached
+ * object — no waterfall, Focus renders instantly. `alerts` is the preventable-
+ * alerts payload (signals already pruned to the last 7 days + sorted newest-first
+ * server-side); we expose it as `preventableAlerts` so the existing views are
+ * untouched.
  */
 export function useQmBoard({ facilityName, orgSlug }) {
   const [currentlyTriggering, setCurrentlyTriggering] = useState(null);
@@ -39,33 +38,18 @@ export function useQmBoard({ facilityName, orgSlug }) {
     const params = new URLSearchParams({ facilityName, orgSlug });
 
     try {
-      const [ctRes, paRes] = await Promise.all([
-        chrome.runtime.sendMessage({
-          type: 'API_REQUEST',
-          endpoint: `/api/extension/qm-planner/currently-triggering?${params}`,
-          options: { method: 'GET' },
-        }),
-        chrome.runtime.sendMessage({
-          type: 'API_REQUEST',
-          endpoint: `/api/extension/qm-planner/preventable-alerts?${params}`,
-          options: { method: 'GET' },
-        }),
-      ]);
-
-      if (!ctRes?.success) throw new Error(ctRes?.error || 'Failed to load currently-triggering');
-      if (!paRes?.success) throw new Error(paRes?.error || 'Failed to load preventable alerts');
-
-      setCurrentlyTriggering(unwrap(ctRes.data));
-      setPreventableAlerts(unwrap(paRes.data));
-
-      // Best-effort: day-101 crossers. Never blocks the board.
-      chrome.runtime.sendMessage({
+      // One call returns the whole board (currently-triggering + upcoming + alerts).
+      const boardRes = await chrome.runtime.sendMessage({
         type: 'API_REQUEST',
-        endpoint: `/api/extension/qm-planner/upcoming?${params}`,
+        endpoint: `/api/extension/qm-planner/board?${params}`,
         options: { method: 'GET' },
-      }).then((upRes) => {
-        setUpcoming(upRes?.success ? unwrap(upRes.data) : null);
-      }).catch(() => setUpcoming(null));
+      });
+      if (!boardRes?.success) throw new Error(boardRes?.error || 'Failed to load QM board');
+
+      const board = unwrap(boardRes.data) ?? {};
+      setCurrentlyTriggering(board.currentlyTriggering ?? null);
+      setUpcoming(board.upcoming ?? null);
+      setPreventableAlerts(board.alerts ?? null);
     } catch (err) {
       console.error('[QMBoard] fetch failed', err);
       window.SuperAnalytics?.track?.('error_shown', {

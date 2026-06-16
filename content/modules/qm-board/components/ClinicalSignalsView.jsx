@@ -46,13 +46,14 @@ function addedLine(a) {
   return `${s ? signalDateVerb(s.source) : 'recorded'} ${prettyDate(date)}`;
 }
 
-export function ClinicalSignalsView({ preventableAlerts: data, currentlyTriggering, facilityName, orgSlug, onBack }) {
+export function ClinicalSignalsView({ preventableAlerts: data, currentlyTriggering, facilityName, orgSlug, onBack, initialOpenPatientId }) {
   const summary = currentlyTriggering?.summary ?? { byMeasure: {} };
   const { snoozeAlert, unsnoozeAlert } = useSnooze({ facilityName, orgSlug });
 
   const [tab, setTab] = useState('active');
   const [chip, setChip] = useState(null);          // alertId filter | null
-  const [openId, setOpenId] = useState(null);      // resident modal
+  // Deep-link: a Focus "Watch" signal click seeds the resident modal open.
+  const [openId, setOpenId] = useState(initialOpenPatientId ?? null); // resident modal
   const [whatIf, setWhatIf] = useState(false);
   const [skipped, setSkipped] = useState(new Set()); // signalKeys marked Skip
   const [sessionSnoozes, setSessionSnoozes] = useState(new Map());

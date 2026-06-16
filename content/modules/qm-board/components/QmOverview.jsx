@@ -2,9 +2,9 @@
  * Surface A — QM Command Center dashboard.
  *
  * Ported from web/components/quality-measures/qm-overview.tsx (PR #626),
- * adapted to Preact + the `qmc-` CSS tone system. Buckets residents by
- * actionability (at-risk / clearable / will-hit) via the pure view-model,
- * NOT by raw cliff urgency.
+ * adapted to Preact + the `qmc-` CSS tone system. Groups residents by the one
+ * honest axis — ClearGroup (Clear with an MDS / Needs a clinical fix / Locked
+ * this quarter) — via the pure view-model, NOT by raw cliff urgency.
  *
  * `upcoming` (day-101 crossers) is optional — the extension doesn't wire the
  * upcoming endpoint yet, so the "Coming soon" group is simply absent. All
@@ -12,43 +12,53 @@
  */
 import { useMemo, useState } from 'preact/hooks';
 import {
-  bucketForActionability, isFiveStarMds, isWhatIfClearable, measureRate, ratePct,
-  shortLabel, measureCode, statusBucketForEntry, statusBucketForRow, statusRank,
+  clearGroupForEntry, clearGroupForRow, clearGroupForMechanism, clearGroupRank,
+  rowClearsThisQuarter,
+  isFiveStarMds, measureRate, ratePct,
+  shortLabel, measureCode,
   measureInLens, rowForLens, crosserForLens,
 } from '../lib/qm-view-model.js';
 import { hasActiveQip, qipForState } from '../lib/qip-programs.js';
 import {
-  URGENCY, CROSSING, STATUS_BUCKET, entryUrgency, soonestCliffDays,
+  URGENCY, CROSSING, CLEAR_GROUP, entryUrgency, soonestCliffDays,
   crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel,
-  clearTiming, CLEAR_TONE,
+  clearTiming, CLEAR_TONE, rowDaysUntilClearable,
 } from '../lib/qm-tones.js';
 import { ShieldCheck, CalendarClock, Activity, ChevronRight, ChevronDown, CircleCheck, Search, X, TrendingDown } from './icons.jsx';
+import { FiveStarCard } from './FiveStarCard.jsx';
+import { DfsTile } from './DfsTile.jsx';
 
-// Tile footer copy keyed by the measure's actionability bucket.
-const BUCKET_FOOTER = {
-  clearable:   { tone: 'sky',    label: (n) => `${n} actionable` },
-  trajectory:  { tone: 'sky',    label: (n) => `${n} clinical` },
-  cant_clear:  { tone: 'slate',  label: () => 'time-based' },
-  locked:      { tone: 'slate',  label: () => 'stay-locked' },
-  coming_soon: { tone: 'violet', label: (n) => `${n} crossing` },
+// Per-row action verb — names what the prominent (in-group) measures need, so a
+// green-group row reads "Clears [ADL Decline]" not a flat pile of mixed chips.
+const ROW_VERB = {
+  clear_mds: { label: 'Clears', tone: 'emerald' },
+  clinical:  { label: 'Fix',    tone: 'amber' },
+  locked:    { label: 'Locked', tone: 'slate' },
+};
+
+// Tile footer copy keyed by the measure's clear group.
+const GROUP_FOOTER = {
+  clear_mds: { tone: 'emerald', label: (n) => `${n} clearable` },
+  clinical:  { tone: 'amber',   label: (n) => `${n} clinical` },
+  locked:    { tone: 'slate',   label: () => 'locked' },
 };
 
 const SEGMENTS = [
-  { key: 'at_risk',   label: STATUS_BUCKET.at_risk.label,   tone: 'rose' },
-  { key: 'clearable', label: STATUS_BUCKET.clearable.label, tone: 'sky' },
-  { key: 'will_hit',  label: STATUS_BUCKET.will_hit.label,  tone: 'slate' },
-  { key: 'clear',     label: 'Clear',                       tone: 'emerald' },
+  { key: 'clear_mds', label: CLEAR_GROUP.clear_mds.label, tone: CLEAR_GROUP.clear_mds.tone },
+  { key: 'clinical',  label: CLEAR_GROUP.clinical.label,  tone: CLEAR_GROUP.clinical.tone },
+  { key: 'locked',    label: CLEAR_GROUP.locked.label,    tone: CLEAR_GROUP.locked.tone },
+  { key: 'clear',     label: 'Clear',                     tone: 'emerald' },
 ];
 
 const WORK_GROUPS = [
-  { key: 'at_risk',   label: STATUS_BUCKET.at_risk.label,   sub: 'A lever still exists — act before the cliff',  tone: 'rose' },
-  { key: 'clearable', label: STATUS_BUCKET.clearable.label, sub: 'A lever exists, with runway before the cliff', tone: 'sky' },
-  { key: 'will_hit',  label: STATUS_BUCKET.will_hit.label,  sub: 'No lever this stay — FYI so iQIES never surprises', tone: 'slate' },
+  { key: 'clear_mds', label: CLEAR_GROUP.clear_mds.label, sub: CLEAR_GROUP.clear_mds.sub, tone: CLEAR_GROUP.clear_mds.tone },
+  { key: 'clinical',  label: CLEAR_GROUP.clinical.label,  sub: CLEAR_GROUP.clinical.sub,  tone: CLEAR_GROUP.clinical.tone },
+  { key: 'locked',    label: CLEAR_GROUP.locked.label,    sub: CLEAR_GROUP.locked.sub,    tone: CLEAR_GROUP.locked.tone },
 ];
 
 export function QmOverview({
-  data, upcoming, lens = 'five_star', onLensChange,
-  onOpenMeasure, onOpenResident, signalCount = 0, onOpenSignals, onOpenFunctional,
+  data, upcoming, lens = 'five_star', onLensChange, prediction, dfs,
+  onOpenMeasure, onOpenResident, signalCount = 0, onOpenSignals, onOpenFunctional, onOpenSimulator, onOpenDfs,
 }) {
   const { summary } = data;
   const facilityState = data.facilityState;
@@ -58,7 +68,7 @@ export function QmOverview({
   const setLens = onLensChange ?? (() => {}); // lens is owned by QMBoard (drives whole board + drill-in)
   const [seg, setSeg] = useState(null);
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState(new Set(['clearable', 'will_hit']));
+  const [collapsed, setCollapsed] = useState(new Set(['clinical', 'locked']));
   const [showClear, setShowClear] = useState(false);
   const [showCrossers, setShowCrossers] = useState(true);
 
@@ -91,7 +101,7 @@ export function QmOverview({
     const out = [];
     for (const p of lensRows) {
       if (p.triggeringCount === 0) continue;
-      out.push({ patient: p, status: statusBucketForRow(p), days: soonestCliffDays(p) });
+      out.push({ patient: p, status: clearGroupForRow(p), days: soonestCliffDays(p) });
     }
     return out;
   }, [lensRows]);
@@ -104,8 +114,11 @@ export function QmOverview({
   const segCount = (k) =>
     k === 'clear' ? clearResidents.length : residents.filter((r) => r.status === k).length;
 
+  // One sorted grid (web UX redesign dropped the state-survey divider — the
+  // per-tile "state" tag still distinguishes them). Lens filter: state-survey
+  // measures not in this state's QIP are dropped entirely.
   const tiles = useMemo(() => {
-    const withData = data.measuresEvaluated
+    return data.measuresEvaluated
       .map((meta) => {
         const counts = summary.byMeasure[meta.id] ?? { triggering: 0, excluded: 0, applicable: 0 };
         const urgencies = [];
@@ -115,14 +128,8 @@ export function QmOverview({
         }
         return { meta, counts, urgencies };
       })
-      // Lens filter: state-survey-only measures not in this state's QIP are
-      // dropped from the tiles entirely (the worklist still shows them).
-      .filter((x) => x.counts.applicable > 0 && measureInLens(x.meta.id, lens, facilityState));
-    const sortFn = (a, b) => b.counts.triggering - a.counts.triggering;
-    return {
-      cms: withData.filter((x) => !x.meta.nonCms).sort(sortFn),
-      non: withData.filter((x) => x.meta.nonCms).sort(sortFn),
-    };
+      .filter((x) => x.counts.applicable > 0 && measureInLens(x.meta.id, lens, facilityState))
+      .sort((a, b) => b.counts.triggering - a.counts.triggering);
   }, [data.measuresEvaluated, summary.byMeasure, data.patients, lens, facilityState]);
 
   const qLabel = quarterLabel(summary.currentQuarterEnd);
@@ -136,14 +143,30 @@ export function QmOverview({
     return next;
   });
 
-  // One status group (at_risk / clearable / will_hit). Returns null when a
-  // segment filter excludes it or it has no rows.
+  // One clear group (clear_mds / clinical / locked). Returns null when a segment
+  // filter excludes it or it has no rows. The green group is a FLAT list sorted
+  // "Clearable now" first then by days-until-clearable (the per-row countdown
+  // carries the timing); the amber/slate groups sort by soonest cliff.
   const renderGroup = (key) => {
     if (seg && seg !== key) return null;
     const g = WORK_GROUPS.find((x) => x.key === key);
-    const rows = residents.filter((r) => r.status === key).sort((a, b) => a.days - b.days);
+    const rows = residents.filter((r) => r.status === key);
+    if (key === 'clear_mds') {
+      rows.sort((a, b) => rowDaysUntilClearable(a.patient, facilityDate) - rowDaysUntilClearable(b.patient, facilityDate) || a.days - b.days);
+    } else {
+      rows.sort((a, b) => a.days - b.days);
+    }
     if (rows.length === 0) return null;
     const isCollapsed = !seg && collapsed.has(key);
+    const renderRows = (list, offset = 0) => list.map((r, i) => (
+      <ResidentRow key={r.patient.patientId} item={r} facilityDate={facilityDate} delay={Math.min(offset + i, 16) * 16} onOpenResident={onOpenResident} />
+    ));
+    // Green group: split by the quarter lock — "This quarter · do now" vs the
+    // muted "Next quarter only" (locks in this quarter). Not hidden, just dimmed.
+    const qEnd = summary.currentQuarterEnd;
+    const thisQ = key === 'clear_mds' ? rows.filter((r) => rowClearsThisQuarter(r.patient, qEnd)) : rows;
+    const nextQ = key === 'clear_mds' ? rows.filter((r) => !rowClearsThisQuarter(r.patient, qEnd)) : [];
+    const split = key === 'clear_mds' && nextQ.length > 0;
     return (
       <div key={key}>
         <button type="button" className="qmc-group__head" disabled={!!seg} onClick={() => toggleCollapse(key)}> {/* NO_TRACK */}
@@ -154,11 +177,20 @@ export function QmOverview({
           <span className="qmc-group__sub">· {g.sub}</span>
         </button>
         {!isCollapsed && (
-          <div className="qmc-rows">
-            {rows.map((r, i) => (
-              <ResidentRow key={r.patient.patientId} item={r} facilityDate={facilityDate} delay={Math.min(i, 16) * 16} onOpenResident={onOpenResident} />
-            ))}
-          </div>
+          split ? (
+            <>
+              {thisQ.length > 0 && (
+                <>
+                  <div className="qmc-greensplit__head">This quarter · do now <span className="qmc-greensplit__count">{thisQ.length}</span></div>
+                  <div className="qmc-rows">{renderRows(thisQ)}</div>
+                </>
+              )}
+              <div className="qmc-greensplit__head qmc-greensplit__head--muted">Next quarter only · locks in this quarter <span className="qmc-greensplit__count">{nextQ.length}</span></div>
+              <div className="qmc-rows qmc-rows--nextq">{renderRows(nextQ, thisQ.length)}</div>
+            </>
+          ) : (
+            <div className="qmc-rows">{renderRows(rows)}</div>
+          )
         )}
       </div>
     );
@@ -230,9 +262,9 @@ export function QmOverview({
           })}
         </div>
 
-        {/* Clinical signals entry */}
-        {onOpenSignals && signalCount > 0 && (
-          <button type="button" data-track="qm_drill_in" data-track-prop-measure-code="signals" data-track-prop-view="signals" className="qmc-signals-btn" onClick={onOpenSignals}>
+        {/* Clinical signals entry (hidden while a status segment filters the worklist) */}
+        {!seg && onOpenSignals && signalCount > 0 && (
+          <button type="button" data-track="qm_drill_in" data-track-prop-measure-code="signals" data-track-prop-view="signals" className="qmc-signals-btn" onClick={() => onOpenSignals()}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span className="qmc-signals-btn__icon"><Activity /></span>
               <span>
@@ -259,7 +291,7 @@ export function QmOverview({
         )}
       </div>
 
-      {/* ── Measure tiles (hidden while a segment filters) ──────────────── */}
+      {/* ── Measure tiles (hidden while a status segment filters the worklist) ── */}
       {!seg && (
         <div>
           <div className="qmc-seclabel">
@@ -268,27 +300,26 @@ export function QmOverview({
             </span>
           </div>
           <div className="qmc-tiles">
-            {tiles.cms.map((x, i) => (
+            {tiles.map((x, i) => (
               <MeasureTile key={x.meta.id} {...x} soon={crosserByMeasure[x.meta.id] ?? 0} delay={i * 22} onClick={() => onOpenMeasure(x.meta.id)} />
             ))}
+            {/* DFS — informational rate tile, last; taps through to its own page */}
+            {dfs?.available && lens !== 'qip' && onOpenDfs && (
+              <DfsTile dfs={dfs} delay={tiles.length * 22} onClick={onOpenDfs} />
+            )}
           </div>
-          {tiles.non.length > 0 && (
-            <>
-              <div className="qmc-substate">State-survey only (not on iQIES Five-Star)</div>
-              <div className="qmc-tiles">
-                {tiles.non.map((x, i) => (
-                  <MeasureTile key={x.meta.id} {...x} soon={crosserByMeasure[x.meta.id] ?? 0} delay={i * 22} onClick={() => onOpenMeasure(x.meta.id)} />
-                ))}
-              </div>
-            </>
-          )}
         </div>
+      )}
+
+      {/* ── Predicted Five-Star QM — below the grid so the grid stays visible; hidden while filtering ── */}
+      {!seg && prediction && lens !== 'qip' && (
+        <FiveStarCard prediction={prediction} onOpenSimulator={onOpenSimulator} />
       )}
 
       {/* ── Worklist toolbar ────────────────────────────────────────────── */}
       <div className="qmc-toolbar">
         <div className="qmc-toolbar__title">
-          <span>{q ? 'Search' : seg === 'clear' ? 'Clear residents' : seg ? STATUS_BUCKET[seg].label : 'Worklist'}</span>
+          <span>{q ? 'Search' : seg === 'clear' ? 'Clear residents' : seg ? CLEAR_GROUP[seg].label : 'Worklist'}</span>
           {seg && !q && (
             <button type="button" className="qmc-reset" onClick={() => setSeg(null)}> {/* NO_TRACK */}
               <X /> Show all measures
@@ -318,15 +349,15 @@ export function QmOverview({
         <ClearList residents={clearResidents} />
       ) : (
         <div className="qmc-worklist">
-          {/* Order: At risk → Coming soon (surfaced, not buried) → Clearable → Will hit → Clear */}
-          {renderGroup('at_risk')}
+          {/* Order: Clear with an MDS → Coming soon (surfaced, not buried) → Needs a clinical fix → Locked → Clear */}
+          {renderGroup('clear_mds')}
 
           {!seg && crossers.length > 0 && (
             <div className="qmc-collapsible qmc-collapsible--violet">
               <button type="button" className="qmc-collapsible__head" onClick={() => setShowCrossers((s) => !s)}> {/* NO_TRACK */}
                 {showCrossers ? <ChevronDown /> : <ChevronRight />}
                 <span className="qmc-dot qmc-dot--violet" style={{ width: '8px', height: '8px' }} />
-                Coming soon · {crossers.length} crossing day-101 — short-stay coding that will trip a long-stay measure
+                Going to trigger soon · {crossers.length} <span className="qmc-text--slate" style={{ fontWeight: 400 }}>· short-stay coding that hits a long-stay measure at day-101</span>
               </button>
               {showCrossers && (
                 <div className="qmc-collapsible__body qmc-rows">
@@ -338,8 +369,8 @@ export function QmOverview({
             </div>
           )}
 
-          {renderGroup('clearable')}
-          {renderGroup('will_hit')}
+          {renderGroup('clinical')}
+          {renderGroup('locked')}
 
           {residents.length === 0 && (
             <div className="qmc-allclear">No residents triggering — all clear.</div>
@@ -362,12 +393,12 @@ export function QmOverview({
 }
 
 function MeasureTile({ meta, counts, urgencies, soon, delay, onClick }) {
-  const bucket = bucketForActionability(meta.clearProfile?.actionability);
+  const group = clearGroupForMechanism(meta.clearProfile?.clearMechanism);
   const rate = measureRate(counts);
   const code = measureCode(meta.id);
   const fiveStar = isFiveStarMds(meta.id);
-  const footer = BUCKET_FOOTER[bucket];
-  const actionableCount = isWhatIfClearable(bucket) ? counts.triggering : 0;
+  const footer = GROUP_FOOTER[group];
+  const actionableCount = group === 'locked' ? 0 : counts.triggering;
   const dots = urgencies.slice(0, 8);
   return (
     <button type="button" data-track="qm_tile_clicked" data-track-prop-measure-code={meta.id} className="qmc-tile qmc-rise" style={{ animationDelay: `${delay}ms` }} onClick={onClick}>
@@ -399,13 +430,20 @@ function MeasureTile({ meta, counts, urgencies, soon, delay, onClick }) {
 
 function ResidentRow({ item, facilityDate, delay, onOpenResident }) {
   const r = item.patient;
-  const tone = STATUS_BUCKET[item.status].tone;
-  // Per-measure clear-timing chip — only on actionable rows (At-risk / Clearable),
-  // where "can I clear it / when" drives action. Will-hit/Clear show no chip.
-  const showClear = item.status === 'at_risk' || item.status === 'clearable';
+  const tone = CLEAR_GROUP[item.status].tone;
   const entries = r.measures
     .filter((m) => m.triggers)
-    .sort((a, b) => statusRank(statusBucketForEntry(a)) - statusRank(statusBucketForEntry(b)));
+    .sort((a, b) => clearGroupRank(clearGroupForEntry(a)) - clearGroupRank(clearGroupForEntry(b)));
+  // Lead with the measures THIS group acts on (clear-with-MDS in the green group);
+  // demote the resident's other triggers to a muted "· also" so the row says what
+  // actually clears, not a flat pile of mixed chips.
+  const inGroup = entries.filter((m) => clearGroupForEntry(m) === item.status);
+  const chips = inGroup.length ? inGroup : entries;
+  const others = inGroup.length ? entries.filter((m) => clearGroupForEntry(m) !== item.status) : [];
+  const verb = ROW_VERB[item.status];
+  // One row-level timing badge (the soonest/most-actionable measure) instead of a
+  // separate badge per measure — the per-pill timings were the wall of words.
+  const time = entries[0] ? clearTiming(entries[0], r, facilityDate) : null;
   return (
     <button type="button" data-track="qm_drill_in" data-track-prop-measure-code={entries[0]?.id || '—'} data-track-prop-view="resident"
       className="qmc-row qmc-rise" style={{ animationDelay: `${delay}ms` }} onClick={() => onOpenResident(r, entries[0])}>
@@ -418,25 +456,23 @@ function ResidentRow({ item, facilityDate, delay, onOpenResident }) {
           </span>
         </div>
         <div className="qmc-row__pills">
-          {entries.map((m, i) => {
-            const t = STATUS_BUCKET[statusBucketForEntry(m)].tone;
-            const ct = showClear ? clearTiming(m, r, facilityDate) : null;
+          <span className={`qmc-row__verb qmc-text--${verb.tone}`}>{verb.label}</span>
+          {chips.map((m, i) => {
+            const t = CLEAR_GROUP[clearGroupForEntry(m)].tone;
             return (
-              <span key={`${m.id}-${i}`} className="qmc-pillgroup">
-                <span className={`qmc-chip qmc-chip--${t}`}>
-                  <span className={`qmc-dot qmc-dot--${t}`} style={{ width: '6px', height: '6px' }} />
-                  {shortLabel(m.id, m.label)}
-                </span>
-                {ct && (
-                  <span className={`qmc-clearchip qmc-clearchip--${CLEAR_TONE[ct.kind].badge}`}>{ct.short}</span>
-                )}
+              <span key={`${m.id}-${i}`} className={`qmc-chip qmc-chip--${t}`}>
+                <span className={`qmc-dot qmc-dot--${t}`} style={{ width: '6px', height: '6px' }} />
+                {shortLabel(m.id, m.label)}
               </span>
             );
           })}
+          {others.length > 0 && (
+            <span className="qmc-row__also">· also {others.map((m) => shortLabel(m.id, m.label)).join(', ')}</span>
+          )}
         </div>
       </div>
       <div className="qmc-row__right">
-        {/* No per-row day countdown — the cliff is the shared quarter-end (hero). */}
+        {time && <span className={`qmc-clearchip qmc-clearchip--${CLEAR_TONE[time.kind].badge}`}>{time.short}</span>}
         <span className="qmc-row__count">{r.triggeringCount}</span>
         <ChevronRight className="qmc-row__chev" />
       </div>
@@ -517,7 +553,7 @@ function SearchResults({ residents, clear, crossers, query, facilityDate, onOpen
   if (total === 0) {
     return <div className="qmc-empty">No residents match “{query.trim()}”.</div>;
   }
-  const sorted = residents.slice().sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.days - b.days);
+  const sorted = residents.slice().sort((a, b) => clearGroupRank(a.status) - clearGroupRank(b.status) || a.days - b.days);
   return (
     <div className="qmc-rows">
       <div style={{ fontSize: '11px', color: 'var(--slate-400)' }}>{total} match{total === 1 ? '' : 'es'}</div>

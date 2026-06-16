@@ -8,8 +8,8 @@
  * (rose/sky/slate/violet/amber/emerald) that the extension CSS maps to colors
  * via `qm-tone-<key>` classes. Logic (ranks, derivations) is verbatim.
  */
-import { statusBucketForEntry } from './qm-view-model.js';
-import { deriveClearability, clearabilityHasLever } from './clearability.js';
+import { clearGroupForEntry } from './qm-view-model.js';
+import { deriveClearability } from './clearability.js';
 
 // ── Urgency tone (resident-level cliff urgency) ─────────────────────────────
 // Tone = { tone, label, rank }  — `tone` is the semantic key for CSS.
@@ -23,24 +23,25 @@ export const URGENCY = {
 /** Violet tone for the day-101 "Going to trigger soon" (crossing) population. */
 export const CROSSING = { tone: 'violet' };
 
-// ── Status-bucket tone (the rose/sky/slate worklist + segment groups) ───────
-// Single source of truth for the three honest buckets. `at_risk` is loud
-// (rose), `will_hit` is deliberately calm (slate) — it's awareness, not a
-// to-do, so it should never compete for attention with the real worklist.
-export const STATUS_BUCKET = {
-  at_risk: {
-    label: 'At risk',
-    sub: 'A lever still exists — and the cliff is near',
-    tone: 'rose',
+// ── Clear-group tone (the green/amber/slate worklist + segment groups) ──────
+// One honest axis (see qm-view-model ClearGroup). clear_mds is the actionable
+// green group; clinical is amber (a lever exists, but it's the clinical team's,
+// not the MDS coordinator's); locked is calm slate — awareness, never a to-do.
+// `tone` is the semantic key the extension CSS maps to colors.
+export const CLEAR_GROUP = {
+  clear_mds: {
+    label: 'Clear with an MDS',
+    sub: 'you can knock these off by scheduling an assessment',
+    tone: 'emerald',
   },
-  clearable: {
-    label: 'Clearable',
-    sub: 'A lever exists, with runway before the cliff',
-    tone: 'sky',
+  clinical: {
+    label: 'Needs a clinical fix',
+    sub: 'the clinical team / physician has to act first',
+    tone: 'amber',
   },
-  will_hit: {
-    label: 'Will hit',
-    sub: 'No lever this stay — it counts no matter what',
+  locked: {
+    label: 'Locked this quarter',
+    sub: 'counts no matter what — see when it comes off',
     tone: 'slate',
   },
 };
@@ -72,66 +73,114 @@ export const CLEAR_TONE = {
   locked:      { badge: 'slate' },
 };
 
+/** Whole days from `fromIso` to `toIso` (both ISO YYYY-MM-DD). Negative = past. */
+function daysBetween(fromIso, toIso) {
+  const f = Date.parse(`${fromIso.slice(0, 10)}T00:00:00Z`);
+  const t = Date.parse(`${toIso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(f) || Number.isNaN(t)) return 0;
+  return Math.round((t - f) / 86_400_000);
+}
+
 /**
- * When/whether one measure clears, relative to facility-local today. Labels are
- * keyed off the backend's `clearability` classification — fall back to deriving
- * it locally for older responses that don't carry the field (backwards compat).
- * Never key "now" off `earliestClearDate <= today`: only `clear_now`
- * (Modification — a pure coding fix) is green; everything else with a lever is
- * amber `conditional` because the clinical change / Dx query hasn't happened yet.
+ * When/whether one measure clears, relative to facility-local today. Derives
+ * purely from the backend `clearability` classification + `cliffType` +
+ * `cliffInfo.earliestClearDate` (no statusBucket dependency). `facilityDate`
+ * (today, ISO) is REQUIRED for the green countdown. Each result carries its own
+ * `big` (banner), `short` (row chip), and `sub` (banner sub-line);
+ * CLEAR_TONE[kind].badge gives the semantic color key.
+ *   now         — pure coding fix (Modification) OR a matured time window — green
+ *   date        — green countdown ("Clears in N days") / day-101 preventable
+ *   conditional — a lever exists but it's gated on clinical work / a Dx query
+ *                 that hasn't happened yet (amber — deliberately NOT green)
+ *   wait        — Falls lookback scan / day-101 carries-over, ages out (slate)
+ *   locked      — stay-locked, no lever (slate)
  */
 export function clearTiming(entry, patient, facilityDate) {
   const g = entry.clearGuidance;
   const cliff = entry.cliffInfo;
   const crossing = isCrossingEntry(entry);
-  const bucket = statusBucketForEntry(entry);
-  const clr = entry.clearability ?? deriveClearability(g?.actionType);
-  const hasClearPath = !crossing && bucket !== 'will_hit' && clearabilityHasLever(clr);
 
   if (crossing) {
     return cliff?.clearableBeforeCliff
       ? { kind: 'date', big: 'Preventable before day-101', short: 'Preventable', sub: g?.actions?.[0]?.label ?? 'clear the coding before they cross' }
       : { kind: 'wait', big: 'Carries over at day-101', short: 'Carries over', sub: 'already coded — appears when CDIF reaches 101' };
   }
-  if (hasClearPath) {
-    const action = g?.actions?.[0]?.label;
-    // The ONLY clear that needs no clinical change is a coding fix (Modification):
-    // re-code the MDS and it drops. That's the one true "Clear now".
-    if (clr === 'clear_now') {
-      return { kind: 'now', big: 'Ready to clear now', short: 'Clear now', sub: action ?? 're-code the MDS, then re-ARD' };
-    }
-    // A physician Dx query can be started today, but only clears once it's signed
-    // back — not instant.
-    if (clr === 'needs_query') {
-      return { kind: 'conditional', big: 'Clears on a Dx query', short: 'Needs Dx query', sub: action ?? 'physician query + signed Dx, then re-ARD' };
-    }
-    // Clinical: gated on a clinical change (heal the wound, restore ambulation,
-    // d/c the drug) that, by definition, hasn't happened yet — the measure is
-    // still triggering. A bare re-ARD re-codes the same value and still triggers.
-    // So it is NOT "clear now"; lead with the clinical action.
+
+  const action = g?.actions?.[0]?.label;
+  // The backend's clearability classification is the single source of truth;
+  // fall back to deriving it from the action type for older responses.
+  const clr = entry.clearability ?? deriveClearability(g?.actionType);
+
+  // A pure coding fix (Modification) drops today with a re-code — clearable now.
+  if (clr === 'clear_now') {
+    return { kind: 'now', big: 'Clearable now', short: 'Clearable now', sub: action ?? 're-code the MDS, then re-ARD' };
+  }
+  // A physician Dx query can be started today, but only clears once it's
+  // signed back — not instant.
+  if (clr === 'needs_query') {
+    return { kind: 'conditional', big: 'Clears on a Dx query', short: 'Needs Dx query', sub: action ?? 'physician query + signed Dx, then re-ARD' };
+  }
+  // Clinical: gated on a clinical change (heal the wound, d/c the drug, restore
+  // ambulation, …) that, by definition, hasn't happened yet. NOT "clear now";
+  // lead with the clinical action.
+  if (clr === 'needs_clinical') {
     return { kind: 'conditional', big: 'Clears once resolved', short: 'Needs clinical fix', sub: action ?? 'resolve the condition, then re-ARD' };
   }
-  if (clr === 'stay_locked' || g?.actionType === 'stay_locked' || cliff?.urgency === 'stay-locked') {
+  if (clr === 'stay_locked') {
     return { kind: 'locked', big: 'Locked to this stay', short: 'Stay-locked', sub: 'clears at discharge or a new stay' };
   }
-  // Change measures (Walk-Indep, ADL Decline, Bowel/Bladder) don't "age out" of
-  // a lookback window — each new target is judged against its own prior, so the
-  // decline drops at the next assessment if the resident holds or improves.
-  if (cliff?.cliffType === 'comparison') {
+  if (clr === 'time_based') {
+    // Falls — multi-assessment scan you can't accelerate; ages out by date.
+    if (cliff?.cliffType === 'lookback_scan') {
+      return {
+        kind: 'wait',
+        big: g?.clearDate ? `Counts until ${prettyDate(g.clearDate)}` : 'Ages out of the window',
+        short: g?.clearDate ? `Until ${prettyDate(g.clearDate)}` : 'Time-based',
+        sub: 'time-based — no action speeds it up',
+      };
+    }
+    // MDS-clearable countdown: comparison (ADL/Walk/B&B re-baseline at the next
+    // assessment) + UTI (point_in_time, ages out of the 30-day look-back). Show
+    // "Clearable now" once the scan/look-back has matured, else "Clears in N days".
+    const isUti = cliff?.cliffType === 'point_in_time';
+    const earliest = cliff?.earliestClearDate;
+    const days = earliest && facilityDate ? daysBetween(facilityDate, earliest) : null;
+    if (days == null || days <= 0) {
+      return {
+        kind: 'now',
+        big: 'Clearable now',
+        short: 'Clearable now',
+        sub: isUti ? 'the UTI has aged out — open a new MDS' : 'open a new MDS to clear',
+      };
+    }
     return {
-      kind: 'wait',
-      big: 'Clears at the next assessment',
-      short: 'Next assessment',
-      sub: 'drops if the next target holds or improves vs its own prior',
+      kind: 'date',
+      big: `Clears in ${days}d`,
+      short: `Clears in ${days}d`,
+      sub: isUti ? 'after the UTI ages out (30-day look-back)' : 'then open a new MDS',
     };
   }
-  // Lookback-scan (Falls) / time-window (UTI): a coded event ages out by date.
-  return {
-    kind: 'wait',
-    big: g?.clearDate ? `Counts until ${prettyDate(g.clearDate)}` : 'Ages out of the window',
-    short: g?.clearDate ? `Until ${prettyDate(g.clearDate)}` : 'Time-based',
-    sub: 'time-based — no action speeds it up',
-  };
+  // none — no recognized roll-off path.
+  return { kind: 'wait', big: 'Ages out of the window', short: 'Time-based', sub: 'time-based — no action speeds it up' };
+}
+
+/**
+ * Days until a resident's soonest clear_mds measure can clear, for sorting the
+ * green flat list ("Clearable now" rows first → smallest countdown next). 0 when
+ * any green measure is clearable today; Infinity when the row has none.
+ */
+export function rowDaysUntilClearable(row, facilityDate) {
+  let min = Infinity;
+  for (const m of row.measures) {
+    if (!m.triggers) continue;
+    if (clearGroupForEntry(m) !== 'clear_mds') continue;
+    const t = clearTiming(m, row, facilityDate);
+    if (t.kind === 'now') return 0;
+    const earliest = m.cliffInfo?.earliestClearDate;
+    const d = earliest && facilityDate ? daysBetween(facilityDate, earliest) : null;
+    if (d != null) min = Math.min(min, Math.max(0, d));
+  }
+  return min;
 }
 
 // ── Small derivations ───────────────────────────────────────────────────────

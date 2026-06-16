@@ -1,58 +1,26 @@
 /**
  * CMS Five-Star QM scoring — per-measure rate→points + star thresholds.
  *
+ * Ported verbatim from web/components/quality-measures/qm-five-star.ts (PR #626).
  * Transcribed from the CMS Five-Star Technical Users' Guide (April 2026),
  * Appendix Table A3 (per-measure cut-points) + Table 5 (rating thresholds).
- * Source PDF: .context/attachments/.../five-star-users-guide-april-2026.pdf
  *
  * What this can and can't do (be honest in the UI):
- *  - The 10 MDS measures' points ARE computable here. 5 of them are NOT risk-
- *    adjusted (ADL, antipsychotic-long, UTI, falls-major, antipsychotic-new) so
- *    our observed rate == CMS's rate → EXACT points. The other 5 ARE risk-
- *    adjusted (walk, pressure-ulcer-long, catheter, discharge-function,
- *    pressure-ulcer-short) so our observed rate ≈ but ≠ CMS's adjusted rate →
- *    APPROXIMATE points.
- *  - The 5 claims-based measures (LS hospitalizations + ED; SS rehosp + ED +
- *    community-discharge) need Medicare claims we don't have → UNKNOWN. They
- *    are listed here (for the best/worst-case star RANGE) but never "scored".
+ *  - The 10 MDS measures' points ARE computable here. 5 are NOT risk-adjusted
+ *    (ADL, antipsychotic-long, UTI, falls-major, antipsychotic-new) → EXACT
+ *    points. The other 5 ARE risk-adjusted → APPROXIMATE points.
+ *  - The 5 claims-based measures need Medicare claims we don't have → UNKNOWN.
+ *    Listed (for the best/worst-case star RANGE) but never "scored".
  *
  * Points: 150-pt measures use deciles (15→150 in 15s); 100-pt use quintiles
- * (20→100 in 20s). More points = better. Lower rate is better for every
- * measure EXCEPT discharge-function & community-discharge (higher is better).
+ * (20→100 in 20s). More points = better. Lower rate is better for every measure
+ * EXCEPT discharge-function & community-discharge (higher is better).
  */
-import type { QmMeasureId } from '@core/types/qm-planner.types';
-
-export type FiveStarStay = 'long' | 'short';
-
-export interface PointTier {
-  points: number;
-  min: number;
-  max: number;
-}
-
-export interface FiveStarMeasure {
-  /** Our evaluator id, or null for claims measures we can't compute. */
-  id: QmMeasureId | null;
-  /** Claims measures have no QmMeasureId — a stable key for them. */
-  key: string;
-  label: string;
-  stay: FiveStarStay;
-  maxPoints: 100 | 150;
-  /** true → higher rate scores more points (discharge-fn, community-discharge). */
-  higherIsBetter: boolean;
-  /** true → our observed MDS rate ≈ but ≠ the CMS risk-adjusted rate. */
-  riskAdjusted: boolean;
-  /** true → claims-based, NOT computable from MDS. */
-  claimsBased: boolean;
-  /** A3 cut-points, ordered highest-points → lowest. */
-  tiers: PointTier[];
-}
 
 // Helper to build a tier list from rows [points, min, max].
-const T = (rows: Array<[number, number, number]>): PointTier[] =>
-  rows.map(([points, min, max]) => ({ points, min, max }));
+const T = (rows) => rows.map(([points, min, max]) => ({ points, min, max }));
 
-export const FIVE_STAR_MEASURES: FiveStarMeasure[] = [
+export const FIVE_STAR_MEASURES = [
   // ── Long-stay MDS ─────────────────────────────────────────────────────────
   {
     id: 'adl_decline', key: 'ls_adl', label: 'Need for help with ADLs increased',
@@ -132,10 +100,10 @@ export const FIVE_STAR_MEASURES: FiveStarMeasure[] = [
   },
 ];
 
-const BY_ID = new Map<QmMeasureId, FiveStarMeasure>();
+const BY_ID = new Map();
 for (const m of FIVE_STAR_MEASURES) if (m.id) BY_ID.set(m.id, m);
 
-export function fiveStarMeasure(id: QmMeasureId): FiveStarMeasure | undefined {
+export function fiveStarMeasure(id) {
   return BY_ID.get(id);
 }
 
@@ -144,7 +112,7 @@ export function fiveStarMeasure(id: QmMeasureId): FiveStarMeasure | undefined {
  * tier whose range the rate satisfies (directional: rate ≤ max for lower-is-
  * better, rate ≥ min for higher-is-better). Falls back to the lowest tier.
  */
-export function pointsForRate(spec: FiveStarMeasure, rate: number): number {
+export function pointsForRate(spec, rate) {
   for (const t of spec.tiers) {
     if (spec.higherIsBetter ? rate >= t.min : rate <= t.max) return t.points;
   }
@@ -152,7 +120,7 @@ export function pointsForRate(spec: FiveStarMeasure, rate: number): number {
 }
 
 /** Convenience: points for one of our MDS measures by id (undefined if not Five-Star). */
-export function measurePoints(id: QmMeasureId, rate: number): number | undefined {
+export function measurePoints(id, rate) {
   const spec = BY_ID.get(id);
   return spec ? pointsForRate(spec, rate) : undefined;
 }
@@ -161,10 +129,7 @@ export function measurePoints(id: QmMeasureId, rate: number): number | undefined
  * The next-better tier's boundary and the rate delta to reach it — drives
  * "you're 0.4% from +15 pts" coaching. Returns null at the top tier.
  */
-export function nextTier(
-  spec: FiveStarMeasure,
-  rate: number
-): { points: number; needRate: number; delta: number } | null {
+export function nextTier(spec, rate) {
   const current = pointsForRate(spec, rate);
   // tiers are ordered best→worst; the better tier is the one just above current.
   const idx = spec.tiers.findIndex((t) => t.points === current);
@@ -176,12 +141,7 @@ export function nextTier(
 }
 
 // ── Table 5: rating thresholds (as of January 2025) ─────────────────────────
-export interface StarBand {
-  stars: number;
-  min: number;
-  max: number;
-}
-export const QM_RATING_THRESHOLDS: Record<'long' | 'short' | 'overall', StarBand[]> = {
+export const QM_RATING_THRESHOLDS = {
   long: [
     { stars: 1, min: 155, max: 465 },
     { stars: 2, min: 466, max: 565 },
@@ -208,7 +168,7 @@ export const QM_RATING_THRESHOLDS: Record<'long' | 'short' | 'overall', StarBand
 /** Short-stay raw points are scaled by 1150/800 before applying thresholds. */
 export const SHORT_STAY_SCALE = 1150 / 800;
 
-export function starsForScore(kind: 'long' | 'short' | 'overall', score: number): number {
+export function starsForScore(kind, score) {
   for (const b of QM_RATING_THRESHOLDS[kind]) {
     if (score >= b.min && score <= b.max) return b.stars;
   }
