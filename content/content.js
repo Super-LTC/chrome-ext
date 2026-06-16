@@ -89,6 +89,14 @@ import './modules/care-plan-stamp/inject-button.js';
 import './modules/care-plan-stamp/audit-banner.js';
 import './modules/care-plan-stamp/audit-review-button.js';
 
+// 6.4. MDS Interview Auto-Scheduler — on the New/Change MDS popup, intercept
+//      Save and offer to create the BIMS/PHQ/GG/Pain UDAs this ARD requires.
+import './modules/mds-interview-scheduler/coverage-api.js';
+import './modules/mds-interview-scheduler/pcc-library.js';
+import './modules/mds-interview-scheduler/pcc-schedule-uda.js';
+import './modules/mds-interview-scheduler/form-read.js';
+import './modules/mds-interview-scheduler/inject-scheduler.js';
+
 // 6.5. Load PDF.js library into content script scope
 import * as pdfjsLib from 'pdfjs-dist';
 window.pdfjsLib = pdfjsLib;

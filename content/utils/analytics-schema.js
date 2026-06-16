@@ -193,6 +193,14 @@ export const EVENT_SCHEMA = {
   // handler nor the track() call exist. Allowlisted so it works once wired up.
   care_plan_audit_item_verified: ['from_bucket'],
   care_plan_audit_verify_dismissed: ['kind'],
+
+  // === MDS Interview Auto-Scheduler (newmds.xhtml popup) ===
+  // Counts + the assessment description carry the signal; no patient ids.
+  mds_interview_scheduler_shown: ['description', 'n_needed', 'n_covered', 'n_in_progress', 'n_unmatched', 'operation'],
+  mds_interview_scheduler_confirmed: ['description', 'n_selected', 'n_needed'],
+  mds_interview_scheduler_skipped: ['description', 'n_needed'],
+  mds_interview_scheduler_hidden: ['description', 'n_needed'],
+  mds_interview_scheduler_scheduled: ['n_selected', 'n_created', 'n_failed'],
   care_plan_audit_partial_stamped: ['source', 'n_interventions', 'caa'],
   care_plan_audit_remove_kept: [],
   care_plan_audit_remove_kept_click: [],
