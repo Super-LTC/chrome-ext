@@ -324,6 +324,8 @@ window.countAdminEvents = countEvents;
 window.renderSplitNote = renderSplitNote;
 window.renderSplitTherapy = renderSplitTherapy;
 window.renderSplitUda = renderSplitUda;
+// MDS In-Progress list coverage overlay reads facility from here (with #pccFacLink fallback).
+window.getFacilityInfo = getFacilityInfo;
 
 // ============================================
 // Message Listener (existing functionality)

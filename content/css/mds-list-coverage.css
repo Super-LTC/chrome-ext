@@ -1,0 +1,55 @@
+/* MDS In-Progress list interview-coverage chips.
+   Restraint by design: "done" recedes to quiet gray, only "needed" carries color. */
+.super-ilc-cell { white-space: nowrap; line-height: 1.7; }
+.super-ilc-chip {
+  display: inline-flex; align-items: center;
+  font: 600 11px/1 -apple-system, system-ui, sans-serif;
+  margin-right: 9px; cursor: default;
+}
+.super-ilc-chip--clickable { cursor: pointer; }
+
+/* Color budget: saturated color is reserved for what needs action. Done is a
+   quiet low-sat green; upcoming is nearly invisible. (quiet → loud) */
+
+/* upcoming = look-back not open yet: nearly invisible, never an ✗ */
+.super-ilc-chip--upcoming { color: #d4d8de; font-weight: 500; }
+.super-ilc-chip--upcoming:hover { color: #94a3b8; }
+
+/* covered = done: quiet, low-saturation green */
+.super-ilc-chip--covered { color: #7ba293; font-weight: 500; }
+.super-ilc-chip--covered:hover { color: #15803d; }
+
+/* in_progress = started, not signed (rare): BLUE — "in motion", distinct from
+   the red/orange "needs action" alarm */
+.super-ilc-chip--in_progress { color: #2563eb; font-weight: 600; }
+.super-ilc-chip--in_progress:hover { color: #1d4ed8; }
+
+/* needed = nothing started: the one thing that should grab the eye */
+.super-ilc-chip--needed { color: #c2410c; font-weight: 600; }
+.super-ilc-chip--needed:hover { color: #9a3412; }
+
+.super-ilc-chip--neutral { color: #cbd5e1; font-weight: 500; }
+.super-ilc-chip--error   { color: #b91c1c; }
+.super-ilc-loading { color: #cbd5e1; font: 500 11px/1 system-ui; }
+
+/* per-interview detail popover (anchored to the clicked chip) */
+.super-ilc-pop {
+  position: fixed; z-index: 2147483600; min-width: 150px; max-width: 260px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(15,23,42,.16); padding: 9px 11px;
+  font: 12px/1.45 -apple-system, system-ui, sans-serif; color: #475569;
+}
+.super-ilc-pop__h { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+.super-ilc-pop--covered     .super-ilc-pop__h { color: #15803d; }
+.super-ilc-pop--in_progress .super-ilc-pop__h { color: #2563eb; }
+.super-ilc-pop--needed      .super-ilc-pop__h { color: #c2410c; }
+.super-ilc-pop--upcoming    .super-ilc-pop__h { color: #64748b; }
+.super-ilc-pop__name { color: #1e293b; font-weight: 600; margin-bottom: 5px; }
+.super-ilc-pop__l { color: #64748b; }
+.super-ilc-pop__l + .super-ilc-pop__l { margin-top: 1px; }
+.super-ilc-pop__note { color: #c2410c; margin-top: 5px; }
+.super-ilc-pop__link {
+  display: inline-block; margin-top: 8px;
+  font-weight: 600; font-size: 12px; color: #2563eb; text-decoration: none;
+}
+.super-ilc-pop__link:hover { text-decoration: underline; }
