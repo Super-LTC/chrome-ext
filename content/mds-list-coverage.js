@@ -4,7 +4,7 @@
 import { scrapeRows } from './mds-list-coverage/scrape.js';
 import { toChips } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
-import { attachInterviewHover } from './mds-list-coverage/detail.js';
+import { attachInterviewPopover } from './mds-list-coverage/detail.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
 // Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
@@ -94,7 +94,7 @@ function renderRow(rowEl, result, rowMeta) {
     chip.append(`${icon}${c.label}`);
     if (c.iv) {
       chip.classList.add('super-ilc-chip--clickable');
-      attachInterviewHover(chip, c.iv, () => {
+      attachInterviewPopover(chip, c.iv, () => {
         window.SuperAnalytics?.track?.('mds_list_coverage_row_clicked', {
           required: Number(result.coverage?.summary?.required || 0),
           needed: Number(result.coverage?.summary?.needed || 0),

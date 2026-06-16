@@ -36,11 +36,6 @@ function lookbackText(iv) {
   return iv?.window ? `${shortDate(iv.window.start)}–${shortDate(iv.window.end)}` : '';
 }
 
-function isLocked(uda) {
-  if (!uda) return false;
-  return uda.state ? uda.state === 'locked' : !!uda.lockedDate;
-}
-
 // Deep-link target is the PCC externalId (id is internal-only).
 function udaLink(uda) {
   return uda ? (uda.externalId || uda.id) : undefined;
@@ -79,9 +74,15 @@ export function toChips(result) {
   });
 }
 
-// Single-interview detail for the anchored popover. Shows the real UDA name
-// (verbatim), its dates, locked/open, and the look-back. GG gets both its
-// observe window and the look-back.
+function observedText(u) {
+  if (!u?.date) return '';
+  const end = u.observedEndDate && u.observedEndDate !== u.date ? `–${shortDate(u.observedEndDate)}` : '';
+  return `Observed ${shortDate(u.date)}${end}`;
+}
+
+// Structured detail for the popover: { heading, name?, meta[], note?, udaId? }.
+// Kept terse on purpose — name (the form), a couple of muted date lines, and an
+// out-of-window note only when relevant.
 export function interviewDetail(iv) {
   const label = labelFor(iv.type);
   const w = lookbackText(iv);
@@ -89,45 +90,30 @@ export function interviewDetail(iv) {
 
   if (iv.status === 'covered') {
     const u = iv.coveringUda;
-    const lines = [];
-    if (u?.description) lines.push(u.description);
-    if (isGG && u?.date) {
-      lines.push(`Observe window ${shortDate(u.date)}–${shortDate(u.observedEndDate || u.date)}`);
-      if (w) lines.push(`Look back ${w}`);
-      if (u) lines.push(isLocked(u) ? 'Locked' : 'Open');
-    } else if (u?.date) {
-      lines.push(`Completed ${shortDate(u.date)} · ${isLocked(u) ? 'locked' : 'open'}`);
-      if (w) lines.push(`Look back ${w}`);
-    } else {
-      if (u) lines.push(isLocked(u) ? 'Locked' : 'Open');
-      if (w) lines.push(`Look back ${w}`);
-    }
-    if (!lines.length) lines.push('Done in window');
-    return { label, status: 'covered', heading: `${label} · Done`, lines, udaId: udaLink(u) };
+    const meta = [];
+    if (isGG) { const o = observedText(u); if (o) meta.push(o); }
+    else if (u?.date) meta.push(`Completed ${shortDate(u.date)}`);
+    if (w) meta.push(`Look back ${w}`);
+    return { label, status: 'covered', heading: `${label} · Done`, name: u?.description, meta, udaId: udaLink(u) };
   }
 
   if (iv.status === 'in_progress') {
     const u = iv.inProgressUda;
-    const lines = [];
-    if (u?.description) lines.push(u.description);
-    lines.push(u?.date ? `Started ${shortDate(u.date)} · not signed` : 'Started — not signed yet');
-    if (iv.recommendedScheduleDate) lines.push(`Sign by ${shortDate(iv.recommendedScheduleDate)}`);
-    if (w) lines.push(`Look back ${w}`);
-    return { label, status: 'in_progress', heading: `${label} · In progress`, lines, udaId: udaLink(u) };
+    const meta = ['Started, not signed'];
+    if (iv.recommendedScheduleDate) meta.push(`Sign by ${shortDate(iv.recommendedScheduleDate)}`);
+    if (w) meta.push(`Look back ${w}`);
+    return { label, status: 'in_progress', heading: `${label} · In progress`, name: u?.description, meta, udaId: udaLink(u) };
   }
 
   if (iv.status === 'upcoming') {
-    const lines = [iv.window?.start ? `Look back opens ${shortDate(iv.window.start)}` : 'Window not open yet'];
-    if (iv.recommendedScheduleDate) lines.push(`Plan for ${shortDate(iv.recommendedScheduleDate)}`);
-    return { label, status: 'upcoming', heading: `${label} · Upcoming`, lines };
+    const meta = [iv.window?.start ? `Opens ${shortDate(iv.window.start)}` : 'Not open yet'];
+    if (iv.recommendedScheduleDate) meta.push(`Plan for ${shortDate(iv.recommendedScheduleDate)}`);
+    return { label, status: 'upcoming', heading: `${label} · Upcoming`, meta };
   }
 
   // needed
-  const by = iv.recommendedScheduleDate ? shortDate(iv.recommendedScheduleDate) : '';
-  const lines = [by ? `Schedule by ${by}` : 'Needs scheduling'];
-  if (w) lines.push(`Look back ${w}`);
-  if (iv.outOfWindowUda?.date) {
-    lines.push(`Earlier one from ${shortDate(iv.outOfWindowUda.date)} is outside this window.`);
-  }
-  return { label, status: 'needed', heading: `${label} · Schedule`, lines, udaId: udaLink(iv.outOfWindowUda) };
+  const meta = [iv.recommendedScheduleDate ? `Schedule by ${shortDate(iv.recommendedScheduleDate)}` : 'Needs scheduling'];
+  if (w) meta.push(`Look back ${w}`);
+  const note = iv.outOfWindowUda?.date ? `Earlier form from ${shortDate(iv.outOfWindowUda.date)} is out of window` : undefined;
+  return { label, status: 'needed', heading: `${label} · Schedule`, meta, note, udaId: udaLink(iv.outOfWindowUda) };
 }

@@ -1,66 +1,59 @@
 // content/mds-list-coverage/detail.js
-// A small popover for ONE interview, anchored to its chip. Shows on hover
-// (with a grace delay so it survives the gap between chip and popover) and
-// also on click (which additionally fires the analytics signal).
+// Click-to-toggle popover for ONE interview, anchored to its chip. No hover —
+// clicking a chip opens it (clicking the same chip or outside closes it), so
+// there's no accidental-hover noise and nothing to "mouse out of the way."
 import { interviewDetail } from './render-model.js';
 
 const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s) => (window.escapeHtml ? window.escapeHtml(s) : String(s ?? '').replace(/[&<>"']/g, (c) => ESC_MAP[c]));
 
 let popEl = null;
-let hideTimer = null;
-
-function cancelHide() { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } }
-function scheduleHide() { cancelHide(); hideTimer = setTimeout(close, 140); }
 
 function close() {
-  cancelHide();
   if (popEl) { popEl.remove(); popEl = null; document.removeEventListener('click', onDocClick, true); }
 }
 function onDocClick(e) { if (popEl && !popEl.contains(e.target)) close(); }
 
-function showFor(anchorEl, iv) {
-  close();
-  const d = interviewDetail(iv);
-  // When the backend returns the UDA's id (== PCC ESOLassessid), offer a deep
-  // link straight to that form in a new tab.
-  const link = d.udaId
-    ? `<a class="super-ilc-pop__link" href="${esc(udaUrl(d.udaId))}" target="_blank" rel="noopener">View in PCC ↗</a>`
-    : '';
-  popEl = document.createElement('div');
-  popEl.className = `super-ilc-pop super-ilc-pop--${d.status}`;
-  popEl.innerHTML =
-    `<div class="super-ilc-pop__h">${esc(d.heading)}</div>` +
-    d.lines.map((l) => `<div class="super-ilc-pop__l">${esc(l)}</div>`).join('') +
-    link;
-  popEl.querySelector('.super-ilc-pop__link')?.addEventListener('click', () => {
-    window.SuperAnalytics?.track?.('mds_list_coverage_uda_opened', { status: d.status });
-  });
-  // Keep it open while the pointer is over the popover itself.
-  popEl.addEventListener('mouseenter', cancelHide);
-  popEl.addEventListener('mouseleave', scheduleHide);
-  document.body.appendChild(popEl);
-  position(popEl, anchorEl);
-}
-
-// PCC opens a UDA/assessment at this path; the UDA id IS the ESOLassessid.
-// Use the live page origin (PCC host varies per customer: www21, www10, …).
+// PCC opens a UDA/assessment here; the UDA externalId IS the ESOLassessid.
+// Live page origin (PCC host varies per customer: www21, www10, …).
 function udaUrl(id) {
   return `${location.origin}/care/chart/mds/mdssection.jsp?ESOLassessid=${encodeURIComponent(id)}`;
 }
 
-/** Wire hover + click for one interview chip. `onClick` fires the analytics signal. */
-export function attachInterviewHover(chip, iv, onClick) {
-  chip.addEventListener('mouseenter', () => { cancelHide(); showFor(chip, iv); });
-  chip.addEventListener('mouseleave', scheduleHide);
+function buildHtml(d) {
+  const parts = [`<div class="super-ilc-pop__h">${esc(d.heading)}</div>`];
+  if (d.name) parts.push(`<div class="super-ilc-pop__name">${esc(d.name)}</div>`);
+  (d.meta || []).forEach((m) => parts.push(`<div class="super-ilc-pop__l">${esc(m)}</div>`));
+  if (d.note) parts.push(`<div class="super-ilc-pop__note">${esc(d.note)}</div>`);
+  if (d.udaId) {
+    parts.push(`<a class="super-ilc-pop__link" href="${esc(udaUrl(d.udaId))}" target="_blank" rel="noopener">View in PCC ↗</a>`);
+  }
+  return parts.join('');
+}
+
+/** Click toggles the popover for this chip. `onOpen` fires the analytics signal. */
+export function attachInterviewPopover(chip, iv, onOpen) {
   chip.addEventListener('click', (e) => {
     e.stopPropagation();
-    onClick?.();
-    cancelHide();
-    showFor(chip, iv);
-    // After an intentional click, let an outside click dismiss it too.
-    setTimeout(() => document.addEventListener('click', onDocClick, true), 0);
+    if (popEl && popEl.__anchor === chip) { close(); return; } // toggle off
+    open(chip, iv, onOpen);
   });
+}
+
+function open(chip, iv, onOpen) {
+  close();
+  onOpen?.();
+  const d = interviewDetail(iv);
+  popEl = document.createElement('div');
+  popEl.className = `super-ilc-pop super-ilc-pop--${d.status}`;
+  popEl.__anchor = chip;
+  popEl.innerHTML = buildHtml(d);
+  popEl.querySelector('.super-ilc-pop__link')?.addEventListener('click', () => {
+    window.SuperAnalytics?.track?.('mds_list_coverage_uda_opened', { status: d.status });
+  });
+  document.body.appendChild(popEl);
+  position(popEl, chip);
+  setTimeout(() => document.addEventListener('click', onDocClick, true), 0);
 }
 
 // Anchor under the chip; flip above if it would overflow the viewport bottom,
