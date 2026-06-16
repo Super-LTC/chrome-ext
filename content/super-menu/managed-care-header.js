@@ -17,15 +17,16 @@ const DEBUG = false; // flip on to trace header injection / click wiring in the 
 function log(...args) { if (DEBUG) console.log('[MC-header]', ...args); }
 
 function getPatientFromHeader() {
-  // Prefer the URL param (matches getMDSContext); fall back to the header's
-  // "Client ID: NNN" title span.
-  const url = new URL(window.location.href);
-  let patientId = url.searchParams.get('ESOLclientid');
+  // Prefer the stable numeric id (recovers it from the DOM when the URL carries
+  // an ephemeral EID_ token); fall back to the header's "Client ID: NNN" span.
+  let patientId = window.resolveStableClientId?.();
   const nameEl = document.querySelector('.residentName#name, .residentName');
-  if (!patientId) {
+  // If the resolver couldn't find a numeric id (null, or it returned a raw EID_
+  // token), use the header span — it carries the numeric Client ID directly.
+  if (!patientId || !/^\d+$/.test(patientId)) {
     const idSpan = nameEl?.querySelector('span[title^="Client ID:"]');
     const m = idSpan?.title?.match(/Client ID:\s*(\d+)/);
-    patientId = m?.[1] || null;
+    patientId = m?.[1] || patientId || null;
   }
   const patientName = nameEl ? nameEl.childNodes[0]?.textContent?.trim() || null : null;
   return { patientId, patientName };

@@ -19,17 +19,20 @@ function _isCarePlanDetailPage() {
 }
 
 function _resolvePatientId() {
+  // Prefer the stable numeric id (the URL may carry an ephemeral EID_ token).
+  const stable = window.resolveStableClientId?.();
+  if (stable) return stable;
   const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
-  if (fromUrl) return fromUrl;
+  if (/^\d+$/.test(fromUrl || '')) return fromUrl;
   try {
     const v = document?.needs?.ESOLclientid?.value;
-    if (v) return v;
+    if (/^\d+$/.test(v || '')) return v;
   } catch (_) { /* */ }
   const hidden = document.querySelector('input[name="ESOLclientid"]');
-  if (hidden?.value) return hidden.value;
+  if (/^\d+$/.test(hidden?.value || '')) return hidden.value;
   const html = document.body?.innerHTML || '';
   const m = html.match(/ESOLclientid=(\d+)/);
-  return m ? m[1] : null;
+  return m ? m[1] : (fromUrl || null);
 }
 
 function _dismissKeyFor(patientId) {

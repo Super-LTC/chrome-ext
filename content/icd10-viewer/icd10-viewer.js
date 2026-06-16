@@ -137,7 +137,10 @@ const ICD10Viewer = {
     // Get patient ID from URL or page
     // PCC uses various parameter names: ESOLclientid, clientId, patientId, residentId
     const urlParams = new URLSearchParams(window.location.search);
-    let patientId = urlParams.get('ESOLclientid') ||
+    // Prefer the stable numeric id — PCC's ESOLclientid URL param may now be an
+    // ephemeral EID_ token that won't match our stored records.
+    let patientId = window.resolveStableClientId?.() ||
+                    urlParams.get('ESOLclientid') ||
                     urlParams.get('clientId') ||
                     urlParams.get('patientId') ||
                     urlParams.get('residentId');

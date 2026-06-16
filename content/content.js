@@ -10,6 +10,10 @@ import '../config.js';
 import './css-bootstrap.js';
 import './utils/analytics.js'; // initializes PostHog, sets super-properties, bootstraps auth
 import { initDraggableOverlays } from './utils/draggable-overlay.js';
+// Stable client-id resolver (window.resolveStableClientId) — must load before any
+// module that reads ESOLclientid off the page. PCC now serves ephemeral EID_
+// tokens in URLs; this recovers the stable numeric id from the DOM.
+import './super-menu/client-id.js';
 
 // 2. Import vanilla utilities (order matters - matches current manifest.json order)
 import './mockData.js';

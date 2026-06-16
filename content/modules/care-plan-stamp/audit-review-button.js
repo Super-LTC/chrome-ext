@@ -16,11 +16,14 @@ function _isReviewPage() {
 }
 
 function _resolvePatientId() {
+  // Prefer the stable numeric id (the URL may carry an ephemeral EID_ token).
+  const stable = window.resolveStableClientId?.();
+  if (stable) return stable;
   const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
-  if (fromUrl) return fromUrl;
+  if (/^\d+$/.test(fromUrl || '')) return fromUrl;
   const html = document.body?.innerHTML || '';
   const m = html.match(/ESOLclientid=(\d+)/);
-  return m ? m[1] : null;
+  return m ? m[1] : (fromUrl || null);
 }
 
 async function _renderBanner() {

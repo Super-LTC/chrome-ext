@@ -734,10 +734,11 @@ const QuerySendModal = {
                          mdsState.manualContext?.assessmentId || mdsState.context?.assessmentId ||
                          window.SuperOverlay?.assessmentId || '';
 
-    // Use stored patientId from API response (preferred), fallback to URL param
+    // Use stored patientId from API response (preferred), fallback to the stable
+    // numeric id from the page (handles EID_ tokens in the URL).
     const patientId = window.SuperOverlay?.patientId ||
                       mdsState.context?.patientId ||
-                      url.searchParams.get('ESOLclientid') || '';
+                      window.resolveStableClientId?.() || '';
 
     // Get org from cookie via background script
     const orgResponse = getOrg();

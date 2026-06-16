@@ -93,26 +93,29 @@ async function _handleClick() {
  * attributes for `ESOLclientid=<digits>`.
  */
 function _resolvePatientId() {
-  // 1. URL query param
-  const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
-  if (fromUrl) return fromUrl;
+  // PCC URLs may now carry an ephemeral EID_ token instead of the numeric id.
+  // Prefer the stable numeric id recovered from the page (hidden input, anchors,
+  // inline scripts); only the URL value, when numeric, is trusted directly.
+  const stable = window.resolveStableClientId?.();
+  if (stable) return stable;
 
-  // 2. `document.needs` form (the legacy form PCC's own JS reads from)
+  // Fallbacks (shared resolver unavailable): a numeric URL param, then the
+  // page's hidden ESOLclientid input / inline strings, then the raw URL value.
+  const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
+  if (/^\d+$/.test(fromUrl || '')) return fromUrl;
+
   try {
     const v = document?.needs?.ESOLclientid?.value;
-    if (v) return v;
+    if (/^\d+$/.test(v || '')) return v;
   } catch (_) { /* document.needs may not exist */ }
 
-  // 3. Any hidden ESOLclientid input on the page
   const hidden = document.querySelector('input[name="ESOLclientid"]');
-  if (hidden?.value) return hidden.value;
+  if (/^\d+$/.test(hidden?.value || '')) return hidden.value;
 
-  // 4. Last resort: regex any inline string referencing the param
-  const html = document.body?.innerHTML || '';
-  const m = html.match(/ESOLclientid=(\d+)/);
+  const m = (document.body?.innerHTML || '').match(/ESOLclientid=(\d+)/);
   if (m) return m[1];
 
-  return null;
+  return fromUrl || null;
 }
 
 function _scrapePatientName() {

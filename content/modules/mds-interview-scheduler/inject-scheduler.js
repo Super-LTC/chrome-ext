@@ -15,8 +15,22 @@ import { render, h } from 'preact';
 import { SchedulerModal, SchedulerLoading } from './SchedulerModal.jsx';
 import { buildCoverageQuery, isoToPccDate } from './lib/coverage-query.js';
 import { matchLibraryToInterviews } from './lib/library-match.js';
+import { mdsBetaEnabled } from '../../mds-beta-gate.js';
 
 const OVERLAY_ID = 'super-mds-sched-overlay';
+
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Non-blocking toast via the shared SuperToast (success/error). Safe no-op if
+ *  it's unavailable in this context. */
+function _toast(type, message) {
+  try {
+    const t = window.SuperToast;
+    if (t && typeof t[type] === 'function') t[type](message);
+    else if (t?.show) t.show({ type, message });
+    else console.info('[mds-sched]', message);
+  } catch { /* toast must never break the save */ }
+}
 
 function _isNewMdsPopup() {
   return window.location.href.includes('/clinical/mds3_popup/newmds.xhtml');
@@ -169,17 +183,22 @@ async function _onSave(proceedWithSave, abortSave) {
       n_created: res?.created?.length || 0,
       n_failed: res?.errors?.length || 0,
     });
+
     _teardown(overlay);
-    // Never block the MDS save (UDAs are independent) — but if any failed, make
-    // sure the nurse SEES it (otherwise they'd assume it scheduled). A blocking
-    // alert here is appropriate: it pauses before the save-navigation.
+    // Never block the MDS save — UDAs are independent. Surface the outcome as a
+    // toast (non-blocking) and give it a beat to render before the save navigates
+    // the popup away.
+    const createdCount = res?.created?.length || 0;
     const failedTypes = (res && !res.ok)
       ? picks.filter((p) => !res.created.includes(p.type)).map((p) => p.label)
       : (!res ? picks.map((p) => p.label) : []);
     if (failedTypes.length > 0) {
       console.warn('[mds-sched] some UDAs failed', res?.errors);
-      // eslint-disable-next-line no-alert
-      alert(`Super LTC: scheduled ${res?.created?.length || 0} of ${picks.length} interviews.\n\nCouldn't schedule: ${failedTypes.join(', ')}.\nPlease add ${failedTypes.length === 1 ? 'it' : 'these'} manually. The MDS will still save.`);
+      _toast('error', `Scheduled ${createdCount} of ${picks.length}. Couldn't schedule ${failedTypes.join(', ')} — add ${failedTypes.length === 1 ? 'it' : 'them'} manually. The MDS will still save.`);
+      await _sleep(2000);
+    } else {
+      _toast('success', `Scheduled ${createdCount} assessment${createdCount === 1 ? '' : 's'} for this resident.`);
+      await _sleep(1000);
     }
     proceed();
   };
@@ -241,8 +260,11 @@ function _installSaveHook() {
   _listenerInstalled = true;
 }
 
-function _init() {
+async function _init() {
   if (!_isNewMdsPopup()) return;
+  // Beta gate: only allowlisted users get the scheduler (auto-schedule UI +
+  // create-flow). Fails closed — non-testers get the native PCC save, untouched.
+  if (!(await mdsBetaEnabled())) return;
   // Only shows the "turn on" pill if the scheduler was hidden; nothing otherwise.
   try { _renderResetPill(); } catch (e) { console.warn('[mds-sched] pill render failed', e); }
   try { _prefetchLibrary(); } catch (e) { console.warn('[mds-sched] prefetch failed', e); }

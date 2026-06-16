@@ -3060,10 +3060,7 @@ async function renderSplitTherapy(viewerEl, therapyDocId, highlightQuote, overri
 async function renderSplitUda(viewerEl, udaId, quoteText) {
   const params = await window.getCurrentParams();
   const patientId = window.SuperOverlay?.patientId
-    || (() => {
-      try { return new URL(window.location.href).searchParams.get('ESOLclientid'); }
-      catch { return null; }
-    })();
+    || window.resolveStableClientId?.();
 
   if (!patientId) {
     viewerEl.innerHTML = `<div class="super-split__viewer-loading"><span>Missing patient context</span></div>`;
@@ -3914,8 +3911,9 @@ async function getQueryContext() {
   const url = new URL(window.location.href);
   const assessmentId = url.searchParams.get('ESOLassessid');
 
-  // Use stored patientId from API response (preferred), fallback to URL param
-  const patientId = SuperOverlay.patientId || url.searchParams.get('ESOLclientid');
+  // Use stored patientId from API response (preferred), fallback to the stable
+  // numeric id from the page (handles EID_ tokens in the URL).
+  const patientId = SuperOverlay.patientId || window.resolveStableClientId?.();
 
   // Get org from cookie
   const orgResponse = getOrg();

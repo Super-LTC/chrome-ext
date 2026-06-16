@@ -74,7 +74,9 @@ function injectAICodeButton() {
 function injectMdsEstimateLinks() {
   if (!window.location.href.includes('cp_mds.jsp')) return;
 
-  const patientId = new URLSearchParams(window.location.search).get('ESOLclientid');
+  // cp_mds.jsp now carries an ephemeral EID_ token in its URL; resolve the
+  // stable numeric id from the page so the injected links use a storable id.
+  const patientId = window.resolveStableClientId?.();
   if (!patientId) return;
 
   // Find all assessment rows in the MDS table
@@ -276,9 +278,10 @@ function _showTestAddCodeDialog() {
     statusEl.style.color = '#666';
 
     try {
-      // Get patient ID from URL
+      // Get patient ID — prefer the stable numeric id (the URL may carry an
+      // ephemeral EID_ token).
       const urlParams = new URLSearchParams(window.location.search);
-      const clientId = urlParams.get('ESOLclientid');
+      const clientId = window.resolveStableClientId?.() || urlParams.get('ESOLclientid');
 
       if (!clientId) {
         statusEl.textContent = 'Could not find patient ID (ESOLclientid) in URL';
@@ -495,7 +498,7 @@ function initSuperChat() {
 
   // Augment the meddiag listing table with CP + Query columns
   if (window.MedDiagAugment?.init) {
-    const urlPid = new URLSearchParams(window.location.search).get('ESOLclientid');
+    const urlPid = window.resolveStableClientId?.();
     const ctxPid = (typeof getChatPatientId === 'function') ? getChatPatientId() : null;
     const facName = (typeof getChatFacilityInfo === 'function') ? getChatFacilityInfo() : '';
     const orgInfo = (typeof getOrg === 'function') ? getOrg() : null;
@@ -608,7 +611,7 @@ const chatUrlObserver = new MutationObserver(() => {
 
     // Re-init meddiag augment if patient or page changed
     if (window.MedDiagAugment?.init) {
-      const urlPid = new URLSearchParams(window.location.search).get('ESOLclientid');
+      const urlPid = window.resolveStableClientId?.();
       const ctxPid = (typeof getChatPatientId === 'function') ? getChatPatientId() : null;
       const facName = (typeof getChatFacilityInfo === 'function') ? getChatFacilityInfo() : '';
       const orgInfo = (typeof getOrg === 'function') ? getOrg() : null;

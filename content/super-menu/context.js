@@ -1,12 +1,16 @@
 // Super Menu Context Detection
 
+import { resolveStableClientId, scrapeNumericClientIdFromDOM } from './client-id.js';
+
 // Cache for patient name to avoid repeated DOM queries
 let cachedPatientName = null;
 let cachedPatientId = null;
 
 function getChatPatientId() {
-  const url = new URL(window.location.href);
-  return url.searchParams.get('ESOLclientid');
+  // PCC URLs may now carry an ephemeral EID_ token instead of the numeric id.
+  // resolveStableClientId() recovers the stable numeric id from the page so the
+  // value is safe to send to the backend / store. Returns null off patient pages.
+  return resolveStableClientId();
 }
 
 function getPatientNameFromPage() {
@@ -43,7 +47,7 @@ function getPatientNameFromPage() {
 function getMDSContext() {
   const url = new URL(window.location.href);
   const assessmentId = url.searchParams.get('ESOLassessid');
-  const patientId = url.searchParams.get('ESOLclientid');
+  const patientId = resolveStableClientId();
 
   // Get patient name, using cache if same patient
   let patientName = null;
@@ -168,17 +172,10 @@ function getPCCAssessmentMetaFromDOM() {
 // the only patient signal available in the "Run it" 404 case, where section
 // data never loads so SuperOverlay.patientId is still null.
 function scrapeClientIdFromDOM() {
-  // 1. Anchor hrefs — most reliable, survive across PCC markup tweaks.
-  for (const a of document.querySelectorAll('a[href*="ESOLclientid="]')) {
-    const m = /[?&]ESOLclientid=(\d+)/.exec(a.getAttribute('href') || '');
-    if (m && m[1] && m[1] !== '0') return m[1];
-  }
-  // 2. Inline scripts — diag-find link builder strings, etc.
-  for (const s of document.querySelectorAll('script:not([src])')) {
-    const m = /ESOLclientid=(\d+)/.exec(s.textContent || '');
-    if (m && m[1] && m[1] !== '0') return m[1];
-  }
-  return null;
+  // Delegates to the shared resolver, which scrapes the numeric id from the
+  // hidden form input, anchor hrefs, and inline scripts (digits only — never an
+  // EID_ token).
+  return scrapeNumericClientIdFromDOM();
 }
 
 // Resolve externalPatientId from current PCC page state (URL first, fall back

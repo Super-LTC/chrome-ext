@@ -13,9 +13,14 @@ function _val(name) {
 }
 
 function _resolvePatientId() {
-  const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
-  if (fromUrl) return fromUrl;
-  return _val('ESOLclientid') || null;
+  // The popup URL may carry an ephemeral EID_ token, but the form's hidden
+  // ESOLclientid input holds the stable NUMERIC id — prefer it. Use the shared
+  // resolver when available; otherwise read the hidden input / URL directly.
+  const stable = window.resolveStableClientId?.();
+  if (stable) return stable;
+  const fromForm = _val('ESOLclientid');
+  if (/^\d+$/.test(fromForm)) return fromForm;
+  return new URLSearchParams(window.location.search).get('ESOLclientid') || fromForm || null;
 }
 
 function _facilityFromOpener() {

@@ -190,12 +190,10 @@ function resolvePatientIdForUda() {
   if (typeof window !== 'undefined') {
     const fromOverlay = window.SuperOverlay?.patientId;
     if (fromOverlay) return fromOverlay;
-    try {
-      const fromUrl = new URL(window.location.href).searchParams.get('ESOLclientid');
-      if (fromUrl) return fromUrl;
-    } catch {
-      /* ignore */
-    }
+    // Stable numeric id — recovers it from the DOM when the URL carries an
+    // ephemeral EID_ token. Returns null off patient pages.
+    const stable = window.resolveStableClientId?.();
+    if (stable) return stable;
   }
   return null;
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super LTC for Point Click Care",
-  "version": "1.0.53",
+  "version": "1.0.54",
   "description": "AI-powered clinical tools for PointClickCare: MDS analysis, ICD-10 lookup, documentation, and query tools.",
   "permissions": [
     "storage",
@@ -26,8 +26,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.pointclickcare.com/*"],
-      "js": ["content/content.js"],
+      "matches": [
+        "*://*.pointclickcare.com/*"
+      ],
+      "js": [
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -35,7 +39,9 @@
         "https://superltc.com/auth/extension/callback*",
         "http://localhost:3000/auth/extension/callback*"
       ],
-      "js": ["content/auth-callback.js"],
+      "js": [
+        "content/auth-callback.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -51,12 +57,21 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["lib/pdf.min.js", "lib/pdf.worker.min.js"],
-      "matches": ["*://*.pointclickcare.com/*"]
+      "resources": [
+        "lib/pdf.min.js",
+        "lib/pdf.worker.min.js"
+      ],
+      "matches": [
+        "*://*.pointclickcare.com/*"
+      ]
     },
     {
-      "resources": ["manifest.json"],
-      "matches": ["*://*.pointclickcare.com/*"]
+      "resources": [
+        "manifest.json"
+      ],
+      "matches": [
+        "*://*.pointclickcare.com/*"
+      ]
     }
   ]
 }

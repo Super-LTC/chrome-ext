@@ -5,6 +5,7 @@ import { scrapeRows } from './mds-list-coverage/scrape.js';
 import { toChips } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewPopover } from './mds-list-coverage/detail.js';
+import { mdsBetaEnabled } from './mds-beta-gate.js';
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
 // Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
@@ -109,6 +110,9 @@ function renderRow(rowEl, result, rowMeta) {
 
 async function runCoverage() {
   if (ILC.busy) return;
+  // Beta gate (single chokepoint for all call paths: init + both observers).
+  // Fails closed — non-testers get the plain MDS list with no coverage chips.
+  if (!(await mdsBetaEnabled())) return;
   const table = findListTable();
   if (!table) return;
   const rows = scrapeRows(table.querySelector('tbody') || table);

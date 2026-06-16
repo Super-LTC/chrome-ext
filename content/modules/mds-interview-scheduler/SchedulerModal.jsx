@@ -49,6 +49,13 @@ const S = {
   cbWrap: 'flex:1;min-width:0;',
   date: 'flex-shrink:0;width:138px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:12.5px;color:#0f172a;font-family:inherit;box-sizing:border-box;',
   warn: 'margin:5px 0 0 23px;font-size:11px;color:#b45309;',
+  // Covered/in-progress rows: a faint, NON-interactive "done" tick — never a
+  // checkbox (a checkbox implies "will be created"). A real checked box only
+  // appears once you explicitly opt in to creating another.
+  doneMark: 'width:16px;height:16px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:13px;color:#cbd5e1;',
+  nameDone: 'font-size:13.5px;font-weight:650;color:#475569;flex:1;',
+  addLink: 'margin:6px 0 0 23px;font-size:11.5px;color:#4f46e5;font-weight:700;cursor:pointer;display:inline-block;',
+  addUndo: 'margin:6px 0 0 23px;font-size:11.5px;color:#94a3b8;font-weight:600;cursor:pointer;display:inline-block;',
   progress: 'flex-shrink:0;margin:0 20px 10px;padding:9px 11px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:600;',
   progressErr: 'flex-shrink:0;margin:0 20px 10px;padding:9px 11px;border-radius:8px;background:#fef2f2;color:#b91c1c;font-size:12px;font-weight:600;',
   foot: 'flex-shrink:0;padding:12px 20px;border-top:1px solid #eef2f6;display:flex;justify-content:flex-end;gap:9px;align-items:center;background:#fff;',
@@ -100,7 +107,7 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
     return (
       <div style={S.meta}>
         {prefix} {date}{suffix} · <span style={S.metaStrong}>{uda.description}</span>
-        {openUda && uda.id ? <> · <a style={S.open} onClick={() => openUda(uda)}>Open ↗</a></> : null}
+        {openUda && uda.id ? <> · <a style={S.open} onClick={() => openUda(uda)}>View ↗</a></> : null}
       </div>
     );
   };
@@ -121,17 +128,33 @@ export function SchedulerModal({ coverage, matches, libraryOptions, isoToPccDate
             const st = state[i.type];
             const s = STATUS[i.status] || STATUS.needed;
             const cbId = `super-mds-sched-${i.type}`;
+            const isNeeded = i.status === 'needed';
+            const toggle = () => !busy && set(i.type, { create: !st.create });
             return (
               <div key={i.type} style={S.row}>
                 <div style={S.rowTop}>
-                  <input type="checkbox" id={cbId} style={S.check}
-                    checked={st.create} disabled={busy}
-                    onChange={() => set(i.type, { create: !st.create })} />
-                  <label for={cbId} style={S.name}>{TYPE_LABEL[i.type] || i.type}</label>
+                  {(isNeeded || st.create) ? (
+                    /* A checked box ONLY when this row will actually be created. */
+                    <input type="checkbox" id={cbId} style={S.check}
+                      checked={st.create} disabled={busy}
+                      onChange={() => set(i.type, { create: !st.create })} />
+                  ) : (
+                    /* Already covered, nothing to do: a faint "done" tick, not a control. */
+                    <span style={S.doneMark} aria-hidden="true">✓</span>
+                  )}
+                  <label for={(isNeeded || st.create) ? cbId : undefined}
+                    style={(isNeeded || st.create) ? S.name : S.nameDone}>{TYPE_LABEL[i.type] || i.type}</label>
                   <span style={S.pill(s)}><span style={S.dot(s)} />{s.text}</span>
                 </div>
 
                 <ExistingLine i={i} />
+
+                {/* Covered/in-progress: explicit opt-in (or undo) for adding another. */}
+                {!isNeeded && (
+                  st.create
+                    ? <div style={S.addUndo} onClick={toggle}>✕ Don't create — keep the existing one</div>
+                    : <div style={S.addLink} onClick={toggle}>＋ Create a new one anyway</div>
+                )}
 
                 {st.create && (
                   <>
