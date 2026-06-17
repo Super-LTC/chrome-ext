@@ -2378,11 +2378,6 @@
   color: #15803d;
   background: #f0fdf4;
 }
-.mds-cc__qcard-pcc--failed {
-  color: #92400e;
-  background: #fef3c7;
-  cursor: help;
-}
 .mds-cc__qcard-pcc--pending {
   color: #6b7280;
   background: #f3f4f6;
