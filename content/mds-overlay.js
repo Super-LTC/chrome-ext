@@ -172,16 +172,20 @@ const SuperRunItCard = {
     this._el.querySelector('.super-run-it__btn').addEventListener('click', () => this._run());
   },
 
-  _run() {
+  async _run() {
     const RunNow = window.MdsRunNow;
     if (!RunNow) return;
-    const params = RunNow.gatherParams();
-    if (!RunNow.hasRequiredParams(params)) {
+
+    // Show the working state up front so the brief re-scrape retry (below)
+    // isn't a dead button. gatherParamsResilient re-scrapes once after a short
+    // delay if PCC hadn't finished painting the proptable / client-id anchors.
+    this._renderProgress({ phase: 'none' });
+
+    const { ok, params } = await RunNow.gatherParamsResilient({ surface: 'section_overlay', code: this._code });
+    if (!ok) {
       this._renderError("Couldn't read the assessment details from this page. Try reloading.");
       return;
     }
-
-    this._renderProgress({ phase: 'none' });
 
     this._handle = RunNow.start(params, {
       onPhase: (state) => this._renderProgress(state),
