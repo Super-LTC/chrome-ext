@@ -1408,6 +1408,9 @@ function buildPopoverHTML(result) {
   const injectionsHTML = renderMedications(ai.injections, 'Injections');
   const insulinHTML = renderMedications(ai.insulinInjections, 'Insulin Injections');
   const medicationsTakenHTML = renderMedications(ai.medicationsTaken, 'Medications Taken');
+  // N0415 col1: meds ordered in this class but never administered in the lookback
+  // (answer stays No). Shows WHY it coded No instead of leaving the popover empty.
+  const orderedNotGivenHTML = renderMedications(ai.medicationsOrderedNotGiven, 'Ordered · Not Given', true);
   const routineMedsHTML = renderMedications(ai.routineMedications, 'Routine Medications');
   const prnMedsHTML = renderMedications(ai.prnMedications, 'PRN Medications');
   const indicationsHTML = renderMedicationIndications(ai.medicationsWithIndication);
@@ -1484,6 +1487,7 @@ function buildPopoverHTML(result) {
       ${injectionsHTML}
       ${insulinHTML}
       ${medicationsTakenHTML}
+      ${orderedNotGivenHTML}
       ${routineMedsHTML}
       ${prnMedsHTML}
       ${indicationsHTML}
@@ -1827,13 +1831,15 @@ function renderIncontinenceEpisodeDates(episodeDates, lookbackWindow) {
 }
 
 // Helper: Render medications for Section N items
-function renderMedications(medications, label = 'Medications') {
+function renderMedications(medications, label = 'Medications', clickableWithoutAdmins = false) {
   if (!medications || medications.length === 0) return '';
 
   const medItems = medications.map(med => {
     const hasAdmins = med.administrationCount && med.administrationCount > 0;
     const orderId = med.orderId || med.sourceId || '';
-    const isClickable = hasAdmins && orderId;
+    // "Ordered · Not Given" rows have 0 admins but still let the nurse open the
+    // MAR/TAR viewer to see the held/refused/scheduled-not-given entries.
+    const isClickable = (hasAdmins || clickableWithoutAdmins) && orderId;
 
     const adminInfo = hasAdmins
       ? `<span class="super-med-admin">${med.administrationCount} admin${med.administrationCount > 1 ? 's' : ''}</span>`
