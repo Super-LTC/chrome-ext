@@ -13,8 +13,13 @@
  */
 const NEWASSESS = '/care/chart/assess/newassess.jsp';
 
+// ⚠️ TEMP verbose logging for UDA-creation debugging. Remove with MDS_SCHED_TEST.
+const LOG = (...a) => console.log('%c[mds-uda]', 'color:#4f46e5;font-weight:bold', ...a);
+
 async function _fetchText(url) {
+  LOG('GET', url);
   const res = await fetch(url, { credentials: 'same-origin' });
+  LOG('GET ←', res.status, res.url);
   if (!res.ok) throw new Error(`PCC GET ${url} → ${res.status}`);
   const html = await res.text();
   if (html.includes('<title>Login</title>') || html.includes('loginForm')) {
@@ -42,10 +47,14 @@ function _selectedOption(html, name) {
 async function _freshFormState(patientId) {
   const html = await _fetchText(`${NEWASSESS}?ESOLsave=N&ESOLtabType=C&ESOLclientid=${encodeURIComponent(patientId)}`);
   const m = html.match(/name="ESOLminiToken"\s+value="([^"]+)"/);
-  if (!m) throw new Error('Could not find ESOLminiToken on newassess form');
+  if (!m) {
+    LOG('miniToken NOT FOUND. form html snippet:', html.slice(0, 1500));
+    throw new Error('Could not find ESOLminiToken on newassess form');
+  }
   const now = new Date();
   const hour = _selectedOption(html, 'hour') ?? String(now.getHours());
   const minute = _selectedOption(html, 'minute') ?? String(now.getMinutes());
+  LOG('form state:', { token: m[1].slice(0, 12) + '…', hour, minute });
   return { token: m[1], hour, minute };
 }
 
@@ -87,19 +96,24 @@ async function createUda({ patientId, stdAssessmentId, assessDatePcc, miniToken,
     std_assessment: String(stdAssessmentId),
     assessment_type: 'O',                    // UDA → "Other"
   });
+  LOG('POST', { patientId, stdAssessmentId, assessDatePcc, hour: String(h), minute: String(mm) });
+  LOG('POST body:', body.toString());
   const res = await fetch(`${NEWASSESS}?ESOLtabType=C&ESOLsave=S`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
-  if (!res.ok) throw new Error(`PCC newassess POST → ${res.status}`);
   const html = await res.text();
+  LOG('POST ←', res.status, 'final url:', res.url, 'html length:', html.length);
+  LOG('POST response html (first 3000):', html.slice(0, 3000));
+  if (!res.ok) throw new Error(`PCC newassess POST → ${res.status}`);
   if (html.includes('<title>Login</title>') || html.includes('loginForm')) {
     throw new Error('PCC session expired');
   }
   if (/class="errormsg"/i.test(html)) {
     const m = html.match(/class="errormsg"[^>]*>([^<]+)/i);
+    LOG('errormsg detected:', m ? m[1].trim() : '(none captured)');
     throw new Error(`PCC error: ${m ? m[1].trim() : 'unknown'}`);
   }
   // PCC returns the newassess form HTML even on a SUCCESSFUL save (it serves a
@@ -110,23 +124,41 @@ async function createUda({ patientId, stdAssessmentId, assessDatePcc, miniToken,
 
 /**
  * picks: [{ type, stdAssessmentId, assessDatePcc, label }]
- * Sequential to keep PCC happy + progress simple. Each createUda fetches its OWN
- * fresh form state (single-use miniToken + the facility's current time), so the
- * save time is never in the future and tokens aren't reused.
+ * STRICTLY SEQUENTIAL — each createUda fully completes (fresh single-use token →
+ * POST → response) before the next starts. We also add a small gap between saves
+ * and retry a failed one once (with a fresh token), because PCC occasionally
+ * rejects a save while it's still rotating the token from the previous one — the
+ * cause of "created 3 of 4".
  */
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function scheduleInterviews({ patientId, picks, onProgress }) {
   const result = { ok: true, created: [], errors: [] };
   for (let i = 0; i < picks.length; i++) {
     const p = picks[i];
+    if (i > 0) await _sleep(400); // let PCC settle between sequential saves
     onProgress?.({ index: i, total: picks.length, type: p.type, label: p.label, phase: 'creating' });
-    try {
-      await createUda({ patientId, stdAssessmentId: p.stdAssessmentId, assessDatePcc: p.assessDatePcc });
+
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await createUda({ patientId, stdAssessmentId: p.stdAssessmentId, assessDatePcc: p.assessDatePcc });
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        LOG(`createUda failed (attempt ${attempt}/2) for ${p.type}: ${e.message}`);
+        if (attempt < 2) await _sleep(700); // fresh token + settle, then retry once
+      }
+    }
+
+    if (lastErr) {
+      result.ok = false;
+      result.errors.push({ type: p.type, error: lastErr.message });
+      onProgress?.({ index: i, total: picks.length, type: p.type, label: p.label, phase: 'error', error: lastErr.message });
+    } else {
       result.created.push(p.type);
       onProgress?.({ index: i, total: picks.length, type: p.type, label: p.label, phase: 'done' });
-    } catch (e) {
-      result.ok = false;
-      result.errors.push({ type: p.type, error: e.message });
-      onProgress?.({ index: i, total: picks.length, type: p.type, label: p.label, phase: 'error', error: e.message });
     }
   }
   return result;

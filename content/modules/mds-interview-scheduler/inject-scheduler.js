@@ -19,6 +19,16 @@ import { mdsBetaEnabled } from '../../mds-beta-gate.js';
 
 const OVERLAY_ID = 'super-mds-sched-overlay';
 
+// 🔴 KILL SWITCH — the whole interview scheduler is parked for now (UX needs a
+// rethink; see the "save hijack feels like a surprise" discussion). Code is kept
+// intact; _init() bails before installing anything. Flip back to true to re-enable.
+const SCHEDULER_ENABLED = false;
+
+// ⚠️ TEMP TEST FLAG — REMOVE BEFORE SHIP.
+// true → real gate + real coverage (real patient), CREATE the UDAs for real, but
+// do NOT fire the MDS save (abort it) so you can verify UDA creation in isolation.
+const MDS_SCHED_TEST = false;
+
 const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Non-blocking toast via the shared SuperToast (success/error). Safe no-op if
@@ -184,6 +194,17 @@ async function _onSave(proceedWithSave, abortSave) {
       n_failed: res?.errors?.length || 0,
     });
 
+    // TEMP TEST: UDAs were created for real — but do NOT fire the MDS save. Report
+    // the outcome and abort, so you can verify the UDAs landed in isolation.
+    if (MDS_SCHED_TEST) {
+      _teardown(overlay);
+      const created = (res?.created || []).join(', ') || 'none';
+      const errors = (res?.errors || []).map((e) => `${e.type}: ${e.error}`).join('\n  ') || 'none';
+      alert(`TEST — UDAs created, MDS NOT saved\n\nCreated: ${created}\nErrors:\n  ${errors}`);
+      abortSave?.();
+      return;
+    }
+
     _teardown(overlay);
     // Never block the MDS save — UDAs are independent. Surface the outcome as a
     // toast (non-blocking) and give it a beat to render before the save navigates
@@ -261,6 +282,7 @@ function _installSaveHook() {
 }
 
 async function _init() {
+  if (!SCHEDULER_ENABLED) return;   // parked — see KILL SWITCH note up top
   if (!_isNewMdsPopup()) return;
   // Beta gate: only allowlisted users get the scheduler (auto-schedule UI +
   // create-flow). Fails closed — non-testers get the native PCC save, untouched.
