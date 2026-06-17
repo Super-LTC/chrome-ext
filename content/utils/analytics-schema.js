@@ -88,6 +88,13 @@ export const EVENT_SCHEMA = {
   mds_run_triggered: ['surface', 'code'],
   mds_run_completed: ['surface', 'code', 'sections_total', 'duration_ms_bucket'],
   mds_run_failed: ['surface', 'code', 'duration_ms_bucket'],
+  // "Run it" clicked but the page scrape was missing required fields. A retry
+  // re-scrapes ~400ms later: `_recovered` = the retry filled the gap (race
+  // confirmed); `_missing` = still short, with `missing_fields` (comma-joined
+  // field keys, no values) naming the culprit. Diagnoses the "Couldn't read the
+  // assessment details" error.
+  mds_run_params_recovered: ['surface', 'code'],
+  mds_run_params_missing: ['surface', 'code', 'missing_fields'],
 
   // Interview-coverage chips on the PCC MDS List → In Progress screen.
   // `_shown` fires once per batch round trip; `_row_clicked` opens the detail popover.
