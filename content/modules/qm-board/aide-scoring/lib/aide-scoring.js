@@ -3,9 +3,9 @@
  * reference (aide-scorecard.react-reference.tsx + aide-quality-panel.react-reference.tsx).
  *
  * SIGN CONVENTION (read before touching this):
- *   deviation / averageDeviation / overallAverageDeviation = baseline - aideScore.
- *     positive => aide scored BELOW baseline => "scoring LOW"  (residents rated less independent)
- *     negative => aide scored ABOVE baseline => "scoring HIGH" (residents rated more independent)
+ *   deviation / averageDeviation / overallAverageDeviation = peerAverage - aideScore.
+ *     positive => aide scored BELOW peers => "scoring LOW"  (residents rated less independent)
+ *     negative => aide scored ABOVE peers => "scoring HIGH" (residents rated more independent)
  *   The UI FLIPS the sign for display so "+" = high and "−" = low (see `signed`).
  *   Tones: sky = high, rose = low, emerald = on track.
  *   Grade tones: A=emerald, B=teal, C=amber, D=orange, F=rose.
@@ -15,9 +15,9 @@ export const SHIFT_LABELS = ['Day', 'Eve', 'Night'];
 /** GG codes are 1-6, so the largest possible deviation magnitude is 5. */
 export const BAR_MAX = 5;
 
-/** Signed deviation as the user reads it: + = above baseline (high), − = below (low). */
+/** Signed deviation as the user reads it: + = above peers (high), − = below (low). */
 export function signed(deviation) {
-  // deviation = baseline - score (positive = below baseline). Flip for display.
+  // deviation = peerAverage - score (positive = below peers). Flip for display.
   const v = -(deviation ?? 0);
   const s = v > 0 ? '+' : v < 0 ? '−' : '';
   return `${s}${Math.abs(v).toFixed(1)}`;
@@ -37,7 +37,7 @@ export function gradeTone(grade) {
 /** Tone for a raw deviation value (used by category bars / example scores). */
 export function deviationTone(deviation, significant = true) {
   if (!significant) return 'slate';
-  // deviation > 0 => below baseline (low) => rose; < 0 => above (high) => sky
+  // deviation > 0 => below peers (low) => rose; < 0 => above (high) => sky
   return deviation > 0 ? 'rose' : 'sky';
 }
 
@@ -67,7 +67,7 @@ export function statusOf(summary) {
 /** One-sentence plain-English coaching line. Ported verbatim from the web ref. */
 export function coachingLine(detail) {
   const s = detail?.summary;
-  if (!s || s.assessmentCount === 0) return 'No scored assessments with valid MDS baselines yet.';
+  if (!s || s.assessmentCount === 0) return 'Not enough peer-scored assessments yet.';
 
   const cats = (detail.categoryDeviations || [])
     .filter((c) => c.isSignificant)
@@ -84,21 +84,21 @@ export function coachingLine(detail) {
   const pts = Math.abs(s.overallAverageDeviation).toFixed(1);
 
   if (s.isHighVariance) {
-    return `Scores swing widely against the MDS baseline (±${s.variance.toFixed(1)} pts)${
+    return `Scores swing widely against their peers (±${s.variance.toFixed(1)} pts)${
       catList ? `, most in ${catList}` : ''
-    }. Inconsistent scoring — worth reviewing how levels are being judged.`;
+    }. Inconsistent scoring — worth a quick check on how levels are judged.`;
   }
   if (!s.isSignificant) {
-    return `Scores closely match the MDS baseline (within ${pts} pts on average). No action needed.`;
+    return `Scores closely match their peers (within ${pts} pts on average). No action needed.`;
   }
   if (s.direction === 'above') {
-    return `Tends to score about ${pts} points ABOVE the MDS baseline${
+    return `Tends to score about ${pts} points ABOVE their peers${
       catList ? `, especially ${catList}` : ''
-    } — rating residents as more independent than the assessment. Aim to align with the assessed level.`;
+    } — rating residents as more independent than coworkers do. Worth a quick check on how levels are judged.`;
   }
-  return `Tends to score about ${pts} points BELOW the MDS baseline${
+  return `Tends to score about ${pts} points BELOW their peers${
     catList ? `, especially ${catList}` : ''
-  } — rating residents as less independent than the assessment. Aim to align with the assessed level.`;
+  } — rating residents as less independent than coworkers do. Worth a quick check on how levels are judged.`;
 }
 
 export const SORT_OPTIONS = [

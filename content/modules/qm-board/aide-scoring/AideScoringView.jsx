@@ -1,6 +1,6 @@
 /**
  * Aide Scoring Quality — roster of CNAs graded A–F on how closely their daily GG
- * scores match each resident's MDS baseline. Click a row → inline scorecard;
+ * scores match what other CNAs scored the same resident the same week. Click a row → inline scorecard;
  * "Print scorecards" → select mode → one-aide-per-page PDF.
  *
  * Rendered as the "Aides" tab of the Functional Decline screen. Self-contained
@@ -112,7 +112,7 @@ export function AideScoringView({ facilityName, orgSlug }) {
   if (aides.length === 0) {
     return (
       <div className="qmc-allclear">
-        No scoring data available. Requires synced GG scores and MDS baselines.
+        No scoring data available. Requires GG scores from multiple CNAs on the same residents.
       </div>
     );
   }
@@ -130,8 +130,8 @@ export function AideScoringView({ facilityName, orgSlug }) {
       {/* Explainer + A–F legend */}
       <div className="qmc-aide-explain">
         <p className="qmc-aide-explain__text">
-          How closely each aide's daily GG scores match the resident's MDS-assessed baseline ({rangeLabel}).{' '}
-          <b>A</b> = spot-on · <b>F</b> = far off or inconsistent. Click an aide to see where they're off;
+          How closely each aide's daily GG scores match what other CNAs scored the same resident the same week ({rangeLabel}).{' '}
+          <b>A</b> = in line with peers · <b>F</b> = far off or inconsistent. Click an aide to see where they're off;
           use <b>Print scorecards</b> to print a coaching sheet.
         </p>
         <div className="qmc-aide-legend">
@@ -240,7 +240,7 @@ function AideRow({ aide, selectMode, selected, isExpanded, detail, detailLoading
           ) : detail ? (
             <AideScorecard detail={detail} dateRangeLabel={rangeLabel} />
           ) : (
-            <div className="qmc-sc__empty" style={{ padding: '12px 0' }}>No scored assessments with valid baselines.</div>
+            <div className="qmc-sc__empty" style={{ padding: '12px 0' }}>Not enough peer-scored assessments yet.</div>
           )}
         </div>
       )}

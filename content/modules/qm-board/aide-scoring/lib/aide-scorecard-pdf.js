@@ -14,7 +14,7 @@ const SLATE_FILL = [37, 99, 235];
 
 function toneRgb(deviation, significant = true) {
   if (!significant) return [100, 116, 139];
-  return deviation > 0 ? ROSE : SKY; // >0 below baseline = low = rose
+  return deviation > 0 ? ROSE : SKY; // >0 below peers = low = rose
 }
 
 function safe(s) {
@@ -76,7 +76,7 @@ function renderAidePage(doc, autoTable, detail, facilityName, dateRangeLabel) {
   if (cats.length > 0) {
     autoTable(doc, {
       startY: y,
-      head: [['Category', 'Avg vs baseline', 'Direction']],
+      head: [['Category', 'Avg vs peers', 'Direction']],
       body: cats.map((c) => [
         c.name,
         signed(c.averageDeviation),
@@ -103,12 +103,12 @@ function renderAidePage(doc, autoTable, detail, facilityName, dateRangeLabel) {
     y += 6;
     autoTable(doc, {
       startY: y,
-      head: [['Patient', 'Category', 'Aide', 'Baseline', 'Shift', 'Date']],
+      head: [['Patient', 'Category', 'Aide', 'Peer avg', 'Shift', 'Date']],
       body: examples.map((s) => [
         s.patientName,
         s.categoryName,
         String(s.aideScore),
-        String(s.baselineScore),
+        s.peerAverage != null ? s.peerAverage.toFixed(1) : '—',
         SHIFT_LABELS[s.shiftIndex] || String(s.shiftIndex),
         s.recordedDate,
       ]),
@@ -126,6 +126,20 @@ function renderAidePage(doc, autoTable, detail, facilityName, dateRangeLabel) {
       margin: { left: MARGIN, right: MARGIN },
     });
   }
+
+  // Footnote — what "Peer avg" means.
+  const footY = (doc.lastAutoTable?.finalY ?? y) + 16;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
+  doc.setTextColor(SLATE);
+  doc.text(
+    doc.splitTextToSize(
+      'Peer average = what other CNAs scored the same resident that week (same shift when available).',
+      515
+    ),
+    MARGIN,
+    footY
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  * AideScorecard — per-aide CNA scoring scorecard (Preact port of
  * aide-scorecard.react-reference.tsx). Shared by the expandable roster row.
- *   - headline status (how far above/below the MDS baseline they score)
+ *   - headline status (how far above/below their peers they score)
  *   - per-category diverging bars ("where you're missing")
  *   - a weekly trend line ("are they improving?")
  *   - a plain-English coaching line
@@ -77,7 +77,7 @@ export function AideScorecard({ detail, dateRangeLabel, forPrint = false }) {
                 <th className="qmc-extbl__l">Patient</th>
                 <th className="qmc-extbl__l">Category</th>
                 <th className="qmc-extbl__c">Aide</th>
-                <th className="qmc-extbl__c">Baseline</th>
+                <th className="qmc-extbl__c">Peer avg</th>
                 <th className="qmc-extbl__c">Shift</th>
                 <th className="qmc-extbl__r">Date</th>
               </tr>
@@ -88,7 +88,7 @@ export function AideScorecard({ detail, dateRangeLabel, forPrint = false }) {
                   <td className="qmc-extbl__l qmc-extbl__name">{s.patientName}</td>
                   <td className="qmc-extbl__l qmc-extbl__cat">{s.categoryName}</td>
                   <td className={`qmc-extbl__c qmc-extbl__mono qmc-text--${deviationTone(s.deviation)}`}>{s.aideScore}</td>
-                  <td className="qmc-extbl__c qmc-extbl__mono qmc-extbl__muted">{s.baselineScore}</td>
+                  <td className="qmc-extbl__c qmc-extbl__mono qmc-extbl__muted">{s.peerAverage != null ? s.peerAverage.toFixed(1) : '—'}</td>
                   <td className="qmc-extbl__c qmc-extbl__muted">{SHIFT_LABELS[s.shiftIndex] || s.shiftIndex}</td>
                   <td className="qmc-extbl__r qmc-extbl__muted">{s.recordedDate}</td>
                 </tr>
@@ -113,16 +113,16 @@ function CategoryBars({ detail }) {
 
   return (
     <div className="qmc-sc__col">
-      <div className="qmc-sc__seclabel">By Category · vs MDS baseline</div>
+      <div className="qmc-sc__seclabel">By Category · vs peers</div>
       {cats.length === 0 ? (
         <div className="qmc-sc__empty">No category data.</div>
       ) : (
         <>
           <div className="qmc-cats">
             {cats.map((c) => {
-              const dev = c.averageDeviation; // baseline - score
+              const dev = c.averageDeviation; // peerAverage - score
               const width = (Math.min(Math.abs(dev), BAR_MAX) / BAR_MAX) * 50; // % of half-track
-              const above = dev < 0; // scored higher than baseline (high)
+              const above = dev < 0; // scored higher than peers (high)
               const tone = !c.isSignificant ? 'emerald' : above ? 'sky' : 'rose';
               return (
                 <div key={c.mdsKey} className="qmc-cat">
@@ -169,7 +169,7 @@ function TrendChart({ detail }) {
     );
   }
 
-  // Display value flips sign so + = above baseline.
+  // Display value flips sign so + = above peers.
   const vals = pts.map((p) => -p.averageDeviation);
   const maxAbs = Math.max(1, ...vals.map((v) => Math.abs(v)));
   const x = (i) =>
@@ -186,7 +186,7 @@ function TrendChart({ detail }) {
       <svg viewBox={`0 0 ${TREND_W} ${TREND_H}`} className="qmc-trend" style={{ maxHeight: TREND_H }}>
         <line x1={TREND_PAD} y1={TREND_H / 2} x2={TREND_W - TREND_PAD} y2={TREND_H / 2}
           stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
-        <text x={TREND_W - TREND_PAD} y={TREND_H / 2 - 3} textAnchor="end" fontSize={8} fill="#94a3b8">baseline</text>
+        <text x={TREND_W - TREND_PAD} y={TREND_H / 2 - 3} textAnchor="end" fontSize={8} fill="#94a3b8">peers</text>
         <path d={linePath} fill="none" stroke="#475569" strokeWidth={1.75} strokeLinejoin="round" />
         {vals.map((v, i) => (
           <circle key={i} cx={x(i)} cy={y(v)} r={2.75}
