@@ -740,10 +740,14 @@ function transformSectionN(results) {
               rationale: col1.rationale,
               evidenceCount: 0,
               // Forward an EXPLICIT solver-provided reason only (no heuristic for N —
-              // its payload lacks the order/admin evidence to derive one safely). Null
-              // today; lights up the calm info badge if the N solver ever sets it.
+              // its payload lacks the order/admin evidence to derive one safely).
+              // The N solver sets 'ordered_not_administered' when meds in this class
+              // were ordered but never given in the lookback → calm info badge.
               reviewReason: col1.reviewReason || null,
-              medicationsTaken: col1.medicationsTaken
+              medicationsTaken: col1.medicationsTaken,
+              // Drug names that were ordered-but-not-given (answer stays 'no'); shown
+              // as "Ordered, not given: <drug>" so the nurse sees why we coded No.
+              medicationsOrderedNotGiven: col1.medicationsOrderedNotGiven || []
             }
           }
         });

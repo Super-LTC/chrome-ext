@@ -844,12 +844,18 @@ function injectBadge(questionEl, result) {
       badge.classList.add('super-badge--review');
       badge.innerHTML = `<span class="super-badge__icon">&#9888;</span> Super: ${answerText}`;
       break;
-    case 'info':
+    case 'info': {
       // Calm informational badge — e.g. "ordered, not administered". Not a nag;
       // states the reason on its face and is clickable to view the MAR/TAR.
       badge.classList.add('super-badge--info');
       badge.innerHTML = `<span class="super-badge__icon">&#9432;</span> Super: Ordered · not given`;
+      // Name the ordered-but-not-given drugs on hover (N0415 col1 carries them).
+      const ong = Array.isArray(result.aiAnswer?.medicationsOrderedNotGiven)
+        ? result.aiAnswer.medicationsOrderedNotGiven.map((m) => m.medicationName).filter(Boolean)
+        : [];
+      if (ong.length) badge.title = `Ordered, not given: ${ong.join(', ')}`;
       break;
+    }
     case 'dismissed':
       if (result.userDecision?.decision === 'disagree') {
         badge.classList.add('super-badge--mismatch', 'super-badge--dismissed', 'super-badge--disagreed');
