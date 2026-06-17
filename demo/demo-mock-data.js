@@ -365,6 +365,8 @@ export const DEMO_API_RESPONSES = {
         hasPdf: true,
         practitioner: { firstName: 'Demo', lastName: 'Provider', title: 'MD' },
         selectedIcd10Code: 'E11.9',
+        // We just auto-posted it → on the list + success
+        onDiagnosisList: true,
         pccDiagnosisPostStatus: 'success',
         pccDiagnosisPostedAt: new Date(Date.now() - 86400000 + 5000).toISOString()
       },
@@ -380,9 +382,28 @@ export const DEMO_API_RESPONSES = {
         hasPdf: true,
         practitioner: { firstName: 'Sample', lastName: 'Doctor', title: 'DO' },
         selectedIcd10Code: 'E11.42',
+        // Auto-post failed and it's not on the list → nurse must enter manually
+        onDiagnosisList: false,
         pccDiagnosisPostStatus: 'failed',
         pccDiagnosisPostError: 'PCC session expired — re-enter manually',
         pccDiagnosisPostedAt: new Date(Date.now() - 2 * 86400000 + 5000).toISOString()
+      },
+      {
+        id: 'q-007',
+        mdsAssessmentId: '4860265',
+        patientName: 'Doe, Jane',
+        mdsItem: 'I4400',
+        mdsItemName: 'COPD',
+        status: 'signed',
+        signedAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+        mdsItemCoded: true,
+        hasPdf: true,
+        practitioner: { firstName: 'Demo', lastName: 'Provider', title: 'MD' },
+        selectedIcd10Code: 'J44.9',
+        // Legacy query signed before auto-post existed; already on the chart.
+        // No post status, but ground-truth onDiagnosisList still true.
+        onDiagnosisList: true,
+        pccDiagnosisPostStatus: null
       }
     ]
   },
