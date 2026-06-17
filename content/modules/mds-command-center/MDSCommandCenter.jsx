@@ -181,24 +181,33 @@ function wasSignedRecently(signedAt, withinMinutes = 30) {
   return Date.now() - t < withinMinutes * 60 * 1000;
 }
 
-// Whether the signed diagnosis was auto-posted onto the patient's PCC
-// diagnosis list. `success` → done automatically; `failed`/`partial` → nurse
-// must enter it manually; null → post runs in a lambda a beat after signing,
-// so treat as in-progress (only while freshly signed), never as failed.
-function PccPostBadge({ status, error, signedAt }) {
-  if (status === 'success') {
-    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">{'✓'} Added to PCC</span>;
+// Whether the signed diagnosis is on the patient's PCC diagnosis list.
+//
+// `onDiagnosisList` is the ground truth — true means the code is actually on
+// the (synced) list (already there from the old manual flow, OR we just
+// posted it). It's reliable even for queries signed before auto-post existed,
+// so it drives the main indicator. `pccDiagnosisPostStatus` only reflects our
+// auto-post attempt and is null for everything signed before this shipped, so
+// it's supplementary (distinguishes "we just added it" from "already there"
+// and surfaces a failed attempt). null status with no list hit → the post may
+// still be in flight (runs in a lambda a beat after signing).
+function PccPostBadge({ onDiagnosisList, status, error, signedAt }) {
+  if (onDiagnosisList === true || status === 'success') {
+    // success → we just auto-posted it; otherwise it was already on the list.
+    const label = status === 'success' ? '✓ Added to PCC' : '✓ On PCC diagnosis list';
+    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">{label}</span>;
   }
   if (status === 'failed' || status === 'partial') {
     return (
       <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--failed" title={error || undefined}>
-        Not added to PCC — enter manually
+        Not added — enter manually
       </span>
     );
   }
-  // status == null → pending. Only show while the post could still be in
-  // flight; older signed queries with no status show nothing.
-  if (wasSignedRecently(signedAt)) {
+  // Not on the list and no post result yet → treat as in-progress, never
+  // failed. Only show while it could still be in flight; older signed queries
+  // that were never added (and never will auto-add) show nothing.
+  if (status == null && wasSignedRecently(signedAt)) {
     return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--pending">Adding to PCC…</span>;
   }
   return null;
@@ -476,6 +485,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
                   )}
                   {isSigned && (
                     <PccPostBadge
+                      onDiagnosisList={q.onDiagnosisList}
                       status={q.pccDiagnosisPostStatus}
                       error={q.pccDiagnosisPostError}
                       signedAt={q.signedAt}
