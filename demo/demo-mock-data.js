@@ -365,15 +365,13 @@ export const DEMO_API_RESPONSES = {
         hasPdf: true,
         practitioner: { firstName: 'Demo', lastName: 'Provider', title: 'MD' },
         selectedIcd10Code: 'E11.9',
-        // We just auto-posted it → on the list + success
-        onDiagnosisList: true,
+        // Auto-post succeeded → green "Added to PCC" badge
         pccDiagnosisPostStatus: 'success',
         pccDiagnosisPostedAt: new Date(Date.now() - 86400000 + 5000).toISOString()
       },
       {
         id: 'q-006',
         mdsAssessmentId: '4862100',
-        patientId: 'demo-patient-002',
         patientName: 'Smith, Robert',
         mdsItem: 'I2900',
         mdsItemName: 'Diabetic Neuropathy',
@@ -383,28 +381,7 @@ export const DEMO_API_RESPONSES = {
         hasPdf: true,
         practitioner: { firstName: 'Sample', lastName: 'Doctor', title: 'DO' },
         selectedIcd10Code: 'E11.42',
-        selectedIcd10Description: 'Type 2 diabetes mellitus with diabetic polyneuropathy',
-        // Auto-post failed and it's not on the list → nurse must enter manually
-        onDiagnosisList: false,
-        pccDiagnosisPostStatus: 'failed',
-        pccDiagnosisPostError: 'PCC session expired — re-enter manually',
-        pccDiagnosisPostedAt: new Date(Date.now() - 2 * 86400000 + 5000).toISOString()
-      },
-      {
-        id: 'q-007',
-        mdsAssessmentId: '4860265',
-        patientName: 'Doe, Jane',
-        mdsItem: 'I4400',
-        mdsItemName: 'COPD',
-        status: 'signed',
-        signedAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-        mdsItemCoded: true,
-        hasPdf: true,
-        practitioner: { firstName: 'Demo', lastName: 'Provider', title: 'MD' },
-        selectedIcd10Code: 'J44.9',
-        // Legacy query signed before auto-post existed; already on the chart.
-        // No post status, but ground-truth onDiagnosisList still true.
-        onDiagnosisList: true,
+        // No post result → we make no claim (no badge); nurse checks PCC as usual
         pccDiagnosisPostStatus: null
       }
     ]
