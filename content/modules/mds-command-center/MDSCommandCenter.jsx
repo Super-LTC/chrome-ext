@@ -181,36 +181,92 @@ function wasSignedRecently(signedAt, withinMinutes = 30) {
   return Date.now() - t < withinMinutes * 60 * 1000;
 }
 
-// Whether the signed diagnosis is on the patient's PCC diagnosis list.
+// PCC diagnosis-list status (+ one-click add) for a signed query.
 //
 // `onDiagnosisList` is the ground truth — true means the code is actually on
 // the (synced) list (already there from the old manual flow, OR we just
 // posted it). It's reliable even for queries signed before auto-post existed,
 // so it drives the main indicator. `pccDiagnosisPostStatus` only reflects our
-// auto-post attempt and is null for everything signed before this shipped, so
-// it's supplementary (distinguishes "we just added it" from "already there"
-// and surfaces a failed attempt). null status with no list hit → the post may
-// still be in flight (runs in a lambda a beat after signing).
-function PccPostBadge({ onDiagnosisList, status, error, signedAt }) {
-  if (onDiagnosisList === true || status === 'success') {
-    // success → we just auto-posted it; otherwise it was already on the list.
-    const label = status === 'success' ? '✓ Added to PCC' : '✓ On PCC diagnosis list';
-    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">{label}</span>;
-  }
-  if (status === 'failed' || status === 'partial') {
+// best-effort auto-post and is null for everything signed before this shipped,
+// so it's supplementary (distinguishes "we just added it" from "already there"
+// and surfaces a failed attempt).
+//
+// When the code is NOT on the list, offer a one-click add that posts it
+// straight to the chart (same endpoint the auto-post uses), so the nurse
+// doesn't have to leave and enter it manually.
+function SignedPccStatus({ q, facilityName, orgSlug, onRefetch }) {
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
+
+  const onList = added || q.onDiagnosisList === true || q.pccDiagnosisPostStatus === 'success';
+  if (onList) {
+    // success / just-added → we put it there; otherwise it was already on the list.
+    const justAdded = added || q.pccDiagnosisPostStatus === 'success';
     return (
-      <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--failed" title={error || undefined}>
-        Not added — enter manually
+      <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">
+        {justAdded ? '✓ Added to PCC' : '✓ On PCC diagnosis list'}
       </span>
     );
   }
-  // Not on the list and no post result yet → treat as in-progress, never
-  // failed. Only show while it could still be in flight; older signed queries
-  // that were never added (and never will auto-add) show nothing.
-  if (status == null && wasSignedRecently(signedAt)) {
+
+  // No post result yet and freshly signed → the lambda auto-post may still be
+  // running. Show in-progress briefly, never indefinitely.
+  if (q.pccDiagnosisPostStatus == null && wasSignedRecently(q.signedAt)) {
     return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--pending">Adding to PCC…</span>;
   }
-  return null;
+
+  // Explicitly not on the list, or our post failed/partial → needs adding.
+  // (The fresh in-flight case is handled above.)
+  const notOnList = q.onDiagnosisList === false
+    || q.pccDiagnosisPostStatus === 'failed'
+    || q.pccDiagnosisPostStatus === 'partial';
+  if (!notOnList) return null; // surface doesn't report list state — make no claim
+
+  const canAdd = !!q.patientId && !!q.selectedIcd10Code;
+
+  async function handleAdd(e) {
+    e.stopPropagation();
+    if (adding) return;
+    setAdding(true);
+    try {
+      await window.ICD10API.approveDiagnosis(
+        q.patientId,
+        {
+          icd10Code: q.selectedIcd10Code,
+          description: q.selectedIcd10Description || q.mdsItemName,
+          id: null,
+        },
+        facilityName,
+        orgSlug
+      );
+      window.SuperToast?.success?.(`Added ${q.selectedIcd10Code} to PCC diagnosis list`);
+      setAdded(true); // optimistic — refetch will confirm via onDiagnosisList
+      onRefetch?.();
+    } catch (err) {
+      console.error('[Super] Add to PCC failed:', err);
+      window.SuperToast?.error?.(err?.message || 'Failed to add to PCC');
+      setAdding(false);
+    }
+  }
+
+  return (
+    <span class="mds-cc__qcard-pcc-group">
+      <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--failed" title={q.pccDiagnosisPostError || undefined}>
+        {canAdd ? 'Not on PCC list' : 'Not added — enter manually'}
+      </span>
+      {canAdd && (
+        <TrackedButton
+          track="mds_cc_item_actioned"
+          trackProps={{ item_code: (q.mdsItem || '').includes(':') ? q.mdsItem.split(':')[0] : (q.mdsItem || ''), action: 'add_to_pcc' }}
+          class="mds-cc__qcard-pcc-add"
+          disabled={adding}
+          onClick={handleAdd}
+        >
+          {adding ? 'Adding…' : '+ Add to PCC'}
+        </TrackedButton>
+      )}
+    </span>
+  );
 }
 
 function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, onRevoke, assessmentCtx, isPending }) {
@@ -313,7 +369,7 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf
   );
 }
 
-function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAssessment, onRefetch }) {
+function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAssessment, onRefetch, facilityName, orgSlug }) {
   const [expandedId, setExpandedId] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
   const pending = sortByArd((outstandingQueries || []).filter(q => q.status === 'pending'));
@@ -484,11 +540,11 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
                     <span class="mds-cc__qcard-icd">{q.selectedIcd10Code}</span>
                   )}
                   {isSigned && (
-                    <PccPostBadge
-                      onDiagnosisList={q.onDiagnosisList}
-                      status={q.pccDiagnosisPostStatus}
-                      error={q.pccDiagnosisPostError}
-                      signedAt={q.signedAt}
+                    <SignedPccStatus
+                      q={q}
+                      facilityName={facilityName}
+                      orgSlug={orgSlug}
+                      onRefetch={onRefetch}
                     />
                   )}
                   {isRejected && q.rejectionReason && (
@@ -863,6 +919,8 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
               assessments={assessments}
               onOpenAssessment={handleOpenAssessmentById}
               onRefetch={retry}
+              facilityName={facilityName}
+              orgSlug={orgSlug}
             />
           )}
 

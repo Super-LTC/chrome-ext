@@ -373,6 +373,7 @@ export const DEMO_API_RESPONSES = {
       {
         id: 'q-006',
         mdsAssessmentId: '4862100',
+        patientId: 'demo-patient-002',
         patientName: 'Smith, Robert',
         mdsItem: 'I2900',
         mdsItemName: 'Diabetic Neuropathy',
@@ -382,6 +383,7 @@ export const DEMO_API_RESPONSES = {
         hasPdf: true,
         practitioner: { firstName: 'Sample', lastName: 'Doctor', title: 'DO' },
         selectedIcd10Code: 'E11.42',
+        selectedIcd10Description: 'Type 2 diabetes mellitus with diabetic polyneuropathy',
         // Auto-post failed and it's not on the list → nurse must enter manually
         onDiagnosisList: false,
         pccDiagnosisPostStatus: 'failed',
