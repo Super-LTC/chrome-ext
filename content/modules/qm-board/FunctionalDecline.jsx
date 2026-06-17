@@ -15,7 +15,13 @@ import { useGgDashboard } from './hooks/useGgDashboard.js';
 import { useSnooze } from './hooks/useSnooze.js';
 import { GgDeclineDetail } from './components/GgDeclineDetail.jsx';
 import { QmLoading } from './components/QmLoading.jsx';
+import { AideScoringView } from './aide-scoring/AideScoringView.jsx';
 import { ChevronLeft, ChevronRight, Search, X, Clock, Undo2, Info } from './components/icons.jsx';
+
+const TABS = [
+  { value: 'residents', label: 'Residents' },
+  { value: 'aides', label: 'Aides' },
+];
 
 const MODES = [
   { value: 'therapy', label: 'Therapy Pickup' },
@@ -28,6 +34,7 @@ const SEVERITY_GROUPS = [
 ];
 
 export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
+  const [tab, setTab] = useState('residents');
   const [mode, setMode] = useState('therapy');
   const [query, setQuery] = useState('');
   const [showSnoozed, setShowSnoozed] = useState(false);
@@ -67,9 +74,26 @@ export function FunctionalDeclineView({ facilityName, orgSlug, onBack }) {
         <button type="button" className="qmc-bc__back" onClick={onBack}><ChevronLeft /> Command Center</button> {/* NO_TRACK */}
         <span style={{ color: 'var(--slate-300)' }}>/</span>
         <div className="qmc-bc__crumb">Functional Decline</div>
+        {tab === 'aides' && (
+          <>
+            <span style={{ color: 'var(--slate-300)' }}>/</span>
+            <div className="qmc-bc__crumb">Aides</div>
+          </>
+        )}
       </div>
 
-      {loading ? (
+      {/* Top-level Residents | Aides toggle */}
+      <div className="qmc-tabs">
+        {TABS.map((t) => (
+          <button key={t.value} type="button" className={tab === t.value ? 'qmc-tab qmc-tab--on' : 'qmc-tab'} onClick={() => setTab(t.value)}> {/* NO_TRACK */}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'aides' ? (
+        <AideScoringView facilityName={facilityName} orgSlug={orgSlug} />
+      ) : loading ? (
         <QmLoading title="Loading functional-decline roster" />
       ) : error ? (
         <div className="qmc-error">
