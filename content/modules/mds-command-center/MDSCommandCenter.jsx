@@ -181,32 +181,21 @@ function wasSignedRecently(signedAt, withinMinutes = 30) {
   return Date.now() - t < withinMinutes * 60 * 1000;
 }
 
-// Whether the signed diagnosis is on the patient's PCC diagnosis list.
+// PCC diagnosis-list status for a signed query.
 //
-// `onDiagnosisList` is the ground truth — true means the code is actually on
-// the (synced) list (already there from the old manual flow, OR we just
-// posted it). It's reliable even for queries signed before auto-post existed,
-// so it drives the main indicator. `pccDiagnosisPostStatus` only reflects our
-// auto-post attempt and is null for everything signed before this shipped, so
-// it's supplementary (distinguishes "we just added it" from "already there"
-// and surfaces a failed attempt). null status with no list hit → the post may
-// still be in flight (runs in a lambda a beat after signing).
-function PccPostBadge({ onDiagnosisList, status, error, signedAt }) {
-  if (onDiagnosisList === true || status === 'success') {
-    // success → we just auto-posted it; otherwise it was already on the list.
-    const label = status === 'success' ? '✓ Added to PCC' : '✓ On PCC diagnosis list';
-    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">{label}</span>;
+// We only assert what we directly know. `pccDiagnosisPostStatus` is the result
+// of our own best-effort auto-post recorded at sign time, so `success`
+// reliably means we wrote the code to the chart — it does NOT depend on
+// diagnosis-list sync freshness. We deliberately do NOT surface a negative
+// ("not on list"): that would rest on `onDiagnosisList`, a lookup against our
+// synced copy of PCC's list that can be stale and would cause false alarms.
+// When we didn't add it, we say nothing and leave the nurse's normal
+// check-PCC workflow untouched.
+function PccPostBadge({ status, signedAt }) {
+  if (status === 'success') {
+    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">✓ Added to PCC</span>;
   }
-  if (status === 'failed' || status === 'partial') {
-    return (
-      <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--failed" title={error || undefined}>
-        Not added — enter manually
-      </span>
-    );
-  }
-  // Not on the list and no post result yet → treat as in-progress, never
-  // failed. Only show while it could still be in flight; older signed queries
-  // that were never added (and never will auto-add) show nothing.
+  // Brief in-progress hint right after signing while the lambda posts.
   if (status == null && wasSignedRecently(signedAt)) {
     return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--pending">Adding to PCC…</span>;
   }
@@ -484,12 +473,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
                     <span class="mds-cc__qcard-icd">{q.selectedIcd10Code}</span>
                   )}
                   {isSigned && (
-                    <PccPostBadge
-                      onDiagnosisList={q.onDiagnosisList}
-                      status={q.pccDiagnosisPostStatus}
-                      error={q.pccDiagnosisPostError}
-                      signedAt={q.signedAt}
-                    />
+                    <PccPostBadge status={q.pccDiagnosisPostStatus} signedAt={q.signedAt} />
                   )}
                   {isRejected && q.rejectionReason && (
                     <span class="mds-cc__qcard-rejection">&ldquo;{q.rejectionReason}&rdquo;</span>
