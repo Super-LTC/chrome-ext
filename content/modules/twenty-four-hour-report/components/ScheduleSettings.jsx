@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   formatHourLabel,
   formatTimezoneLabel,
+  intervalsEqual,
+  WEEKDAYS,
 } from '../utils/api.js';
 
 const PRESET_HOURS = [3, 6, 7];
@@ -32,6 +34,11 @@ export function ScheduleSettings({
   selectedHour,
   onHourChange,
   isDirty,
+  intervalByDay,
+  onIntervalChange,
+  intervalsDirty,
+  validIntervals,
+  defaultIntervalByDay,
   onSave,
   onReset,
   onRetry,
@@ -60,15 +67,22 @@ export function ScheduleSettings({
     };
   }, [isOpen, onClose]);
 
+  // Revert of local edits is centralized in the parent's onClose handler.
   const handleCancel = () => {
-    if (schedule?.scheduleHour != null) onHourChange(schedule.scheduleHour);
     onClose();
   };
 
   const tzLabel = formatTimezoneLabel(schedule?.timezone);
   const savedLabel = schedule ? formatHourLabel(schedule.scheduleHour) : null;
   const defaultHour = schedule?.defaultScheduleHour ?? 3;
-  const showReset = schedule?.scheduleHour !== defaultHour;
+  const hourDiffersFromDefault = schedule != null && schedule.scheduleHour !== defaultHour;
+  const intervalsDifferFromDefault =
+    defaultIntervalByDay != null &&
+    intervalByDay != null &&
+    !intervalsEqual(intervalByDay, defaultIntervalByDay);
+  const showReset = hourDiffersFromDefault || intervalsDifferFromDefault;
+  const canSave = (isDirty || intervalsDirty) && !saving;
+  const intervals = validIntervals?.length ? validIntervals : [24, 48, 72];
   const presetsCoverSelection = selectedHour != null && PRESET_HOURS.includes(selectedHour);
 
   const triggerText = (() => {
@@ -171,6 +185,55 @@ export function ScheduleSettings({
           </div>
         )}
 
+        {intervalByDay && (
+          <div class="thr__window-section">
+            <p class="thr__schedule-presets-label">Report window per day</p>
+            <p class="thr__schedule-help thr__window-help">
+              How far back each day's report looks. Set a day to 48h or 72h so
+              its report covers days no one is on site.
+            </p>
+            <div class="thr__window-list" role="group" aria-label="Report window per weekday">
+              {WEEKDAYS.map(({ key, label }) => {
+                const current = Number(intervalByDay[key]);
+                const isWeekendCover = key === '1' && current === 72;
+                return (
+                  <div class="thr__window-row" key={key}>
+                    <span class="thr__window-day">
+                      {label}
+                      {isWeekendCover && (
+                        <span class="thr__window-note"> · covers the weekend</span>
+                      )}
+                    </span>
+                    <div
+                      class="thr__window-seg"
+                      role="radiogroup"
+                      aria-label={`${label} report window`}
+                    >
+                      {intervals.map((iv) => {
+                        const isSelected = current === iv;
+                        return (
+                          // NO_TRACK
+                          <button
+                            key={iv}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            class={`thr__window-opt${isSelected ? ' is-selected' : ''}`}
+                            onClick={() => onIntervalChange(key, iv)}
+                            disabled={saving}
+                          >
+                            {iv}h
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {error && schedule && (
           <p class="thr__schedule-inline-error" role="alert">{error}</p>
         )}
@@ -184,7 +247,7 @@ export function ScheduleSettings({
               onClick={onReset}
               disabled={saving}
             >
-              Reset to {formatHourLabel(defaultHour)}
+              Reset to defaults
             </button>
           )}
           <div class="thr__schedule-actions">
@@ -202,7 +265,7 @@ export function ScheduleSettings({
               type="button"
               class="thr__schedule-save"
               onClick={onSave}
-              disabled={!isDirty || saving}
+              disabled={!canSave}
             >
               {saving ? 'Saving…' : 'Save'}
             </button>

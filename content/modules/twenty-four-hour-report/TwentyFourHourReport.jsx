@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useReportData } from './hooks/useReportData.js';
 import { useReportSchedule } from './hooks/useReportSchedule.js';
 import { useRestoreFromPCC } from './hooks/useRestoreFromPCC.js';
-import { formatFacilityDate, todayInFacilityTz } from './utils/api.js';
+import { formatFacilityDate, todayInFacilityTz, completeIntervalMap } from './utils/api.js';
 import { ScheduleSettings } from './components/ScheduleSettings.jsx';
 import { SeverityCards } from './components/SeverityCards.jsx';
 import { FiltersBar } from './components/FiltersBar.jsx';
@@ -90,6 +90,11 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
     selectedHour,
     setSelectedHour,
     isDirty: scheduleDirty,
+    intervalByDay,
+    setIntervalByDay,
+    intervalsDirty,
+    validIntervals,
+    defaultIntervalByDay,
     updateSchedule,
     retry: retrySchedule,
   } = useReportSchedule({ facilityName, orgSlug });
@@ -259,31 +264,47 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
     if (e.target === e.currentTarget) onClose();
   };
 
+  // Revert all unsaved local edits (hour + per-day window) back to the
+  // last-saved schedule, then close the popover.
   const closeSettings = () => {
     if (schedule?.scheduleHour != null) setSelectedHour(schedule.scheduleHour);
+    if (schedule?.reportIntervalByDay) setIntervalByDay({ ...schedule.reportIntervalByDay });
     setSettingsOpen(false);
   };
 
+  const handleIntervalChange = (dayKey, value) => {
+    setIntervalByDay((prev) => ({ ...(prev || {}), [dayKey]: value }));
+  };
+
+  // Save only what changed — the hour and the window map are independent
+  // server-side, so a single PATCH carries just the dirty field(s).
   const handleScheduleSave = async () => {
-    if (selectedHour == null) return;
+    const patch = {};
+    if (scheduleDirty && selectedHour != null) patch.scheduleHour = selectedHour;
+    if (intervalsDirty && intervalByDay) patch.reportIntervalByDay = completeIntervalMap(intervalByDay);
+    if (Object.keys(patch).length === 0) return;
     try {
-      await updateSchedule(selectedHour);
-      window.SuperToast?.success?.('Report delivery time updated');
+      await updateSchedule(patch);
+      window.SuperToast?.success?.('Report schedule updated');
       setSettingsOpen(false);
     } catch (err) {
-      window.SuperToast?.error?.(err?.message || 'Failed to update report delivery time');
+      window.SuperToast?.error?.(err?.message || 'Failed to update report schedule');
     }
   };
 
+  // Reset both controls to their seeded defaults and persist in one PATCH.
   const handleScheduleReset = async () => {
     const defaultHour = schedule?.defaultScheduleHour ?? 3;
+    const patch = { scheduleHour: defaultHour };
+    if (defaultIntervalByDay) patch.reportIntervalByDay = completeIntervalMap(defaultIntervalByDay);
     setSelectedHour(defaultHour);
+    if (defaultIntervalByDay) setIntervalByDay({ ...defaultIntervalByDay });
     try {
-      await updateSchedule(defaultHour);
-      window.SuperToast?.success?.('Report delivery time reset to default');
+      await updateSchedule(patch);
+      window.SuperToast?.success?.('Report schedule reset to defaults');
       setSettingsOpen(false);
     } catch (err) {
-      window.SuperToast?.error?.(err?.message || 'Failed to reset report delivery time');
+      window.SuperToast?.error?.(err?.message || 'Failed to reset report schedule');
     }
   };
 
@@ -357,6 +378,11 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
             selectedHour={selectedHour}
             onHourChange={setSelectedHour}
             isDirty={scheduleDirty}
+            intervalByDay={intervalByDay}
+            onIntervalChange={handleIntervalChange}
+            intervalsDirty={intervalsDirty}
+            validIntervals={validIntervals}
+            defaultIntervalByDay={defaultIntervalByDay}
             onSave={handleScheduleSave}
             onReset={handleScheduleReset}
             onRetry={retrySchedule}
