@@ -167,12 +167,6 @@ export function CommandCenterHeader({
         >
           Rounding
         </button>
-        <button
-          class={`mds-cc__view-tab${activeView === 'planner' ? ' mds-cc__view-tab--active' : ''}`}
-          onClick={() => onViewChange('planner')}
-        >
-          Planner
-        </button>
       </div>
 
       {/* ── Assessments filter row ── */}

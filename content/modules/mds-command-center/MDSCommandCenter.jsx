@@ -469,6 +469,16 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
                       {practitioner.firstName} {practitioner.lastName}{practitioner.title ? `, ${practitioner.title}` : ''}
                     </span>
                   )}
+                  {isSigned && q.signedAt && (
+                    <span class="mds-cc__qcard-date" title={new Date(q.signedAt).toLocaleString()}>
+                      Signed {formatRelative(q.signedAt)}
+                    </span>
+                  )}
+                  {isRejected && q.rejectedAt && (
+                    <span class="mds-cc__qcard-date" title={new Date(q.rejectedAt).toLocaleString()}>
+                      Rejected {formatRelative(q.rejectedAt)}
+                    </span>
+                  )}
                   {isSigned && q.selectedIcd10Code && (
                     <span class="mds-cc__qcard-icd">{q.selectedIcd10Code}</span>
                   )}

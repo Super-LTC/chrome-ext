@@ -2293,6 +2293,9 @@
 .mds-cc__qcard-practitioner {
   color: var(--super-gray-500, #6b7280);
 }
+.mds-cc__qcard-date {
+  color: var(--super-gray-500, #6b7280);
+}
 
 /* ARD countdown badge (lives in qcard-right, next to revenue delta) */
 .mds-cc__ard {
