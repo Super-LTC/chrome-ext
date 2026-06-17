@@ -1,7 +1,10 @@
 import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
 import { useCertifications } from './hooks/useCertifications.js';
 import { useDischargedCerts } from './hooks/useDischargedCerts.js';
+import { useNotificationPrefs } from './hooks/useNotificationPrefs.js';
 import { StayGroupCard } from './components/StayGroupCard.jsx';
+import { CertSettingsPopover } from './components/CertSettingsPopover.jsx';
+import { CertDigestBanner } from './components/CertDigestBanner.jsx';
 import { SendCertModal } from './components/SendCertModal.jsx';
 import { SkipCertModal } from './components/SkipCertModal.jsx';
 import { RevokeCertModal } from './components/RevokeCertModal.jsx';
@@ -120,6 +123,17 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
   } = useDischargedCerts({
     facilityName, orgSlug, enabled: activeSubTab === 'discharged'
   });
+
+  // Notification preferences (gear popover + digest banner). Facility-wide —
+  // not loaded in the per-patient overlay (same scope as the Discharged tab).
+  const { prefs: notificationPrefs, update: updateNotificationPref } = useNotificationPrefs({
+    facilityName: patientId ? null : facilityName,
+    orgSlug: patientId ? null : orgSlug,
+  });
+  const turnOnDigest = useCallback(
+    () => updateNotificationPref('morningDigest', true),
+    [updateNotificationPref]
+  );
 
   // Fire-once when the Discharged tab is first opened.
   const [dischargedOpened, setDischargedOpened] = useState(false);
@@ -369,6 +383,16 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
         </div>
       )}
 
+      {/* Digest opt-in nudge (facility-wide; self-hides once opted in/dismissed) */}
+      {!patientId && (
+        <CertDigestBanner
+          prefs={notificationPrefs}
+          facilityName={facilityName}
+          orgSlug={orgSlug}
+          onTurnOn={turnOnDigest}
+        />
+      )}
+
       {/* Stay type filter + Sub-tabs */}
       <div class="cert__filters">
         <div class="cert__stay-type-filter">
@@ -386,6 +410,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
             </button>
           ))}
         </div>
+        <div class="cert__sub-tabs-row">
         <div class="cert__sub-tabs">
           {/* Discharged is a facility-wide archive; hide it in per-patient overlay */}
           {SUB_TABS.filter(tab => tab.id !== 'discharged' || !patientId).map(tab => (
@@ -401,6 +426,12 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
               )}
             </button>
           ))}
+        </div>
+        {/* Notification settings gear (facility-wide; renders only when at least
+            one module-enabled toggle exists for this facility) */}
+        {!patientId && (
+          <CertSettingsPopover prefs={notificationPrefs} onToggle={updateNotificationPref} />
+        )}
         </div>
       </div>
 

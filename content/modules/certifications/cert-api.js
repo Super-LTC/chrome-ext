@@ -347,6 +347,60 @@ const CertAPI = {
     }
 
     return response.data;
+  },
+
+  /**
+   * Read the user's notification preferences for a facility. ONE round-trip
+   * populates the whole settings popover (all five toggles) plus which modules
+   * are enabled (used to hide toggles whose module is off) and the userId
+   * (used to key the per-user banner-dismiss flag on shared workstations).
+   *
+   * Returns null when the certs module is disabled or the user lacks access —
+   * callers treat null as "hide the settings/banner UI" (same as fetchDashboard).
+   *
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @returns {Promise<{settings, modules, settingModules, moduleEnabled, morningDigest, userId}|null>}
+   */
+  async fetchNotificationPrefs(facilityName, orgSlug) {
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/notification-preferences?${params}`,
+      options: { method: 'GET' }
+    });
+
+    // Non-2xx (404/403) means module disabled or no access — return null
+    if (!response.success) return null;
+
+    return response.data || null;
+  },
+
+  /**
+   * Flip one or more notification toggles for a facility. The backend merges any
+   * subset, so pass just the key(s) being changed. Returns the full updated
+   * `settings` object so the caller can reconcile optimistic state.
+   *
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @param {Object} patch - subset of toggle booleans, e.g. { morningDigest: true }
+   * @returns {Promise<{settings: Object, morningDigest: boolean}>}
+   */
+  async updateNotificationPrefs(facilityName, orgSlug, patch) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/notification-preferences`,
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ facilityName, orgSlug, ...patch })
+      }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to update notification preferences');
+    }
+
+    return response.data;
   }
 };
 
