@@ -128,7 +128,9 @@ export function QmOverview({
         }
         return { meta, counts, urgencies };
       })
-      .filter((x) => x.counts.applicable > 0 && measureInLens(x.meta.id, lens, facilityState))
+      // discharge_function is owned by the dedicated DfsTile + DFS page; keep it
+      // out of the generic by-measure grid so it isn't listed twice.
+      .filter((x) => x.meta.id !== 'discharge_function' && x.counts.applicable > 0 && measureInLens(x.meta.id, lens, facilityState))
       .sort((a, b) => b.counts.triggering - a.counts.triggering);
   }, [data.measuresEvaluated, summary.byMeasure, data.patients, lens, facilityState]);
 
@@ -352,12 +354,17 @@ export function QmOverview({
           {/* Order: Clear with an MDS → Coming soon (surfaced, not buried) → Needs a clinical fix → Locked → Clear */}
           {renderGroup('clear_mds')}
 
-          {!seg && crossers.length > 0 && (
+          {!seg && (crossers.length > 0 || (upcoming?.beyondHorizon ?? 0) > 0) && (
             <div className="qmc-collapsible qmc-collapsible--violet">
               <button type="button" className="qmc-collapsible__head" onClick={() => setShowCrossers((s) => !s)}> {/* NO_TRACK */}
                 {showCrossers ? <ChevronDown /> : <ChevronRight />}
                 <span className="qmc-dot qmc-dot--violet" style={{ width: '8px', height: '8px' }} />
                 Going to trigger soon · {crossers.length} <span className="qmc-text--slate" style={{ fontWeight: 400 }}>· short-stay coding that hits a long-stay measure at day-101</span>
+                {(upcoming?.beyondHorizon ?? 0) > 0 && (
+                  <span className="qmc-text--slate" style={{ marginLeft: 'auto', paddingLeft: '8px', fontWeight: 400, fontSize: '11px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                    +{upcoming.beyondHorizon} cross later
+                  </span>
+                )}
               </button>
               {showCrossers && (
                 <div className="qmc-collapsible__body qmc-rows">

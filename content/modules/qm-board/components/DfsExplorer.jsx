@@ -62,8 +62,8 @@ export function DfsExplorer({ resident, onClose }) {
           <button type="button" className="qmc-modal__close" onClick={onClose} aria-label="Close"><X /></button> {/* NO_TRACK */}
         </div>
 
-        <div className="qmc-modal__body">
-          {/* live total + bar */}
+        {/* live total + bar — pinned (stays visible as you bump the rows) */}
+        <div className="qmc-dfs-explore__top">
           <div className="qmc-dfs-explore__readout">
             <span className="qmc-dfs-explore__adm">Admission {Math.round(resident.entryScore)}</span>
             <span className="qmc-dfs-explore__total">
@@ -78,10 +78,12 @@ export function DfsExplorer({ resident, onClose }) {
             <div className={`qmc-dfs-bar__fill ${hits ? 'qmc-dfs-bar__fill--emerald' : 'qmc-dfs-bar__fill--amber'}`} style={{ width: `${observedW}%` }} />
             <div className="qmc-dfs-bar__target" style={{ left: `${targetL}%` }} />
           </div>
+        </div>
 
-          {/* per-item controls */}
-          <div className="qmc-dfs-items">
-            {rows.map((r) => {
+        {/* per-item controls — the scroll region, so every item (incl. the Walk
+            rows + Reset) stays reachable inside the constrained ext overlay. */}
+        <div className="qmc-dfs-items qmc-dfs-items--scroll">
+          {rows.map((r) => {
               const val = values[r.code] ?? 1;
               const moved = val !== Math.round(r.admission ?? 0);
               return (
@@ -99,20 +101,19 @@ export function DfsExplorer({ resident, onClose }) {
                     <button type="button" className="qmc-dfs-step" disabled={val >= 6} onClick={() => bump(r.code, 1)} aria-label={`Raise ${r.label}`}><Plus /></button> {/* NO_TRACK */}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* footer */}
-          <div className="qmc-dfs-explore__foot">
-            <p className="qmc-dfs-explore__note">
-              Exploratory — admission values are real (1 = dependent, 6 = independent); this is a
-              "what would it take" tool, not a prediction.
-            </p>
-            {dirty && (
-              <button type="button" className="qmc-dfs-explore__reset" onClick={reset}>Reset</button> /* NO_TRACK */
-            )}
-          </div>
+        {/* footer — pinned */}
+        <div className="qmc-dfs-explore__foot">
+          <p className="qmc-dfs-explore__note">
+            Exploratory — admission values are real (1 = dependent, 6 = independent); this is a
+            "what would it take" tool, not a prediction.
+          </p>
+          {dirty && (
+            <button type="button" className="qmc-dfs-explore__reset" onClick={reset}>Reset</button> /* NO_TRACK */
+          )}
         </div>
       </div>
     </div>

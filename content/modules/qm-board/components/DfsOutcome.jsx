@@ -61,10 +61,9 @@ export function DfsOutcome({ facilityName, orgSlug, stayId, name, dischargeDate,
           <button type="button" className="qmc-modal__close" onClick={onClose} aria-label="Close"><X /></button> {/* NO_TRACK */}
         </div>
 
-        <div className="qmc-modal__body">
-          {/* summary */}
-          {data && !data.excluded && (
-            <div className="qmc-dfs-outcome__summary">
+        {/* summary — pinned */}
+        {data && !data.excluded && (
+          <div className="qmc-dfs-outcome__summary">
               <span className="qmc-dfs-outcome__big">
                 {Math.round(data.observed ?? 0)}<span className="qmc-dfs-outcome__big-sub"> observed</span>
               </span>
@@ -74,11 +73,12 @@ export function DfsOutcome({ facilityName, orgSlug, stayId, name, dischargeDate,
               </span>
               <span className={`qmc-dfs-outcome__delta ${met ? 'qmc-text--emerald' : 'qmc-text--rose'}`}>
                 {delta != null ? `${delta >= 0 ? '+' : ''}${Math.round(delta)}` : '—'}
-              </span>
-            </div>
-          )}
+            </span>
+          </div>
+        )}
 
-          {/* per-item table */}
+        {/* per-item table — the scroll region */}
+        <div className="qmc-dfs-outcome__scroll">
           {loading ? (
             <div className="qmc-dfs-outcome__state">Loading…</div>
           ) : !data ? (
@@ -124,7 +124,10 @@ export function DfsOutcome({ facilityName, orgSlug, stayId, name, dischargeDate,
               </tbody>
             </table>
           )}
+        </div>
 
+        {/* footer note — pinned */}
+        <div className="qmc-dfs-explore__foot">
           <p className="qmc-dfs-explore__note">
             Observed sums the discharge GG items (imputed where not charted); expected is the risk-adjusted target.
             The gap = which items stalled.

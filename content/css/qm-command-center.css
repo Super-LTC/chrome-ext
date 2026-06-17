@@ -851,11 +851,17 @@
 .qmc-dfs-table__name{font-weight:500;color:var(--slate-900)}
 .qmc-dfs-table__disch{font-weight:600;color:var(--slate-900)}
 
-/* DFS modals (explorer + outcome) — reuse qmc-modal shell, slightly wider */
-.qmc-dfs-modal{max-width:560px}
+/* DFS modals (explorer + outcome) — reuse qmc-modal shell, slightly wider.
+   max-height:100% (not 85vh) so the card adapts to whatever the fixed overlay
+   resolves to — full viewport on its own, or a constrained/transformed ext
+   panel — instead of overflowing it. The header/totals/footer are pinned and
+   only the item list / table scrolls, so the bottom rows (Walk 10/50, Reset)
+   stay reachable while the running total stays in view. */
+.qmc-dfs-modal{max-width:560px;max-height:100%}
 .qmc-dfs-modal__title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* explorer */
+.qmc-dfs-explore__top{flex-shrink:0;padding:16px 20px 14px;background:#fff}
 .qmc-dfs-explore__readout{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .qmc-dfs-explore__adm{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-400)}
 .qmc-dfs-explore__total{font-size:22px;font-weight:700;color:var(--slate-900);font-variant-numeric:tabular-nums}
@@ -869,6 +875,8 @@
 .qmc-dfs-bar__target{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--slate-600)}
 .qmc-dfs-items{display:flex;flex-direction:column;border-radius:12px;border:1px solid var(--slate-200);
   background:#fff;overflow:hidden}
+/* the scroll region inside the explorer card */
+.qmc-dfs-items--scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 20px}
 .qmc-dfs-items>*+*{border-top:1px solid var(--slate-50)}
 .qmc-dfs-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px}
 .qmc-dfs-item__name{font-size:13px;color:var(--slate-800)}
@@ -882,14 +890,17 @@
 .qmc-dfs-step svg{width:16px;height:16px}
 .qmc-dfs-item__val{width:20px;text-align:center;font-size:16px;font-weight:700;color:var(--slate-900);
   font-variant-numeric:tabular-nums}
-.qmc-dfs-explore__foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.qmc-dfs-explore__foot{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 20px;border-top:1px solid var(--slate-200);background:#fff}
 .qmc-dfs-explore__note{margin:0;font-size:11px;color:var(--slate-400);line-height:1.5}
 .qmc-dfs-explore__reset{flex-shrink:0;border:none;background:none;border-radius:8px;padding:6px 12px;
   font-size:12px;font-weight:600;color:var(--slate-500);cursor:pointer}
 .qmc-dfs-explore__reset:hover{background:var(--slate-100)}
 
 /* outcome */
-.qmc-dfs-outcome__summary{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.qmc-dfs-outcome__summary{flex-shrink:0;display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  padding:16px 20px;background:#fff}
+.qmc-dfs-outcome__scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 12px 0}
 .qmc-dfs-outcome__big{font-size:22px;font-weight:700;color:var(--slate-900);font-variant-numeric:tabular-nums}
 .qmc-dfs-outcome__big--exp{color:var(--slate-500)}
 .qmc-dfs-outcome__big-sub{font-size:13px;font-weight:500;color:var(--slate-400)}
