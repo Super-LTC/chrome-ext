@@ -101,6 +101,46 @@ export function formatTimezoneLabel(timezone) {
   }
 }
 
+/**
+ * Weekday key (JS Date.getDay(): 0=Sun … 6=Sat) → display order Mon→Sun and
+ * full label. The backend keys the window map by getDay(), so Monday is "1".
+ */
+export const WEEKDAYS = [
+  { key: '1', label: 'Monday' },
+  { key: '2', label: 'Tuesday' },
+  { key: '3', label: 'Wednesday' },
+  { key: '4', label: 'Thursday' },
+  { key: '5', label: 'Friday' },
+  { key: '6', label: 'Saturday' },
+  { key: '0', label: 'Sunday' },
+];
+
+/**
+ * Shallow-compare two weekday→interval maps across all 7 keys (0–6).
+ * Tolerates string/number key+value mismatches.
+ */
+export function intervalsEqual(a, b) {
+  if (!a || !b) return a === b;
+  for (let d = 0; d <= 6; d += 1) {
+    if (Number(a[d]) !== Number(b[d])) return false;
+  }
+  return true;
+}
+
+/**
+ * Build a complete 7-key window object (keys "0".."6") from a partial map,
+ * coercing values to numbers and falling back to 24h for any missing day.
+ * The PATCH contract requires all 7 days present.
+ */
+export function completeIntervalMap(map) {
+  const out = {};
+  for (let d = 0; d <= 6; d += 1) {
+    const v = Number(map?.[d]);
+    out[String(d)] = Number.isFinite(v) ? v : 24;
+  }
+  return out;
+}
+
 export function facilityDateFromReport(item, timezone) {
   if (!item) return null;
   if (typeof item.facilityDate === 'string') return item.facilityDate;
