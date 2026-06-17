@@ -308,7 +308,8 @@ export const DEMO_API_RESPONSES = {
         status: 'sent',
         sentAt: new Date(Date.now() - 2 * 86400000).toISOString(),
         ardDaysRemaining: 3,
-        assessmentPayment: { currentDaily: 482.50, potentialDaily: 538.20, remainingDays: 14 },
+        movesCaseMix: true,
+        assessmentPayment: { mode: 'cmi', delta: 0.24, current: { total: 1.20 }, potential: { total: 1.44 } },
         sentTo: [{ firstName: 'Demo', lastName: 'Provider', title: 'MD' }]
       },
       {
@@ -320,8 +321,23 @@ export const DEMO_API_RESPONSES = {
         status: 'sent',
         sentAt: new Date(Date.now() - 5 * 86400000).toISOString(),
         ardDaysRemaining: -4,
-        assessmentPayment: { currentDaily: 610.80, potentialDaily: 645.30, remainingDays: 26 },
+        movesCaseMix: true,
+        assessmentPayment: { mode: 'cmi', delta: 0.18, current: { total: 1.32 }, potential: { total: 1.50 } },
         sentTo: [{ firstName: 'Sample', lastName: 'Doctor', title: 'DO' }]
+      },
+      {
+        id: 'q-002',
+        mdsAssessmentId: '4862100',
+        patientName: 'Smith, Robert',
+        mdsItem: 'I7300',
+        mdsItemName: 'Peripheral Vascular Disease (PVD/PAD)',
+        status: 'sent',
+        sentAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        ardDaysRemaining: 6,
+        // SECTION-I diagnostic-only — no case-mix lift
+        movesCaseMix: false,
+        assessmentPayment: null,
+        sentTo: [{ firstName: 'Demo', lastName: 'Provider', title: 'MD' }]
       },
       {
         id: 'q-001',
@@ -331,7 +347,8 @@ export const DEMO_API_RESPONSES = {
         mdsItemName: 'Malnutrition',
         status: 'pending',
         ardDaysRemaining: 3,
-        assessmentPayment: { currentDaily: 482.50, potentialDaily: 538.20, remainingDays: 14 }
+        movesCaseMix: true,
+        assessmentPayment: { mode: 'cmi', delta: 0.30, current: { total: 1.20 }, potential: { total: 1.50 } }
       }
     ],
 
@@ -347,7 +364,46 @@ export const DEMO_API_RESPONSES = {
         mdsItemCoded: false,
         hasPdf: true,
         practitioner: { firstName: 'Demo', lastName: 'Provider', title: 'MD' },
-        selectedIcd10Code: 'E11.9'
+        selectedIcd10Code: 'E11.9',
+        // We just auto-posted it → on the list + success
+        onDiagnosisList: true,
+        pccDiagnosisPostStatus: 'success',
+        pccDiagnosisPostedAt: new Date(Date.now() - 86400000 + 5000).toISOString()
+      },
+      {
+        id: 'q-006',
+        mdsAssessmentId: '4862100',
+        patientName: 'Smith, Robert',
+        mdsItem: 'I2900',
+        mdsItemName: 'Diabetic Neuropathy',
+        status: 'signed',
+        signedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+        mdsItemCoded: false,
+        hasPdf: true,
+        practitioner: { firstName: 'Sample', lastName: 'Doctor', title: 'DO' },
+        selectedIcd10Code: 'E11.42',
+        // Auto-post failed and it's not on the list → nurse must enter manually
+        onDiagnosisList: false,
+        pccDiagnosisPostStatus: 'failed',
+        pccDiagnosisPostError: 'PCC session expired — re-enter manually',
+        pccDiagnosisPostedAt: new Date(Date.now() - 2 * 86400000 + 5000).toISOString()
+      },
+      {
+        id: 'q-007',
+        mdsAssessmentId: '4860265',
+        patientName: 'Doe, Jane',
+        mdsItem: 'I4400',
+        mdsItemName: 'COPD',
+        status: 'signed',
+        signedAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+        mdsItemCoded: true,
+        hasPdf: true,
+        practitioner: { firstName: 'Demo', lastName: 'Provider', title: 'MD' },
+        selectedIcd10Code: 'J44.9',
+        // Legacy query signed before auto-post existed; already on the chart.
+        // No post status, but ground-truth onDiagnosisList still true.
+        onDiagnosisList: true,
+        pccDiagnosisPostStatus: null
       }
     ]
   },

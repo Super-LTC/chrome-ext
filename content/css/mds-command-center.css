@@ -2351,6 +2351,43 @@
   color: #dc2626;
 }
 
+/* Neutral tag for SECTION-I diagnostic-only items (no case-mix lift) */
+.mds-cc__qcard-tag {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--super-font, sans-serif);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.mds-cc__qcard-tag--coding {
+  color: #4b5563;
+  background: #f3f4f6;
+}
+
+/* "Added to PCC" auto-post status on signed query cards */
+.mds-cc__qcard-pcc {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--super-font, sans-serif);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.mds-cc__qcard-pcc--success {
+  color: #15803d;
+  background: #f0fdf4;
+}
+.mds-cc__qcard-pcc--failed {
+  color: #92400e;
+  background: #fef3c7;
+  cursor: help;
+}
+.mds-cc__qcard-pcc--pending {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
 /* Expanded body */
 .mds-cc__qcard-body {
   padding: 0 14px 12px;

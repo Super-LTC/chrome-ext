@@ -171,8 +171,55 @@ function sortByArd(queries) {
   });
 }
 
+// True if the query was signed within the last `withinMinutes`. Used to
+// distinguish a freshly-signed query whose PCC post is genuinely in-flight
+// from a legacy/older signed query that simply has no post status.
+function wasSignedRecently(signedAt, withinMinutes = 30) {
+  if (!signedAt) return false;
+  const t = new Date(signedAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < withinMinutes * 60 * 1000;
+}
+
+// Whether the signed diagnosis is on the patient's PCC diagnosis list.
+//
+// `onDiagnosisList` is the ground truth — true means the code is actually on
+// the (synced) list (already there from the old manual flow, OR we just
+// posted it). It's reliable even for queries signed before auto-post existed,
+// so it drives the main indicator. `pccDiagnosisPostStatus` only reflects our
+// auto-post attempt and is null for everything signed before this shipped, so
+// it's supplementary (distinguishes "we just added it" from "already there"
+// and surfaces a failed attempt). null status with no list hit → the post may
+// still be in flight (runs in a lambda a beat after signing).
+function PccPostBadge({ onDiagnosisList, status, error, signedAt }) {
+  if (onDiagnosisList === true || status === 'success') {
+    // success → we just auto-posted it; otherwise it was already on the list.
+    const label = status === 'success' ? '✓ Added to PCC' : '✓ On PCC diagnosis list';
+    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--success">{label}</span>;
+  }
+  if (status === 'failed' || status === 'partial') {
+    return (
+      <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--failed" title={error || undefined}>
+        Not added — enter manually
+      </span>
+    );
+  }
+  // Not on the list and no post result yet → treat as in-progress, never
+  // failed. Only show while it could still be in flight; older signed queries
+  // that were never added (and never will auto-add) show nothing.
+  if (status == null && wasSignedRecently(signedAt)) {
+    return <span class="mds-cc__qcard-pcc mds-cc__qcard-pcc--pending">Adding to PCC…</span>;
+  }
+  return null;
+}
+
 function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, onRevoke, assessmentCtx, isPending }) {
   const delta = formatPaymentDelta(q.assessmentPayment);
+  // SECTION-I diagnostic-only items don't move case-mix. Backend nulls
+  // assessmentPayment for these (so `delta` is already null), but gate
+  // explicitly on movesCaseMix and show a neutral "Coding accuracy" tag
+  // instead of any payment/CMI lift.
+  const codingOnly = q.movesCaseMix === false;
   const sentTo = q.sentTo?.[0] || q.practitioner;
   const practName = sentTo ? `${sentTo.firstName || ''} ${sentTo.lastName || ''}`.trim() : null;
   const practTitle = sentTo?.title;
@@ -189,7 +236,8 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf
         </div>
         <div class="mds-cc__qcard-right">
           {ardBadge(q)}
-          {delta && <span class={`mds-cc__qcard-delta${isPending ? ' mds-cc__qcard-delta--pending' : ''}`}>{delta}</span>}
+          {delta && !codingOnly && <span class={`mds-cc__qcard-delta${isPending ? ' mds-cc__qcard-delta--pending' : ''}`}>{delta}</span>}
+          {codingOnly && <span class="mds-cc__qcard-tag mds-cc__qcard-tag--coding">Coding accuracy</span>}
           <svg class={`mds-cc__qcard-chevron${expanded ? ' mds-cc__qcard-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -434,6 +482,14 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
                   )}
                   {isSigned && q.selectedIcd10Code && (
                     <span class="mds-cc__qcard-icd">{q.selectedIcd10Code}</span>
+                  )}
+                  {isSigned && (
+                    <PccPostBadge
+                      onDiagnosisList={q.onDiagnosisList}
+                      status={q.pccDiagnosisPostStatus}
+                      error={q.pccDiagnosisPostError}
+                      signedAt={q.signedAt}
+                    />
                   )}
                   {isRejected && q.rejectionReason && (
                     <span class="mds-cc__qcard-rejection">&ldquo;{q.rejectionReason}&rdquo;</span>

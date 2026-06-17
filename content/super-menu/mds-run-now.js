@@ -104,8 +104,63 @@ function gatherParams() {
   };
 }
 
+// The five fields POST /run can't run without. All scraped live from the PCC
+// DOM (or merged from a caller-supplied seed), so any can be transiently blank.
+const REQUIRED_PARAMS = ['externalPatientId', 'ardDate', 'assessmentType', 'facilityName', 'orgSlug'];
+
 function hasRequiredParams(p) {
-  return !!(p && p.externalPatientId && p.ardDate && p.assessmentType && p.facilityName && p.orgSlug);
+  return missingParams(p).length === 0;
+}
+
+/** Which required fields are blank. Empty array = good to run. */
+function missingParams(p) {
+  if (!p) return REQUIRED_PARAMS.slice();
+  return REQUIRED_PARAMS.filter((k) => !p[k]);
+}
+
+// Copy only the truthy entries of `seed` — lets a caller (e.g. PDPM patient
+// scope) override scraped values without clobbering them with undefined.
+function pickTruthy(obj) {
+  const out = {};
+  if (!obj) return out;
+  for (const k of Object.keys(obj)) if (obj[k]) out[k] = obj[k];
+  return out;
+}
+
+/**
+ * Gather run params, retrying once after a short delay if the first scrape came
+ * up short. PCC paints the assessment proptable + ESOLclientid anchors a beat
+ * after the "Run it" card can render, so a click that lands too early scrapes
+ * blanks (ardDate / assessmentType / externalPatientId). One re-scrape closes
+ * that window. Emits telemetry on both recovery and persistent failure so we
+ * can see how often the race bites and which field is the culprit.
+ *
+ * @param {object}  [opts]
+ * @param {string}  [opts.surface]      telemetry label
+ * @param {string}  [opts.code]         originating 404 code
+ * @param {object}  [opts.seed]         truthy values override scraped ones
+ * @param {number}  [opts.retryDelayMs]
+ * @returns {Promise<{ok:boolean, params:object, missing:string[]}>}
+ */
+async function gatherParamsResilient({ surface = 'unknown', code = null, seed = null, retryDelayMs = 400 } = {}) {
+  const merge = () => ({ ...gatherParams(), ...pickTruthy(seed) });
+
+  let params = merge();
+  let missing = missingParams(params);
+  if (!missing.length) return { ok: true, params, missing: [] };
+
+  await new Promise((r) => setTimeout(r, retryDelayMs));
+  params = merge();
+  missing = missingParams(params);
+
+  const track = window.SuperAnalytics?.track;
+  if (!missing.length) {
+    track?.('mds_run_params_recovered', { surface, code: code || 'unknown' });
+    return { ok: true, params, missing: [] };
+  }
+
+  track?.('mds_run_params_missing', { surface, code: code || 'unknown', missing_fields: missing.join(',') });
+  return { ok: false, params, missing };
 }
 
 function trackBucket(ms) {
@@ -261,7 +316,9 @@ export const MdsRunNow = {
   introCopy,
   phaseCopy,
   gatherParams,
+  gatherParamsResilient,
   hasRequiredParams,
+  missingParams,
 };
 
 // Global for vanilla surfaces (mds-overlay.js). Preact modules can import directly.

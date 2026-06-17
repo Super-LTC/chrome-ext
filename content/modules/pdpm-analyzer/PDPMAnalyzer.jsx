@@ -1201,14 +1201,20 @@ function RunItState({ code, runParams, onComplete }) {
 
   const intro = MdsRunNow.introCopy(code);
 
-  function startRun() {
-    if (!MdsRunNow.hasRequiredParams(runParams)) {
+  async function startRun() {
+    setErrorMsg(null);
+    setProgress({ phase: 'none' });
+    // Re-scrape once if the page wasn't fully painted (race). runParams carries
+    // any patient-scope overrides as the seed, so they win over a fresh scrape.
+    const { ok, params } = await MdsRunNow.gatherParamsResilient({
+      surface: 'pdpm_analyzer', code, seed: runParams,
+    });
+    if (!ok) {
+      setProgress(null);
       setErrorMsg("Couldn't read the assessment details. Try reopening from the MDS page.");
       return;
     }
-    setErrorMsg(null);
-    setProgress({ phase: 'none' });
-    handleRef.current = MdsRunNow.start(runParams, {
+    handleRef.current = MdsRunNow.start(params, {
       onPhase: (state) => setProgress(state),
       onDone: () => { handleRef.current = null; onComplete?.(); },
       onError: (msg) => { handleRef.current = null; setProgress(null); setErrorMsg(msg); },

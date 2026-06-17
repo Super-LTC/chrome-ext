@@ -46,6 +46,11 @@ export const EVENT_SCHEMA = {
   cert_view_opened: ['source'],
   cert_discharged_tab_opened: ['source'],
   cert_discharged_load_more: ['page'],
+  cert_settings_opened: ['source'],
+  cert_setting_toggled: ['setting', 'enabled'],
+  cert_digest_banner_shown: [],
+  cert_digest_banner_enabled: [],
+  cert_digest_banner_dismissed: [],
   care_plan_coverage_opened: ['source'],
   care_plan_stamp_submitted: ['source'],
   rounding_reports_opened: ['source'],
@@ -88,6 +93,13 @@ export const EVENT_SCHEMA = {
   mds_run_triggered: ['surface', 'code'],
   mds_run_completed: ['surface', 'code', 'sections_total', 'duration_ms_bucket'],
   mds_run_failed: ['surface', 'code', 'duration_ms_bucket'],
+  // "Run it" clicked but the page scrape was missing required fields. A retry
+  // re-scrapes ~400ms later: `_recovered` = the retry filled the gap (race
+  // confirmed); `_missing` = still short, with `missing_fields` (comma-joined
+  // field keys, no values) naming the culprit. Diagnoses the "Couldn't read the
+  // assessment details" error.
+  mds_run_params_recovered: ['surface', 'code'],
+  mds_run_params_missing: ['surface', 'code', 'missing_fields'],
 
   // Interview-coverage chips on the PCC MDS List → In Progress screen.
   // `_shown` fires once per batch round trip; `_row_clicked` opens the detail popover.
