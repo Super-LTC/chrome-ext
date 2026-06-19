@@ -85,6 +85,8 @@ html:has(.super-tour-bar) .cc-pop { max-height: calc(100vh - 72px); }
   transition: background 0.15s ease;
 }
 .super-tour-exit:hover { background: rgba(99, 102, 241, 0.08); }
+.super-tour-exit--ghost { border-color: transparent; color: #6b7280; }
+.super-tour-exit--ghost:hover { color: #4f46e5; background: rgba(99, 102, 241, 0.08); }
 
 /* Start card (pre-tour invitation) */
 .super-tour-start-backdrop {

@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { startTour, exitTour } from './tour-runner.jsx';
 import { getTourState } from './tour-state.js';
+import { STEPS } from './tour-script.js';
 import { ValueHud } from './ValueHud.jsx';
 
 const SMark = () => (
@@ -56,7 +57,7 @@ export const TourChrome = () => {
   const initial = getTourState();
   const [active, setActive] = useState(!!initial.active);
   const [offered, setOffered] = useState(false);
-  const [step, setStep] = useState({ index: initial.index || 0, total: 0 });
+  const [step, setStep] = useState({ index: initial.index || 0, total: STEPS.length });
   const [ended, setEnded] = useState(null); // null | { hud }
 
   useEffect(() => {
@@ -84,9 +85,10 @@ export const TourChrome = () => {
 
   const showStart = offered && !active;
 
-  // Progress bar: "Step N of M". total may be 0 until the first tour:step lands.
-  const total = step.total || 0;
-  const current = Math.min(step.index + 1, total || step.index + 1);
+  // Progress bar: "Step N of M". Fall back to the known step count so the bar
+  // reads correctly the instant the tour starts (no "Starting…" flash).
+  const total = step.total || STEPS.length;
+  const current = Math.min(step.index + 1, total);
   const pct = total ? Math.round((current / total) * 100) : 0;
 
   return (
@@ -97,8 +99,15 @@ export const TourChrome = () => {
           <div className="super-tour-bar-row">
             <div className="super-tour-bar-brand"><SMark /><span>Super tour</span></div>
             <div className="super-tour-bar-label">
-              {total ? `Step ${current} of ${total}` : 'Starting…'}
+              {`Step ${current} of ${total}`}
             </div>
+            <button
+              type="button"
+              className="super-tour-exit super-tour-exit--ghost"
+              onClick={() => startTour()}
+            >
+              Restart
+            </button>
             <button
               type="button"
               className="super-tour-exit"

@@ -117,12 +117,19 @@ async function renderStep(index) {
   const step = STEPS[index];
   if (!step) { finishTour(); return; }
 
-  // Chapter title card: show when entering a new chapter. Falls back to the
-  // persisted chapter so a cross-page hop still detects the transition.
+  // Tell the chrome (progress bar) immediately, before any chapter card, so the
+  // bar reads "Step 1 of N" the instant the tour starts.
+  window.dispatchEvent(new CustomEvent('tour:step', {
+    detail: { index, total: STEPS.length },
+  }));
+
+  // Chapter title card: show when entering a NEW chapter. Falls back to the
+  // persisted chapter so a cross-page hop still detects the transition. Skipped
+  // on the very first step (prevChapter null) — the start card already intro'd.
   const prevChapter = lastRenderedChapter != null
     ? lastRenderedChapter
     : getTourState().lastChapter;
-  if (step.chapter != null && step.chapter !== prevChapter) {
+  if (step.chapter != null && prevChapter != null && step.chapter !== prevChapter) {
     await showChapterCard(step.chapter);
   }
   lastRenderedChapter = step.chapter;
