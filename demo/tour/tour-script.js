@@ -104,7 +104,7 @@ const CHAPTER_1 = [
     chapter: 1,
     page: 'medical-diagnosis',
     selector: '.icd10-viewer__push-btn',
-    placement: 'top',
+    placement: 'bottom',
     title: 'Push it straight into PCC',
     body: 'One click writes the staged codes back to PointClickCare — no retyping, no copy-paste.',
     advance: 'click',
