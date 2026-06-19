@@ -8,6 +8,7 @@
  * Routes API_REQUEST messages to demo mock data.
  */
 import { DEMO_API_RESPONSES } from './demo-mock-data.js';
+import { SECTION_I_DETAIL } from './demo-section-i-fixtures.js';
 import { buildPlannerWeekEvents, buildPlannerSummary } from './demo-planner-fixtures.js';
 import {
   DEMO_QM_CURRENTLY_TRIGGERING,
@@ -539,7 +540,9 @@ function routeApiRequest(endpoint, options = {}) {
   const itemDetailMatch = path.match(/\/api\/extension\/mds\/items\/([^/]+)/);
   if (itemDetailMatch) {
     const code = decodeURIComponent(itemDetailMatch[1]);
-    const data = DEMO_API_RESPONSES.itemDetail[code];
+    // Canonical Section I fixtures win (correct codes/names/evidence); fall back
+    // to the legacy itemDetail map for other surfaces (e.g. Command Center).
+    const data = SECTION_I_DETAIL[code] || DEMO_API_RESPONSES.itemDetail[code];
     if (data) return { success: true, data };
     // Return a generic response for unknown items
     return {

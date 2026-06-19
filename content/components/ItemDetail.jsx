@@ -251,7 +251,7 @@ function CarePlanSection({ carePlan }) {
  * @param {Object}  props.detectionItem — detection item from parent (has .impact, .mdsItem, .itemName)
  * @param {string}  props.mdsItem — MDS item code (e.g. "I0600")
  */
-export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, onViewSource, onDismiss, dismissing, assessmentId }) {
+export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, onViewSource, onDismiss, onAgree, dismissing, assessmentId }) {
   const isFull = variant === 'full';
   const apiItem = data?.item;
   const isColumnBased = !!apiItem?.columns;
@@ -498,10 +498,16 @@ export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, 
         </div>
       ) : (
         <div class="sid__actions">
+          {onAgree && (
+            // NO_TRACK: agree resolution owned by parent feature
+            <button class="sid__btn sid__btn--agree" type="button" disabled={dismissing} onClick={() => onAgree()}>
+              Agree
+            </button>
+          )}
           {onDismiss && (
             // NO_TRACK: opens dismiss-form sub-flow; parent's onDismiss owns the resolution
             <button class="sid__btn sid__btn--dismiss" type="button" onClick={() => setDismissMode(true)}>
-              Dismiss
+              {onAgree ? 'Disagree' : 'Dismiss'}
             </button>
           )}
           <div class="sid__actions-right">

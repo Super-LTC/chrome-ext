@@ -452,6 +452,16 @@
 }
 .sid__btn--secondary:hover { background: #e5e7eb; }
 
+.sid__btn--agree {
+  background: #059669;
+  color: #fff;
+}
+.sid__btn--agree:hover { background: #047857; }
+.sid__btn--agree:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .sid__btn--dismiss {
   background: none;
   color: #6b7280;

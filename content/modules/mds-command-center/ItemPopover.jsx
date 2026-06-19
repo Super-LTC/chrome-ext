@@ -31,7 +31,7 @@ function isViewableEvidence(ev) {
   return vt === 'document' || vt === 'clinical-note' || vt === 'therapy-document' || isOrderEvidence(ev);
 }
 
-export function ItemPopover({ item, context, onClose }) {
+export function ItemPopover({ item, context, onClose, onAgree, onDismiss, dismissing }) {
   const mdsItem = item?.mdsItem;
   const categoryKey = item?.categoryKey;
   const { data, loading, error } = useItemDetail(mdsItem, categoryKey, context);
@@ -273,6 +273,9 @@ export function ItemPopover({ item, context, onClose }) {
                 detectionItem={item}
                 mdsItem={mdsItem}
                 onViewSource={handleViewSource}
+                onAgree={onAgree ? () => onAgree(data) : undefined}
+                onDismiss={onDismiss ? (reason) => onDismiss(data, reason) : undefined}
+                dismissing={dismissing}
               />
             )}
           </div>

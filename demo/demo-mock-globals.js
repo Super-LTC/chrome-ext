@@ -221,9 +221,18 @@ export function installGlobalMocks() {
     assessmentId: '4860265'
   };
 
-  // ── Navigation stubs ──
+  // ── Navigation ──
+  // Real app jumps the MDS form to the item. The captured demo page already
+  // contains every item wrapper, so the faithful analog is to scroll it into
+  // view and flash a highlight — making "Go to {code}" a live action, not a
+  // console stub.
   window.navigateToMDSItem = (item) => {
-    console.log('[DemoMock] navigateToMDSItem:', item);
+    const code = typeof item === 'string' ? item : (item?.mdsItem || item?.code || '');
+    const el = code && document.getElementById(`${code}_wrapper`);
+    if (!el) { console.log('[DemoMock] navigateToMDSItem: no wrapper for', code); return; }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('super-highlight');
+    setTimeout(() => el.classList.remove('super-highlight'), 2000);
   };
 
   // ── PDPMAnalyzerLauncher (used by MDSCommandCenter to open PDPM) ──
