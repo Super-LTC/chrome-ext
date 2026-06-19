@@ -6,7 +6,8 @@
 }
 .driver-popover.super-tour .driver-popover-title { font-size: 15px; font-weight: 700; color: #1e1b4b; }
 .driver-popover.super-tour .driver-popover-description { font-size: 13px; color: #374151; line-height: 1.5; }
-.driver-popover.super-tour .driver-popover-progress-text { color: #6b7280; font-size: 11px; }
+/* Hidden — the TourChrome top bar shows real cross-page progress instead. */
+.driver-popover.super-tour .driver-popover-progress-text { display: none; }
 .driver-popover.super-tour .driver-popover-navigation-btns button {
   background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border: none;
   border-radius: 8px; padding: 7px 14px; font-weight: 600; text-shadow: none;

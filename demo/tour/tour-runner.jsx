@@ -50,11 +50,16 @@ async function renderStep(index) {
 
   const isNext = step.advance === 'next';
   drv = driver({
-    showProgress: true,
-    progressText: `Step {{current}} of {{total}}`,
+    // Each step is its own single-step driver instance, so driver.js's built-in
+    // progress would always read "Step 1 of 1". The TourChrome top bar shows the
+    // real progress instead, so disable driver's own.
+    showProgress: false,
     popoverClass: 'super-tour',
     allowClose: false,
     overlayColor: 'rgba(17, 24, 39, 0.55)',
+    // Single-step config uses the "done" button; label it "Next" so next-mode
+    // steps read naturally instead of "Done" mid-tour.
+    doneBtnText: 'Next',
     // Wire Next BEFORE drive() so driver.js v1.4 binds the handler reliably.
     onNextClick: isNext ? () => advance() : undefined,
     steps: [{
