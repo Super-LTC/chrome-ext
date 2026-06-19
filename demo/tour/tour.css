@@ -47,6 +47,18 @@
   box-shadow: 0 2px 14px rgba(49, 46, 129, 0.16);
   border-bottom: 1px solid rgba(99, 102, 241, 0.18);
 }
+
+/* Reserve space for the bar so it pushes content down instead of overlaying
+   it. Keyed to the bar being present (only while the tour is active). The
+   captured page body gets top padding, and viewport-centred Super modals are
+   inset below the bar so their headers never hide behind it. */
+html:has(.super-tour-bar) body { padding-top: 48px; }
+html:has(.super-tour-bar) .cc-pop__backdrop {
+  align-items: flex-start;
+  padding-top: 56px;
+  box-sizing: border-box;
+}
+html:has(.super-tour-bar) .cc-pop { max-height: calc(100vh - 72px); }
 .super-tour-bar-fill {
   height: 3px;
   background: linear-gradient(90deg, #818cf8, #4f46e5);
