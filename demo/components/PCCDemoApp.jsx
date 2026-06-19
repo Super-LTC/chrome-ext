@@ -117,15 +117,19 @@ export function PCCDemoApp() {
       '#super-chat-panel', '.super-chat-panel',
       '#super-menu-panel', '.super-menu-panel',
       '#notesModal',
-      // Captured care plan HTML ships with the baked-in vanilla FAB markup
-      // — hide it so only the Preact <SuperDemoFab> shows.
-      '#super-bubbles-container',
       // NOTE: do NOT hide .super-modal here — the Preact FeedbackModal uses
       // that class. Vanilla legacy modals attached before mount have their
       // own ids (#superModal, #notesModal) which we hide above.
     ];
     selectors.forEach(sel => {
       document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; });
+    });
+    // Captured pages (e.g. care plan) can ship a baked-in vanilla FAB that also
+    // uses #super-bubbles-container. Hide ONLY those — never the Preact
+    // <SuperDemoFab>, which renders inside #super-demo-root.
+    const demoRoot = document.getElementById('super-demo-root');
+    document.querySelectorAll('#super-bubbles-container').forEach(el => {
+      if (!demoRoot || !demoRoot.contains(el)) el.style.display = 'none';
     });
   }, []);
 

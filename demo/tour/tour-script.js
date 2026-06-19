@@ -1,10 +1,28 @@
 // demo/tour/tour-script.js
 //
-// Guided tour steps. Kept deliberately tight (~15 steps) — a prospect should
-// feel the product, not slog through it. Each chapter is a few high-signal
-// beats. Step shape consumed by tour-runner.jsx:
+// Guided tour steps — a hands-on, click-through walkthrough. The prospect
+// actually clicks the real controls (care-plan shield, AI Code Patient, a code,
+// Add, Push, the badges, the FAB actions) so they feel the product. Step shape
+// consumed by tour-runner.jsx:
 //   { id, chapter, page, selector, title, body, placement, before, advance,
 //     event, autoMs, hud, phone }
+
+// Small shared helpers (function declarations are hoisted, so they're usable in
+// any step's `before`, regardless of where they're defined in this file).
+async function _waitFor(fn, ms = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const r = fn();
+    if (r) return r;
+    await new Promise((res) => setTimeout(res, 120));
+  }
+  return null;
+}
+
+function _closeMeddiagPanels() {
+  document.querySelectorAll('.super-meddiag-cp-backdrop, .super-meddiag-q-backdrop')
+    .forEach((el) => el.click());
+}
 
 // ── Chapter 1 — Smarter diagnosis coding (medical-diagnosis page) ──
 const CHAPTER_1 = [
@@ -15,29 +33,49 @@ const CHAPTER_1 = [
     selector: null,
     placement: 'center',
     title: 'Meet Jane Doe',
-    body: "Her MDS is signed and ready to submit. Watch Super double-check it against her chart in about two minutes — starting with her diagnoses.",
+    body: "Her MDS is signed and ready to submit. Let's watch Super double-check it against her chart — you drive, just click where it points.",
     advance: 'next',
   },
   {
-    id: 'c1-coverage',
+    id: 'c1-cp-shield',
     chapter: 1,
     page: 'medical-diagnosis',
-    selector: '.super-meddiag-th--cp',
+    selector: '.super-meddiag-chip--cp',
+    placement: 'left',
+    title: 'Care-plan coverage on every diagnosis',
+    body: 'Super grades each diagnosis against the care plan — green covered, amber partial, red gap. Click a shield to see the detail.',
+    advance: 'click',
+  },
+  {
+    id: 'c1-cp-panel',
+    chapter: 1,
+    page: 'medical-diagnosis',
+    selector: '.super-meddiag-cp-panel',
+    placement: 'left',
+    title: 'Exactly what covers it — and what is missing',
+    body: 'Super shows the matching care-plan focus and interventions, and flags the gap to fix. No hunting through the care plan.',
+    advance: 'next',
+  },
+  {
+    id: 'c1-aicode-btn',
+    chapter: 1,
+    page: 'medical-diagnosis',
+    selector: '.super-smart-code-btn',
     placement: 'bottom',
-    title: 'Coverage & queries, at a glance',
-    body: 'Super grades every diagnosis against the care plan (green = covered, amber = partial, red = gap) and tracks open physician queries — right inside the chart.',
-    advance: 'next',
+    title: 'Let Super suggest the codes',
+    body: 'Now click "AI Code Patient" — Super reads the whole chart and proposes the billable ICD-10 codes.',
+    advance: 'click',
+    before: async () => { _closeMeddiagPanels(); },
   },
   {
-    id: 'c1-icd-codes',
+    id: 'c1-icd-code',
     chapter: 1,
     page: 'medical-diagnosis',
-    selector: '.icd10-viewer__sidebar',
+    selector: '.icd10-sb__row',
     placement: 'right',
-    title: 'AI-suggested ICD-10 codes',
-    body: 'Super scans the chart and suggests billable ICD-10 codes, grouped by PDPM impact and ranked by what moves reimbursement.',
-    advance: 'next',
-    before: async () => window.__superDemoTour?.openIcd10?.(),
+    title: 'Codes ranked by PDPM impact',
+    body: 'Super ranks the suggestions by what moves reimbursement. Click a code to see its evidence.',
+    advance: 'click',
   },
   {
     id: 'c1-icd-evidence',
@@ -46,26 +84,34 @@ const CHAPTER_1 = [
     selector: '.icd10-viewer__evidence-panel',
     placement: 'left',
     title: 'Every code is backed by evidence',
-    body: 'Click any suggestion and Super shows the exact chart language behind it — defensible coding, not guesswork. You can estimate the PDPM impact before you commit a thing.',
+    body: 'Super pulls the exact chart language behind the code, highlighted in the source — defensible coding, not guesswork.',
     advance: 'next',
-    // Open the viewer if needed, then select the first suggested code so the
-    // evidence panel is populated.
-    before: async () => {
-      if (!document.querySelector('.icd10-viewer__sidebar')) window.__superDemoTour?.openIcd10?.();
-      const row = await _waitFor(() => document.querySelector('.icd10-sb__row'));
-      row?.click();
-      await _waitFor(() => {
-        const p = document.querySelector('.icd10-viewer__evidence-panel');
-        return p && p.textContent.trim().length > 40;
-      }, 4000);
-    },
+  },
+  {
+    id: 'c1-icd-add',
+    chapter: 1,
+    page: 'medical-diagnosis',
+    selector: '.icd10-evidence-panel__approve',
+    placement: 'left',
+    title: 'Stage the code',
+    body: 'Happy with it? Click Add to stage the code for PCC.',
+    advance: 'click',
+  },
+  {
+    id: 'c1-icd-push',
+    chapter: 1,
+    page: 'medical-diagnosis',
+    selector: '.icd10-viewer__push-btn',
+    placement: 'top',
+    title: 'Push it straight into PCC',
+    body: 'One click writes the staged codes back to PointClickCare — no retyping, no copy-paste.',
+    advance: 'click',
   },
 ];
 
 // ── Chapter 2 — Catch what the coder missed (mds-section-i page) ──
-// First step is on a different page; reaching it from Chapter 1 makes the
-// engine persist state and navigate to mds-section-i.html, where the tour
-// re-boots and resumes here.
+// First step is on a different page; reaching it from Chapter 1 makes the engine
+// persist state and navigate to mds-section-i.html, where the tour resumes here.
 const CHAPTER_2 = [
   {
     id: 'c2-legend',
@@ -74,7 +120,7 @@ const CHAPTER_2 = [
     selector: null,
     placement: 'center',
     title: 'Super checked every diagnosis',
-    body: 'On the MDS itself, Super badges each item: green = it agrees with the coding, red = it found something missed, yellow = ask the physician.',
+    body: 'On the MDS itself, Super badges each item: green = it agrees, red = it found something missed, yellow = ask the physician.',
     advance: 'next',
   },
   {
@@ -84,7 +130,7 @@ const CHAPTER_2 = [
     selector: '.super-badge[data-mds-item="I0200"]',
     placement: 'bottom',
     title: 'A missed diagnosis, flagged in red',
-    body: "Super flagged anemia that wasn't coded. Click the badge to see the evidence.",
+    body: "Super flagged anemia that wasn't coded. Click the badge to see why.",
     advance: 'click',
   },
   {
@@ -94,7 +140,7 @@ const CHAPTER_2 = [
     selector: '.cc-pop .sid__ev-card--clickable',
     placement: 'left',
     title: 'Super shows its work',
-    body: 'Hgb 9.8, ferritin 12, ferrous sulfate on the MAR — the evidence is right here. Click a source to see it in full.',
+    body: 'Hgb 9.8, ferritin 12, ferrous sulfate on the MAR — the evidence is right here. Click a source to open it.',
     advance: 'click',
   },
   {
@@ -117,7 +163,6 @@ const CHAPTER_2 = [
     body: 'Convinced? Click Agree and Super codes the anemia — a real NTA point recovered.',
     advance: 'click',
     hud: { ntaPoints: 1 },
-    // Return from the source split-view to the summary so Agree is in reach.
     before: async () => {
       const back = document.querySelector('.cc-pop__back-btn');
       if (back) {
@@ -171,7 +216,6 @@ const CHAPTER_3 = [
     body: "Here's the text that lands on their phone — with the supporting evidence one tap away.",
     advance: 'next',
     phone: { state: 'incoming' },
-    // Close the lingering evidence popover so the phone has the stage.
     before: async () => window.__superDemoTour?.closeOverlay?.(),
   },
   {
@@ -194,20 +238,10 @@ const CHAPTER_3 = [
 ];
 
 // ── Chapter 4 — See the revenue impact (mds-section-i page) ──
-// Open the MDS Command Center and expand Jane's assessment so the HIPPS change
-// + detections preview is visible. The Command Center exposes no hook to expand
-// a specific assessment, so we click her active card from `before` (idempotently)
-// and wait for her HIPPS line to render.
-async function _waitFor(fn, ms = 8000) {
-  const start = Date.now();
-  while (Date.now() - start < ms) {
-    const r = fn();
-    if (r) return r;
-    await new Promise((res) => setTimeout(res, 120));
-  }
-  return null;
-}
-
+// Open the MDS Command Center via the real FAB, then expand Jane's assessment so
+// the HIPPS change + detections preview is visible. The Command Center exposes
+// no hook to expand a specific assessment, so we click her active card from
+// `before` (idempotently) and wait for her HIPPS line to render.
 async function _openJanePreview() {
   window.__superDemoTour?.openOverlay?.('commandCenter');
   await _waitFor(() => document.querySelector('.mds-cc__card'));
@@ -228,13 +262,33 @@ async function _openJanePreview() {
 
 const CHAPTER_4 = [
   {
+    id: 'c4-fab',
+    chapter: 4,
+    page: 'mds-section-i',
+    selector: '.super-bubble__main',
+    placement: 'left',
+    title: 'Everything rolls up in Super',
+    body: "That's one resident's coding cleaned up. Click the Super button to see what it means for the numbers.",
+    advance: 'click',
+  },
+  {
+    id: 'c4-mds-action',
+    chapter: 4,
+    page: 'mds-section-i',
+    selector: '.super-dial__action--mds',
+    placement: 'left',
+    title: 'Open the MDS Command Center',
+    body: 'Click the MDS Command Center — your facility-wide view of every assessment in flight.',
+    advance: 'click',
+  },
+  {
     id: 'c4-hipps',
     chapter: 4,
     page: 'mds-section-i',
     selector: '.mds-cc__ss',
     placement: 'bottom',
-    title: "It rolls up to real dollars",
-    body: "In Super's Command Center, these catches move Jane from HIPPS KAQD to KBQE — added reimbursable acuity that pencils out to real dollars per day.",
+    title: 'It rolls up to real dollars',
+    body: "Jane's catches move her from HIPPS KAQD to KBQE — added reimbursable acuity that pencils out to real dollars per day.",
     advance: 'next',
     before: _openJanePreview,
     hud: { dollarsPerDay: 42 },
@@ -253,31 +307,37 @@ const CHAPTER_4 = [
 ];
 
 // ── Chapter 5 — Your whole facility (mds-section-i page) ──
-// Each step swaps to a different overlay via `before` (setOverlay replaces the
-// active overlay, so no explicit close is needed between them). finishTour
-// closes the last overlay so the end card lands on a clean page.
 const CHAPTER_5 = [
+  {
+    id: 'c5-fab',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: '.super-bubble__main',
+    placement: 'left',
+    title: 'Zoom out to the whole building',
+    body: 'Super is more than one resident. Click the Super button again.',
+    advance: 'click',
+    before: async () => window.__superDemoTour?.closeOverlay?.(),
+  },
+  {
+    id: 'c5-qm-action',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: '.super-dial__action--qm',
+    placement: 'left',
+    title: 'Open the QM Board',
+    body: 'Click the QM Board — every Quality Measure across the facility, in one place.',
+    advance: 'click',
+  },
   {
     id: 'c5-qm',
     chapter: 5,
     page: 'mds-section-i',
     selector: '.qmc-hero',
     placement: 'bottom',
-    title: 'Beyond one resident',
-    body: 'Zoom out: Super tracks every Quality Measure and predicts your Five-Star rating in real time.',
+    title: 'Five-Star, predicted in real time',
+    body: 'Super tracks every measure and forecasts your Five-Star rating — so you fix problems before they cost you.',
     advance: 'next',
-    before: async () => window.__superDemoTour?.openOverlay?.('qm'),
-  },
-  {
-    id: 'c5-24hr',
-    chapter: 5,
-    page: 'mds-section-i',
-    selector: '.thr__severity-strip',
-    placement: 'bottom',
-    title: 'Every shift, summarized',
-    body: "And the 24-hour report turns each shift's changes into a clean clinical summary — so nothing gets lost in handoff.",
-    advance: 'next',
-    before: async () => window.__superDemoTour?.openOverlay?.('24hr'),
   },
 ];
 
