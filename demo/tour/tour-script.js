@@ -232,8 +232,97 @@ const CHAPTER_3 = [
   },
 ];
 
+// ── Chapter 4 — MDS Command Center / PDPM impact (mds-section-i page) ──
+// Every finding from the earlier chapters rolls up into the PDPM picture. We
+// open Super's MDS Command Center, then expand Jane's assessment to surface the
+// HIPPS change and the "would change HIPPS" detections that drive revenue.
+//
+// The Command Center exposes no hook to expand a specific assessment, so the
+// HIPPS/detection steps click Jane's active card from `before` (idempotently —
+// only if her preview isn't already open) and wait for her HIPPS line to render.
+async function _waitFor(fn, ms = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const r = fn();
+    if (r) return r;
+    await new Promise((res) => setTimeout(res, 120));
+  }
+  return null;
+}
+
+// Open the Command Center and expand Jane Doe's active (non-completed)
+// assessment so the HIPPS line + detections preview is visible.
+async function _openJanePreview() {
+  window.__superDemoTour?.openOverlay?.('commandCenter');
+  await _waitFor(() => document.querySelector('.mds-cc__card'));
+  // If Jane's HIPPS line is already showing, don't re-click (that would toggle
+  // the card shut).
+  const janeOpen = () => {
+    const ss = document.querySelector('.mds-cc__ss');
+    return ss && /KAQD/.test(ss.textContent);
+  };
+  if (janeOpen()) return;
+  const jane = await _waitFor(() =>
+    [...document.querySelectorAll('.mds-cc__card')].find((c) => {
+      const n = c.querySelector('.mds-cc__card-name');
+      return n && /Doe, Jane/.test(n.textContent) && !/Completed/.test(c.textContent);
+    })
+  );
+  jane?.click();
+  await _waitFor(janeOpen);
+}
+
+const CHAPTER_4 = [
+  {
+    id: 'c4-open',
+    chapter: 4,
+    page: 'mds-section-i',
+    selector: '.mds-cc__stats-strip',
+    placement: 'bottom',
+    title: 'Where it all adds up',
+    body: "Open Super's MDS Command Center — every finding rolls up into the PDPM picture for the whole facility.",
+    advance: 'next',
+    before: async () => window.__superDemoTour?.openOverlay?.('commandCenter'),
+  },
+  {
+    id: 'c4-hipps',
+    chapter: 4,
+    page: 'mds-section-i',
+    selector: '.mds-cc__ss',
+    placement: 'left',
+    title: "Jane's HIPPS moves",
+    body: 'These catches move Jane from HIPPS KAQD to KBQE — added reimbursable acuity that pencils out to real dollars per day.',
+    advance: 'next',
+    before: _openJanePreview,
+    hud: { dollarsPerDay: 42 },
+  },
+  {
+    id: 'c4-detections',
+    chapter: 4,
+    page: 'mds-section-i',
+    selector: '.mds-cc__ps-items',
+    placement: 'left',
+    title: 'Each catch is a revenue opportunity',
+    body: 'Malnutrition, diabetes with PVD, IV medications — each item is backed by chart evidence. Click any to drill in.',
+    advance: 'next',
+    before: _openJanePreview,
+  },
+  {
+    id: 'c4-close',
+    chapter: 4,
+    page: 'mds-section-i',
+    selector: null,
+    placement: 'center',
+    title: "That's the loop",
+    body: 'From a single missed code to facility-wide reimbursement — Super closes the gap end to end.',
+    advance: 'next',
+    before: async () => window.__superDemoTour?.closeOverlay?.(),
+  },
+];
+
 export const STEPS = [
   ...CHAPTER_1,
   ...CHAPTER_2,
   ...CHAPTER_3,
+  ...CHAPTER_4,
 ];
