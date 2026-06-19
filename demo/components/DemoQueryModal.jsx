@@ -8,6 +8,7 @@
  * Mounted by PCCDemoApp; triggered via window.QuerySendModal.show().
  */
 import { useState, useEffect, useRef } from 'preact/hooks';
+import { setTourState } from '../tour/tour-state.js';
 
 export function DemoQueryModal({ queryData, onClose }) {
   const [step, setStep] = useState(1);
@@ -71,6 +72,14 @@ export function DemoQueryModal({ queryData, onClose }) {
         aiGeneratedNote: noteText
       });
       await window.QueryAPI.sendQuery(query.id, [selectedPractitioner.id], noteText);
+      // Guided tour: surface the chosen doctor on the phone mockup, then signal
+      // the c3-send step to advance. Additive — no effect outside the tour.
+      try {
+        const doctorName = selectedPractitioner.name
+          || `${selectedPractitioner.firstName || ''} ${selectedPractitioner.lastName || ''}`.trim();
+        if (doctorName) setTourState({ doctorName });
+      } catch {}
+      window.dispatchEvent(new CustomEvent('tour:query-sent'));
       setSuccess(true);
       setTimeout(() => {
         onClose();

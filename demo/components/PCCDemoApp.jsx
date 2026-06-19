@@ -80,6 +80,8 @@ export function PCCDemoApp() {
   const [carePlanModal, setCarePlanModal] = useState(null); // { defaultMode: 'initial' | 'comprehensive' }
   const toastTimer = useRef(null);
   const injectedBadges = useRef([]);
+  // Keeps the latest resolveBadge available to the (mount-only) tour hook below.
+  const resolveBadgeRef = useRef(null);
 
   // ── Guided tour overlay openers (additive; consumed by demo/tour/tour-runner.jsx) ──
   useEffect(() => {
@@ -87,6 +89,9 @@ export function PCCDemoApp() {
       openOverlay: (name) => setOverlay(name),       // 'commandCenter' | 'qm' | '24hr' | 'coverage' | 'feedback' | 'chat'
       closeOverlay: () => { setOverlay(null); setPopoverItem(null); },
       openPopover: (code) => window.dispatchEvent(new CustomEvent('demo:badge-click', { detail: { code } })),
+      // Guided tour (Chapter 3): mark a Section I badge resolved once the
+      // physician signs the query back. Mirrors the Agree/Disagree path.
+      resolveBadge: (code, decision = 'agree') => resolveBadgeRef.current?.(code, decision),
     };
     return () => { delete window.__superDemoTour; };
   }, []);
@@ -375,6 +380,8 @@ export function PCCDemoApp() {
       if (hasNote) badge.title = note.trim();
     }
   }, []);
+
+  resolveBadgeRef.current = resolveBadge;
 
   const handleItemAgree = useCallback((data) => {
     const code = data?.item?.mdsItem || popoverItem?.mdsItem;

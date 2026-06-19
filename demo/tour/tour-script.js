@@ -124,7 +124,116 @@ const CHAPTER_2 = [
   },
 ];
 
+// ── Chapter 3 — Physician query + phone mockup (mds-section-i page) ──
+// The UTI item needs a doctor's sign-off. We walk the query flow end-to-end,
+// then show what the physician receives on a phone mockup, and finally resolve
+// the badge once they "sign" it back.
+const CHAPTER_3 = [
+  {
+    id: 'c3-uti-badge',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: '.super-badge[data-mds-item="I2300"]',
+    placement: 'bottom',
+    title: 'This one needs a doctor',
+    body: "UTI is supported by the chart, but it needs a physician's sign-off before it can be coded. Click the badge.",
+    advance: 'click',
+  },
+  {
+    id: 'c3-query-btn',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: '.cc-pop .sid__btn--primary',
+    placement: 'top',
+    title: 'Super already drafted the query',
+    body: 'No blank form — Super wrote the clarification note with the evidence attached. Click Query Physician.',
+    advance: 'click',
+  },
+  {
+    id: 'c3-query-review',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: '.dqm__textarea',
+    placement: 'left',
+    title: 'Review the note',
+    body: 'This is the note the physician sees — editable, but ready to go. Continue when you’re happy.',
+    advance: 'next',
+  },
+  {
+    id: 'c3-query-next',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: '.dqm__footer .dqm__btn--primary',
+    placement: 'top',
+    title: 'On to the physician',
+    body: 'Click Next to pick who signs it.',
+    advance: 'click',
+  },
+  {
+    id: 'c3-query-pract',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: '.dqm__pract-list',
+    placement: 'left',
+    title: 'Pick the attending',
+    body: 'Choose the physician — Super attaches all the supporting evidence automatically.',
+    advance: 'click',
+  },
+  {
+    id: 'c3-send',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: '.dqm__footer .dqm__btn--primary',
+    placement: 'top',
+    title: 'Send it',
+    body: 'Send the query — the doctor gets a text instantly. No phone calls, no faxes.',
+    advance: 'event',
+    event: 'tour:query-sent',
+  },
+  {
+    id: 'c3-phone-incoming',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: null,
+    placement: 'center',
+    title: 'What the doctor receives',
+    body: "Here's the text (and an email) that lands on the physician's phone — with the evidence one tap away.",
+    advance: 'next',
+    phone: { state: 'incoming' },
+  },
+  {
+    id: 'c3-phone-typing',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: null,
+    placement: 'center',
+    title: 'They review and reply',
+    body: 'Because the evidence is right there, they respond in seconds.',
+    advance: 'auto',
+    autoMs: 1800,
+    phone: { state: 'typing' },
+  },
+  {
+    id: 'c3-phone-signed',
+    chapter: 3,
+    page: 'mds-section-i',
+    selector: null,
+    placement: 'center',
+    title: 'Signed — and it flows back',
+    body: 'The diagnosis is confirmed and flows straight back into the MDS. The badge resolves automatically.',
+    advance: 'next',
+    phone: { state: 'signed' },
+    before: async () => {
+      window.__superDemoTour?.resolveBadge?.('I2300', 'agree');
+      window.dispatchEvent(new CustomEvent('demo:toast', {
+        detail: { type: 'success', message: 'UTI confirmed by physician — coded' },
+      }));
+    },
+  },
+];
+
 export const STEPS = [
   ...CHAPTER_1,
   ...CHAPTER_2,
+  ...CHAPTER_3,
 ];
