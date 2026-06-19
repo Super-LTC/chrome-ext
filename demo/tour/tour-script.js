@@ -320,9 +320,72 @@ const CHAPTER_4 = [
   },
 ];
 
+// ── Chapter 5 — Facility features: QM Board / 24-hour Report / Care Plan ──
+// We've followed one resident end to end; now we zoom out to the whole
+// facility. Each step swaps to a different overlay via its `before` (setOverlay
+// replaces the active overlay, so no explicit close is needed between them).
+// The final step closes everything so the tour ends with a clean page.
+const CHAPTER_5 = [
+  {
+    id: 'c5-qm-open',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: '.qmc-hero',
+    placement: 'left',
+    title: 'Beyond one resident: your whole facility',
+    body: 'Super tracks every Quality Measure and your Five-Star rating in real time.',
+    advance: 'next',
+    before: async () => window.__superDemoTour?.openOverlay?.('qm'),
+  },
+  {
+    id: 'c5-qm-measure',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: '.qmf-clearrow',
+    placement: 'left',
+    title: 'Down to the resident driving it',
+    body: "Each measure shows where you stand and what's driving it.",
+    advance: 'next',
+  },
+  {
+    id: 'c5-24hr',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: '.thr__severity-strip',
+    placement: 'bottom',
+    title: 'The last shift, at a glance',
+    body: "The 24-hour report turns the last shift's changes into a clean clinical summary.",
+    advance: 'next',
+    before: async () => window.__superDemoTour?.openOverlay?.('24hr'),
+  },
+  {
+    id: 'c5-coverage',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: '.cpc__score',
+    placement: 'left',
+    title: 'Nothing falls through the cracks',
+    body: 'And care-plan coverage shows which diagnoses still need a care plan.',
+    advance: 'next',
+    before: async () => window.__superDemoTour?.openOverlay?.('coverage'),
+  },
+  {
+    id: 'c5-close',
+    chapter: 5,
+    page: 'mds-section-i',
+    selector: null,
+    placement: 'center',
+    title: 'One resident, or the whole building',
+    body: 'From a single missed code to facility-wide quality and reimbursement — Super has the whole picture covered.',
+    advance: 'next',
+    before: async () => window.__superDemoTour?.closeOverlay?.(),
+  },
+];
+
 export const STEPS = [
   ...CHAPTER_1,
   ...CHAPTER_2,
   ...CHAPTER_3,
   ...CHAPTER_4,
+  ...CHAPTER_5,
 ];
