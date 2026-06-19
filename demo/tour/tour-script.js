@@ -76,6 +76,55 @@ const CHAPTER_1 = [
   },
 ];
 
+// ── Chapter 2 — Section I active-diagnosis detection (mds-section-i page) ──
+// The first step lives on a different page, so reaching it from Chapter 1
+// makes the engine persist state and navigate to mds-section-i.html, where the
+// tour re-boots and resumes here.
+const CHAPTER_2 = [
+  {
+    id: 'c2-legend',
+    chapter: 2,
+    page: 'mds-section-i',
+    selector: null,
+    placement: 'center',
+    title: 'Super checked every diagnosis',
+    body: 'Green = Super agrees with the coding. Red = Super found something the coder missed. Yellow = ask the physician.',
+    advance: 'next',
+  },
+  {
+    id: 'c2-anemia-badge',
+    chapter: 2,
+    page: 'mds-section-i',
+    selector: '.super-badge[data-mds-item="I0200"]',
+    placement: 'bottom',
+    title: 'A missed diagnosis, flagged in red',
+    body: "Super flagged anemia that wasn't coded. Click the badge to see why.",
+    advance: 'click',
+  },
+  {
+    id: 'c2-anemia-evidence',
+    chapter: 2,
+    page: 'mds-section-i',
+    selector: '.cc-pop .sid__step-summary',
+    placement: 'left',
+    title: 'Backed by the chart',
+    body: 'Hgb 9.8, ferritin 12, and ferrous sulfate on the MAR all point to iron-deficiency anemia — a real NTA point worth money that the coding missed.',
+    advance: 'next',
+  },
+  {
+    id: 'c2-anemia-agree',
+    chapter: 2,
+    page: 'mds-section-i',
+    selector: '.sid__btn--agree',
+    placement: 'top',
+    title: 'Resolve it in one click',
+    body: 'Agree and Super resolves it — one click.',
+    advance: 'click',
+    hud: { ntaPoints: 1 },
+  },
+];
+
 export const STEPS = [
   ...CHAPTER_1,
+  ...CHAPTER_2,
 ];
