@@ -126,7 +126,11 @@ async function renderStep(index) {
     cleanupFns.push(() => clearTimeout(t));
   }
 
-  if (step.hud) setTourState({ hud: { ...getTourState().hud, ...step.hud } });
+  if (step.hud) {
+    const nextHud = { ...getTourState().hud, ...step.hud };
+    setTourState({ hud: nextHud });
+    window.dispatchEvent(new CustomEvent('tour:hud', { detail: { hud: nextHud } }));
+  }
 }
 
 function advance() {
