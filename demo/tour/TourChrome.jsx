@@ -6,10 +6,50 @@
 import { useState, useEffect } from 'preact/hooks';
 import { startTour, exitTour } from './tour-runner.jsx';
 import { getTourState } from './tour-state.js';
+import { ValueHud } from './ValueHud.jsx';
 
 const SMark = () => (
   <span className="super-tour-mark" aria-hidden="true">S</span>
 );
+
+const EndCard = ({ hud, onRestart }) => {
+  const nta = hud?.ntaPoints || 0;
+  const dollars = hud?.dollarsPerDay || 0;
+  return (
+    <div className="super-tour-end-backdrop">
+      <div className="super-tour-end">
+        <div className="super-tour-end-mark"><SMark /></div>
+        <h2 className="super-tour-end-title">That's Super.</h2>
+        <p className="super-tour-end-tally">
+          Super found <strong>{nta} NTA point{nta === 1 ? '' : 's'}</strong> and
+          {' '}<strong>~${dollars}/day</strong> in supported acuity for one resident.
+        </p>
+        <ul className="super-tour-end-bullets">
+          <li><span className="super-tour-end-check">✓</span> Smarter, defensible diagnosis coding</li>
+          <li><span className="super-tour-end-check">✓</span> Physician queries answered in seconds</li>
+          <li><span className="super-tour-end-check">✓</span> Facility-wide quality measures, in real time</li>
+        </ul>
+        <div className="super-tour-end-actions">
+          <a
+            className="super-tour-btn super-tour-btn-primary"
+            href="https://superltc.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Book a demo
+          </a>
+          <button
+            type="button"
+            className="super-tour-btn super-tour-btn-ghost"
+            onClick={onRestart}
+          >
+            Restart tour
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const TourChrome = () => {
   // active = a tour is running on this page; offer = show the start card.
@@ -17,25 +57,28 @@ export const TourChrome = () => {
   const [active, setActive] = useState(!!initial.active);
   const [offered, setOffered] = useState(false);
   const [step, setStep] = useState({ index: initial.index || 0, total: 0 });
+  const [ended, setEnded] = useState(null); // null | { hud }
 
   useEffect(() => {
     const onOffer = () => { setOffered(true); };
     const onStep = (e) => {
       setActive(true);
       setOffered(false);
+      setEnded(null);
       setStep({ index: e.detail?.index ?? 0, total: e.detail?.total ?? 0 });
     };
-    const onEnd = () => { setActive(false); setOffered(false); };
+    const onFinished = (e) => { setActive(false); setOffered(false); setEnded({ hud: e.detail?.hud }); };
+    const onExited = () => { setActive(false); setOffered(false); setEnded(null); };
 
     window.addEventListener('tour:offer', onOffer);
     window.addEventListener('tour:step', onStep);
-    window.addEventListener('tour:finished', onEnd);
-    window.addEventListener('tour:exited', onEnd);
+    window.addEventListener('tour:finished', onFinished);
+    window.addEventListener('tour:exited', onExited);
     return () => {
       window.removeEventListener('tour:offer', onOffer);
       window.removeEventListener('tour:step', onStep);
-      window.removeEventListener('tour:finished', onEnd);
-      window.removeEventListener('tour:exited', onEnd);
+      window.removeEventListener('tour:finished', onFinished);
+      window.removeEventListener('tour:exited', onExited);
     };
   }, []);
 
@@ -94,6 +137,15 @@ export const TourChrome = () => {
             </div>
           </div>
         </div>
+      )}
+
+      <ValueHud />
+
+      {ended && (
+        <EndCard
+          hud={ended.hud}
+          onRestart={() => { setEnded(null); startTour(); }}
+        />
       )}
     </div>
   );
