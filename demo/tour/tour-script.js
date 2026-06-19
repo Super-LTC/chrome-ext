@@ -389,3 +389,13 @@ export const STEPS = [
   ...CHAPTER_4,
   ...CHAPTER_5,
 ];
+
+// Chapter title-card copy, keyed by chapter number. Shown as a brief branded
+// interstitial whenever the tour enters a new chapter.
+export const CHAPTERS = {
+  1: 'Smarter diagnosis coding',
+  2: 'Catch what the coder missed',
+  3: 'Close the loop with the physician',
+  4: 'See the revenue impact',
+  5: 'Your whole facility',
+};

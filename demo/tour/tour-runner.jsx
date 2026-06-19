@@ -3,12 +3,16 @@ import { driver } from 'driver.js';
 import { render } from 'preact';
 import 'driver.js/dist/driver.css';
 import './tour.css';
-import { STEPS } from './tour-script.js';
+import { STEPS, CHAPTERS } from './tour-script.js';
 import { getTourState, setTourState, resetTour, currentPageId } from './tour-state.js';
 import { PhoneMock } from './PhoneMock.jsx';
 
 let drv = null;
 let cleanupFns = [];
+// Tracks the chapter of the most recently rendered step so we can detect chapter
+// transitions (and show a title card). Persisted in tour state so a cross-page
+// hop still shows the card if the chapter changed across the navigation.
+let lastRenderedChapter = null;
 
 // ── Phone mockup (Chapter 3) ──
 // A step may carry a `phone` field, e.g. `phone: { state: 'incoming' }`. We
@@ -33,6 +37,50 @@ function showPhone(phone) {
 function clearPhone() {
   const el = phoneContainer(false);
   if (el) { render(null, el); el.remove(); }
+}
+
+// ── Chapter title card ──
+// A brief full-screen branded interstitial shown when the tour enters a new
+// chapter. Purely visual: it appears, holds ~1.4s, fades out, then resolves so
+// the actual step renders. It does NOT touch the step's advance mode.
+function showChapterCard(chapter) {
+  return new Promise((resolve) => {
+    const title = CHAPTERS[chapter];
+    if (!title) { resolve(); return; }
+    const card = document.createElement('div');
+    card.className = 'super-tour-chapter-card';
+    card.innerHTML = `
+      <div class="super-tour-chapter-inner">
+        <div class="super-tour-chapter-mark"><span class="super-tour-mark" aria-hidden="true">S</span></div>
+        <div class="super-tour-chapter-eyebrow">Chapter ${chapter}</div>
+        <div class="super-tour-chapter-title"></div>
+      </div>`;
+    card.querySelector('.super-tour-chapter-title').textContent = title;
+    document.body.appendChild(card);
+    // force reflow so the enter transition runs
+    void card.offsetWidth;
+    card.classList.add('is-in');
+    const hold = setTimeout(() => {
+      card.classList.remove('is-in');
+      card.classList.add('is-out');
+      const done = setTimeout(() => { card.remove(); resolve(); }, 360);
+      cleanupFns.push(() => { clearTimeout(done); card.remove(); });
+    }, 1400);
+    cleanupFns.push(() => { clearTimeout(hold); card.remove(); });
+  });
+}
+
+// Inject the Super "S" narrator avatar into the driver popover header so each
+// step reads as "spoken" by Super.
+function injectNarrator() {
+  const titleEl = document.querySelector('.driver-popover.super-tour .driver-popover-title');
+  if (titleEl && !titleEl.querySelector('.super-tour-narrator')) {
+    const avatar = document.createElement('span');
+    avatar.className = 'super-tour-narrator super-tour-mark';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = 'S';
+    titleEl.prepend(avatar);
+  }
 }
 
 function clearStep() {
@@ -68,6 +116,17 @@ async function renderStep(index) {
   clearStep();
   const step = STEPS[index];
   if (!step) { finishTour(); return; }
+
+  // Chapter title card: show when entering a new chapter. Falls back to the
+  // persisted chapter so a cross-page hop still detects the transition.
+  const prevChapter = lastRenderedChapter != null
+    ? lastRenderedChapter
+    : getTourState().lastChapter;
+  if (step.chapter != null && step.chapter !== prevChapter) {
+    await showChapterCard(step.chapter);
+  }
+  lastRenderedChapter = step.chapter;
+  setTourState({ lastChapter: step.chapter });
 
   if (typeof step.before === 'function') {
     try { await step.before(); } catch (e) { console.warn('[tour] before() failed', e); }
@@ -105,6 +164,7 @@ async function renderStep(index) {
     }],
   });
   drv.drive();
+  injectNarrator();
 
   // Tell the tour chrome (progress bar) which step we're on.
   window.dispatchEvent(new CustomEvent('tour:step', {
@@ -143,13 +203,18 @@ function finishTour() {
   clearStep();
   clearPhone();
   try { drv?.destroy(); } catch {}
-  // End card handled in Phase 8; for now just deactivate.
+  const hud = getTourState().hud;
   setTourState({ active: false });
-  window.dispatchEvent(new CustomEvent('tour:finished'));
+  // TourChrome renders the branded end card from this event's hud tally.
+  window.dispatchEvent(new CustomEvent('tour:finished', { detail: { hud } }));
 }
 
-export function startTour() { resetTour(); goToIndex(0); }
-export function exitTour() { clearStep(); clearPhone(); try { drv?.destroy(); } catch {}; resetTour(); window.dispatchEvent(new CustomEvent('tour:exited')); }
+export function startTour() {
+  resetTour();
+  lastRenderedChapter = null;
+  goToIndex(0);
+}
+export function exitTour() { clearStep(); clearPhone(); try { drv?.destroy(); } catch {}; lastRenderedChapter = null; resetTour(); window.dispatchEvent(new CustomEvent('tour:exited')); }
 
 // Called by each demo entry on every page load.
 export function bootTour() {

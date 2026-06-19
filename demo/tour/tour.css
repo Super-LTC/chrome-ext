@@ -3,8 +3,21 @@
   background: #fff; border-radius: 14px; padding: 0;
   box-shadow: 0 24px 60px rgba(49, 46, 129, 0.28); max-width: 360px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  animation: superTourPopIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.driver-popover.super-tour .driver-popover-title { font-size: 15px; font-weight: 700; color: #1e1b4b; }
+@keyframes superTourPopIn { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+/* driver.js animates the spotlight cutout; smooth its movement */
+.driver-popover.super-tour { transition: transform 0.2s ease; }
+.driver-overlay, .driver-stage { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important; }
+.driver-popover.super-tour .driver-popover-title {
+  font-size: 15px; font-weight: 700; color: #1e1b4b;
+  display: flex; align-items: center; gap: 9px;
+}
+/* Narrator avatar prepended into the popover title */
+.super-tour-narrator {
+  width: 24px; height: 24px; border-radius: 7px; font-size: 13px;
+  flex: 0 0 24px; box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35);
+}
 .driver-popover.super-tour .driver-popover-description { font-size: 13px; color: #374151; line-height: 1.5; }
 /* Hidden — the TourChrome top bar shows real cross-page progress instead. */
 .driver-popover.super-tour .driver-popover-progress-text { display: none; }
