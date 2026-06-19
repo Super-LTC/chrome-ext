@@ -29,15 +29,36 @@ const CHAPTER_1 = [
     advance: 'next',
   },
   {
-    id: 'c1-icd',
+    id: 'c1-icd-codes',
     chapter: 1,
     page: 'medical-diagnosis',
     selector: '.icd10-viewer__sidebar',
     placement: 'right',
     title: 'AI-suggested ICD-10 codes',
-    body: 'Super scans the chart and suggests billable ICD-10 codes grouped by PDPM impact — each backed by the exact chart language, with the reimbursement effect estimated before you commit.',
+    body: 'Super scans the chart and suggests billable ICD-10 codes, grouped by PDPM impact and ranked by what moves reimbursement.',
     advance: 'next',
     before: async () => window.__superDemoTour?.openIcd10?.(),
+  },
+  {
+    id: 'c1-icd-evidence',
+    chapter: 1,
+    page: 'medical-diagnosis',
+    selector: '.icd10-viewer__evidence-panel',
+    placement: 'left',
+    title: 'Every code is backed by evidence',
+    body: 'Click any suggestion and Super shows the exact chart language behind it — defensible coding, not guesswork. You can estimate the PDPM impact before you commit a thing.',
+    advance: 'next',
+    // Open the viewer if needed, then select the first suggested code so the
+    // evidence panel is populated.
+    before: async () => {
+      if (!document.querySelector('.icd10-viewer__sidebar')) window.__superDemoTour?.openIcd10?.();
+      const row = await _waitFor(() => document.querySelector('.icd10-sb__row'));
+      row?.click();
+      await _waitFor(() => {
+        const p = document.querySelector('.icd10-viewer__evidence-panel');
+        return p && p.textContent.trim().length > 40;
+      }, 4000);
+    },
   },
 ];
 
@@ -67,15 +88,43 @@ const CHAPTER_2 = [
     advance: 'click',
   },
   {
+    id: 'c2-anemia-evidence',
+    chapter: 2,
+    page: 'mds-section-i',
+    selector: '.cc-pop .sid__ev-card--clickable',
+    placement: 'left',
+    title: 'Super shows its work',
+    body: 'Hgb 9.8, ferritin 12, ferrous sulfate on the MAR — the evidence is right here. Click a source to see it in full.',
+    advance: 'click',
+  },
+  {
+    id: 'c2-anemia-source',
+    chapter: 2,
+    page: 'mds-section-i',
+    selector: '.cc-pop__viewer',
+    placement: 'left',
+    title: 'The source, right where you are',
+    body: 'No chart-digging — the actual MAR opens inline, showing ferrous sulfate given three times a day. Proof in one click.',
+    advance: 'next',
+  },
+  {
     id: 'c2-anemia-agree',
     chapter: 2,
     page: 'mds-section-i',
     selector: '.sid__btn--agree',
     placement: 'top',
-    title: 'Backed by the chart — resolve in one click',
-    body: 'Hgb 9.8, ferritin 12, and ferrous sulfate on the MAR all point to iron-deficiency anemia — a real NTA point the coding missed. Click Agree and Super resolves it.',
+    title: 'Resolve it in one click',
+    body: 'Convinced? Click Agree and Super codes the anemia — a real NTA point recovered.',
     advance: 'click',
     hud: { ntaPoints: 1 },
+    // Return from the source split-view to the summary so Agree is in reach.
+    before: async () => {
+      const back = document.querySelector('.cc-pop__back-btn');
+      if (back) {
+        back.click();
+        await _waitFor(() => document.querySelector('.sid__btn--agree'));
+      }
+    },
   },
 ];
 

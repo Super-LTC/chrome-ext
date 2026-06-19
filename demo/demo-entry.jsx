@@ -60,6 +60,7 @@ import { Icd10QueryFlow } from '../content/modules/icd10-query-flow/Icd10QueryFl
 import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confirmation/DiagnosisConfirmationDialog.jsx';
 import { bootTour } from './tour/tour-runner.jsx';
 import { TourChrome } from './tour/TourChrome.jsx';
+import { installResponsiveFit } from './demo-responsive-fit.js';
 
 // Expose preact + components globally so icd10-viewer.js uses synchronous
 // globals instead of dynamic JSX imports (which would 404 against static bundles).
@@ -78,6 +79,7 @@ function boot() {
     document.body.appendChild(root);
   }
 
+  installResponsiveFit();
   render(<DemoApp />, root);
 
   let tourRoot = document.getElementById('super-tour-chrome');

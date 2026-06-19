@@ -59,6 +59,7 @@ import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confir
 import { initDraggableOverlays } from '../content/utils/draggable-overlay.js';
 import { bootTour } from './tour/tour-runner.jsx';
 import { TourChrome } from './tour/TourChrome.jsx';
+import { installResponsiveFit } from './demo-responsive-fit.js';
 
 // Expose preact + components globally so the vanilla icd10-viewer.js can
 // mount Preact trees without dynamic JSX imports in the classic-script load path.
@@ -76,6 +77,7 @@ function boot() {
     document.body.appendChild(root);
   }
 
+  installResponsiveFit();
   render(<PCCDemoApp />, root);
   initDraggableOverlays();
 
