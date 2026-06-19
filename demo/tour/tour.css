@@ -106,3 +106,140 @@
 /* pulse ring on the spotlighted target */
 @keyframes superTourPulse { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.55); } 70% { box-shadow: 0 0 0 10px rgba(99,102,241,0); } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); } }
 .super-tour-pulse { animation: superTourPulse 1.6s ease-out infinite; border-radius: 6px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Phone mockup (Chapter 3 — physician query notification)
+   Fixed bottom-right, slides up. Namespaced under .super-tour-phone.
+   ────────────────────────────────────────────────────────────────────────── */
+.super-tour-phone {
+  position: fixed;
+  right: 28px;
+  bottom: 24px;
+  z-index: 2147483646; /* above driver.js overlay so the phone is always visible */
+  pointer-events: none; /* purely illustrative */
+  animation: superTourPhoneUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes superTourPhoneUp {
+  from { opacity: 0; transform: translateY(48px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.super-tour-phone-frame {
+  width: 300px;
+  background: #f2f2f7;
+  border-radius: 42px;
+  padding: 11px;
+  border: 11px solid #1c1c1e;
+  box-shadow:
+    0 30px 70px rgba(17, 24, 39, 0.45),
+    0 8px 20px rgba(17, 24, 39, 0.25),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+}
+
+/* Status bar */
+.super-tour-phone-statusbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 22px 8px;
+  font-size: 13px; font-weight: 600; color: #1c1c1e;
+}
+.super-tour-phone-status-icons { display: inline-flex; align-items: center; gap: 5px; }
+.stp-bars, .stp-wifi, .stp-batt { display: inline-block; background: #1c1c1e; }
+.stp-bars { width: 16px; height: 10px; clip-path: polygon(0 60%,18% 60%,18% 100%,0 100%,
+  27% 40%,45% 40%,45% 100%,27% 100%, 54% 22%,72% 22%,72% 100%,54% 100%, 82% 0,100% 0,100% 100%,82% 100%); }
+.stp-wifi { width: 15px; height: 11px; border-radius: 2px;
+  -webkit-mask: radial-gradient(circle at 50% 100%, #000 0 2px, transparent 2.5px),
+    radial-gradient(circle at 50% 100%, transparent 0 4px, #000 4px 6px, transparent 6.5px),
+    radial-gradient(circle at 50% 100%, transparent 0 7px, #000 7px 9px, transparent 9.5px);
+  -webkit-mask-composite: source-over; }
+.stp-batt { width: 22px; height: 11px; border-radius: 3px; position: relative; }
+.stp-batt::after { content: ''; position: absolute; right: -3px; top: 3px; width: 2px; height: 5px;
+  background: #1c1c1e; border-radius: 0 1px 1px 0; }
+
+.super-tour-phone-notch {
+  position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
+  width: 96px; height: 22px; background: #1c1c1e; border-radius: 0 0 16px 16px;
+}
+
+/* Conversation header */
+.super-tour-phone-convo-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px 10px;
+  background: rgba(249, 249, 249, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 0.5px solid rgba(60, 60, 67, 0.18);
+}
+.super-tour-phone-avatar {
+  width: 36px; height: 36px; border-radius: 50%; flex: 0 0 36px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff; font-weight: 800; font-size: 16px;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4);
+}
+.super-tour-phone-convo-name { font-size: 14px; font-weight: 700; color: #1c1c1e; line-height: 1.1; }
+.super-tour-phone-convo-sub { font-size: 11px; color: #8e8e93; margin-top: 2px; }
+
+/* Messages */
+.super-tour-phone-messages {
+  background: #fff;
+  padding: 16px 14px 22px;
+  min-height: 168px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.super-tour-phone-bubble {
+  max-width: 78%;
+  padding: 9px 13px;
+  font-size: 13.5px; line-height: 1.4;
+  border-radius: 18px;
+  word-break: break-word;
+  animation: superTourBubbleIn 0.32s ease both;
+}
+@keyframes superTourBubbleIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.super-tour-phone-bubble--in {
+  align-self: flex-start;
+  background: #e9e9eb; color: #1c1c1e;
+  border-bottom-left-radius: 5px;
+}
+.super-tour-phone-bubble--out {
+  align-self: flex-end;
+  background: linear-gradient(180deg, #34c759, #248a3d);
+  color: #fff;
+  border-bottom-right-radius: 5px;
+  box-shadow: 0 2px 6px rgba(36, 138, 61, 0.3);
+}
+.super-tour-phone-bubble--typing {
+  align-self: flex-end;
+  background: #e9e9eb;
+  border-bottom-right-radius: 5px;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 11px 14px;
+}
+.super-tour-phone-bubble--typing .stp-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #8e8e93;
+  animation: superTourTypingDot 1.2s infinite ease-in-out;
+}
+.super-tour-phone-bubble--typing .stp-dot:nth-child(2) { animation-delay: 0.18s; }
+.super-tour-phone-bubble--typing .stp-dot:nth-child(3) { animation-delay: 0.36s; }
+@keyframes superTourTypingDot {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.super-tour-phone-stamp {
+  align-self: flex-end;
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 2px;
+  font-size: 11px; font-weight: 700; color: #248a3d;
+  letter-spacing: 0.02em; text-transform: uppercase;
+  animation: superTourBubbleIn 0.32s ease 0.12s both;
+}
+.super-tour-phone-stamp .stp-check {
+  display: grid; place-items: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #34c759; color: #fff; font-size: 10px;
+}

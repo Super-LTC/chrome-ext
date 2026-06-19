@@ -1,12 +1,39 @@
 // demo/tour/tour-runner.jsx
 import { driver } from 'driver.js';
+import { render } from 'preact';
 import 'driver.js/dist/driver.css';
 import './tour.css';
 import { STEPS } from './tour-script.js';
 import { getTourState, setTourState, resetTour, currentPageId } from './tour-state.js';
+import { PhoneMock } from './PhoneMock.jsx';
 
 let drv = null;
 let cleanupFns = [];
+
+// ── Phone mockup (Chapter 3) ──
+// A step may carry a `phone` field, e.g. `phone: { state: 'incoming' }`. We
+// render PhoneMock into a dedicated #super-tour-phone container (mirroring how
+// TourChrome is mounted) and unmount it when the tour moves past the phone
+// chapter or ends.
+function phoneContainer(create) {
+  let el = document.getElementById('super-tour-phone');
+  if (!el && create) {
+    el = document.createElement('div');
+    el.id = 'super-tour-phone';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function showPhone(phone) {
+  const el = phoneContainer(true);
+  render(<PhoneMock state={phone.state} doctorName={getTourState().doctorName} message={phone.message} />, el);
+}
+
+function clearPhone() {
+  const el = phoneContainer(false);
+  if (el) { render(null, el); el.remove(); }
+}
 
 function clearStep() {
   cleanupFns.forEach((fn) => { try { fn(); } catch {} });
@@ -45,6 +72,11 @@ async function renderStep(index) {
   if (typeof step.before === 'function') {
     try { await step.before(); } catch (e) { console.warn('[tour] before() failed', e); }
   }
+
+  // Phone mockup: show/update when this step declares one, clear when it moves
+  // past the phone chapter.
+  if (step.phone) showPhone(step.phone);
+  else clearPhone();
 
   const el = await waitForSelector(step.selector);
 
@@ -105,6 +137,7 @@ function advance() {
 
 function finishTour() {
   clearStep();
+  clearPhone();
   try { drv?.destroy(); } catch {}
   // End card handled in Phase 8; for now just deactivate.
   setTourState({ active: false });
@@ -112,7 +145,7 @@ function finishTour() {
 }
 
 export function startTour() { resetTour(); goToIndex(0); }
-export function exitTour() { clearStep(); try { drv?.destroy(); } catch {}; resetTour(); window.dispatchEvent(new CustomEvent('tour:exited')); }
+export function exitTour() { clearStep(); clearPhone(); try { drv?.destroy(); } catch {}; resetTour(); window.dispatchEvent(new CustomEvent('tour:exited')); }
 
 // Called by each demo entry on every page load.
 export function bootTour() {
