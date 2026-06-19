@@ -10,6 +10,7 @@ demo/jspdf.es.min-*.js
 demo/jspdf.plugin.autotable-*.js
 demo/purify.es-*.js
 demo/pcc-demo-entry-*.js
+demo/demo-entry-*.js
 installed-users.csv
 .env
 *.log
