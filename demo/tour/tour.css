@@ -365,3 +365,7 @@
 }
 .super-tour-end-actions { display: flex; flex-direction: column; gap: 10px; }
 .super-tour-end-actions .super-tour-btn { text-decoration: none; display: block; text-align: center; }
+/* The CTA is an <a>; captured PCC pages set a global link color that would
+   otherwise override the button text. Force the button colors on top. */
+.super-tour-end-actions a.super-tour-btn-primary { color: #fff !important; }
+.super-tour-end-actions .super-tour-btn-ghost { color: #4b5563 !important; }

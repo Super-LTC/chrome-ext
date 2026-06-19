@@ -139,6 +139,16 @@ async function renderStep(index) {
 
   const el = await waitForSelector(step.selector);
 
+  // Center the target in the viewport before spotlighting so edge elements
+  // (far-right table columns, items low on the page) don't push the popover
+  // off-screen. Give the scroll a moment to settle before driver.js measures.
+  if (el) {
+    try {
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      await new Promise((r) => setTimeout(r, 240));
+    } catch {}
+  }
+
   const isNext = step.advance === 'next';
   drv = driver({
     // Each step is its own single-step driver instance, so driver.js's built-in
@@ -203,6 +213,8 @@ function finishTour() {
   clearStep();
   clearPhone();
   try { drv?.destroy(); } catch {}
+  // Close any overlay the last chapter left open so the end card lands clean.
+  try { window.__superDemoTour?.closeOverlay?.(); } catch {}
   const hud = getTourState().hud;
   setTourState({ active: false });
   // TourChrome renders the branded end card from this event's hud tally.
@@ -214,7 +226,7 @@ export function startTour() {
   lastRenderedChapter = null;
   goToIndex(0);
 }
-export function exitTour() { clearStep(); clearPhone(); try { drv?.destroy(); } catch {}; lastRenderedChapter = null; resetTour(); window.dispatchEvent(new CustomEvent('tour:exited')); }
+export function exitTour() { clearStep(); clearPhone(); try { drv?.destroy(); } catch {}; try { window.__superDemoTour?.closeOverlay?.(); } catch {}; lastRenderedChapter = null; resetTour(); window.dispatchEvent(new CustomEvent('tour:exited')); }
 
 // Called by each demo entry on every page load.
 export function bootTour() {
