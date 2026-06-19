@@ -40,6 +40,8 @@ import '../content/css/diagnosis-query-modal.css';
 import '../content/css/ard-estimator.css';
 import '../content/css/ai-chat.css';
 import '../content/css/qm-board.css';
+import '../content/css/qm-command-center.css';
+import '../content/css/ftag-prevention.css';
 import '../content/css/24hr-report.css';
 import './demo-chat.css';
 import './demo-document-viewer.css';
@@ -56,6 +58,7 @@ import { Sidebar as ICD10SidebarComponent } from '../content/modules/icd10-sideb
 import { ArdEstimator } from '../content/modules/ard-estimator/ArdEstimator.jsx';
 import { Icd10QueryFlow } from '../content/modules/icd10-query-flow/Icd10QueryFlow.jsx';
 import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confirmation/DiagnosisConfirmationDialog.jsx';
+import { bootTour } from './tour/tour-runner.jsx';
 
 // Expose preact + components globally so icd10-viewer.js uses synchronous
 // globals instead of dynamic JSX imports (which would 404 against static bundles).
@@ -76,6 +79,7 @@ function boot() {
 
   render(<DemoApp />, root);
   console.log('[Demo] DemoApp mounted');
+  setTimeout(() => { try { bootTour(); } catch (e) { console.warn('[tour] boot failed', e); } }, 400);
 }
 
 if (document.readyState === 'loading') {
