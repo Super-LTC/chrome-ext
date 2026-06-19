@@ -9,6 +9,7 @@ import { MDSCommandCenter } from '../../content/modules/mds-command-center/MDSCo
 import { PDPMAnalyzer } from '../../content/modules/pdpm-analyzer/PDPMAnalyzer.jsx';
 import { QueryItemsPage } from '../../content/modules/query-items/QueryItemsPage.jsx';
 import { QMBoard } from '../../content/modules/qm-board/QMBoard.jsx';
+import { FtagBoard } from '../../content/modules/ftag-prevention/FtagBoard.jsx';
 import { TwentyFourHourReport } from '../../content/modules/twenty-four-hour-report/TwentyFourHourReport.jsx';
 import { FeedbackModal } from '../../content/modules/feedback/FeedbackModal.jsx';
 import { CoveragePanel } from '../../content/modules/care-plan-coverage/CoveragePanel.jsx';
@@ -33,6 +34,24 @@ export function DemoApp() {
   const [overlay, setOverlay] = useState(null);
   const [pdpmContext, setPdpmContext] = useState(null);
   const [queryContext, setQueryContext] = useState(null);
+
+  // ── Guided tour overlay openers (additive; consumed by demo/tour/tour-runner.jsx) ──
+  useEffect(() => {
+    window.__superDemoTour = {
+      // DemoApp FAB overlays: 'commandCenter' | 'qm' | 'ftag' | '24hr' | 'chat' | 'feedback' | 'coverage'
+      openOverlay: (name) => setOverlay(name),
+      closeOverlay: () => setOverlay(null),
+      // ICD-10 Viewer is the vanilla global mounted on medical-diagnosis.html.
+      openIcd10: () => {
+        if (window.ICD10Viewer && typeof window.ICD10Viewer.open === 'function') {
+          window.ICD10Viewer.open();
+        } else {
+          console.warn('[tour] ICD10Viewer not available');
+        }
+      },
+    };
+    return () => { delete window.__superDemoTour; };
+  }, []);
 
   // Hide the vanilla demo-super-menu.js FAB/panel so the real Preact FAB
   // doesn't fight it on the page.
@@ -115,6 +134,14 @@ export function DemoApp() {
         />
       )}
 
+      {overlay === 'ftag' && (
+        <FtagBoard
+          facilityName={FACILITY_NAME}
+          orgSlug={ORG_SLUG}
+          onClose={handleClose}
+        />
+      )}
+
       {overlay === '24hr' && (
         <TwentyFourHourReport
           facilityName={FACILITY_NAME}
@@ -188,11 +215,13 @@ export function DemoApp() {
       <SuperDemoFab
         onOpenMds={() => setOverlay('commandCenter')}
         onOpenQm={() => setOverlay('qm')}
+        onOpenFtag={() => setOverlay('ftag')}
         onOpen24hr={() => setOverlay('24hr')}
         onOpenChat={() => setOverlay('chat')}
         onOpenFeedback={() => setOverlay('feedback')}
         onOpenCoverage={() => setOverlay('coverage')}
         showCoverage={true}
+        showFtag={true}
       />
     </>
   );

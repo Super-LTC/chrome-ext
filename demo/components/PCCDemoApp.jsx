@@ -23,6 +23,11 @@ import { DemoQueryModal } from './DemoQueryModal.jsx';
 import { DemoChatOverlay } from './DemoChatOverlay.jsx';
 import { SuperDemoFab } from './SuperDemoFab.jsx';
 import { isCarePlanDemoPage } from '../demo-care-plan-wire.js';
+// Section I badges are driven by the SAME fixtures the popover reads, scored by
+// the SAME logic the live overlay uses — so a badge and its evidence panel can
+// never disagree about "code it" vs "don't code".
+import { SECTION_I_DETAIL, sectionIAiAnswer } from '../demo-section-i-fixtures.js';
+import { determineStatus, formatAnswerForDisplay } from '../../content/super-menu/mds-badge.js';
 
 const FACILITY_NAME = 'SUNNY MEADOWS DEMO FACILITY';
 const ORG_SLUG = 'demo-org';
@@ -36,27 +41,6 @@ function scrapeCarePlanPatientName() {
   const m = txt.match(/Resident:\s*([^\n(]+)/);
   return m ? m[1].replace(/DO NOT USE/i, '').trim() : DEMO_PATIENT_NAME;
 }
-
-// ── AI's verdict for each MDS Section I item ──
-// AI_VERDICT[code] = 'Yes' | 'No' | 'review'
-// The badge status (match/mismatch/review) is computed at injection time by
-// comparing AI_VERDICT to the PCC-form selected answer, so red/green badges
-// are always consistent with what's actually checked on the page.
-//
-// Items not listed here default to AI agreeing with PCC (always match).
-const AI_VERDICT = {
-  // Confirmed mismatches — AI found chart evidence that PCC missed
-  I0200: 'Yes',  // Anemia — labs show low hemoglobin
-  I0600: 'Yes',  // Heart Failure — echo + lasix
-  I4200: 'Yes',  // MDRO — culture/sensitivity flag
-  I5400: 'Yes',  // Alzheimer's — donepezil + dx note
-  I5800: 'Yes',  // Anxiety — sertraline daily
-
-  // Items needing clinician review (evidence ambiguous)
-  I0900: 'review',  // PVD — partial evidence
-  I4300: 'review',  // Diabetes w/ PVD — depends on I0900 confirmation
-  I5500: 'review',  // MS — historical mention only
-};
 
 // ── Toast component ──
 
@@ -96,6 +80,16 @@ export function PCCDemoApp() {
   const [carePlanModal, setCarePlanModal] = useState(null); // { defaultMode: 'initial' | 'comprehensive' }
   const toastTimer = useRef(null);
   const injectedBadges = useRef([]);
+
+  // ── Guided tour overlay openers (additive; consumed by demo/tour/tour-runner.jsx) ──
+  useEffect(() => {
+    window.__superDemoTour = {
+      openOverlay: (name) => setOverlay(name),       // 'commandCenter' | 'qm' | '24hr' | 'coverage' | 'feedback' | 'chat'
+      closeOverlay: () => { setOverlay(null); setPopoverItem(null); },
+      openPopover: (code) => window.dispatchEvent(new CustomEvent('demo:badge-click', { detail: { code } })),
+    };
+    return () => { delete window.__superDemoTour; };
+  }, []);
 
   // ── Care plan modal opener (registered for sync click wire in demo-care-plan-wire.js) ──
   useEffect(() => {
@@ -139,7 +133,7 @@ export function PCCDemoApp() {
       setPopoverItem({
         mdsItem: code,
         categoryKey: code,
-        itemName: getItemLabel(code),
+        itemName: SECTION_I_DETAIL[code]?.item?.itemName || code,
       });
     }
     window.addEventListener('demo:badge-click', handleBadgeClick);
@@ -156,69 +150,34 @@ export function PCCDemoApp() {
     const wrappers = document.querySelectorAll('[id^="I"][id$="_wrapper"]');
     const badges = [];
 
+    // ── Icon + answer markup mirrors the live overlay's injectBadge() exactly. ──
+    const ICONS = { match: '✓', mismatch: '✗', review: '⚠', info: 'ℹ' };
+
     for (const wrapper of wrappers) {
       const code = wrapper.id.replace('_wrapper', '');
       const label = wrapper.querySelector('.question_label');
       if (!label) continue;
       if (label.querySelector('.super-badge')) continue;
 
-      const pcc = readPccAnswer(wrapper);
-      if (pcc === null) continue;  // skip items with no answer captured
+      // Only badge items Super actually analyzed — same as production, where the
+      // backend returns results for a subset of items, not every question.
+      const aiAnswer = sectionIAiAnswer(code);
+      if (!aiAnswer) continue;
 
-      const aiVerdict = AI_VERDICT[code] || pcc;  // default: AI agrees with PCC
-      let status, text;
-      if (aiVerdict === 'review') {
-        status = 'review';
-        text = '! Super: Needs Review';
-      } else if (aiVerdict === pcc) {
-        status = 'match';
-        text = `+ Super: ${aiVerdict}`;
-      } else {
-        status = 'mismatch';
-        text = `X Super: ${aiVerdict}`;
-      }
+      const pcc = readPccAnswer(wrapper);  // 'Yes' | 'No' | null
+      // Shared logic: identical to content/mds-overlay.js determineStatus().
+      const status = determineStatus(aiAnswer, pcc);
+      const answerText = formatAnswerForDisplay(aiAnswer.answer);
 
       const badge = document.createElement('span');
       badge.className = `super-badge super-badge--${status}`;
-      badge.textContent = text;
       badge.setAttribute('data-mds-item', code);
-      const def = { status };
-      badge.style.cssText = `
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 3px 8px; border-radius: 4px; font-size: 11px;
-        font-weight: 600; cursor: pointer; margin-left: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-        vertical-align: middle;
-      `;
-
-      if (def.status === 'match') {
-        badge.style.background = '#dcfce7';
-        badge.style.color = '#166534';
-        badge.style.border = '1px solid #86efac';
-      } else if (def.status === 'mismatch') {
-        badge.style.background = '#fee2e2';
-        badge.style.color = '#991b1b';
-        badge.style.border = '1px solid #fca5a5';
-      } else if (def.status === 'review') {
-        badge.style.background = '#fef3c7';
-        badge.style.color = '#92400e';
-        badge.style.border = '1px solid #fcd34d';
-      }
+      badge.innerHTML = `<span class="super-badge__icon">${ICONS[status] || ''}</span> Super: ${answerText}`;
 
       badge.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('demo:badge-click', { detail: { code } }));
-      });
-
-      badge.addEventListener('mouseenter', () => {
-        badge.style.transform = 'translateY(-1px)';
-        badge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.12)';
-      });
-      badge.addEventListener('mouseleave', () => {
-        badge.style.transform = '';
-        badge.style.boxShadow = '';
       });
 
       const bTag = label.querySelector(':scope > b');
@@ -395,6 +354,44 @@ export function PCCDemoApp() {
     setPopoverItem(null);
   }, []);
 
+  // ── Agree / Disagree on a Section I item ──
+  // Mirrors the live overlay: a decision marks the badge "dismissed" (agree →
+  // struck-through match, disagree → struck-through "Dismissed" with the note
+  // cue) and shows a confirmation toast. The captured page is static, so unlike
+  // production we don't click the PCC answer link — the visual resolution is
+  // what the demo needs to convey.
+  const resolveBadge = useCallback((code, decision, note) => {
+    const badge = document.querySelector(`.super-badge[data-mds-item="${code}"]`);
+    if (!badge) return;
+    const ai = sectionIAiAnswer(code);
+    const answerText = ai ? formatAnswerForDisplay(ai.answer) : '';
+    if (decision === 'agree') {
+      badge.className = 'super-badge super-badge--match super-badge--dismissed';
+      badge.innerHTML = `<span class="super-badge__icon">✓</span> Super: ${answerText}`;
+    } else {
+      badge.className = 'super-badge super-badge--mismatch super-badge--dismissed super-badge--disagreed';
+      const hasNote = !!(note && note.trim());
+      badge.innerHTML = `<span class="super-badge__icon">✗</span> Dismissed${hasNote ? ' <span class="super-badge__note-cue" aria-hidden="true">💬</span>' : ''}`;
+      if (hasNote) badge.title = note.trim();
+    }
+  }, []);
+
+  const handleItemAgree = useCallback((data) => {
+    const code = data?.item?.mdsItem || popoverItem?.mdsItem;
+    const name = SECTION_I_DETAIL[code]?.item?.itemName || code;
+    resolveBadge(code, 'agree');
+    window.dispatchEvent(new CustomEvent('demo:toast', { detail: { type: 'success', message: `Agreed — ${name} marked resolved` } }));
+    handlePopoverClose();
+  }, [popoverItem, resolveBadge, handlePopoverClose]);
+
+  const handleItemDismiss = useCallback((data, reason) => {
+    const code = data?.item?.mdsItem || popoverItem?.mdsItem;
+    const name = SECTION_I_DETAIL[code]?.item?.itemName || code;
+    resolveBadge(code, 'disagree', reason);
+    window.dispatchEvent(new CustomEvent('demo:toast', { detail: { type: 'info', message: `Dismissed — feedback recorded for ${name}` } }));
+    handlePopoverClose();
+  }, [popoverItem, resolveBadge, handlePopoverClose]);
+
   return (
     <>
       {/* ── MDS Command Center ── */}
@@ -451,6 +448,8 @@ export function PCCDemoApp() {
           item={popoverItem}
           context={{ assessmentId: '4860265' }}
           onClose={handlePopoverClose}
+          onAgree={handleItemAgree}
+          onDismiss={handleItemDismiss}
         />
       )}
 
@@ -536,53 +535,6 @@ function readPccAnswer(wrapper) {
     if (/^no/i.test(txt)) return 'No';
   }
   return null;
-}
-
-// ── Item label map ──
-
-function getItemLabel(code) {
-  const labels = {
-    I0100: 'Cancer',
-    I0200: 'Anemia',
-    I0300: 'Atrial Fibrillation / Dysrhythmias',
-    I0400: 'Coronary Artery Disease (CAD)',
-    I0500: 'Deep Venous Thrombosis (DVT)',
-    I0600: 'Heart Failure',
-    I0700: 'Hypertension (HTN)',
-    I0800: 'Orthostatic Hypotension',
-    I0900: 'Peripheral Vascular Disease (PVD)',
-    I1100: 'Cirrhosis',
-    I1200: 'GERD',
-    I2000: 'Diabetes Mellitus (DM)',
-    I2100: 'Thyroid Disorder',
-    I2300: 'Anemia',
-    I2900: 'Drug/Medication Induced Depression',
-    I4200: 'Multi-Drug Resistant Organism (MDRO)',
-    I4300: 'Diabetes with PVD',
-    I4400: 'Pneumonia',
-    I4500: 'Septicemia',
-    I4900: 'Schizophrenia',
-    I5100: 'Hemiplegia / Hemiparesis',
-    I5200: 'Paraplegia',
-    I5250: 'Quadriplegia',
-    I5300: 'Aphasia',
-    I5350: 'Non-Alzheimer Dementia',
-    I5400: 'Alzheimer Disease',
-    I5500: 'Multi-Sclerosis',
-    I5600: 'Malnutrition',
-    I5700: 'Schizophrenia',
-    I5800: 'Anxiety Disorder',
-    I5900: 'PTSD',
-    I5950: 'Psychotic Disorder',
-    I6000: 'Asthma / COPD / CLD',
-    I6100: 'Respiratory Failure',
-    I6200: 'None of the Above',
-    I6300: 'None of the Above',
-    I6500: 'Seizure / Epilepsy',
-    I7900: 'None of the Above',
-    I8000: 'Additional Diagnoses',
-  };
-  return labels[code] || `MDS Item ${code}`;
 }
 
 // ── Styles ──
