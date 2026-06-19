@@ -48,23 +48,31 @@ async function renderStep(index) {
 
   const el = await waitForSelector(step.selector);
 
+  const isNext = step.advance === 'next';
   drv = driver({
     showProgress: true,
     progressText: `Step {{current}} of {{total}}`,
     popoverClass: 'super-tour',
     allowClose: false,
     overlayColor: 'rgba(17, 24, 39, 0.55)',
+    // Wire Next BEFORE drive() so driver.js v1.4 binds the handler reliably.
+    onNextClick: isNext ? () => advance() : undefined,
     steps: [{
       element: el || undefined,
       popover: {
         title: step.title,
         description: step.body,
         side: step.placement || 'bottom',
-        showButtons: step.advance === 'next' ? ['next'] : [],
+        showButtons: isNext ? ['next'] : [],
       },
     }],
   });
   drv.drive();
+
+  // Tell the tour chrome (progress bar) which step we're on.
+  window.dispatchEvent(new CustomEvent('tour:step', {
+    detail: { index, total: STEPS.length },
+  }));
 
   if (el && step.advance === 'click') {
     el.classList.add('super-tour-pulse');
@@ -76,9 +84,6 @@ async function renderStep(index) {
     const onEvent = () => { window.removeEventListener(step.event, onEvent); advance(); };
     window.addEventListener(step.event, onEvent);
     cleanupFns.push(() => window.removeEventListener(step.event, onEvent));
-  } else if (step.advance === 'next') {
-    // driver.js Next button → poll for its destroy, or wire onNextClick
-    drv.setConfig?.({ onNextClick: () => advance() });
   } else if (step.advance === 'auto') {
     const t = setTimeout(() => advance(), step.autoMs || 1600);
     cleanupFns.push(() => clearTimeout(t));
@@ -108,7 +113,12 @@ export function exitTour() { clearStep(); try { drv?.destroy(); } catch {}; rese
 export function bootTour() {
   const st = getTourState();
   const params = new URLSearchParams(location.search);
-  if (!st.active && params.get('tour') === '1') { startTour(); return; }
+  if (!st.active && params.get('tour') === '1') {
+    // Show the start card (via TourChrome) and let the prospect opt in.
+    // The card calls startTour() when "Take the guided tour" is clicked.
+    window.dispatchEvent(new CustomEvent('tour:offer'));
+    return;
+  }
   if (st.active) {
     // Resume — but only if the saved step belongs to this page (else navigate).
     goToIndex(st.index);
