@@ -59,6 +59,7 @@ import { ArdEstimator } from '../content/modules/ard-estimator/ArdEstimator.jsx'
 import { Icd10QueryFlow } from '../content/modules/icd10-query-flow/Icd10QueryFlow.jsx';
 import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confirmation/DiagnosisConfirmationDialog.jsx';
 import { bootTour } from './tour/tour-runner.jsx';
+import { TourChrome } from './tour/TourChrome.jsx';
 
 // Expose preact + components globally so icd10-viewer.js uses synchronous
 // globals instead of dynamic JSX imports (which would 404 against static bundles).
@@ -78,6 +79,15 @@ function boot() {
   }
 
   render(<DemoApp />, root);
+
+  let tourRoot = document.getElementById('super-tour-chrome');
+  if (!tourRoot) {
+    tourRoot = document.createElement('div');
+    tourRoot.id = 'super-tour-chrome';
+    document.body.appendChild(tourRoot);
+  }
+  render(<TourChrome />, tourRoot);
+
   console.log('[Demo] DemoApp mounted');
   setTimeout(() => { try { bootTour(); } catch (e) { console.warn('[tour] boot failed', e); } }, 400);
 }

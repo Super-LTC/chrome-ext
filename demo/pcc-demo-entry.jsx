@@ -58,6 +58,7 @@ import { Icd10QueryFlow } from '../content/modules/icd10-query-flow/Icd10QueryFl
 import { DiagnosisConfirmationDialog } from '../content/modules/diagnosis-confirmation/DiagnosisConfirmationDialog.jsx';
 import { initDraggableOverlays } from '../content/utils/draggable-overlay.js';
 import { bootTour } from './tour/tour-runner.jsx';
+import { TourChrome } from './tour/TourChrome.jsx';
 
 // Expose preact + components globally so the vanilla icd10-viewer.js can
 // mount Preact trees without dynamic JSX imports in the classic-script load path.
@@ -77,6 +78,15 @@ function boot() {
 
   render(<PCCDemoApp />, root);
   initDraggableOverlays();
+
+  let tourRoot = document.getElementById('super-tour-chrome');
+  if (!tourRoot) {
+    tourRoot = document.createElement('div');
+    tourRoot.id = 'super-tour-chrome';
+    document.body.appendChild(tourRoot);
+  }
+  render(<TourChrome />, tourRoot);
+
   console.log('[PCC Demo] PCCDemoApp mounted');
   setTimeout(() => { try { bootTour(); } catch (e) { console.warn('[tour] boot failed', e); } }, 400);
 }
