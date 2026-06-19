@@ -40,10 +40,12 @@ const CHAPTER_1 = [
     id: 'c1-cp-shield',
     chapter: 1,
     page: 'medical-diagnosis',
-    selector: '.super-meddiag-chip--cp',
+    // Target the one partially-covered diagnosis (amber) so the "gap to fix"
+    // detail lands; green/red shields work identically.
+    selector: '.super-meddiag-chip--cp-partial',
     placement: 'left',
     title: 'Care-plan coverage on every diagnosis',
-    body: 'Super grades each diagnosis against the care plan — green covered, amber partial, red gap. Click a shield to see the detail.',
+    body: 'Super grades each diagnosis against the care plan — green covered, amber partial, red gap. Click an amber shield to see what is missing.',
     advance: 'click',
   },
   {
