@@ -42,6 +42,7 @@ import '../content/css/clinical-notes-modal.css';
 import '../content/css/diagnosis-query-modal.css';
 import '../content/css/ard-estimator.css';
 import '../content/css/qm-board.css';
+import '../content/css/qm-command-center.css';
 import '../content/css/24hr-report.css';
 import '../content/css/ai-chat.css';
 import '../content/css/draggable-overlay.css';
