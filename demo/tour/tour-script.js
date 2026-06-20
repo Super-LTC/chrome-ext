@@ -308,7 +308,7 @@ const CHAPTER_4 = [
     chapter: 4,
     page: 'mds-section-i',
     selector: '.mds-cc__ss',
-    placement: 'bottom',
+    placement: 'top',
     title: 'It rolls up to real dollars',
     body: "Jane's catches move her from HIPPS KAQD to KBQE — added reimbursable acuity that pencils out to real dollars per day.",
     advance: 'next',

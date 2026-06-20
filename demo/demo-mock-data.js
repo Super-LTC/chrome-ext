@@ -303,13 +303,13 @@ export const DEMO_API_RESPONSES = {
         id: 'q-003',
         mdsAssessmentId: '4860265',
         patientName: 'Doe, Jane',
-        mdsItem: 'I4900',
-        mdsItemName: 'Schizophrenia',
+        mdsItem: 'I5600',
+        mdsItemName: 'Malnutrition',
         status: 'sent',
         sentAt: new Date(Date.now() - 2 * 86400000).toISOString(),
         ardDaysRemaining: 3,
         movesCaseMix: true,
-        assessmentPayment: { mode: 'cmi', delta: 0.24, current: { total: 1.20 }, potential: { total: 1.44 } },
+        assessmentPayment: { mode: 'cmi', delta: 0.30, current: { total: 1.20 }, potential: { total: 1.50 } },
         sentTo: [{ firstName: 'Demo', lastName: 'Provider', title: 'MD' }]
       },
       {
@@ -338,17 +338,6 @@ export const DEMO_API_RESPONSES = {
         movesCaseMix: false,
         assessmentPayment: null,
         sentTo: [{ firstName: 'Demo', lastName: 'Provider', title: 'MD' }]
-      },
-      {
-        id: 'q-001',
-        mdsAssessmentId: '4860265',
-        patientName: 'Doe, Jane',
-        mdsItem: 'I5600',
-        mdsItemName: 'Malnutrition',
-        status: 'pending',
-        ardDaysRemaining: 3,
-        movesCaseMix: true,
-        assessmentPayment: { mode: 'cmi', delta: 0.30, current: { total: 1.20 }, potential: { total: 1.50 } }
       }
     ],
 
@@ -520,11 +509,11 @@ export const DEMO_API_RESPONSES = {
       outstandingQueries: [
         {
           id: 'q-003',
-          mdsItem: 'I4900',
-          mdsItemName: 'Schizophrenia',
+          mdsItem: 'I5600',
+          mdsItemName: 'Malnutrition',
           status: 'sent',
           sentAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-          pdpmImpact: { wouldChangeHipps: false }
+          pdpmImpact: { wouldChangeHipps: true }
         }
       ],
       recentlySigned: [
@@ -2193,7 +2182,7 @@ export const DEMO_API_RESPONSES = {
           { code: 'F20.9', description: 'Schizophrenia, unspecified' }
         ],
         existingQuery: {
-          id: 'q-003',
+          id: 'q-103',
           status: 'sent',
           sentAt: new Date(Date.now() - 2 * 86400000).toISOString()
         }
