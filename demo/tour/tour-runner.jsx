@@ -31,7 +31,7 @@ function phoneContainer(create) {
 
 function showPhone(phone) {
   const el = phoneContainer(true);
-  render(<PhoneMock state={phone.state} doctorName={getTourState().doctorName} message={phone.message} />, el);
+  render(<PhoneMock state={phone.state} doctorName={getTourState().doctorName} message={phone.message} confirmText={phone.confirmText} />, el);
 }
 
 function clearPhone() {

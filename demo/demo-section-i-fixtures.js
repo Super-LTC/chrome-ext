@@ -22,7 +22,7 @@
  *   'needs_physician_query' → send a physician query    (badge stays yellow)
  *
  * Against the page's coded answers (all No except I0700/I2900/I6200 = Yes) this
- * produces: 4 red coding wins, 3 green confirmations, 4 yellow queries, 1 green
+ * produces: 3 red coding wins, 3 green confirmations, 5 yellow queries, 1 green
  * validated-negative.
  *
  * To extend to another section: add a sibling fixtures file and merge it in
@@ -64,8 +64,8 @@ export const SECTION_I_DETAIL = {
     item: {
       mdsItem: 'I5600', itemName: 'Malnutrition (protein/calorie)', section: 'I',
       description: 'I5600 — Malnutrition (protein or calorie) or at risk for malnutrition.',
-      status: 'code',
-      validation: { diagnosisCheck: { passed: true }, treatmentCheck: { passed: true } },
+      status: 'needs_physician_query',
+      validation: { diagnosisCheck: { passed: false }, treatmentCheck: { passed: true } },
       evidence: [
         { sourceType: 'progress-note', sourceId: 'doc-nutr-001', documentName: 'Nutrition Progress Note', displayName: 'Nutrition Progress Note — 01/22/2026', effectiveDate: '2026-01-22',
           quote: 'Weight Loss: 17 lbs (12.6%) in past 3 months. PO Intake: < 50% meals/est. needs. Moderate protein-calorie malnutrition diagnosed.',
@@ -88,7 +88,7 @@ export const SECTION_I_DETAIL = {
         { code: 'E46', description: 'Unspecified protein-calorie malnutrition' }
       ]
     },
-    diagnosisSummary: 'Nutrition assessment from 1/22 documents moderate protein-calorie malnutrition: 12.6% weight loss in 3 months, PO intake <50%, albumin 2.9, prealbumin 12. No malnutrition ICD-10 code on active problem list.',
+    diagnosisSummary: 'Nutrition assessment from 1/22 documents moderate protein-calorie malnutrition: 12.6% weight loss in 3 months, PO intake <50%, albumin 2.9, prealbumin 12. No malnutrition ICD-10 code on active problem list — recommend a physician query to confirm the diagnosis before coding.',
     treatmentSummary: 'Ensure Plus 8oz BID, fortified cereal 6oz QD, weekly weights, dietitian follow-up.',
     carePlan: {
       onCarePlan: true,

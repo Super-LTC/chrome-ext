@@ -7,7 +7,6 @@ import { useState, useEffect } from 'preact/hooks';
 import { startTour, exitTour } from './tour-runner.jsx';
 import { getTourState } from './tour-state.js';
 import { STEPS } from './tour-script.js';
-import { ValueHud } from './ValueHud.jsx';
 
 const SMark = () => (
   <span className="super-tour-mark" aria-hidden="true">S</span>
@@ -147,8 +146,6 @@ export const TourChrome = () => {
           </div>
         </div>
       )}
-
-      <ValueHud />
 
       {ended && (
         <EndCard

@@ -4,9 +4,10 @@
 // receives — an SMS query — and how they respond, all without leaving the demo.
 //
 // Props:
-//   state      — 'incoming' | 'typing' | 'signed'
-//   doctorName — chosen practitioner (defaults to 'Dr. Patel')
-//   message    — optional override for the SuperLTC bubble text
+//   state       — 'incoming' | 'typing' | 'signed'
+//   doctorName  — chosen practitioner (defaults to 'Dr. Patel')
+//   message     — optional override for the SuperLTC bubble text
+//   confirmText — optional override for the doctor's signed-confirmation bubble
 //
 // Rendered by the tour engine (tour-runner.jsx) into #super-tour-phone when a
 // step declares a `phone` field. Styles live under `.super-tour-phone` in
@@ -14,10 +15,10 @@
 
 const DEFAULT_DOCTOR = 'Dr. Patel';
 
-export const PhoneMock = ({ state = 'incoming', doctorName = DEFAULT_DOCTOR, message }) => {
+export const PhoneMock = ({ state = 'incoming', doctorName = DEFAULT_DOCTOR, message, confirmText }) => {
   const name = doctorName || DEFAULT_DOCTOR;
   const incomingText = message
-    || `${name}, you have a diagnosis query for Jane Doe (UTI). Tap to review →`;
+    || `${name}, you have a diagnosis query for Jane Doe (malnutrition). Tap to review →`;
 
   return (
     <div className="super-tour-phone" data-state={state}>
@@ -59,7 +60,7 @@ export const PhoneMock = ({ state = 'incoming', doctorName = DEFAULT_DOCTOR, mes
           {state === 'signed' && (
             <>
               <div className="super-tour-phone-bubble super-tour-phone-bubble--out">
-                ✓ Confirmed — UTI active
+                {confirmText || '✓ Confirmed — malnutrition active'}
               </div>
               <div className="super-tour-phone-stamp">
                 <span className="stp-check" aria-hidden="true">✓</span> Signed

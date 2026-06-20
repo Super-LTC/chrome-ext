@@ -178,13 +178,13 @@ const CHAPTER_2 = [
 // ── Chapter 3 — Close the loop with the physician (mds-section-i page) ──
 const CHAPTER_3 = [
   {
-    id: 'c3-uti-badge',
+    id: 'c3-mal-badge',
     chapter: 3,
     page: 'mds-section-i',
-    selector: '.super-badge[data-mds-item="I2300"]',
+    selector: '.super-badge[data-mds-item="I5600"]',
     placement: 'bottom',
     title: 'This one needs a doctor',
-    body: "UTI is supported by the chart, but it needs a physician's sign-off before coding. Click the badge.",
+    body: "Malnutrition is documented by the dietitian — 12.6% weight loss, low albumin — but it needs a physician's diagnosis before it can be coded. Click the badge.",
     advance: 'click',
   },
   {
@@ -249,11 +249,11 @@ const CHAPTER_3 = [
     title: 'Signed — and it flows back',
     body: 'They confirm in seconds, and the diagnosis flows straight back into the MDS. The badge resolves automatically.',
     advance: 'next',
-    phone: { state: 'signed' },
+    phone: { state: 'signed', confirmText: '✓ Confirmed — malnutrition active' },
     before: async () => {
-      window.__superDemoTour?.resolveBadge?.('I2300', 'agree');
+      window.__superDemoTour?.resolveBadge?.('I5600', 'agree');
       window.dispatchEvent(new CustomEvent('demo:toast', {
-        detail: { type: 'success', message: 'UTI confirmed by physician — coded' },
+        detail: { type: 'success', message: 'Malnutrition confirmed by physician — coded' },
       }));
     },
   },
