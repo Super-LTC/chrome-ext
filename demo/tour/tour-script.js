@@ -40,12 +40,12 @@ const CHAPTER_1 = [
     id: 'c1-cp-shield',
     chapter: 1,
     page: 'medical-diagnosis',
-    // Target the one partially-covered diagnosis (amber) so the "gap to fix"
-    // detail lands; green/red shields work identically.
-    selector: '.super-meddiag-chip--cp-partial',
+    // Target the first uncovered diagnosis (red) — the clearest gap: a coded
+    // diagnosis with no care plan at all.
+    selector: '.super-meddiag-chip--cp-missing',
     placement: 'left',
     title: 'Care-plan coverage on every diagnosis',
-    body: 'Super grades each diagnosis against the care plan — green covered, amber partial, red gap. Click an amber shield to see what is missing.',
+    body: 'Super grades each diagnosis against the care plan — green = covered, red = no care plan at all. Click the red shield to see the gap.',
     advance: 'click',
   },
   {
@@ -54,8 +54,8 @@ const CHAPTER_1 = [
     page: 'medical-diagnosis',
     selector: '.super-meddiag-cp-panel',
     placement: 'left',
-    title: 'The exact gap, spelled out',
-    body: "Sleep apnea has a care-plan focus (“Sleep r/t OSA”) but no CPAP-tolerance assessment linked. Super names the precise missing intervention — a survey risk you'd otherwise have to dig for.",
+    title: 'A coded diagnosis with no care plan',
+    body: "Morbid obesity is on her diagnosis list, but nothing in the care plan addresses it. Super flags it — and tells you exactly what to add — before a surveyor finds it.",
     advance: 'next',
   },
   {
