@@ -54,8 +54,8 @@ const CHAPTER_1 = [
     page: 'medical-diagnosis',
     selector: '.super-meddiag-cp-panel',
     placement: 'left',
-    title: 'Exactly what covers it — and what is missing',
-    body: 'Super shows the matching care-plan focus and interventions, and flags the gap to fix. No hunting through the care plan.',
+    title: 'The exact gap, spelled out',
+    body: "Sleep apnea has a care-plan focus (“Sleep r/t OSA”) but no CPAP-tolerance assessment linked. Super names the precise missing intervention — a survey risk you'd otherwise have to dig for.",
     advance: 'next',
   },
   {
