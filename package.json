@@ -19,7 +19,8 @@
     "zip:store": "npm run build:store && rm -f super-ltc-store.zip && cd dist-store && zip -r ../super-ltc-store.zip . -x 'update-super-ltc*' 'install-auto-updater.bat' 'uninstall-auto-updater.bat' && cd .. && echo 'Created super-ltc-store.zip (Chrome Web Store ready)'",
     "demo": "vite --config vite.demo.config.js --open /demo/mds-section-i.html",
     "demo:build": "vite build --config vite.demo.config.js",
-    "demo:deploy": "npm run demo:build && DEMO_ENTRY=legacy npm run demo:build && rm -rf demo-dist && mkdir -p demo-dist/content/css demo-dist/content/icd10-viewer demo-dist/content/super-menu demo-dist/lib && rsync -a --exclude='*.jsx' --exclude='components/' --exclude='hooks/' --exclude='pcc-demo.html' --exclude='demo-mock-chrome.js' --exclude='demo-mock-globals.js' demo/ demo-dist/demo/ && cp content/css/variables.css content/css/icd10-viewer.css content/css/therapy-modal.css content/css/meddiag-augment.css content/css/pdpm-analyzer.css demo-dist/content/css/ && cp content/icd10-viewer/icd10-mock-data.js content/icd10-viewer/icd10-api.js content/icd10-viewer/icd10-sidebar.js content/icd10-viewer/icd10-evidence-panel.js content/icd10-viewer/icd10-pdf-viewer.js content/icd10-viewer/icd10-viewer.js demo-dist/content/icd10-viewer/ && cp content/super-menu/meddiag-augment.js demo-dist/content/super-menu/ && cp lib/pdf.min.js lib/pdf.worker.min.js demo-dist/lib/ 2>/dev/null; echo '<html><head><meta http-equiv=\"refresh\" content=\"0;url=demo/mds-section-i.html\"></head></html>' > demo-dist/index.html && echo 'Ready! Drag demo-dist/ into Netlify'"
+    "demo:deploy": "bash scripts/deploy-demo.sh demo-dist 'demo/mds-section-i.html'",
+    "demo:deploy:tour": "bash scripts/deploy-demo.sh demo-tour-dist 'demo/medical-diagnosis.html?tour=1'"
   },
   "repository": {
     "type": "git",

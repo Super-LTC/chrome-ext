@@ -3,6 +3,7 @@ dist/
 dist-prod/
 dist-store/
 demo-dist/
+demo-tour-dist/
 # Accidental Vite chunk output in demo/ (demo:build should only produce *.built.{js,css})
 demo/index.es-*.js
 demo/html2canvas.esm-*.js
