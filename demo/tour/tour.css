@@ -48,15 +48,29 @@
   border-bottom: 1px solid rgba(99, 102, 241, 0.18);
 }
 
-/* Reserve space for the bar so it pushes content down instead of overlaying
-   it. Keyed to the bar being present (only while the tour is active). The
-   captured page body gets top padding, and viewport-centred Super modals are
-   inset below the bar so their headers never hide behind it. */
+/* Reserve space for the bar so it pushes the whole screen down instead of
+   overlaying it. Keyed to the bar being present (only while the tour runs). */
+/* 1) Captured-page flow content gets top padding. */
 html:has(.super-tour-bar) body { padding-top: 48px; }
-html:has(.super-tour-bar) .cc-pop__backdrop {
-  align-items: flex-start;
-  padding-top: 56px;
-  box-sizing: border-box;
+/* 2) Every full-screen Super overlay is position:fixed (viewport-relative), so
+   body padding doesn't move it — inset each one's top below the bar. They keep
+   bottom:0, so they simply shrink to the space under the bar. */
+html:has(.super-tour-bar) :is(
+  .icd10-viewer-modal,
+  .icd10-viewer-modal__backdrop,
+  .icd10-viewer-modal__container,
+  .mds-cc__overlay,
+  .qmb__overlay,
+  .thr__overlay,
+  .cpc__overlay,
+  .super-chat-overlay,
+  .super-query-modal,
+  .super-query-modal__backdrop,
+  .super-query-modal__container,
+  .dqm__backdrop,
+  .cc-pop__backdrop
+) {
+  top: 48px;
 }
 html:has(.super-tour-bar) .cc-pop { max-height: calc(100vh - 72px); }
 .super-tour-bar-fill {
