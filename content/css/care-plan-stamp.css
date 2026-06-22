@@ -3545,3 +3545,318 @@
   margin-right: 12px;
 }
 .cpas-modal__back:hover { background: #eef2ff; }
+
+/* ===== Care Plan V2 wizard =====
+   Phase 4 styling for the comprehensive-audit step-through (AuditWizard.jsx +
+   FocusCard variant="v2"). EVERY rule below is scoped under `.cpas-wiz` or the
+   dashboard `.cpas-dashboard__stampall` button so the shared FocusCard /
+   FocusRationale components keep their existing V1 look untouched.
+   Visual target: .context/careplan-v2-wizard-MOCK.html */
+
+/* ── Layout: sidebar + main, both full-height & independently scrollable ── */
+.cpas-wiz {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+.cpas-wiz__side {
+  width: 290px;
+  flex-shrink: 0;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  overflow-y: auto;
+  min-height: 0;
+}
+.cpas-wiz__main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ── Progress ── */
+.cpas-wiz__prog {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.cpas-wiz__prog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.cpas-wiz__prog-text {
+  font-size: 12px;
+  color: #64748b;
+}
+.cpas-wiz__stamp-all {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.cpas-wiz__bar {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.cpas-wiz__fill {
+  height: 100%;
+  width: 0;
+  background: #4f46e5;
+  border-radius: 99px;
+  transition: width 0.25s ease;
+}
+
+/* ── Care-area groups (collapsible) ── */
+.cpas-wiz__grp {
+  border-bottom: 1px solid #eef2f6;
+}
+.cpas-wiz__grp-head,
+.cpas-wiz__fold-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f172a;
+  cursor: pointer;
+}
+.cpas-wiz__grp-head:hover,
+.cpas-wiz__fold-head:hover {
+  background: #f1f5f9;
+}
+.cpas-wiz__grp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cpas-wiz__grp-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #eef2f6;
+  border-radius: 99px;
+  padding: 0 7px;
+  line-height: 18px;
+}
+.cpas-wiz__caret {
+  flex-shrink: 0;
+  color: #cbd5e1;
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+.cpas-wiz__grp.is-open .cpas-wiz__caret,
+.cpas-wiz__fold.is-open .cpas-wiz__caret {
+  transform: rotate(180deg);
+}
+.cpas-wiz__grp-body {
+  padding-bottom: 6px;
+}
+
+/* ── Shield / status dots ── */
+.cpas-wiz__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #94a3b8;
+}
+.cpas-wiz__dot.is-gap { background: #f43f5e; }
+.cpas-wiz__dot.is-partial { background: #f59e0b; }
+.cpas-wiz__dot.is-covered { background: #10b981; }
+.cpas-wiz__dot.is-skipped { background: #94a3b8; }
+
+/* ── Item rows ── */
+.cpas-wiz__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 14px 7px 22px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+}
+.cpas-wiz__item:hover {
+  background: #fff;
+}
+.cpas-wiz__item.is-selected {
+  border-left-color: #4f46e5;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 500;
+}
+.cpas-wiz__item.is-skipped {
+  color: #94a3b8;
+  text-decoration: line-through;
+  text-decoration-color: #cbd5e1;
+}
+.cpas-wiz__item.is-skipped.is-selected {
+  text-decoration: none;
+}
+.cpas-wiz__item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid #cbd5e1;
+  flex-shrink: 0;
+}
+.cpas-wiz__item.is-done .cpas-wiz__item-dot {
+  background: #10b981;
+  border-color: #10b981;
+}
+.cpas-wiz__item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+/* Skipped rows carry an inline Reopen button → split the row into a
+   clickable label button + the action. */
+.cpas-wiz__item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.cpas-wiz__reopen {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* ── Skipped / Covered folds ── */
+.cpas-wiz__fold {
+  border-bottom: 1px solid #eef2f6;
+}
+.cpas-wiz__cov,
+.cpas-wiz__grp-body.cpas-wiz__cov {
+  padding: 4px 14px 10px 22px;
+}
+.cpas-wiz__covered {
+  font-size: 12px;
+  color: #059669;
+  padding: 2px 0;
+}
+
+/* ── Detail pane: v2 header ── */
+.cpas-wiz .cpas-detail__header--v2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+.cpas-wiz .cpas-detail__badge-sec {
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.cpas-wiz .cpas-detail__pos {
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: right;
+}
+
+/* ── Why box: color-by-basis (V1-safe via .cpas-wiz scope + :has()) ── */
+.cpas-wiz .cpas-detail__rationale:has(.is-standard) {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-standard) .cpas-detail__rationale-title {
+  color: #475569;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-assessment) {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-assessment) .cpas-detail__rationale-title {
+  color: #92400e;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-diagnosis) {
+  background: #eef2ff;
+  border-color: #e0e7ff;
+  color: #4338ca;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-diagnosis) .cpas-detail__rationale-title {
+  color: #4338ca;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-order) {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+.cpas-wiz .cpas-detail__rationale:has(.is-order) .cpas-detail__rationale-title {
+  color: #0369a1;
+}
+
+/* ── Locked position chip: static green pill, no dropdown affordance ── */
+.cpas-wiz .cpas-chip--pos.is-locked {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid transparent;
+  cursor: default;
+  pointer-events: none;
+}
+.cpas-wiz .cpas-chip--pos.is-locked .cpas-chip__icon,
+.cpas-wiz .cpas-chip--pos.is-locked svg {
+  display: none;
+}
+
+/* ── Footer: right-aligned action row (reuses .cpas-btn styles) ── */
+.cpas-wiz__footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px 24px 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ── Dashboard "Stamp all" CTA: full-width prominent bar ── */
+.cpas-dashboard__stampall {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  text-align: center;
+}
