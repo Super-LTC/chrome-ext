@@ -19,7 +19,8 @@ import { Combobox } from '../CarePlanStampModal.jsx';
  *   - readOnly: disable all editors (during stamping/done)
  *   - dropdowns: org dropdowns { kardexLabels, kardexOptions, positionLabels, positionOptions }
  */
-export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns, isStamped, stampOneDisabled, onStampOne }) => {
+export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns, isStamped, stampOneDisabled, onStampOne, variant = 'v1', areaBadge, positionLabel }) => {
+  const isV2 = variant === 'v2';
   const sectionRef = useRef(null);
   // Snap back to top whenever the active focus changes — otherwise scroll
   // position from the previous focus leaks over and looks broken.
@@ -91,6 +92,21 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
 
   return (
     <section className="cpas-detail" ref={sectionRef}>
+      {isV2 ? (
+        <header className="cpas-detail__header cpas-detail__header--v2">
+          <span className="cpas-detail__badge-sec">{areaBadge}</span>
+          {positionLabel && <span className="cpas-detail__pos">{positionLabel}</span>}
+          {isStamped && (
+            <div className="cpas-detail__actions">
+              <span className="cpas-state-chip is-added" title="Already added to the care plan">
+                <span className="cpas-state-chip__state">
+                  <span className="cpas-state-chip__icon">✓</span> Added to care plan
+                </span>
+              </span>
+            </div>
+          )}
+        </header>
+      ) : (
       <header className="cpas-detail__header">
         <div>
           <span className={`cpas-detail__rule ${rawFocus._isLibrary ? 'is-library' : ''}`}>
@@ -157,6 +173,7 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
           )}
         </div>
       </header>
+      )}
 
       {/* Library trim callout — explains we imported a subset of PCC's full library */}
       {rawFocus._isLibrary && rawFocus._meta && (
@@ -306,6 +323,10 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                 editIntervention(i, { positions: cleaned, positionOne: cleaned[0] ?? iv.positionOne });
               };
               const blank = _detectPlaceholder(iv.description);
+              // In v2 the kardex value is the engine's pre-filled choice (it IS
+              // the value), so no "✨ Recommended" badge. In v1 it's an opt-in
+              // suggestion pinned to the top of the dropdown.
+              const kardexRecommended = isV2 ? null : iv._recKardex;
               return (
                 <li key={i} className="cpas-iv-row">
                   <div className="cpas-iv-row__body">
@@ -330,12 +351,19 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                         onChange={(v) => editIntervention(i, { kardexCategory: v })}
                         disabled={readOnly}
                         variant="kardex"
-                        recommendedId={iv._recKardex}
+                        recommendedId={kardexRecommended}
                         kindBadge="K"
                         allowClear
                         placeholder="Select Kardex (none)"
                       />
-                      {posList.map((p, j) => (
+                      {isV2 ? (
+                        // v2: positions are auto-assigned by the engine and
+                        // locked — display-only chips, no dropdown / remove / add.
+                        posList.map((p, j) => (
+                          <PositionChipLocked key={j} label={positionLabels[p] || p} />
+                        ))
+                      ) : (
+                        posList.map((p, j) => (
                         <PositionChip
                           key={j}
                           value={p}
@@ -349,8 +377,9 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                           onRemove={posList.length > 1 ? () => setPositions(posList.filter((_, k) => k !== j)) : null}
                           disabled={readOnly}
                         />
-                      ))}
-                      {!readOnly && posList.length < 5 && (
+                        ))
+                      )}
+                      {!isV2 && !readOnly && posList.length < 5 && (
                         // NO_TRACK: pure-UI position add
                         <button
                           className="cpas-iv-row__chip-add"
@@ -751,6 +780,16 @@ const PositionChip = ({ value, labels, options, onChange, onRemove, disabled }) 
       >×</button>
     )}
   </span>
+);
+
+/**
+ * PositionChipLocked — v2 display-only position pill. The wizard's positions
+ * are auto-assigned by the engine, so there's no dropdown, no remove "×", and
+ * no add button. Label resolution mirrors PositionChip (positionLabels[id] →
+ * human text like "CNA" / "RN").
+ */
+const PositionChipLocked = ({ label }) => (
+  <span className="cpas-chip cpas-chip--pos is-locked" title="Auto-assigned position">{label}</span>
 );
 
 // ---------- Local helpers (small, pure) ----------
