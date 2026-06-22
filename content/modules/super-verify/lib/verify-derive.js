@@ -137,15 +137,65 @@ export function categorizeDetections(data) {
  * Bucket QM measures for the hero section.
  * - triggering: this MDS puts the resident in the numerator
  * - willClear: resident is in the numerator today but this codes clean
- * - excluded: resident excluded from the measure cohort
+ * - excluded, split by exclusionKind:
+ *     excludedIncomplete ('incomplete') = items not coded yet → "evaluate once coded"
+ *     excludedClinical   ('clinical'|null) = genuine clinical exclusion
  */
 export function partitionMeasures(qm) {
   const measures = qm?.measures || [];
   const triggering = measures.filter((m) => m.triggers && !m.excluded);
   const willClear = measures.filter((m) => !m.triggers && !m.excluded && m.facilityCount?.wouldClearOnLock);
   const excluded = measures.filter((m) => m.excluded);
+  const excludedIncomplete = excluded.filter((m) => m.exclusionKind === 'incomplete');
+  const excludedClinical = excluded.filter((m) => m.exclusionKind !== 'incomplete');
   const cleanCount = measures.filter((m) => !m.triggers && !m.excluded).length;
-  return { triggering, willClear, excluded, firingCount: triggering.length, cleanCount };
+  return {
+    triggering,
+    willClear,
+    excluded,
+    excludedIncomplete,
+    excludedClinical,
+    firingCount: triggering.length,
+    cleanCount,
+  };
+}
+
+// Reimbursement per-component breakdown (round-2): NTA / Nursing / SLP / PT-OT,
+// each current→potential CMG (from the HIPPS decode) + $ delta (from
+// gapAnalysis.componentRevenue) + a proportional bar.
+const REIMB_COMPONENTS = [
+  { key: 'nta', label: 'NTA' },
+  { key: 'nursing', label: 'Nursing' },
+  { key: 'slp', label: 'SLP' },
+  { key: 'ptot', label: 'PT/OT' },
+];
+
+export function componentBreakdown(data) {
+  const decoded = data?.hippsDecoded || {};
+  const potential = data?.potentialHippsDecoded || {};
+  const rev = data?.gapAnalysis?.componentRevenue || {};
+
+  const rows = REIMB_COMPONENTS.map(({ key, label }) => {
+    const delta = Number(rev[key]?.delta) || 0;
+    const currentCmg = decoded[key]?.code || null;
+    const potentialCmg = potential[key]?.code || null;
+    return {
+      key,
+      label,
+      currentCmg,
+      potentialCmg,
+      delta,
+      changed: delta > 0 || (!!currentCmg && !!potentialCmg && currentCmg !== potentialCmg),
+    };
+  });
+
+  const maxDelta = rows.reduce((m, r) => Math.max(m, r.delta), 0);
+  return {
+    rows,
+    maxDelta,
+    hippsCurrent: data?.calculation?.hippsCode || data?.summary?.currentHipps || null,
+    hippsPotential: data?.summary?.potentialHippsIfCoded || null,
+  };
 }
 
 // status → UDA cell tone: passed=ok, failed=miss, not_applicable=na, else pending.

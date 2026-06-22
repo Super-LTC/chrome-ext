@@ -11,3 +11,13 @@ export function openItemInPcc(assessId, mdsItem) {
   window.open(url, '_blank', 'noopener');
   return true;
 }
+
+// Deep-link a linked interview UDA (BIMS/PHQ-9/GG/Pain) in PCC by its own
+// external assessment id. NOTE: best-effort URL — confirm the exact PCC UDA
+// "view detail" path; if it 404s this is the single line to correct.
+export function openUdaInPcc(externalAssessmentId) {
+  if (!externalAssessmentId) return false;
+  const url = `/care/chart/assess/assessmentsummary.xhtml?ESOLassessid=${encodeURIComponent(externalAssessmentId)}`;
+  window.open(url, '_blank', 'noopener');
+  return true;
+}

@@ -280,11 +280,22 @@
 .sv-reimb__opp { margin-left: auto; text-align: right; }
 .sv-reimb__opp b { font-family: var(--super-font-mono); color: #059669; font-size: 14px; font-weight: 600; }
 .sv-reimb__opp small { display: block; color: var(--super-gray-400); font-size: 10px; }
-.sv-reimb__gap { padding: 0 14px 13px; }
-.sv-track { height: 6px; border-radius: 999px; background: var(--super-gray-100); overflow: hidden; }
-.sv-track__f { height: 100%; background: var(--super-primary); border-radius: 999px; }
-.sv-gaplbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--super-gray-500); margin-top: 6px; }
-.sv-gaplbl b { font-family: var(--super-font-mono); color: var(--super-gray-700); }
+/* per-component breakdown (NTA / Nursing / SLP / PT-OT) */
+.sv-reimb__bd { border-top: 1px solid var(--super-gray-100); padding: 11px 14px 13px; }
+.sv-reimb__bdhead { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--super-gray-400); margin-bottom: 9px; }
+.sv-comp { display: grid; grid-template-columns: 58px 84px 1fr 52px; align-items: center; gap: 10px; padding: 4px 0; }
+.sv-comp__label { font-weight: 600; font-size: 12.5px; color: var(--super-gray-700); }
+.sv-comp__cmg { font-family: var(--super-font-mono); font-size: 11px; color: var(--super-gray-700); white-space: nowrap; }
+.sv-comp__cmg b { color: var(--super-gray-900); }
+.sv-comp__arr { color: var(--super-gray-400); }
+.sv-comp__nochange { color: var(--super-gray-400); font-family: var(--super-font); font-style: italic; }
+.sv-comp__bar { height: 6px; border-radius: 999px; background: var(--super-gray-100); overflow: hidden; }
+.sv-comp__barf { display: block; height: 100%; background: var(--super-match); border-radius: 999px; }
+.sv-comp__delta { font-family: var(--super-font-mono); font-size: 12px; font-weight: 600; color: #059669; text-align: right; }
+.sv-comp.is-flat .sv-comp__label { color: var(--super-gray-400); }
+.sv-comp.is-flat .sv-comp__barf { background: var(--super-gray-200); }
+.sv-reimb__lift { margin-top: 10px; font-size: 11.5px; color: var(--super-gray-500); line-height: 1.35; }
+.sv-reimb__lift b { font-family: var(--super-font-mono); color: var(--super-gray-700); }
 
 /* ===== Quality measures ============================================== */
 .svq-card { border-left: 3px solid transparent; }
@@ -323,6 +334,7 @@
 .svq-excluded { margin-top: 2px; }
 .sv-disclosure { background: transparent; border: none; color: var(--super-gray-500); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 0; }
 .sv-disclosure__ar { color: var(--super-gray-400); }
+.svq-excluded__hint { font-size: 11.5px; color: var(--super-gray-500); margin: 2px 0 4px; }
 .svq-excluded__list { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--super-gray-600); }
 .svq-excluded__list li { margin: 3px 0; }
 
@@ -378,6 +390,9 @@
 .sv-uda--na .sv-uda__s, .sv-uda--pending .sv-uda__s { background: var(--super-gray-100); color: var(--super-gray-500); }
 .sv-uda__nm { font-weight: 600; font-size: 12.5px; }
 .sv-uda__sub { font-size: 10.5px; color: var(--super-gray-500); }
+.sv-uda.is-clickable { cursor: pointer; }
+.sv-uda.is-clickable:hover { border-color: var(--super-primary-light); }
+.sv-uda__link { color: var(--super-primary); font-weight: 700; }
 .sv-divide { border-top: 1px solid var(--super-gray-100); margin: 12px 0; }
 .sv-uda-action .sv-acts { margin-top: 10px; }
 

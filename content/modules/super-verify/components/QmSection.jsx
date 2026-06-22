@@ -71,21 +71,24 @@ function MeasureCard({ measure, tone, assessId, onDismiss, onToast }) {
   );
 }
 
-function ExcludedDisclosure({ excluded }) {
+function ExcludedGroup({ title, hint, measures }) {
   const [open, setOpen] = useState(false);
-  if (!excluded.length) return null;
+  if (!measures.length) return null;
   return (
     <div className="svq-excluded">
-      {/* NO_TRACK — expands the excluded-measures list */}
+      {/* NO_TRACK — expands an excluded-measures group */}
       <button className="sv-disclosure" onClick={() => setOpen((o) => !o)}>
-        Excluded ({excluded.length}) <span className="sv-disclosure__ar">{open ? '▴' : '▾'}</span>
+        {title} ({measures.length}) <span className="sv-disclosure__ar">{open ? '▴' : '▾'}</span>
       </button>
       {open && (
-        <ul className="svq-excluded__list">
-          {excluded.map((m) => (
-            <li key={m.id}><b>{m.label}</b>{m.exclusionReason ? ` — ${m.exclusionReason}` : ''}</li>
-          ))}
-        </ul>
+        <>
+          {hint ? <div className="svq-excluded__hint">{hint}</div> : null}
+          <ul className="svq-excluded__list">
+            {measures.map((m) => (
+              <li key={m.id}><b>{m.label}</b>{m.exclusionReason ? ` — ${m.exclusionReason}` : ''}</li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
@@ -133,7 +136,12 @@ export function QmSection({ partition, totalMeasures, assessId, dismissed, onDis
           </button>
         )}
 
-        <ExcludedDisclosure excluded={partition.excluded} />
+        <ExcludedGroup
+          title="Will evaluate once coded"
+          hint="Items aren't coded yet — these measures will be evaluated once they are."
+          measures={partition.excludedIncomplete}
+        />
+        <ExcludedGroup title="Excluded — clinical" measures={partition.excludedClinical} />
       </div>
     </>
   );

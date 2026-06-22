@@ -5,6 +5,7 @@ import {
   countMissingInterviews,
   categorizeDetections,
   partitionMeasures,
+  componentBreakdown,
   buildImpactChips,
   detectionDisplayCode,
   sectionCodeForItem,
@@ -126,10 +127,59 @@ describe('partitionMeasures', () => {
     expect(p.firingCount).toBe(2);
     expect(p.cleanCount).toBe(2); // phq9 + uti (non-triggering, non-excluded)
   });
+  it('buckets excluded measures by exclusionKind', () => {
+    const q = { measures: [
+      { id: 'uti', excluded: true, exclusionKind: 'incomplete' },
+      { id: 'catheter', excluded: true, exclusionKind: 'clinical' },
+      { id: 'weight_loss', excluded: true, exclusionKind: null },
+      { id: 'falls_all', triggers: true, excluded: false },
+    ] };
+    const p = partitionMeasures(q);
+    expect(p.excludedIncomplete.map((m) => m.id)).toEqual(['uti']);
+    expect(p.excludedClinical.map((m) => m.id)).toEqual(['catheter', 'weight_loss']);
+  });
   it('handles null qm', () => {
     expect(partitionMeasures(null)).toEqual({
-      triggering: [], willClear: [], excluded: [], firingCount: 0, cleanCount: 0,
+      triggering: [], willClear: [], excluded: [], excludedIncomplete: [], excludedClinical: [],
+      firingCount: 0, cleanCount: 0,
     });
+  });
+});
+
+describe('componentBreakdown', () => {
+  const data = {
+    calculation: { hippsCode: 'IAED1' },
+    summary: { potentialHippsIfCoded: 'IEAA1' },
+    hippsDecoded: { nta: { code: 'ND' }, nursing: { code: 'HDE1' }, slp: { code: 'SA' }, ptot: { code: 'TA' } },
+    potentialHippsDecoded: { nta: { code: 'NC' }, nursing: { code: 'ES2' }, slp: { code: 'SD' }, ptot: { code: 'TA' } },
+    gapAnalysis: { componentRevenue: {
+      nta: { current: 100, potential: 332, delta: 232 },
+      nursing: { current: 200, potential: 410, delta: 210 },
+      slp: { current: 50, potential: 146, delta: 96 },
+      ptot: { current: 120, potential: 120, delta: 0 },
+    } },
+  };
+
+  it('produces NTA/Nursing/SLP/PT-OT rows with current→potential CMG + delta', () => {
+    const { rows } = componentBreakdown(data);
+    expect(rows.map((r) => r.label)).toEqual(['NTA', 'Nursing', 'SLP', 'PT/OT']);
+    expect(rows[0]).toMatchObject({ currentCmg: 'ND', potentialCmg: 'NC', delta: 232, changed: true });
+  });
+  it('marks an unchanged component (no delta, same CMG) as not changed', () => {
+    const ptot = componentBreakdown(data).rows.find((r) => r.key === 'ptot');
+    expect(ptot.changed).toBe(false);
+    expect(ptot.delta).toBe(0);
+  });
+  it('reports maxDelta for bar scaling and the HIPPS lift', () => {
+    const b = componentBreakdown(data);
+    expect(b.maxDelta).toBe(232);
+    expect(b.hippsCurrent).toBe('IAED1');
+    expect(b.hippsPotential).toBe('IEAA1');
+  });
+  it('is robust to a missing breakdown payload', () => {
+    const b = componentBreakdown({});
+    expect(b.rows.every((r) => r.delta === 0 && !r.changed)).toBe(true);
+    expect(b.maxDelta).toBe(0);
   });
 });
 

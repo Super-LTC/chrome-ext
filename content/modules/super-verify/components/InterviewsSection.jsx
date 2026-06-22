@@ -1,13 +1,28 @@
 import { interviewCells } from '../lib/verify-derive.js';
-import { openItemInPcc } from '../lib/view-item.js';
+import { openItemInPcc, openUdaInPcc } from '../lib/view-item.js';
 
 // Which MDS item to deep-link for each missing interview.
 const ITEM_FOR = { bims: 'C0500', phq9: 'D0300', gg: 'GG0130', pain: 'J0300' };
 const TONE_MARK = { ok: '✓', miss: '!', na: '–', pending: '·' };
 
-export function InterviewsSection({ compliance, assessId, assessmentType }) {
+const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function InterviewsSection({ compliance, linkedUdas, assessId, assessmentType }) {
   if (!compliance?.checks) return null;
   const cells = interviewCells(compliance);
+
+  // Index linked UDAs by normalized interview name so each cell can deep-link.
+  const udaByKey = {};
+  (linkedUdas || []).forEach((u) => {
+    if (u?.interview) udaByKey[norm(u.interview)] = u;
+  });
+
   const missing = cells.filter((c) => c.tone === 'miss');
 
   return (
@@ -20,15 +35,29 @@ export function InterviewsSection({ compliance, assessId, assessmentType }) {
       <div className="sv-wrap">
         <div className="sv-card">
           <div className="sv-udagrid">
-            {cells.map((c) => (
-              <div key={c.key} className={`sv-uda sv-uda--${c.tone}`}>
-                <span className="sv-uda__s">{TONE_MARK[c.tone]}</span>
-                <div>
-                  <div className="sv-uda__nm">{c.label}</div>
-                  <div className="sv-uda__sub">{c.message || (c.tone === 'ok' ? 'complete' : c.tone === 'na' ? 'not applicable' : c.tone === 'miss' ? 'missing' : '—')}</div>
+            {cells.map((c) => {
+              const uda = udaByKey[c.key.toUpperCase()];
+              const sub = uda
+                ? `on file${uda.lockedDate ? ` · locked ${fmtDate(uda.lockedDate)}` : uda.date ? ` · ${fmtDate(uda.date)}` : ''}`
+                : c.message || (c.tone === 'ok' ? 'complete' : c.tone === 'na' ? 'not applicable' : c.tone === 'miss' ? 'missing' : '—');
+              const clickable = uda?.externalAssessmentId;
+              return (
+                <div
+                  key={c.key}
+                  className={`sv-uda sv-uda--${c.tone}${clickable ? ' is-clickable' : ''}`}
+                  role={clickable ? 'button' : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={clickable ? () => openUdaInPcc(uda.externalAssessmentId) : undefined}
+                  title={clickable ? 'View UDA in PointClickCare' : undefined}
+                >
+                  <span className="sv-uda__s">{TONE_MARK[c.tone]}</span>
+                  <div>
+                    <div className="sv-uda__nm">{c.label}{clickable ? <span className="sv-uda__link"> ↗</span> : null}</div>
+                    <div className="sv-uda__sub">{sub}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {missing.map((c) => (

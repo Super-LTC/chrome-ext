@@ -4,8 +4,15 @@ import {
   categorizeDetections,
   partitionMeasures,
   countOpenQueries,
+  componentBreakdown,
 } from '../lib/verify-derive.js';
-import { formatPaymentRates, formatPaymentDelta, isPaymentApplicable } from '../../../utils/payment.js';
+import {
+  formatPaymentRates,
+  formatPaymentDelta,
+  getPaymentDeltaNumeric,
+  getPaymentModeLabel,
+  isPaymentApplicable,
+} from '../../../utils/payment.js';
 import { useToasts } from './Toasts.jsx';
 import { QmSection } from './QmSection.jsx';
 import { CodingSection } from './CodingSection.jsx';
@@ -34,16 +41,37 @@ function Tile({ cls, n, label, muted, onClick }) {
   );
 }
 
-function Reimbursement({ data }) {
-  const hipps = data?.calculation?.hippsCode || data?.summary?.currentHipps || '—';
+function ComponentRow({ row, maxDelta }) {
+  const pct = maxDelta > 0 ? Math.max(8, Math.round((row.delta / maxDelta) * 100)) : 0;
+  return (
+    <div className={`sv-comp${row.changed ? '' : ' is-flat'}`}>
+      <span className="sv-comp__label">{row.label}</span>
+      <span className="sv-comp__cmg">
+        {row.changed && row.currentCmg && row.potentialCmg ? (
+          <>
+            <b>{row.currentCmg}</b> <span className="sv-comp__arr">→</span> <b>{row.potentialCmg}</b>
+          </>
+        ) : (
+          <span className="sv-comp__nochange">no change</span>
+        )}
+      </span>
+      <span className="sv-comp__bar"><span className="sv-comp__barf" style={{ width: `${pct}%` }} /></span>
+      <span className="sv-comp__delta">{row.delta > 0 ? `+$${Math.round(row.delta)}` : ''}</span>
+    </div>
+  );
+}
+
+function Reimbursement({ data, nItems }) {
   const rates = formatPaymentRates(data?.payment);
   const current = rates?.current || currentRateLabel(data?.payment);
+  const modeLabel = rates?.label || getPaymentModeLabel(data?.payment) || 'PDPM';
   const delta = rates?.delta || formatPaymentDelta(data?.payment, 'long');
-  const nta = data?.gapAnalysis?.nta;
-  const hasGap = nta && Number.isFinite(nta.currentPoints) && Number.isFinite(nta.pointsNeeded);
-  const pct = hasGap
-    ? Math.max(6, Math.min(96, Math.round((nta.currentPoints / Math.max(1, nta.currentPoints + nta.pointsNeeded)) * 100)))
-    : 0;
+  const totalNum = Math.round(getPaymentDeltaNumeric(data?.payment));
+
+  const { rows, maxDelta, hippsCurrent, hippsPotential } = componentBreakdown(data);
+  const hipps = hippsCurrent || '—';
+  const hasBreakdown = rows.some((r) => r.changed);
+  const hippsLifts = hippsPotential && hippsPotential !== hippsCurrent;
 
   return (
     <>
@@ -54,7 +82,7 @@ function Reimbursement({ data }) {
             <div className="sv-hipps">{hipps}</div>
             <div className="sv-reimb__rate">
               {current ? <b>{current}</b> : <b>—</b>}
-              <span>{rates?.label || 'PDPM'}</span>
+              <span>{modeLabel}</span>
             </div>
             {delta && (
               <div className="sv-reimb__opp">
@@ -63,13 +91,19 @@ function Reimbursement({ data }) {
               </div>
             )}
           </div>
-          {hasGap && (
-            <div className="sv-reimb__gap">
-              <div className="sv-track"><div className="sv-track__f" style={{ width: `${pct}%` }} /></div>
-              <div className="sv-gaplbl">
-                <span>NTA <b>{nta.currentLevel}</b></span>
-                <span><b>{nta.pointsNeeded} pts</b> to {nta.nextLevel}</span>
-              </div>
+
+          {hasBreakdown && (
+            <div className="sv-reimb__bd">
+              <div className="sv-reimb__bdhead">Where the {totalNum > 0 ? `$${totalNum}` : 'lift'} is</div>
+              {rows.map((r) => (
+                <ComponentRow key={r.key} row={r} maxDelta={maxDelta} />
+              ))}
+              {hippsLifts && (
+                <div className="sv-reimb__lift">
+                  Coding the {nItems} item{nItems === 1 ? '' : 's'} below lifts the HIPPS{' '}
+                  <b>{hippsCurrent}</b> → <b>{hippsPotential}</b>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -132,7 +166,7 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
           <Tile cls="sv-stat--warn" n={baseTiles.interviewsMissing} label="interview missing" muted={baseTiles.interviewsMissing === 0} onClick={() => scrollTo('uda')} />
         </div>
 
-        <Reimbursement data={data} />
+        <Reimbursement data={data} nItems={effItems.length} />
 
         {data?.qm && (
           <QmSection
@@ -163,6 +197,7 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
 
         <InterviewsSection
           compliance={data?.compliance}
+          linkedUdas={data?.linkedUdas}
           assessId={assessId}
           assessmentType={data?.assessment?.description}
         />
