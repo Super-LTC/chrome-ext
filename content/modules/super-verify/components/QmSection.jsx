@@ -31,64 +31,47 @@ function ViewAct({ measure, assessId }) {
   );
 }
 
-// What THIS lock newly does — the actual news.
-function NewTriggerCard({ measure, assessId }) {
+// One card; `headline` is rendered verbatim (backend-authored). `tone` drives
+// the badge + accent. New triggers additionally show the facility count delta.
+function MeasureCard({ measure, tone, assessId }) {
   const fc = measure.facilityCount;
   const items = evidenceItems(measure);
   return (
-    <div className="sv-card svq-card is-trig">
+    <div className={`sv-card svq-card ${tone === 'clear' ? 'is-clear' : 'is-trig'}`}>
       <div className="svq-head">
         <div>
           <div className="svq-title">{measure.label}</div>
           <div className="svq-mid">{[measure.id, items.join(' / ')].filter(Boolean).join(' · ')}</div>
         </div>
-        <span className="sv-b sv-b--warn">New trigger</span>
+        <span className={`sv-b ${tone === 'clear' ? 'sv-b--ok' : 'sv-b--warn'}`}>
+          {tone === 'clear' ? 'Clearing' : 'New trigger'}
+        </span>
       </div>
-      {fc ? (
+
+      {tone === 'new' && fc && (
         <div className="svq-delta">
           <div className="svq-nums">
             <span className="svq-c">{fc.current}</span>
             <span className="svq-a">→</span>
             <span className="svq-x">{fc.ifLocked}</span>
           </div>
-          <div className="svq-cap"><b>+1 resident</b> — this lock adds the resident to the facility numerator.</div>
+          {measure.headline ? <div className="svq-cap">{measure.headline}</div> : null}
         </div>
-      ) : (
-        <div className="svq-delta"><div className="svq-cap">This lock adds the resident to the numerator.</div></div>
       )}
+      {tone !== 'new' && measure.headline ? <div className="svq-clear">{measure.headline}</div> : null}
+
       <EvidenceChips measure={measure} />
       <ViewAct measure={measure} assessId={assessId} />
     </div>
   );
 }
 
-// Good news — resident is in the numerator today, this codes clean. No misleading
-// current→current arrow (the facility count flag isn't a −1).
-function WillClearCard({ measure, assessId }) {
-  const fc = measure.facilityCount;
-  return (
-    <div className="sv-card svq-card is-clear">
-      <div className="svq-head">
-        <div>
-          <div className="svq-title">{measure.label}</div>
-          <div className="svq-mid">{measure.id}</div>
-        </div>
-        <span className="sv-b sv-b--ok">Will clear</span>
-      </div>
-      <div className="svq-clear">
-        In the numerator today{fc ? ` (${fc.current} residents facility-wide)` : ''} — coding clean <b>removes this resident</b> on lock.
-      </div>
-      <ViewAct measure={measure} assessId={assessId} />
-    </div>
-  );
-}
-
-function ExcludedGroup({ title, measures }) {
+function Disclosure({ title, measures }) {
   const [open, setOpen] = useState(false);
   if (!measures.length) return null;
   return (
     <div className="svq-excluded">
-      {/* NO_TRACK — expands an excluded-measures group */}
+      {/* NO_TRACK — expands a collapsed measure group */}
       <button className="sv-disclosure" onClick={() => setOpen((o) => !o)}>
         {title} ({measures.length}) <span className="sv-disclosure__ar">{open ? '▴' : '▾'}</span>
       </button>
@@ -103,9 +86,9 @@ function ExcludedGroup({ title, measures }) {
   );
 }
 
-export function QmSection({ partition, totalMeasures, assessId }) {
-  const { newTriggers, willClear, carries, firingCount } = partition;
-  const nothing = newTriggers.length === 0 && willClear.length === 0 && carries.length === 0;
+export function QmSection({ groups, totalMeasures, assessId }) {
+  const { newTrigger, clearing, locked, incomplete, clinical, firingCount } = groups;
+  const nothing = newTrigger.length === 0 && clearing.length === 0 && locked.length === 0;
 
   return (
     <>
@@ -119,22 +102,19 @@ export function QmSection({ partition, totalMeasures, assessId }) {
           <div className="sv-empty"><span className="sv-empty__c">✓</span> No quality measures change from this MDS as coded.</div>
         )}
 
-        {newTriggers.map((m) => (
-          <NewTriggerCard key={m.id} measure={m} assessId={assessId} />
-        ))}
-        {willClear.map((m) => (
-          <WillClearCard key={m.id} measure={m} assessId={assessId} />
+        {newTrigger.length > 0 && <div className="svq-grouplbl svq-grouplbl--alert">New triggers — preventable</div>}
+        {newTrigger.map((m) => (
+          <MeasureCard key={m.id} measure={m} tone="new" assessId={assessId} />
         ))}
 
-        {carries.length > 0 && (
-          <div className="svq-carry">
-            <span className="svq-carry__lbl">Already in the numerator (unchanged by this lock):</span>{' '}
-            {carries.map((m) => m.label).join(', ')}
-          </div>
-        )}
+        {clearing.length > 0 && <div className="svq-grouplbl svq-grouplbl--good">Clearing from last time</div>}
+        {clearing.map((m) => (
+          <MeasureCard key={m.id} measure={m} tone="clear" assessId={assessId} />
+        ))}
 
-        <ExcludedGroup title="Will evaluate once coded" measures={partition.excludedIncomplete} />
-        <ExcludedGroup title="Excluded — clinical" measures={partition.excludedClinical} />
+        <Disclosure title="Already triggering · can't clear" measures={locked} />
+        <Disclosure title="Will evaluate once coded" measures={incomplete} />
+        <Disclosure title="Excluded — clinical" measures={clinical} />
       </div>
     </>
   );

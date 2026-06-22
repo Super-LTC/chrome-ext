@@ -5,7 +5,7 @@
  * Field names verified against the live pdpm-potential payload (the same object
  * the PDPMAnalyzer renders) + the verify handoff doc.
  */
-import { getPaymentDeltaNumeric, formatPaymentDelta, isPaymentApplicable } from '../../../utils/payment.js';
+import { getPaymentDeltaNumeric, formatPaymentDelta } from '../../../utils/payment.js';
 
 const OPEN_QUERY_STATUSES = new Set(['pending', 'sent', 'awaiting_response']);
 const INTERVIEW_KEYS = ['bims', 'phq9', 'gg', 'pain'];
@@ -21,19 +21,17 @@ export function countMissingInterviews(compliance) {
   return INTERVIEW_KEYS.filter((k) => checks[k]?.status === 'failed').length;
 }
 
-// The "to capture" tile, mode-aware: $/day for Medicare/state, CMI points for
-// CMI facilities (never "$0" when the facility is actually on CMI).
-export function captureTile(payment) {
-  if (!isPaymentApplicable(payment)) return { display: '$0', label: 'captured', muted: true };
-  const delta = Number(payment.delta) || 0;
-  if (payment.mode === 'cmi') {
-    return delta > 0
-      ? { display: `+${delta.toFixed(2)}`, label: 'CMI to capture', muted: false }
-      : { display: '0.00', label: 'CMI captured', muted: true };
+// The "to capture" tile, driven by the backend's mode-aware reimbursementHeadline
+// (never compute from componentRevenue — that's Medicare-only → the "+$0" CMI bug).
+export function captureTile(headline) {
+  const h = headline || {};
+  const cmi = h.kind === 'cmi';
+  if (!h.hasLift || h.kind === 'none' || h.deltaValue == null) {
+    return { display: cmi ? '0.00' : '$0', label: cmi ? 'CMI captured' : 'captured', muted: true };
   }
-  return delta > 0
-    ? { display: `+$${Math.round(delta)}`, label: '/day to capture', muted: false }
-    : { display: '$0', label: 'captured', muted: true };
+  return cmi
+    ? { display: `+${Number(h.deltaValue).toFixed(2)}`, label: 'CMI to capture', muted: false }
+    : { display: `+$${Math.round(Number(h.deltaValue))}`, label: '/day to capture', muted: false };
 }
 
 export function summaryTiles(data) {
@@ -156,28 +154,30 @@ export function categorizeDetections(data) {
  *     excludedIncomplete ('incomplete') = items not coded yet → "evaluate once coded"
  *     excludedClinical   ('clinical'|null) = genuine clinical exclusion
  */
-export function partitionMeasures(qm) {
+// Backend now supplies `verifyBucket` (pre-sorted, most-actionable first) — we
+// just group by it. Fallback derivation keeps the panel working against an older
+// response that predates the field.
+const TRIGGERING_BUCKETS = new Set(['new_trigger', 'will_clear', 'clearable', 'locked']);
+
+function effectiveBucket(m) {
+  if (m.verifyBucket) return m.verifyBucket;
+  if (m.excluded) return m.exclusionKind === 'incomplete' ? 'incomplete' : 'clinical';
+  if (!m.triggers) return m.facilityCount?.wouldClearOnLock ? 'will_clear' : 'clean';
+  if (m.facilityCount?.isNewTrigger) return 'new_trigger';
+  return 'locked';
+}
+
+export function groupQmByBucket(qm) {
   const measures = qm?.measures || [];
-  const triggering = measures.filter((m) => m.triggers && !m.excluded);
-  // What THIS lock does (the news) vs what's already true (a carry).
-  const newTriggers = triggering.filter((m) => m.facilityCount?.isNewTrigger);
-  const carries = triggering.filter((m) => !m.facilityCount?.isNewTrigger);
-  const willClear = measures.filter((m) => !m.triggers && !m.excluded && m.facilityCount?.wouldClearOnLock);
-  const excluded = measures.filter((m) => m.excluded);
-  const excludedIncomplete = excluded.filter((m) => m.exclusionKind === 'incomplete');
-  const excludedClinical = excluded.filter((m) => m.exclusionKind !== 'incomplete');
-  const cleanCount = measures.filter((m) => !m.triggers && !m.excluded).length;
-  return {
-    triggering,
-    newTriggers,
-    carries,
-    willClear,
-    excluded,
-    excludedIncomplete,
-    excludedClinical,
-    firingCount: triggering.length,
-    cleanCount,
-  };
+  const bucketOf = (m) => effectiveBucket(m);
+  const newTrigger = measures.filter((m) => bucketOf(m) === 'new_trigger');
+  // "Clearing from last time" worklist: a clean lock removes it, or a lever exists.
+  const clearing = measures.filter((m) => bucketOf(m) === 'will_clear' || bucketOf(m) === 'clearable');
+  const locked = measures.filter((m) => bucketOf(m) === 'locked');
+  const incomplete = measures.filter((m) => bucketOf(m) === 'incomplete');
+  const clinical = measures.filter((m) => bucketOf(m) === 'clinical');
+  const firingCount = measures.filter((m) => TRIGGERING_BUCKETS.has(bucketOf(m))).length;
+  return { newTrigger, clearing, locked, incomplete, clinical, firingCount };
 }
 
 // Evidence chips can repeat the same item=value (current + prior coded the

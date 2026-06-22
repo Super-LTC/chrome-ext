@@ -52,6 +52,7 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
   const [otherSel, setOtherSel] = useState(false);
   const [otherNote, setOtherNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [evidOpen, setEvidOpen] = useState(false);
 
   const label = resolveItemName(item.raw?.itemName, item.mdsItem);
   const confirmDisabled = saving || !reason || (otherSel && otherNote.trim().length === 0);
@@ -126,10 +127,26 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
         </div>
       </div>
 
+      {evidOpen && (
+        <div className="sv-evidence">
+          <p className="sv-evidence__body">{item.raw?.rationale || 'No additional evidence text on file.'}</p>
+          {item.raw?.diagnosisSummary ? (
+            <div className="sv-evidence__row"><span className="sv-evidence__k">Diagnosis</span><span>{item.raw.diagnosisSummary}</span></div>
+          ) : null}
+          {item.raw?.treatmentSummary ? (
+            <div className="sv-evidence__row"><span className="sv-evidence__k">Treatment</span><span>{item.raw.treatmentSummary}</span></div>
+          ) : null}
+          {/* NO_TRACK — opens the item in PCC for the full chart */}
+          <button className="sv-btn sv-btn--ghost sv-evidence__open" onClick={() => openItemInPcc(assessId, item.mdsItem)}>
+            Open {item.displayCode} in PointClickCare ↗
+          </button>
+        </div>
+      )}
+
       {!decided && !reasonOpen && (
         <div className="sv-decide">
-          {/* NO_TRACK — opens the chart evidence for this item in PCC */}
-          <button className="sv-btn sv-btn--pri" onClick={() => openItemInPcc(assessId, item.mdsItem)}>View evidence</button>
+          {/* NO_TRACK — toggles the inline evidence drawer */}
+          <button className="sv-btn sv-btn--pri" onClick={() => setEvidOpen((o) => !o)}>{evidOpen ? 'Hide evidence' : 'View evidence'}</button>
           {/* NO_TRACK — opens the reason panel; the decision is tracked on confirm */}
           <button className="sv-btn" onClick={() => setReasonOpen(true)}>{copy.dismiss}</button>
         </div>

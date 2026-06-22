@@ -5,7 +5,7 @@ import {
   countOpenQueries,
   countMissingInterviews,
   categorizeDetections,
-  partitionMeasures,
+  groupQmByBucket,
   dedupeEvidence,
   componentBreakdown,
   buildImpactChips,
@@ -53,18 +53,19 @@ describe('summaryTiles', () => {
   });
 });
 
-describe('captureTile', () => {
-  it('shows $/day for Medicare with a positive delta', () => {
-    expect(captureTile({ mode: 'medicare', delta: 48.1 })).toEqual({ display: '+$48', label: '/day to capture', muted: false });
+describe('captureTile (from reimbursementHeadline)', () => {
+  it('shows $/day for dollars kind with a lift', () => {
+    expect(captureTile({ kind: 'dollars', hasLift: true, deltaValue: 42.1 })).toEqual({ display: '+$42', label: '/day to capture', muted: false });
   });
-  it('shows CMI points (not $) for a CMI facility', () => {
-    expect(captureTile({ mode: 'cmi', delta: 0.29 })).toEqual({ display: '+0.29', label: 'CMI to capture', muted: false });
+  it('shows CMI points (not $) for cmi kind', () => {
+    expect(captureTile({ kind: 'cmi', hasLift: true, deltaValue: 0.29 })).toEqual({ display: '+0.29', label: 'CMI to capture', muted: false });
   });
-  it('mutes CMI with no lift', () => {
-    expect(captureTile({ mode: 'cmi', delta: 0 })).toEqual({ display: '0.00', label: 'CMI captured', muted: true });
+  it('mutes cmi with no lift', () => {
+    expect(captureTile({ kind: 'cmi', hasLift: false, deltaValue: 0 })).toEqual({ display: '0.00', label: 'CMI captured', muted: true });
   });
-  it('mutes when payment is not applicable', () => {
-    expect(captureTile({ mode: 'not_applicable' })).toEqual({ display: '$0', label: 'captured', muted: true });
+  it('mutes kind none / missing headline', () => {
+    expect(captureTile({ kind: 'none', hasLift: false })).toEqual({ display: '$0', label: 'captured', muted: true });
+    expect(captureTile(undefined)).toEqual({ display: '$0', label: 'captured', muted: true });
   });
 });
 
@@ -135,50 +136,42 @@ describe('categorizeDetections', () => {
   });
 });
 
-describe('partitionMeasures', () => {
+describe('groupQmByBucket', () => {
   const qm = { measures: [
-    { id: 'falls_all', triggers: true, excluded: false, facilityCount: { isNewTrigger: true } },
-    { id: 'adl_decline', triggers: true, excluded: false, facilityCount: { isNewTrigger: true } },
-    { id: 'phq9_depression', triggers: false, excluded: false, facilityCount: { wouldClearOnLock: true } },
-    { id: 'uti', triggers: false, excluded: false, facilityCount: null },
-    { id: 'catheter', triggers: true, excluded: true, exclusionReason: 'no catheter' },
+    { id: 'adl_decline', verifyBucket: 'new_trigger' },
+    { id: 'phq9_depression', verifyBucket: 'will_clear' },
+    { id: 'weight_loss', verifyBucket: 'clearable' },
+    { id: 'falls_all', verifyBucket: 'locked' },
+    { id: 'uti', verifyBucket: 'incomplete' },
+    { id: 'catheter', verifyBucket: 'clinical' },
+    { id: 'pressure_ulcer_long', verifyBucket: 'clean' },
   ] };
 
-  it('separates triggering, will-clear, and excluded', () => {
-    const p = partitionMeasures(qm);
-    expect(p.triggering.map((m) => m.id)).toEqual(['falls_all', 'adl_decline']);
-    expect(p.willClear.map((m) => m.id)).toEqual(['phq9_depression']);
-    expect(p.excluded.map((m) => m.id)).toEqual(['catheter']);
+  it('groups by verifyBucket (will_clear + clearable share the clearing worklist)', () => {
+    const g = groupQmByBucket(qm);
+    expect(g.newTrigger.map((m) => m.id)).toEqual(['adl_decline']);
+    expect(g.clearing.map((m) => m.id)).toEqual(['phq9_depression', 'weight_loss']);
+    expect(g.locked.map((m) => m.id)).toEqual(['falls_all']);
+    expect(g.incomplete.map((m) => m.id)).toEqual(['uti']);
+    expect(g.clinical.map((m) => m.id)).toEqual(['catheter']);
   });
-  it('splits triggering into new triggers (isNewTrigger) vs carries', () => {
-    const q = { measures: [
-      { id: 'falls_all', triggers: true, excluded: false, facilityCount: { isNewTrigger: false } },
-      { id: 'adl_decline', triggers: true, excluded: false, facilityCount: { isNewTrigger: true } },
+  it('counts triggering buckets (new_trigger/will_clear/clearable/locked) as firing', () => {
+    expect(groupQmByBucket(qm).firingCount).toBe(4);
+  });
+  it('falls back to deriving a bucket when verifyBucket is absent (older response)', () => {
+    const legacy = { measures: [
+      { id: 'a', triggers: true, facilityCount: { isNewTrigger: true } },
+      { id: 'b', triggers: false, facilityCount: { wouldClearOnLock: true } },
+      { id: 'c', excluded: true, exclusionKind: 'incomplete' },
     ] };
-    const p = partitionMeasures(q);
-    expect(p.newTriggers.map((m) => m.id)).toEqual(['adl_decline']);
-    expect(p.carries.map((m) => m.id)).toEqual(['falls_all']);
-  });
-  it('reports firing + clean counts', () => {
-    const p = partitionMeasures(qm);
-    expect(p.firingCount).toBe(2);
-    expect(p.cleanCount).toBe(2); // phq9 + uti (non-triggering, non-excluded)
-  });
-  it('buckets excluded measures by exclusionKind', () => {
-    const q = { measures: [
-      { id: 'uti', excluded: true, exclusionKind: 'incomplete' },
-      { id: 'catheter', excluded: true, exclusionKind: 'clinical' },
-      { id: 'weight_loss', excluded: true, exclusionKind: null },
-      { id: 'falls_all', triggers: true, excluded: false },
-    ] };
-    const p = partitionMeasures(q);
-    expect(p.excludedIncomplete.map((m) => m.id)).toEqual(['uti']);
-    expect(p.excludedClinical.map((m) => m.id)).toEqual(['catheter', 'weight_loss']);
+    const g = groupQmByBucket(legacy);
+    expect(g.newTrigger.map((m) => m.id)).toEqual(['a']);
+    expect(g.clearing.map((m) => m.id)).toEqual(['b']);
+    expect(g.incomplete.map((m) => m.id)).toEqual(['c']);
   });
   it('handles null qm', () => {
-    expect(partitionMeasures(null)).toEqual({
-      triggering: [], newTriggers: [], carries: [], willClear: [], excluded: [],
-      excludedIncomplete: [], excludedClinical: [], firingCount: 0, cleanCount: 0,
+    expect(groupQmByBucket(null)).toEqual({
+      newTrigger: [], clearing: [], locked: [], incomplete: [], clinical: [], firingCount: 0,
     });
   });
 });

@@ -6,7 +6,7 @@ import {
 } from '../lib/mds-scraper.js';
 import { parseSectionListing } from '../lib/mds-section-parser.js';
 import { postVerify, BadScrapeError, PatientNotSyncedError } from '../lib/verify-api.js';
-import { categorizeDetections, partitionMeasures } from '../lib/verify-derive.js';
+import { categorizeDetections, groupQmByBucket } from '../lib/verify-derive.js';
 import { track } from '../../../utils/analytics.js';
 
 // Typed errors → user-facing copy + a stable `kind` for analytics.
@@ -111,7 +111,7 @@ export function useSuperVerify({ assessId, patientId }) {
         setPhase('done');
         track('super_verify_results_viewed', {
           n_detections: categorizeDetections(result).items.length,
-          n_qm_triggers: partitionMeasures(result.qm).firingCount,
+          n_qm_triggers: groupQmByBucket(result.qm).firingCount,
           qm_available: !!result.qm,
         });
       } catch (err) {

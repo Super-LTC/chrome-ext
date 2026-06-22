@@ -3,16 +3,11 @@ import {
   summaryTiles,
   captureTile,
   categorizeDetections,
-  partitionMeasures,
+  groupQmByBucket,
   countOpenQueries,
   componentBreakdown,
 } from '../lib/verify-derive.js';
-import {
-  formatPaymentRates,
-  formatPaymentDelta,
-  getPaymentModeLabel,
-  isPaymentApplicable,
-} from '../../../utils/payment.js';
+import { formatPaymentRates, getPaymentModeLabel, isPaymentApplicable } from '../../../utils/payment.js';
 import { useToasts } from './Toasts.jsx';
 import { QmSection } from './QmSection.jsx';
 import { CodingSection } from './CodingSection.jsx';
@@ -61,16 +56,19 @@ function ComponentRow({ row, maxDelta }) {
   );
 }
 
-function Reimbursement({ data, nItems }) {
-  const rates = formatPaymentRates(data?.payment);
-  const current = rates?.current || currentRateLabel(data?.payment);
-  const modeLabel = rates?.label || getPaymentModeLabel(data?.payment) || 'PDPM';
-  const delta = rates?.delta || formatPaymentDelta(data?.payment, 'long');
+function Reimbursement({ data }) {
+  // Header stat is the backend's mode-aware reimbursementHeadline — rendered
+  // VERBATIM (never recomputed from componentRevenue → that was the "+$0" CMI bug).
+  const headline = data?.reimbursementHeadline || {};
+  const current = formatPaymentRates(data?.payment)?.current || currentRateLabel(data?.payment);
+  const modeLabel = getPaymentModeLabel(data?.payment) || (headline.kind === 'cmi' ? 'Medicaid CMI' : 'PDPM');
 
-  const { rows, maxDelta, hippsCurrent, hippsPotential } = componentBreakdown(data);
-  const hipps = hippsCurrent || '—';
+  // Per-component detail is Medicare-only (componentRevenue). For state_rate/cmi
+  // the headline + its HIPPS detail carry the number.
+  const { rows, maxDelta, hippsCurrent } = componentBreakdown(data);
+  const hipps = hippsCurrent || data?.calculation?.hippsCode || '—';
   const changedRows = rows.filter((r) => r.changed);
-  const hippsLifts = hippsPotential && hippsPotential !== hippsCurrent;
+  const showHeadline = headline.hasLift && headline.label;
 
   return (
     <>
@@ -83,10 +81,10 @@ function Reimbursement({ data, nItems }) {
               {current ? <b>{current}</b> : <b>—</b>}
               <span>{modeLabel}</span>
             </div>
-            {delta && (
+            {showHeadline && (
               <div className="sv-reimb__opp">
-                <b>▲ {delta}</b>
-                <small>if items below coded</small>
+                <b>▲ {headline.label}</b>
+                {headline.detail ? <small>{headline.detail}</small> : null}
               </div>
             )}
           </div>
@@ -97,12 +95,6 @@ function Reimbursement({ data, nItems }) {
               {changedRows.map((r) => (
                 <ComponentRow key={r.key} row={r} maxDelta={maxDelta} />
               ))}
-              {hippsLifts && (
-                <div className="sv-reimb__lift">
-                  Coding the {nItems} item{nItems === 1 ? '' : 's'} below lifts the HIPPS{' '}
-                  <b>{hippsCurrent}</b> → <b>{hippsPotential}</b>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -133,8 +125,8 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
 
   // --- derive ---
   const baseTiles = summaryTiles(data);
-  const cap = captureTile(data?.payment);
-  const partition = partitionMeasures(data?.qm);
+  const cap = captureTile(data?.reimbursementHeadline);
+  const qmGroups = groupQmByBucket(data?.qm);
   const { items } = categorizeDetections(data);
   const effItems = items.map((i) => ({
     ...i,
@@ -143,7 +135,7 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
   const reviewCount = effItems.filter((i) => i.decided !== 'dismiss').length;
 
   const totalMeasures = data?.qm?.measures?.length || 0;
-  const qmTriggers = partition.firingCount;
+  const qmTriggers = qmGroups.firingCount;
   const queriesOpen = countOpenQueries(
     (data?.outstandingQueries || []).filter((q) => !queriesDismissed.has(q.id)),
   );
@@ -161,10 +153,10 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
           <Tile cls="sv-stat--warn" n={baseTiles.interviewsMissing} label="interview missing" muted={baseTiles.interviewsMissing === 0} onClick={() => scrollTo('uda')} />
         </div>
 
-        <Reimbursement data={data} nItems={effItems.length} />
+        <Reimbursement data={data} />
 
         {data?.qm && (
-          <QmSection partition={partition} totalMeasures={totalMeasures} assessId={assessId} />
+          <QmSection groups={qmGroups} totalMeasures={totalMeasures} assessId={assessId} />
         )}
 
         <CodingSection
