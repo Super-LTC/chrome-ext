@@ -15,6 +15,7 @@ export const AuditDashboard = ({
   stampedAddIds,
   skippedAddIds,
   onEnterStep,
+  onStampAll,
 }) => {
   useEffect(() => {
     window.SuperAnalytics?.track?.('care_plan_audit_dashboard_viewed', {});
@@ -118,6 +119,17 @@ export const AuditDashboard = ({
             ? <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} · <strong>{totalStamped}</strong> added this session</>
             : <>Reviewed {totalAuditItems} care plan {totalAuditItems === 1 ? 'item' : 'items'} in this audit</>}
         </div>
+        {/* V2-only: parent passes onStampAll. NO_TRACK — telemetry fires in the
+            parent's _commitAuditAdds (care_plan_audit_commit_stamped). */}
+        {onStampAll && totalRemaining > 0 && (
+          <button
+            type="button"
+            className="cpas-btn cpas-btn--primary cpas-dashboard__stampall"
+            onClick={onStampAll}
+          >
+            ✓ Stamp all {totalRemaining} remaining
+          </button>
+        )}
       </div>
 
       <div className="cpas-dashboard__tiles cpas-dashboard__tiles--three">

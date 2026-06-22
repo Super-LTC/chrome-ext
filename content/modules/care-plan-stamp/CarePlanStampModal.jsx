@@ -10,6 +10,9 @@ import { areaLabel } from './careArea.js';
 // Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
 import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.jsx';
+import { isV2, engineVersionOf, devForceMock } from './v2-flag.js';
+import { buildWizardModel, skippedItems } from './wizardModel.js';
+import { AuditWizard } from './components/AuditWizard.jsx';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -189,15 +192,25 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
         if (mode === 'comprehensive') {
           // Comprehensive Review path — full audit of the existing plan.
-          const auditResp = await window.CarePlanAuditAPI.fetchAudit({
-            patientId,
-            facilityName,
-            orgSlug,
-            patientName,
-            orgDropdowns,
-            existingFocusTexts: fullPlan.focusTexts,
-          });
+          // Under the dev mock override, swap the network call for the bundled
+          // fixture. Dynamic import keeps the (large) fixture out of the main
+          // chunk for prod users — it only loads when devForceMock() is set.
+          let auditResp;
+          if (devForceMock()) {
+            const mod = await import('./__fixtures__/mock-audit-v2.js');
+            auditResp = mod.default;
+          } else {
+            auditResp = await window.CarePlanAuditAPI.fetchAudit({
+              patientId,
+              facilityName,
+              orgSlug,
+              patientName,
+              orgDropdowns,
+              existingFocusTexts: fullPlan.focusTexts,
+            });
+          }
           if (cancelled) return;
+          const v2 = isV2(auditResp.audit);
           setCareplanId(cpId);
           setMiniToken(token);
           // Build CAA lookup maps from byCAA (used for rail subtitles only;
@@ -216,17 +229,23 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // `_recKardex` for the dropdown's "✨ Recommended" badge. Mirrors the
           // Initial path's behavior (don't stamp things onto the Kardex
           // automatically — nurses opt in).
-          (audit.toAdd || []).forEach((it) => {
-            if (!it?.focus) return;
-            it.focus = {
-              ...it.focus,
-              interventions: (it.focus.interventions || []).map((iv) => ({
-                ...iv,
-                _recKardex: iv.kardexCategory ?? null,
-                kardexCategory: null,
-              })),
-            };
-          });
+          // V1 only: the engine's kardexCategory is a *recommendation*, not a
+          // default — stash it in _recKardex and blank the live field so nurses
+          // opt in. Under V2 the engine pre-fills kardexCategory intentionally,
+          // so leave it untouched.
+          if (!v2) {
+            (audit.toAdd || []).forEach((it) => {
+              if (!it?.focus) return;
+              it.focus = {
+                ...it.focus,
+                interventions: (it.focus.interventions || []).map((iv) => ({
+                  ...iv,
+                  _recKardex: iv.kardexCategory ?? null,
+                  kardexCategory: null,
+                })),
+              };
+            });
+          }
           // Sort to-add by clinical significance (backend `score`, descending)
           // so the rail, tiles, and coverage grid surface the important focuses
           // first and sink boilerplate.
@@ -238,6 +257,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           (audit.toCheck || []).forEach((it, i) => { it._rowId = `verify-${i}-${it.focusId || it.detail || 'na'}`; });
           (audit.toRemove || []).forEach((it, i) => { it._rowId = `remove-${i}-${it.focusId || 'na'}`; });
           (audit.onPlan || []).forEach((it, i) => { it._rowId = `onplan-${i}-${it.ruleId || it.focusId || 'na'}`; });
+          (audit.skipped || []).forEach((it, i) => { it._rowId = `skip-${i}-${it.ruleId || it.caa || 'na'}`; });
           setAudit(audit);
           const a = audit;
           // Note: unlike the Initial wizard, the audit rail hides skipped items,
@@ -787,6 +807,45 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     });
   }, [audit, patientId, orgSlug, facilityName, skippedAddIds, stampedAddIds]);
 
+  // V2 wizard — un-skip an item from the Skipped fold. Persist the un-skip and
+  // optimistically move it into the live toAdd so the nurse can act on it now.
+  const _reopenSkipped = useCallback((item) => {
+    if (!item?.ruleId) return;
+    // Drop from session-skip set if present.
+    setSkippedAddIds((prev) => { const n = new Set(prev); n.delete(item.ruleId); return n; });
+    // Move into live toAdd + out of skipped (idempotent on ruleId).
+    setAudit((prev) => {
+      if (!prev) return prev;
+      const already = (prev.toAdd || []).some((it) => it.ruleId === item.ruleId);
+      const reAdded = already ? prev.toAdd : [...(prev.toAdd || []), { ...item, _rowId: item._rowId || `add-reopen-${item.ruleId}` }];
+      return { ...prev, toAdd: reAdded, skipped: (prev.skipped || []).filter((s) => s.ruleId !== item.ruleId) };
+    });
+    setSelectedRail({ kind: 'add', key: item._rowId || `add-reopen-${item.ruleId}` });
+    window.CarePlanStampAPI?.persistSkip?.({ patientId, orgSlug, facilityName, ruleId: item.ruleId, isSkipping: false });
+  }, [patientId, orgSlug, facilityName]);
+
+  // V2 wizard — thin wrapper around _stampAuditAddOne. If the item is already
+  // stamped, "Stamp & next" should just advance to the next live toAdd item
+  // instead of re-stamping it.
+  const _wizardStampNext = useCallback((item) => {
+    if (!item) return;
+    if (stampedAddIds.has(item.ruleId)) {
+      // Already stamped → just advance to the next live toAdd item.
+      const toAdd = audit?.toAdd || [];
+      const startIdx = toAdd.findIndex((it) => it._rowId === item._rowId);
+      let next = null;
+      for (let step = 1; step <= toAdd.length; step++) {
+        const cand = toAdd[(startIdx + step) % toAdd.length];
+        if (!cand || cand._rowId === item._rowId) continue;
+        if (stampedAddIds.has(cand.ruleId) || skippedAddIds.has(cand.ruleId)) continue;
+        next = cand; break;
+      }
+      setSelectedRail(next ? { kind: 'add', key: next._rowId } : null);
+      return;
+    }
+    _stampAuditAddOne(item);
+  }, [audit, stampedAddIds, skippedAddIds, _stampAuditAddOne]);
+
   const _resolveAuditItem = useCallback(async (item, fromBucket) => {
     if (!item?.pccFocusId || !careplanId) {
       setResolveStatus((prev) => ({ ...prev, [item.focusId]: 'error' }));
@@ -971,6 +1030,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               linkageCounts={linkageCounts}
               stampedAddIds={stampedAddIds}
               skippedAddIds={skippedAddIds}
+              onStampAll={isV2(audit) ? () => _commitAuditAdds() : undefined}
               onEnterStep={(step, opts) => {
                 setComprehensiveStep(step);
                 const bucket = opts?.bucket || null;
@@ -1005,6 +1065,27 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             <CoveredOverview audit={audit} focusRowId={selectedRail?.kind === 'on_plan' ? selectedRail.key : null} />
           )}
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && comprehensiveStep !== 'on_plan' && (
+            isV2(audit) ? (
+              <AuditWizard
+                audit={audit}
+                dropdowns={dropdowns}
+                auditFocusStates={auditFocusStates}
+                composeFocus={_composeFocus}
+                emptyFocusState={_emptyFocusState}
+                stampedAddIds={stampedAddIds}
+                skippedAddIds={skippedAddIds}
+                needsInputByRowId={_auditNeedsInputByRowId(audit, auditFocusStates)}
+                selected={selectedRail}
+                caaFilter={comprehensiveStep === 'care_area' ? caaFilter : null}
+                stamping={stage === 'stamping'}
+                onSelect={setSelectedRail}
+                onPatchFocusState={_patchAuditFocusStateByRuleId}
+                onStampNext={_wizardStampNext}
+                onSkip={_skipAuditAddItem}
+                onReopen={_reopenSkipped}
+                onStampAll={() => _commitAuditAdds()}
+              />
+            ) : (
             <div className="cpas-modal__columns">
               <AuditRail
                 audit={railAudit}
@@ -1160,6 +1241,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 )}
               </div>
             </div>
+            )
           )}
           {stage === 'ready' && libraryPanelOpen && (
             <LibraryBrowser
