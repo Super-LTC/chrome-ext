@@ -7,7 +7,7 @@ import {
   countOpenQueries,
   componentBreakdown,
 } from '../lib/verify-derive.js';
-import { isPaymentApplicable } from '../../../utils/payment.js';
+import { isPaymentApplicable, formatPaymentRates } from '../../../utils/payment.js';
 import { PaymentCard } from '../../pdpm-analyzer/components/PaymentCard.jsx';
 import { useToasts } from './Toasts.jsx';
 import { QmSection } from './QmSection.jsx';
@@ -15,17 +15,6 @@ import { CodingSection } from './CodingSection.jsx';
 import { QueriesSection } from './QueriesSection.jsx';
 import { InterviewsSection } from './InterviewsSection.jsx';
 import { CertSection } from './CertSection.jsx';
-
-function currentRateLabel(payment) {
-  if (!isPaymentApplicable(payment)) return null;
-  if (payment.mode === 'state_rate') {
-    const r = payment.current?.rate;
-    return r != null ? `$${Math.round(r).toLocaleString()}/day` : null;
-  }
-  const t = payment.current?.total;
-  if (t == null) return null;
-  return payment.mode === 'cmi' ? `${t.toFixed(3)} CMI` : `$${Math.round(t).toLocaleString()}/day`;
-}
 
 function Tile({ cls, n, label, muted, onClick }) {
   return (
@@ -58,18 +47,21 @@ function ComponentRow({ row, maxDelta }) {
 }
 
 function Reimbursement({ data }) {
-  // Header stat is the backend's mode-aware reimbursementHeadline — rendered
-  // VERBATIM (never recomputed from componentRevenue → that was the "+$0" CMI bug).
-  const headline = data?.reimbursementHeadline || {};
-  const current = currentRateLabel(data?.payment);
+  // Single source of truth for the numbers: the analyzer's PaymentCard, driven by
+  // `payment` (works in every mode). `hasLift` is computed the SAME way PaymentCard
+  // decides to render — so the header never says "no capture" while the card shows a
+  // lift (the old reimbursementHeadline-vs-payment contradiction).
+  const payment = data?.payment;
+  const hasLift = isPaymentApplicable(payment) && !!formatPaymentRates(payment);
 
-  // Mode-aware current→potential points/rates come from `payment`, rendered by
-  // the analyzer's own PaymentCard (all modes). Medicare additionally gets the
-  // per-component breakdown (componentRevenue is Medicare-only).
-  const { rows, maxDelta, hippsCurrent } = componentBreakdown(data);
+  const { rows, maxDelta, hippsCurrent, hippsPotential } = componentBreakdown(data);
   const hipps = hippsCurrent || data?.calculation?.hippsCode || '—';
-  const changedRows = rows.filter((r) => r.changed);
-  const showHeadline = headline.hasLift && headline.label;
+  const hippsChange =
+    data?.reimbursementHeadline?.detail ||
+    (hippsPotential && hippsPotential !== hippsCurrent ? `${hippsCurrent} → ${hippsPotential}` : null);
+  // Only $-bearing rows (Medicare). For CMI/state-rate componentRevenue is null →
+  // would render empty bars; PaymentCard carries that detail instead.
+  const dollarRows = rows.filter((r) => r.changed && r.delta > 0);
 
   return (
     <>
@@ -78,22 +70,16 @@ function Reimbursement({ data }) {
         <div className="sv-card sv-reimb">
           <div className="sv-reimb__top">
             <div className="sv-hipps">{hipps}</div>
-            {current ? <div className="sv-reimb__rate"><b>{current}</b><span>current</span></div> : null}
-            {showHeadline ? (
-              <div className="sv-reimb__opp"><b>▲ {headline.label}</b>{headline.detail ? <small>{headline.detail}</small> : null}</div>
-            ) : (
-              <div className="sv-reimb__opp"><small>No additional capture as coded</small></div>
-            )}
+            {hippsChange ? <div className="sv-reimb__hippschg">{hippsChange}</div> : null}
+            {!hasLift ? <div className="sv-reimb__opp"><small>No additional capture as coded</small></div> : null}
           </div>
 
-          {isPaymentApplicable(data?.payment) && (
-            <div className="sv-reimb__pay"><PaymentCard data={data} /></div>
-          )}
+          {hasLift && <div className="sv-reimb__pay"><PaymentCard data={data} /></div>}
 
-          {changedRows.length > 0 && (
+          {dollarRows.length > 0 && (
             <div className="sv-reimb__bd">
               <div className="sv-reimb__bdhead">Where the lift is</div>
-              {changedRows.map((r) => (
+              {dollarRows.map((r) => (
                 <ComponentRow key={r.key} row={r} maxDelta={maxDelta} />
               ))}
             </div>
@@ -126,7 +112,7 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
 
   // --- derive ---
   const baseTiles = summaryTiles(data);
-  const cap = captureTile(data?.reimbursementHeadline);
+  const cap = captureTile(data?.reimbursementHeadline, data?.payment);
   const qmGroups = groupQmByBucket(data?.qm);
   const { items } = categorizeDetections(data);
   const effItems = items.map((i) => ({

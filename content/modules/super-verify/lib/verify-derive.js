@@ -21,17 +21,26 @@ export function countMissingInterviews(compliance) {
   return INTERVIEW_KEYS.filter((k) => checks[k]?.status === 'failed').length;
 }
 
-// The "to capture" tile, driven by the backend's mode-aware reimbursementHeadline
-// (never compute from componentRevenue — that's Medicare-only → the "+$0" CMI bug).
-export function captureTile(headline) {
-  const h = headline || {};
-  const cmi = h.kind === 'cmi';
-  if (!h.hasLift || h.kind === 'none' || h.deltaValue == null) {
-    return { display: cmi ? '0.00' : '$0', label: cmi ? 'CMI captured' : 'captured', muted: true };
-  }
+// The "to capture" tile. Prefers the backend's mode-aware reimbursementHeadline,
+// but falls back to `payment.delta` when the headline is absent / reports no lift
+// (e.g. an env without PR #744) — so we never show "captured" while payment has a
+// real lift. Never derived from componentRevenue (Medicare-only → the "+$0" bug).
+function liftTile(cmi, delta) {
   return cmi
-    ? { display: `+${Number(h.deltaValue).toFixed(2)}`, label: 'CMI to capture', muted: false }
-    : { display: `+$${Math.round(Number(h.deltaValue))}`, label: '/day to capture', muted: false };
+    ? { display: `+${Number(delta).toFixed(2)}`, label: 'CMI to capture', muted: false }
+    : { display: `+$${Math.round(Number(delta))}`, label: '/day to capture', muted: false };
+}
+
+export function captureTile(headline, payment) {
+  const h = headline || {};
+  if (h.hasLift && h.kind !== 'none' && h.deltaValue != null) {
+    return liftTile(h.kind === 'cmi', h.deltaValue);
+  }
+  const pDelta = Number(payment?.delta) || 0;
+  const applicable = payment && payment.mode && payment.mode !== 'not_applicable';
+  if (applicable && pDelta > 0) return liftTile(payment.mode === 'cmi', pDelta);
+  const cmi = h.kind === 'cmi' || payment?.mode === 'cmi';
+  return { display: cmi ? '0.00' : '$0', label: cmi ? 'CMI captured' : 'captured', muted: true };
 }
 
 export function summaryTiles(data) {

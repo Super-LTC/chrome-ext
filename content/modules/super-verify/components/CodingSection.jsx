@@ -3,6 +3,29 @@ import { resolveItemName } from '../../pdpm-analyzer/lib/mds-item-labels.js';
 import { postDetectionDecision } from '../lib/verify-api.js';
 import { openItemInPcc } from '../lib/view-item.js';
 import { track } from '../../../utils/analytics.js';
+import { useItemDetail } from '../../pdpm-analyzer/hooks/useItemDetail.js';
+import { ItemDetail } from '../../../components/ItemDetail.jsx';
+import { openEvidence } from '../../../utils/evidence-helpers.js';
+
+// Fetches the real per-item evidence on expand — the same endpoint + render the
+// PDPM Analyzer uses (useItemDetail → ItemDetail compact). The verify response's
+// inline rationale is often empty, which is why the old drawer said "no evidence".
+function EvidenceDrawer({ item, assessId }) {
+  const { data, loading, error } = useItemDetail(item.mdsItem, item.raw?.categoryKey, { assessmentId: assessId });
+  return (
+    <div className="sv-evidence">
+      {loading && <div className="sv-evidence__loading"><span className="sv-spinner sv-spinner--sm" /> Loading evidence…</div>}
+      {error && <p className="sv-evidence__body">{error}</p>}
+      {!loading && !error && (data
+        ? <ItemDetail variant="compact" data={data} detectionItem={item.raw} mdsItem={item.mdsItem} onViewSource={openEvidence} />
+        : <p className="sv-evidence__body">No evidence on file for this item.</p>)}
+      {/* NO_TRACK — opens the item in PCC for the full chart */}
+      <button className="sv-btn sv-btn--ghost sv-evidence__open" onClick={() => openItemInPcc(assessId, item.mdsItem)}>
+        Open {item.displayCode} in PointClickCare ↗
+      </button>
+    </div>
+  );
+}
 
 // Reason quick-picks differ by card kind (missed opportunity vs over-code risk).
 const REASONS = {
@@ -127,21 +150,7 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
         </div>
       </div>
 
-      {evidOpen && (
-        <div className="sv-evidence">
-          <p className="sv-evidence__body">{item.raw?.rationale || 'No additional evidence text on file.'}</p>
-          {item.raw?.diagnosisSummary ? (
-            <div className="sv-evidence__row"><span className="sv-evidence__k">Diagnosis</span><span>{item.raw.diagnosisSummary}</span></div>
-          ) : null}
-          {item.raw?.treatmentSummary ? (
-            <div className="sv-evidence__row"><span className="sv-evidence__k">Treatment</span><span>{item.raw.treatmentSummary}</span></div>
-          ) : null}
-          {/* NO_TRACK — opens the item in PCC for the full chart */}
-          <button className="sv-btn sv-btn--ghost sv-evidence__open" onClick={() => openItemInPcc(assessId, item.mdsItem)}>
-            Open {item.displayCode} in PointClickCare ↗
-          </button>
-        </div>
-      )}
+      {evidOpen && <EvidenceDrawer item={item} assessId={assessId} />}
 
       {!decided && !reasonOpen && (
         <div className="sv-decide">

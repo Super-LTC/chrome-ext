@@ -67,6 +67,10 @@ describe('captureTile (from reimbursementHeadline)', () => {
     expect(captureTile({ kind: 'none', hasLift: false })).toEqual({ display: '$0', label: 'captured', muted: true });
     expect(captureTile(undefined)).toEqual({ display: '$0', label: 'captured', muted: true });
   });
+  it('falls back to payment.delta when the headline is absent but payment has a lift', () => {
+    expect(captureTile(null, { mode: 'cmi', delta: 0.29 })).toEqual({ display: '+0.29', label: 'CMI to capture', muted: false });
+    expect(captureTile({ hasLift: false }, { mode: 'medicare', delta: 48 })).toEqual({ display: '+$48', label: '/day to capture', muted: false });
+  });
 });
 
 describe('dedupeEvidence', () => {
