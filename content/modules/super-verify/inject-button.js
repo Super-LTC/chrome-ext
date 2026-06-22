@@ -30,23 +30,18 @@ function _readIds() {
 }
 
 function _makeButton() {
-  // Match PCC's native `mdsbutton` anchors (icon + label), tinted with the same
-  // indigo gradient as the care-plan button so it reads as ours.
+  // NOT a PCC `.mdsbutton` — that class is a left/right sprite-cap button (the
+  // right cap gif lives on an inner <span>), so any background override leaves a
+  // white sliver. We use a self-contained indigo pill (styled in
+  // css/super-verify.css) sized to align with the native 24px action buttons.
   const a = document.createElement('a');
-  a.className = 'mdsbutton';
+  a.className = 'sv-inject-btn';
   a.id = BTN_ID;
   a.href = 'javascript:;';
   a.title = 'Super Verify — last-chance PDPM + Quality Measure check before you lock';
   a.setAttribute('data-track', 'super_verify_button_clicked');
-  a.style.cssText = `
-    background: linear-gradient(135deg, #6366f1, #4f46e5);
-    color: #fff;
-    border: 1px solid #4338ca;
-    font-weight: 600;
-    cursor: pointer;
-  `;
   a.innerHTML =
-    '<span aria-hidden="true" style="font-size:15px;line-height:1;margin-right:4px;">✨</span>' +
+    '<span class="sv-inject-btn__ic" aria-hidden="true">✨</span>' +
     '<span>Super Verify</span>';
   a.addEventListener('click', (e) => {
     e.preventDefault();

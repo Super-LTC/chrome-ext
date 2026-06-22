@@ -9,6 +9,37 @@
  * Classes are namespaced sv- (and svq- for quality-measure visuals).
  */
 
+/* ===== Injected action-bar button ===================================== */
+/* Self-contained pill (NOT PCC's sprite-based .mdsbutton). Floats into
+   #mdsactionbuttons next to the native 24px-tall Verify button. */
+.sv-inject-btn {
+  float: left;
+  box-sizing: border-box;
+  height: 24px;
+  margin: 2px 2px 2px 5px;
+  padding: 0 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--super-radius-md);
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: 1px solid #4338ca;
+  color: #fff !important;
+  font-family: var(--super-font);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none !important;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.35);
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+.sv-inject-btn:hover { filter: brightness(1.08); color: #fff !important; text-decoration: none !important; }
+.sv-inject-btn:active { transform: translateY(1px); }
+.sv-inject-btn:focus { outline: none; box-shadow: 0 0 0 2px #c7d2fe; }
+.sv-inject-btn__ic { font-size: 13px; line-height: 1; }
+
 /* ===== Overlay + modal shell ========================================== */
 .sv-overlay {
   position: fixed;
