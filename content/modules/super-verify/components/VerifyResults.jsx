@@ -7,7 +7,8 @@ import {
   countOpenQueries,
   componentBreakdown,
 } from '../lib/verify-derive.js';
-import { formatPaymentRates, getPaymentModeLabel, isPaymentApplicable } from '../../../utils/payment.js';
+import { isPaymentApplicable } from '../../../utils/payment.js';
+import { PaymentCard } from '../../pdpm-analyzer/components/PaymentCard.jsx';
 import { useToasts } from './Toasts.jsx';
 import { QmSection } from './QmSection.jsx';
 import { CodingSection } from './CodingSection.jsx';
@@ -60,11 +61,11 @@ function Reimbursement({ data }) {
   // Header stat is the backend's mode-aware reimbursementHeadline — rendered
   // VERBATIM (never recomputed from componentRevenue → that was the "+$0" CMI bug).
   const headline = data?.reimbursementHeadline || {};
-  const current = formatPaymentRates(data?.payment)?.current || currentRateLabel(data?.payment);
-  const modeLabel = getPaymentModeLabel(data?.payment) || (headline.kind === 'cmi' ? 'Medicaid CMI' : 'PDPM');
+  const current = currentRateLabel(data?.payment);
 
-  // Per-component detail is Medicare-only (componentRevenue). For state_rate/cmi
-  // the headline + its HIPPS detail carry the number.
+  // Mode-aware current→potential points/rates come from `payment`, rendered by
+  // the analyzer's own PaymentCard (all modes). Medicare additionally gets the
+  // per-component breakdown (componentRevenue is Medicare-only).
   const { rows, maxDelta, hippsCurrent } = componentBreakdown(data);
   const hipps = hippsCurrent || data?.calculation?.hippsCode || '—';
   const changedRows = rows.filter((r) => r.changed);
@@ -77,17 +78,17 @@ function Reimbursement({ data }) {
         <div className="sv-card sv-reimb">
           <div className="sv-reimb__top">
             <div className="sv-hipps">{hipps}</div>
-            <div className="sv-reimb__rate">
-              {current ? <b>{current}</b> : <b>—</b>}
-              <span>{modeLabel}</span>
-            </div>
-            {showHeadline && (
-              <div className="sv-reimb__opp">
-                <b>▲ {headline.label}</b>
-                {headline.detail ? <small>{headline.detail}</small> : null}
-              </div>
+            {current ? <div className="sv-reimb__rate"><b>{current}</b><span>current</span></div> : null}
+            {showHeadline ? (
+              <div className="sv-reimb__opp"><b>▲ {headline.label}</b>{headline.detail ? <small>{headline.detail}</small> : null}</div>
+            ) : (
+              <div className="sv-reimb__opp"><small>No additional capture as coded</small></div>
             )}
           </div>
+
+          {isPaymentApplicable(data?.payment) && (
+            <div className="sv-reimb__pay"><PaymentCard data={data} /></div>
+          )}
 
           {changedRows.length > 0 && (
             <div className="sv-reimb__bd">
