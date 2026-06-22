@@ -177,7 +177,6 @@
 .sv-stat:hover { border-color: var(--super-gray-300); transform: translateY(-1px); }
 .sv-stat__n { font-family: var(--super-font-mono); font-weight: 600; font-size: 17px; line-height: 1; }
 .sv-stat__l { font-size: 10px; color: var(--super-gray-500); margin-top: 4px; font-weight: 500; }
-.sv-stat--qm { border-color: #c7d2fe; background: linear-gradient(180deg, #fff, #eef2ff); }
 .sv-stat--qm .sv-stat__n { color: var(--super-primary-dark); }
 .sv-stat--money .sv-stat__n { color: #059669; }
 .sv-stat--warn .sv-stat__n { color: var(--super-review); }
@@ -298,9 +297,8 @@
 .sv-reimb__lift b { font-family: var(--super-font-mono); color: var(--super-gray-700); }
 
 /* ===== Quality measures ============================================== */
-.svq-card { border-left: 3px solid transparent; }
-.svq-card.is-trig { border-left-color: var(--super-review); }
-.svq-card.is-clear { border-left-color: var(--super-match); }
+/* Uniform cards — tone is carried by the badge + the delta number, not a
+   colored left stripe or a tinted card. */
 .svq-head { display: flex; align-items: flex-start; gap: 9px; }
 .svq-head > div:first-child { flex: 1; min-width: 0; }
 .svq-title { font-weight: 600; font-size: 13.5px; }
@@ -309,12 +307,10 @@
   display: flex; align-items: center; gap: 11px; margin-top: 11px; padding: 9px 11px;
   border-radius: var(--super-radius-md); background: var(--super-gray-50); border: 1px solid var(--super-gray-100);
 }
-.svq-card.is-trig .svq-delta { background: var(--super-review-bg); border-color: #fde68a; }
-.svq-card.is-clear .svq-delta { background: #ecfdf5; border-color: #d1fae5; }
 .svq-nums { font-family: var(--super-font-mono); font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .svq-c { font-size: 21px; color: var(--super-gray-400); }
 .svq-a { color: var(--super-gray-300); }
-.svq-x { font-size: 21px; }
+.svq-x { font-size: 21px; color: var(--super-gray-700); }
 .svq-card.is-trig .svq-x { color: var(--super-review); }
 .svq-card.is-clear .svq-x { color: var(--super-gray-400); }
 .svq-cap { font-size: 11.5px; color: var(--super-gray-600); line-height: 1.3; }
@@ -339,10 +335,9 @@
 .svq-excluded__list li { margin: 3px 0; }
 
 /* ===== Coding opportunities (disposition workflow) =================== */
-.sv-coding { border-left: 3px solid var(--super-review); }
-.sv-coding.is-risk { border-left-color: var(--super-mismatch); }
-.sv-coding.is-accepted { border-left-color: var(--super-match); }
-.sv-coding.is-dismissed { border-left-color: var(--super-gray-300); opacity: 0.8; }
+/* No accent stripe — the "Needs a decision" bar + icon + decided chip carry
+   state. Dismissed cards just dim. */
+.sv-coding.is-dismissed { opacity: 0.72; }
 .sv-needbar {
   display: flex; align-items: center; gap: 7px; margin: -2px 0 9px;
   font-size: 10.5px; font-weight: 600; color: #b45309; text-transform: uppercase; letter-spacing: 0.05em;
