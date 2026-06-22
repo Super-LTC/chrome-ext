@@ -305,18 +305,24 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           console.warn('[CarePlanAutoPop] Unresolved canonicals (some fields will stamp without them):', unresolved);
         }
 
-        // Treat the backend's kardex pick as a per-intervention recommendation,
-        // not a default. Every chip starts as None; the suggestion shows up
-        // inside the dropdown as "✨ Recommended". Nurses opt in deliberately.
+        // V2 initial focuses already carry the engine-resolved kardexCategory +
+        // autoSelect + rationale + caa (auto-pop's enrich()). So initial is V2 at
+        // the engine and the card — only the audit *wizard shell* is comprehensive-
+        // only (a new admit has no plan to diff).
+        const v2init = isV2(prop);
+        // Kardex presentation: V2 keeps the engine's pick PRE-FILLED (an editable
+        // recommendation, like the comprehensive wizard). V1 keeps the legacy
+        // opt-in — every chip starts None with the suggestion shown as
+        // "✨ Recommended" inside the dropdown; nurses opt in deliberately.
         const propWithRecs = {
           ...prop,
           focuses: (prop.focuses || []).map((f) => ({
             ...f,
-            interventions: (f.interventions || []).map((iv) => ({
-              ...iv,
-              _recKardex: iv.kardexCategory ?? null,
-              kardexCategory: null,
-            })),
+            interventions: (f.interventions || []).map((iv) => (
+              v2init
+                ? iv
+                : { ...iv, _recKardex: iv.kardexCategory ?? null, kardexCategory: null }
+            )),
           })),
         };
         // Merge previously-skipped focuses (backend returned them on a
@@ -349,10 +355,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         setCareplanId(cpId);
         setMiniToken(token);
         setFocusStates(mergedFocuses.map((f, i) => ({
-          // Pre-skip only if backend marked this already-on-plan OR it came from
-          // the previously-skipped tail. Everything else defaults ON (included);
-          // the nurse skips what they don't want.
-          skipped: !!f.alreadyOnPlan || i >= (propWithRecs.focuses?.length || 0),
+          // Pre-skip if backend marked this already-on-plan, it came from the
+          // previously-skipped tail, OR (V2 only) it's an opt-in focus
+          // (autoSelect:false) — boilerplate universals with no signal start
+          // skipped so evidence-backed focuses are pre-checked and the random
+          // ones are opt-in, not stamped on every plan. The nurse can include
+          // any of them. V1 never sends autoSelect, so this is a no-op there.
+          skipped: !!f.alreadyOnPlan
+            || i >= (propWithRecs.focuses?.length || 0)
+            || (v2init && f.autoSelect === false),
           focusText: null,
           goals: null,
           interventions: null,
