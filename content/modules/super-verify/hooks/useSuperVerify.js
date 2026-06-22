@@ -6,6 +6,8 @@ import {
 } from '../lib/mds-scraper.js';
 import { parseSectionListing } from '../lib/mds-section-parser.js';
 import { postVerify, BadScrapeError, PatientNotSyncedError } from '../lib/verify-api.js';
+import { categorizeDetections, partitionMeasures } from '../lib/verify-derive.js';
+import { track } from '../../../utils/analytics.js';
 
 // Typed errors → user-facing copy + a stable `kind` for analytics.
 function mapError(err) {
@@ -71,6 +73,9 @@ export function useSuperVerify({ assessId, patientId }) {
       setCompleted([]);
       setPhase('scraping');
 
+      let stage = 'scraping';
+      const startedAt = Date.now();
+
       try {
         // Discover sections up front so the checklist can render every row
         // before the fetches land. (Scraper re-parses internally; cheap.)
@@ -89,18 +94,36 @@ export function useSuperVerify({ assessId, patientId }) {
           },
         });
         if (cancelled) return;
-        setNAnswers(Object.keys(blob.answers || {}).length);
+        const nAns = Object.keys(blob.answers || {}).length;
+        setNAnswers(nAns);
+        track('super_verify_scrape_completed', {
+          n_sections: list.length,
+          n_answers: nAns,
+          duration_ms: Date.now() - startedAt,
+        });
 
+        stage = 'verifying';
         setPhase('verifying');
         const result = await postVerify({ assessId, patientId, answersBlob: blob });
         if (cancelled) return;
 
         setData(result);
         setPhase('done');
+        track('super_verify_results_viewed', {
+          n_detections: categorizeDetections(result).items.length,
+          n_qm_triggers: partitionMeasures(result.qm).firingCount,
+          qm_available: !!result.qm,
+        });
       } catch (err) {
         if (cancelled) return;
-        setError(mapError(err));
+        const mapped = mapError(err);
+        setError(mapped);
         setPhase('error');
+        if (stage === 'scraping') {
+          track('super_verify_scrape_failed', { error_kind: mapped.kind });
+        } else {
+          track('super_verify_failed', { status: err?.status || 0, error_kind: mapped.kind });
+        }
       }
     }
 

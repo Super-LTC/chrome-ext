@@ -258,6 +258,16 @@ export const EVENT_SCHEMA = {
   // === Certifications ===
   cert_view_document: ['cert_type'],
 
+  // === Super Verify (MDS last-chance scrubber) ===
+  // No assessment/patient ids — counts + categoricals only (ids would trip the
+  // PHI guardrail and aren't needed; PostHog correlates by session).
+  super_verify_button_clicked: [],
+  super_verify_scrape_completed: ['n_sections', 'n_answers', 'duration_ms'],
+  super_verify_scrape_failed: ['error_kind'],
+  super_verify_results_viewed: ['n_detections', 'n_qm_triggers', 'qm_available'],
+  super_verify_failed: ['status', 'error_kind'],
+  super_verify_decision_saved: ['item_code', 'decision', 'has_reason'],
+
   // === Meta (PHI guardrail tripwire) ===
   phi_guardrail_tripped: ['event_name', 'prop_name', 'pattern'],
 };

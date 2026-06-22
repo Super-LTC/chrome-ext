@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { resolveItemName } from '../../pdpm-analyzer/lib/mds-item-labels.js';
 import { postDetectionDecision } from '../lib/verify-api.js';
 import { openItemInPcc } from '../lib/view-item.js';
+import { track } from '../../../utils/analytics.js';
 
 // Reason quick-picks differ by card kind (missed opportunity vs over-code risk).
 const REASONS = {
@@ -70,6 +71,11 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
       setNote(dismissReason || '');
       setReasonOpen(false);
       onDecided(item.index, next);
+      track('super_verify_decision_saved', {
+        item_code: item.displayCode,
+        decision,
+        has_reason: !!dismissReason,
+      });
       onToast(
         decision === 'agree'
           ? `✓ ${copy.acceptedText(item.displayCode)}`
@@ -124,7 +130,8 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
 
       {!decided && !reasonOpen && (
         <div className="sv-decide">
-          <button className="sv-btn sv-btn--ok" disabled={saving} onClick={() => save('agree', '')} data-track="super_verify_decision_saved">
+          {/* NO_TRACK — fires super_verify_decision_saved (with props) on success in save() */}
+          <button className="sv-btn sv-btn--ok" disabled={saving} onClick={() => save('agree', '')}>
             {copy.accept}
           </button>
           {/* NO_TRACK — opens the live MDS item in PCC */}
@@ -154,7 +161,8 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
             />
           )}
           <div className="sv-racts">
-            <button className="sv-btn sv-btn--pri" disabled={confirmDisabled} onClick={confirmDismiss} data-track="super_verify_decision_saved">
+            {/* NO_TRACK — fires super_verify_decision_saved (with props) on success in save() */}
+            <button className="sv-btn sv-btn--pri" disabled={confirmDisabled} onClick={confirmDismiss}>
               {saving ? 'Saving…' : copy.confirm}
             </button>
             {/* NO_TRACK — cancels the reason panel */}
