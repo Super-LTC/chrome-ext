@@ -1,6 +1,6 @@
 import { h, Fragment } from 'preact';
 import { useState, useEffect, useMemo } from 'preact/hooks';
-import { FocusCard } from './FocusCard.jsx';
+import { FocusCard, FocusRationale } from './FocusCard.jsx';
 import { buildWizardModel, skippedItems } from '../wizardModel.js';
 import { areaLabel } from '../careArea.js';
 
@@ -101,6 +101,11 @@ export const AuditWizard = ({
     }
     if (selected.kind === 'skipped') {
       return skippedList.find((it) => it._rowId === selected.key) || null;
+    }
+    if (selected.kind === 'on_plan') {
+      // Covered care-area chips from the dashboard route here. These items have
+      // no stampable `focus` — render a read-only "on plan" pane (below).
+      return (audit?.onPlan || []).find((it) => it._rowId === selected.key) || null;
     }
     return null;
   }, [selected, audit, skippedList]);
@@ -241,6 +246,8 @@ export const AuditWizard = ({
       <div className="cpas-wiz__main">
         {!selectedItem ? (
           <div className="cpas-empty">Select a focus from the list</div>
+        ) : selected.kind === 'on_plan' ? (
+          <OnPlanDetail item={selectedItem} audit={audit} />
         ) : selected.kind === 'skipped' ? (
           <SkippedDetail
             item={selectedItem}
@@ -377,6 +384,34 @@ const SkippedDetail = ({
         </button>
       </div>
     </Fragment>
+  );
+};
+
+// ── Detail: an already-on-plan focus (read-only) ──
+// Reached when a *covered* care-area chip is clicked on the dashboard. onPlan
+// items carry no stampable `focus` — just the existing focus text + rationale,
+// so this is a lightweight read-only pane (no FocusCard, no footer actions).
+const OnPlanDetail = ({ item, audit }) => {
+  const rationale = item.rationale
+    || (item.evidence?.length ? { evidence: item.evidence } : null);
+  return (
+    <section className="cpas-detail">
+      <header className="cpas-detail__header cpas-detail__header--v2">
+        <span className="cpas-detail__badge-sec">{areaLabel(audit, item)}</span>
+        <span className="cpas-detail__pos">✓ On plan</span>
+      </header>
+      <div className="cpas-detail__statement">
+        {item.focusText || item.description || item.focus?.description || '—'}
+      </div>
+      {rationale && (
+        <FocusRationale
+          rationale={{
+            ...rationale,
+            basisLabel: rationale.basisLabel ? `Covered · ${rationale.basisLabel}` : 'Covered',
+          }}
+        />
+      )}
+    </section>
   );
 };
 

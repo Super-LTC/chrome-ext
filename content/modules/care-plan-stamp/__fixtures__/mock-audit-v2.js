@@ -13,7 +13,7 @@
 //   THERAPY_ANY=9890, SOCIAL_SERVICES=9891
 
 const fixture = {
-  patientId: '178090',
+  patientId: 'DEMO-0001',
   internalPatientId: 'mock-internal',
   audit: {
     engineVersion: 'v2',

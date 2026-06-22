@@ -90,10 +90,10 @@ window.SuperToast = { success: () => {}, error: () => {} };
 
 render(
   h(CarePlanStampModal, {
-    patientId: '178090',
-    patientName: 'Johnson, Thenesia',
-    facilityName: 'Eastbrook',
-    orgSlug: 'eac',
+    patientId: 'DEMO-0001',
+    patientName: 'Demo Resident',
+    facilityName: 'Demo Facility',
+    orgSlug: 'demo-org',
     defaultMode: 'comprehensive',
     onClose: () => {},
   }),

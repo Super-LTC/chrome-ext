@@ -54,17 +54,23 @@ export function buildWizardModel(audit) {
   const toAdd = Array.isArray(audit.toAdd) ? audit.toAdd : [];
   const onPlan = Array.isArray(audit.onPlan) ? audit.onPlan : [];
 
+  // Resolve a care-area label, falling back to 'Other' for unlabeled items —
+  // mirrors AuditDashboard's grouping so the wizard and dashboard never drift
+  // (a dashboard "Other" chip's caaFilter must match a wizard group of the
+  // same name).
+  const label = (item) => areaLabel(audit, item) || 'Other';
+
   // onPlan counts per area, used for partial vs gap status.
   const onPlanByArea = new Map();
   for (const item of onPlan) {
-    const area = areaLabel(audit, item);
+    const area = label(item);
     onPlanByArea.set(area, (onPlanByArea.get(area) || 0) + 1);
   }
 
   // Group toAdd items by area, preserving insertion order of areas.
   const itemsByArea = new Map();
   for (const item of toAdd) {
-    const area = areaLabel(audit, item);
+    const area = label(item);
     if (!itemsByArea.has(area)) itemsByArea.set(area, []);
     itemsByArea.get(area).push(item);
   }
