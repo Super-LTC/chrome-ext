@@ -13,11 +13,20 @@
 import { render, h } from 'preact';
 import { CarePlanStampModal } from '../content/modules/care-plan-stamp/CarePlanStampModal.jsx';
 
-// Force V2 + the mock-fixture path. Read at effect-time (on mount), so setting
-// it before render() is sufficient; a single static import graph keeps one
-// shared preact/preact-hooks instance (a dynamic import splits it and breaks
-// hooks with "Cannot read properties of undefined (reading '__H')").
-localStorage.setItem('superltc_cpv2', 'mock');
+// `?v1` exercises the V1 regression path: no dev toggle, and the audit API
+// returns a v1 response (engineVersion stripped). Default = V2 via the dev
+// mock-fixture path.
+const V1_MODE = new URLSearchParams(location.search).has('v1');
+
+if (V1_MODE) {
+  localStorage.removeItem('superltc_cpv2');
+} else {
+  // Force V2 + the mock-fixture path. Read at effect-time (on mount), so setting
+  // it before render() is sufficient; a single static import graph keeps one
+  // shared preact/preact-hooks instance (a dynamic import splits it and breaks
+  // hooks with "Cannot read properties of undefined (reading '__H')").
+  localStorage.setItem('superltc_cpv2', 'mock');
+}
 
 // ---- minimal chrome stub (the modal only touches it on the Done reload) ----
 if (typeof window.chrome === 'undefined') {
@@ -53,8 +62,16 @@ window.CarePlanStampDiscover = {
   validateProposalIds: () => ({ ok: true, missing: [] }),
 };
 
-// ---- audit API (unused under devForceMock, but defensive) ----
-window.CarePlanAuditAPI = { fetchAudit: async () => ({ audit: { engineVersion: 'v2' } }) };
+// ---- audit API. Under V2 (devForceMock) the modal imports the fixture and
+//      never calls this. Under ?v1 it returns the same fixture data with
+//      engineVersion stripped, so isV2() is false → today's AuditRail path. ----
+import mockAudit from '../content/modules/care-plan-stamp/__fixtures__/mock-audit-v2.js';
+window.CarePlanAuditAPI = {
+  fetchAudit: async () => {
+    const { engineVersion, ...v1Audit } = mockAudit.audit;
+    return { ...mockAudit, audit: v1Audit };
+  },
+};
 
 // ---- stamping client (no-op success so Stamp & next / Stamp all work) ----
 window.CarePlanStampClient = {

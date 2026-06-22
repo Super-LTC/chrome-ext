@@ -10,8 +10,7 @@ import { areaLabel } from './careArea.js';
 // Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
 import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.jsx';
-import { isV2, engineVersionOf, devForceMock } from './v2-flag.js';
-import { buildWizardModel, skippedItems } from './wizardModel.js';
+import { isV2, devForceMock } from './v2-flag.js';
 import { AuditWizard } from './components/AuditWizard.jsx';
 
 /**
