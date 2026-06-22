@@ -38,6 +38,13 @@ export function detectionDisplayCode(mdsItem) {
   return mdsItem.startsWith('I8000:') ? 'I8000' : mdsItem;
 }
 
+// The MDS section letter(s) for an item id — used to deep-link PCC's
+// section.xhtml. "I2100" → "I", "GG0130B1" → "GG", "I8000:NTA:18" → "I".
+export function sectionCodeForItem(mdsItem) {
+  const m = detectionDisplayCode(mdsItem).match(/^([A-Z]+)/);
+  return m ? m[1] : '';
+}
+
 function ntaTierLabel(level, payment) {
   const tiers = payment?.meta?.ntaTiers;
   if (!Array.isArray(tiers)) return null;

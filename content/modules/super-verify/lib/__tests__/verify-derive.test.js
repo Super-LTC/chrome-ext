@@ -7,6 +7,7 @@ import {
   partitionMeasures,
   buildImpactChips,
   detectionDisplayCode,
+  sectionCodeForItem,
   interviewCells,
 } from '../verify-derive.js';
 
@@ -153,6 +154,15 @@ describe('detectionDisplayCode', () => {
   it('collapses I8000:* composites to I8000', () => {
     expect(detectionDisplayCode('I8000:NTA:18')).toBe('I8000');
     expect(detectionDisplayCode('K0510B')).toBe('K0510B');
+  });
+});
+
+describe('sectionCodeForItem', () => {
+  it('extracts the MDS section letter(s)', () => {
+    expect(sectionCodeForItem('I2100')).toBe('I');
+    expect(sectionCodeForItem('GG0130B1')).toBe('GG');
+    expect(sectionCodeForItem('I8000:NTA:18')).toBe('I');
+    expect(sectionCodeForItem('')).toBe('');
   });
 });
 

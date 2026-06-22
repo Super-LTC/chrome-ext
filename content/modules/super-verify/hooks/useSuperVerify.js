@@ -58,6 +58,7 @@ export function useSuperVerify({ assessId, patientId }) {
   const [progress, setProgress] = useState({ done: 0, total: 0, section: null });
   const [completed, setCompleted] = useState([]);
   const [data, setData] = useState(null);
+  const [nAnswers, setNAnswers] = useState(0);
   const [error, setError] = useState(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -88,6 +89,7 @@ export function useSuperVerify({ assessId, patientId }) {
           },
         });
         if (cancelled) return;
+        setNAnswers(Object.keys(blob.answers || {}).length);
 
         setPhase('verifying');
         const result = await postVerify({ assessId, patientId, answersBlob: blob });
@@ -110,5 +112,5 @@ export function useSuperVerify({ assessId, patientId }) {
 
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
 
-  return { phase, sections, progress, completed, data, error, retry };
+  return { phase, sections, progress, completed, data, nAnswers, error, retry };
 }
