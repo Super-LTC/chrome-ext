@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { areaLabel as _areaLabel } from '../careArea.js';
+import { areaStatus } from '../wizardModel.js';
 
 /**
  * Step-1 overview for Comprehensive Review.
@@ -90,7 +91,7 @@ export const AuditDashboard = ({
     (audit.toRemove || []).forEach((it) => bump(_areaLabel(audit, it), 'toRemove', 'removeRowId', it._rowId));
     const STATUS_ORDER = { gap: 0, partial: 1, resolved: 2, covered: 3 };
     return Array.from(m.values())
-      .map((a) => ({ ...a, status: _areaStatus(a) }))
+      .map((a) => ({ ...a, status: areaStatus(a) }))
       .sort((a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || a.label.localeCompare(b.label));
   })();
   const coveredAreas = careAreas.filter((a) => a.status === 'covered').length;
@@ -204,13 +205,6 @@ export const AuditDashboard = ({
     </div>
   );
 };
-
-function _areaStatus(a) {
-  if (a.toAdd > 0 && a.onPlan > 0) return 'partial';
-  if (a.toAdd > 0) return 'gap';
-  if (a.onPlan > 0) return 'covered';
-  return 'resolved';
-}
 
 function _areaMeta(a) {
   if (a.status === 'covered') return '✓';
