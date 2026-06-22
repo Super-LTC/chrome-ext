@@ -79,10 +79,14 @@ function Disclosure({ title, measures }) {
         <ul className="svq-excluded__list">
           {measures.map((m) => {
             const sub = m.headline || m.exclusionReason;
+            const fc = m.facilityCount;
             return (
               <li key={m.id}>
                 <div className="svq-exl-label">{m.label}</div>
                 {sub ? <div className="svq-exl-sub">{sub}</div> : null}
+                {fc?.current != null ? (
+                  <div className="svq-exl-sub">Currently {fc.current} resident{fc.current === 1 ? '' : 's'} facility-wide in this measure.</div>
+                ) : null}
               </li>
             );
           })}

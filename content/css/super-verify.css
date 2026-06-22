@@ -234,9 +234,13 @@
 .sv-ic--risk { background: var(--super-mismatch-bg); color: var(--super-mismatch); }
 .sv-arow__main { flex: 1; min-width: 0; }
 .sv-arow__t { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.sv-arow__d { font-size: 12px; color: var(--super-gray-500); margin-top: 4px; line-height: 1.4; }
-/* Keep long detection rationales from dominating the card. */
-.sv-coding .sv-arow__d { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sv-arow__d { font-size: 12px; color: var(--super-gray-500); margin-top: 6px; line-height: 1.45; }
+.sv-verdict { font-size: 12.5px; font-weight: 500; color: var(--super-gray-700); margin-top: 3px; line-height: 1.4; }
+.sv-coding.is-risk .sv-verdict { color: #b45309; }
+.sv-dxtx { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sv-dxtx__chip { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+.sv-dxtx__chip.is-ok { color: #047857; background: #dcfce7; border-color: #86efac; }
+.sv-dxtx__chip.is-no { color: var(--super-mismatch); background: var(--super-mismatch-bg); border-color: var(--super-mismatch-border); }
 
 .sv-b {
   font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;

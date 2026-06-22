@@ -318,6 +318,10 @@ async function fetchItemEvidence(section, itemCode) {
 window.SuperOverlay = SuperOverlay;
 window.fetchItemEvidence = fetchItemEvidence;
 window.showIncidentDetailModal = showIncidentDetailModal;
+// Order/administration evidence viewer — the only evidence opener that wasn't
+// exposed, so openEvidence() (utils/evidence-helpers.js) silently fell through
+// for order evidence (e.g. "View Administrations" in the Super Verify drawer).
+window.showAdministrationModal = showAdministrationModal;
 window.renderSplitAdministrations = renderSplitAdministrations;
 // Pure MAR/TAR grid builders — reused by the F-Tag Prevention source viewer so
 // it renders the same calendar grid (times × days, ✓/codes, legend) as here,

@@ -12,17 +12,13 @@ import { openEvidence } from '../../../utils/evidence-helpers.js';
 // inline rationale is often empty, which is why the old drawer said "no evidence".
 function EvidenceDrawer({ item, assessId }) {
   const { data, loading, error } = useItemDetail(item.mdsItem, item.raw?.categoryKey, { assessmentId: assessId });
-  // The solver's full reasoning lives on the detection; ItemDetail doesn't render
-  // it for Section-I items, so show it here in full (the card only teases 3 lines).
-  const rationale = item.raw?.rationale;
   return (
     <div className="sv-evidence">
-      {rationale ? <p className="sv-evidence__rationale">{rationale}</p> : null}
       {loading && <div className="sv-evidence__loading"><span className="sv-spinner sv-spinner--sm" /> Loading evidence…</div>}
       {error && <p className="sv-evidence__body">{error}</p>}
       {!loading && !error && (data
         ? <ItemDetail variant="compact" data={data} detectionItem={item.raw} mdsItem={item.mdsItem} onViewSource={openEvidence} />
-        : !rationale && <p className="sv-evidence__body">No evidence on file for this item.</p>)}
+        : <p className="sv-evidence__body">{item.raw?.rationale || 'No evidence on file for this item.'}</p>)}
       {/* NO_TRACK — opens the item in PCC for the full chart */}
       <button className="sv-btn sv-btn--ghost sv-evidence__open" onClick={() => openItemInPcc(assessId, item.mdsItem)}>
         Open {item.displayCode} in PointClickCare ↗
@@ -39,16 +35,19 @@ const REASONS = {
 
 const COPY = {
   opportunity: {
-    accept: 'Accept & code',
-    acceptedText: (code) => `Accepted — will code ${code}`,
+    // A missed code — not on the MDS yet.
+    verdict: 'Not coded yet — the chart supports adding this.',
+    acceptedText: () => 'Accepted — will code',
     dismiss: 'Dismiss…',
     dismissTitle: 'Why dismiss this?',
     confirm: 'Confirm dismiss',
     dismissedVerb: 'Dismissed',
   },
   risk: {
-    accept: 'Confirm correct',
-    acceptedText: () => 'Confirmed correct — evidence on file',
+    // Already coded on the MDS, but documentation may not support it.
+    verdict: 'Coded on this MDS — documentation may not support it.',
+    accept: 'Looks right',
+    acceptedText: () => 'Confirmed — coding looks correct',
     dismiss: 'Remove…',
     dismissTitle: 'Why remove this code?',
     confirm: 'Confirm removal',
@@ -66,6 +65,24 @@ function ImpactChips({ chips }) {
           <span className="sv-impact__v">{c.text}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+// The documentation gap, in plain language — answers "is there a diagnosis / a
+// treatment?" Only meaningful for over-code (risk) items.
+function DxTxStatus({ item }) {
+  const dx = item.diagnosisPassed;
+  const tx = item.activeStatusPassed;
+  if (typeof dx !== 'boolean' && typeof tx !== 'boolean') return null;
+  return (
+    <div className="sv-dxtx">
+      {typeof dx === 'boolean' && (
+        <span className={`sv-dxtx__chip ${dx ? 'is-ok' : 'is-no'}`}>{dx ? '✓ Diagnosis documented' : '✗ No diagnosis documented'}</span>
+      )}
+      {typeof tx === 'boolean' && (
+        <span className={`sv-dxtx__chip ${tx ? 'is-ok' : 'is-no'}`}>{tx ? '✓ Active treatment' : '✗ No active treatment'}</span>
+      )}
     </div>
   );
 }
@@ -149,17 +166,25 @@ function CodingCard({ item, assessId, onDecided, onToast }) {
           <div className="sv-arow__t">
             <span className="sv-code">{item.displayCode}</span> {label}
           </div>
-          {item.rationale ? <div className="sv-arow__d">{item.rationale}</div> : null}
+          <div className="sv-verdict">{copy.verdict}</div>
+          {item.kind === 'risk' && <DxTxStatus item={item} />}
           <ImpactChips chips={item.impact} />
+          {/* Risk has no evidence drawer — show the solver's reasoning inline. */}
+          {item.kind === 'risk' && item.rationale ? <div className="sv-arow__d">{item.rationale}</div> : null}
         </div>
       </div>
 
-      {evidOpen && <EvidenceDrawer item={item} assessId={assessId} />}
+      {item.kind === 'opportunity' && evidOpen && <EvidenceDrawer item={item} assessId={assessId} />}
 
       {!decided && !reasonOpen && (
         <div className="sv-decide">
-          {/* NO_TRACK — toggles the inline evidence drawer */}
-          <button className="sv-btn sv-btn--pri" onClick={() => setEvidOpen((o) => !o)}>{evidOpen ? 'Hide evidence' : 'View evidence'}</button>
+          {item.kind === 'opportunity' ? (
+            // NO_TRACK — toggles the inline evidence drawer
+            <button className="sv-btn sv-btn--pri" onClick={() => setEvidOpen((o) => !o)}>{evidOpen ? 'Hide evidence' : 'View evidence'}</button>
+          ) : (
+            // NO_TRACK — confirms the code is correct (tracked in save())
+            <button className="sv-btn sv-btn--ok" disabled={saving} onClick={() => save('agree', '')}>{copy.accept}</button>
+          )}
           {/* NO_TRACK — opens the reason panel; the decision is tracked on confirm */}
           <button className="sv-btn" onClick={() => setReasonOpen(true)}>{copy.dismiss}</button>
         </div>
