@@ -84,3 +84,9 @@ export const Lock = (p) => (
 export const Plus = (p) => (
   <svg {...base} className={p.className}><path d="M5 12h14M12 5v14"/></svg>
 );
+export const Users = (p) => (
+  <svg {...base} className={p.className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+);
+export const AlertTriangle = (p) => (
+  <svg {...base} className={p.className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg>
+);

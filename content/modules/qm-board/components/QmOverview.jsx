@@ -24,8 +24,10 @@ import {
   crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel,
   clearTiming, CLEAR_TONE, rowDaysUntilClearable,
 } from '../lib/qm-tones.js';
+import { buildDenominatorView, windowedRate } from '../lib/qm-denominator-view.js';
 import { ShieldCheck, CalendarClock, Activity, ChevronRight, ChevronDown, CircleCheck, Search, X, TrendingDown } from './icons.jsx';
-import { FiveStarCard } from './FiveStarCard.jsx';
+import { FiveStarCard, FiveStarCardLoading } from './FiveStarCard.jsx';
+import { DenominatorPanel } from './DenominatorPanel.jsx';
 import { DfsTile } from './DfsTile.jsx';
 
 // Per-row action verb — names what the prominent (in-group) measures need, so a
@@ -57,7 +59,7 @@ const WORK_GROUPS = [
 ];
 
 export function QmOverview({
-  data, upcoming, lens = 'five_star', onLensChange, prediction, dfs,
+  data, upcoming, lens = 'five_star', onLensChange, prediction, predictionLoading, dfs, quarterRates,
   onOpenMeasure, onOpenResident, signalCount = 0, onOpenSignals, onOpenFunctional, onOpenSimulator, onOpenDfs,
 }) {
   const { summary } = data;
@@ -71,6 +73,16 @@ export function QmOverview({
   const [collapsed, setCollapsed] = useState(new Set(['clinical', 'locked']));
   const [showClear, setShowClear] = useState(false);
   const [showCrossers, setShowCrossers] = useState(true);
+  // Which measure's denominator drill-in modal is open (null = none).
+  const [expandedMeasure, setExpandedMeasure] = useState(null);
+
+  // Windowed (discharged-inclusive) denominator view — the CORRECT CMS rate for
+  // the measure tiles. Built once from the quarter-rates payload; null until it
+  // loads (tiles fall back to the active-only rate, no denominator drill-in).
+  const denominatorView = useMemo(
+    () => (quarterRates ? buildDenominatorView(quarterRates) : null),
+    [quarterRates]
+  );
 
   const q = query.trim().toLowerCase();
   const matchesQuery = (p) =>
@@ -303,7 +315,10 @@ export function QmOverview({
           </div>
           <div className="qmc-tiles">
             {tiles.map((x, i) => (
-              <MeasureTile key={x.meta.id} {...x} soon={crosserByMeasure[x.meta.id] ?? 0} delay={i * 22} onClick={() => onOpenMeasure(x.meta.id)} />
+              <MeasureTile key={x.meta.id} {...x} soon={crosserByMeasure[x.meta.id] ?? 0} delay={i * 22}
+                windowed={denominatorView ? windowedRate(denominatorView, x.meta.id) : null}
+                onClick={() => onOpenMeasure(x.meta.id)}
+                onViewDenominator={() => setExpandedMeasure(x.meta.id)} />
             ))}
             {/* DFS — informational rate tile, last; taps through to its own page */}
             {dfs?.available && lens !== 'qip' && onOpenDfs && (
@@ -313,9 +328,14 @@ export function QmOverview({
         </div>
       )}
 
-      {/* ── Predicted Five-Star QM — below the grid so the grid stays visible; hidden while filtering ── */}
-      {!seg && prediction && lens !== 'qip' && (
-        <FiveStarCard prediction={prediction} onOpenSimulator={onOpenSimulator} />
+      {/* ── Predicted Five-Star QM — below the grid so the grid stays visible; hidden while filtering.
+            Shows a skeleton while the (slow) predictor fetch is in flight so the slot doesn't read empty. ── */}
+      {!seg && lens !== 'qip' && (
+        prediction
+          ? <FiveStarCard prediction={prediction} onOpenSimulator={onOpenSimulator} />
+          : predictionLoading
+            ? <FiveStarCardLoading />
+            : null
       )}
 
       {/* ── Worklist toolbar ────────────────────────────────────────────── */}
@@ -395,43 +415,95 @@ export function QmOverview({
           )}
         </div>
       )}
+
+      {/* Denominator drill-in modal — who's in / excluded / discharged-locked for
+          the tile whose "View denominator" was tapped. */}
+      {expandedMeasure && denominatorView && (
+        <DenominatorPanel
+          open
+          meta={data.measuresEvaluated.find((m) => m.id === expandedMeasure)}
+          denom={denominatorView.byMeasure.get(expandedMeasure)}
+          onClose={() => setExpandedMeasure(null)}
+        />
+      )}
     </div>
   );
 }
 
-function MeasureTile({ meta, counts, urgencies, soon, delay, onClick }) {
+// The rate/denominator cluster — CMS tag + % + n/den (or "—"). Rendered on its
+// own as a small button (windowed → opens the denominator drill-in) or a plain
+// span (active-only fallback). Kept compact so it's a deliberate target, not the
+// whole footer width.
+function RateCluster({ rate, showCmsTag }) {
+  if (rate.den <= 0) return <span className="qmc-tile__rate qmc-text--slate">—</span>;
+  return (
+    <span className="qmc-tile__rate-grp">
+      {showCmsTag && <span className="qmc-tile__cmstag">CMS</span>}
+      <span className="qmc-tile__rate">{ratePct(rate.num, rate.den).toFixed(1)}%</span>
+      <span className="qmc-tile__rate-frac">{rate.num}/{rate.den}</span>
+    </span>
+  );
+}
+
+function MeasureTile({ meta, counts, urgencies, soon, windowed, delay, onClick, onViewDenominator }) {
   const group = clearGroupForMechanism(meta.clearProfile?.clearMechanism);
-  const rate = measureRate(counts);
+  // Headline % = the windowed CMS rate (incl. discharged) when loaded; falls back
+  // to the active-only rate until the quarter-rates fetch resolves.
+  const active = measureRate(counts);
+  const rate = windowed ?? active;
+  const isWindowed = windowed != null;
   const code = measureCode(meta.id);
   const fiveStar = isFiveStarMds(meta.id);
   const footer = GROUP_FOOTER[group];
   const actionableCount = group === 'locked' ? 0 : counts.triggering;
   const dots = urgencies.slice(0, 8);
   return (
-    <button type="button" data-track="qm_tile_clicked" data-track-prop-measure-code={meta.id} className="qmc-tile qmc-rise" style={{ animationDelay: `${delay}ms` }} onClick={onClick}>
-      <div className="qmc-tile__top">
-        <div style={{ minWidth: 0 }}>
-          <div className="qmc-tile__name">{shortLabel(meta.id, meta.label)}</div>
-          <div className="qmc-tile__meta">
-            {code && <span className="qmc-tile__code">{code}</span>}
-            {fiveStar
-              ? <span className="qmc-tag qmc-tag--star">5★</span>
-              : <span className="qmc-tag qmc-tag--state">state</span>}
+    <div className="qmc-tile qmc-tile--split qmc-rise" style={{ animationDelay: `${delay}ms` }}>
+      {/* Main region — opens measure-detail. role of button (not a real button el)
+          so the footer "View denominator" button can nest validly. */}
+      <div role="button" tabIndex={0} data-track="qm_tile_clicked" data-track-prop-measure-code={meta.id}
+        className="qmc-tile__main" onClick={onClick}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}>
+        <div className="qmc-tile__top">
+          <div style={{ minWidth: 0 }}>
+            <div className="qmc-tile__name">{shortLabel(meta.id, meta.label)}</div>
+            <div className="qmc-tile__meta">
+              {code && <span className="qmc-tile__code">{code}</span>}
+              {fiveStar
+                ? <span className="qmc-tag qmc-tag--star">5★</span>
+                : <span className="qmc-tag qmc-tag--state">state</span>}
+            </div>
+          </div>
+          <div className="qmc-tile__countgrp">
+            <div className={`qmc-tile__count ${counts.triggering > 0 ? '' : 'qmc-tile__count--zero'}`}>{counts.triggering}</div>
+            <span className="qmc-tile__countlbl">active</span>
           </div>
         </div>
-        <div className={`qmc-tile__count ${counts.triggering > 0 ? '' : 'qmc-tile__count--zero'}`}>{counts.triggering}</div>
-      </div>
-      <div className="qmc-tile__dots">
-        {dots.map((u, i) => <span key={i} className={`qmc-dot qmc-dot--${URGENCY[u].tone}`} />)}
-      </div>
-      <div className="qmc-tile__foot">
-        <span className={`qmc-tile__foot-action qmc-text--${footer.tone}`}>{footer.label(actionableCount)}</span>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          {soon > 0 && <span className="qmc-soon-pill">+{soon} soon</span>}
-          <span className="qmc-tile__rate">{rate.den > 0 ? `${ratePct(rate.num, rate.den).toFixed(1)}%` : '—'}</span>
+        <div className="qmc-tile__dots">
+          {dots.map((u, i) => <span key={i} className={`qmc-dot qmc-dot--${URGENCY[u].tone}`} />)}
         </div>
       </div>
-    </button>
+      {/* Footer caption — group label (left) + the rate cluster (right). Only the
+          compact rate cluster is the denominator button (when windowed), so the
+          drill-in is a deliberate target, not the full-width footer. */}
+      <div className="qmc-tile__foot">
+        <span className={`qmc-tile__foot-action qmc-text--${footer.tone}`}>{footer.label(actionableCount)}</span>
+        <span className="qmc-tile__foot-right">
+          {soon > 0 && <span className="qmc-soon-pill">+{soon} soon</span>}
+          {isWindowed && rate.den > 0 ? (
+            <button type="button" className="qmc-tile__ratebtn" /* NO_TRACK */
+              title="View the residents in this measure's denominator"
+              aria-label={`View denominator for ${shortLabel(meta.id, meta.label)}`}
+              onClick={(e) => { e.stopPropagation(); onViewDenominator(); }}>
+              <RateCluster rate={rate} showCmsTag />
+              <span className="qmc-tile__viewhint">view</span>
+            </button>
+          ) : (
+            <RateCluster rate={rate} showCmsTag={isWindowed} />
+          )}
+        </span>
+      </div>
+    </div>
   );
 }
 

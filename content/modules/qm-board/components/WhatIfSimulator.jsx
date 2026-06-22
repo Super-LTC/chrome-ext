@@ -21,10 +21,34 @@ import { fiveStarMeasure, pointsForRate, QM_RATING_THRESHOLDS } from '../lib/fiv
 import { groupLever } from '../lib/qm-simulator-view.js';
 import { clearGroupForEntry, isFiveStarMds, shortLabel } from '../lib/qm-view-model.js';
 import { clearTiming, fullName } from '../lib/qm-tones.js';
-import { Stars, TrendArrow } from './FiveStarCard.jsx';
+import { Stars, TrendArrow, RangeStars, rangeLabel } from './FiveStarCard.jsx';
 import { ChevronLeft, RotateCcw, Search, Lock, Star } from './icons.jsx';
 
 const pct = (r) => `${(r * 100).toFixed(1)}%`;
+
+/** One per-domain points-forward row — projected star + projected pts + CMS anchor +
+ *  "{pointsToNext} pts to {nextStar}★". Mirrors the card's DomainRow wording; muted
+ *  when that axis has no MDS coverage (score null). */
+function DomainProgress({ label, axis, pred, cmsStar }) {
+  const prog = pred.score != null ? starProgress(axis, pred.score) : null;
+  return (
+    <span className="qmf-sim__dom">
+      <span className="qmf-sim__dom-label">{label}</span>
+      {pred.score != null ? (
+        <>
+          <span className="qmf-sim__dom-star">{pred.predictedStar ?? '—'}★</span>
+          <span className="qmf-sim__dom-pts">{Math.round(pred.score)} pts</span>
+          {cmsStar != null && <span className="qmf-sim__dom-cms">(CMS {cmsStar}★)</span>}
+          {prog && (prog.nextStar != null
+            ? <span className="qmf-sim__dom-prog">· <b>{prog.pointsToNext} pts</b> to {prog.nextStar}★</span>
+            : <span className="qmc-text--emerald" style={{ fontWeight: 600 }}>· top band</span>)}
+        </>
+      ) : (
+        <span className="qmf-sim__dom-nodata">not enough MDS data yet</span>
+      )}
+    </span>
+  );
+}
 
 /** A two-state sliding switch with a state word beside it. Tone separates the two
  *  semantics: emerald = clearing a current trigger, amber = preventing a crosser. */
@@ -164,8 +188,9 @@ export function WhatIfSimulator({ prediction, data, upcoming, onBack, onOpenResi
   }
 
   const q = query.trim().toLowerCase();
-  const lsProg = sim.ls.score != null ? starProgress('long', sim.ls.score) : null;
-  const lsDelta = sim.ls.pointsDelta;
+  // Points-forward readout (mirrors the points-first card): overall hero + per-domain.
+  const ovProg = sim.overall.score != null ? starProgress('overall', sim.overall.score) : null;
+  const ovDelta = sim.overall.pointsDelta;
   const toggle = (k) => setOn((prev) => {
     const next = new Set(prev);
     if (next.has(k)) next.delete(k); else next.add(k);
@@ -204,21 +229,42 @@ export function WhatIfSimulator({ prediction, data, upcoming, onBack, onOpenResi
                 <Stars n={sim.overall.predictedStar} size="lg" />
               </div>
             </div>
-            <div className="qmf-fs__stays">
-              <span>
-                Long-stay <b>{sim.ls.predictedStar ?? '—'}★</b>
-                {lsDelta !== 0 && (
-                  <span className={lsDelta > 0 ? 'qmc-text--emerald' : 'qmc-text--rose'} style={{ fontWeight: 600 }}>
-                    {' '}({lsDelta > 0 ? '+' : ''}{lsDelta} pts vs CMS)
-                  </span>
-                )}
-                {lsProg?.nextStar != null && <span className="qmc-text--slate"> · ~{lsProg.pointsToNext} pts from {lsProg.nextStar}★</span>}
-              </span>
+            {/* Hero actionable line — overall points-to-next, live as toggles change */}
+            <div className="qmf-fs__hero">
+              {ovProg ? (
+                ovProg.nextStar != null ? (
+                  <span><span className="qmc-text--amber" style={{ fontWeight: 700 }}>{ovProg.pointsToNext} points</span> to {ovProg.nextStar}★ overall</span>
+                ) : (
+                  <span className="qmc-text--emerald">Overall is in the top band</span>
+                )
+              ) : (
+                <span className="qmc-text--slate">Overall projection pending MDS data</span>
+              )}
             </div>
+            {/* Per-domain points-forward rows — Long-stay + Short-stay */}
+            <div className="qmf-sim__doms">
+              <DomainProgress label="Long-stay" axis="long" pred={sim.ls} cmsStar={prediction.anchor.ls} />
+              <DomainProgress label="Short-stay" axis="short" pred={sim.ss} cmsStar={prediction.anchor.ss} />
+            </div>
+            {prediction.starRange && rangeLabel(prediction.starRange.overall) !== '—' && (
+              <div className="qmf-sim__absolute">
+                <span className="qmc-text--slate">Absolute projection:</span>
+                <RangeStars range={prediction.starRange.overall} />
+                <b>{rangeLabel(prediction.starRange.overall)}</b>
+                <span className="qmc-text--slate">— claims measures not public</span>
+              </div>
+            )}
           </div>
           <div className="qmf-sim__applied">
             <div className="qmf-sim__applied-n">{on.size}</div>
             <div className="qmf-sim__applied-lbl">what-ifs applied</div>
+            {/* Net overall points moved by the current toggles, vs CMS — live */}
+            <div className="qmf-sim__netpts">
+              {ovDelta > 0 ? <span className="qmc-text--emerald">+{ovDelta} pts vs CMS</span>
+                : ovDelta < 0 ? <span className="qmc-text--rose">{ovDelta} pts vs CMS</span>
+                : <span className="qmc-text--slate">±0 pts vs CMS</span>}
+              {ovProg?.nextStar != null && <span className="qmf-sim__netpts-next">· {ovProg.pointsToNext} to {ovProg.nextStar}★</span>}
+            </div>
             {on.size > 0 && (
               <button type="button" className="qmf-sim__reset" onClick={() => setOn(new Set())}><RotateCcw /> Reset</button> /* NO_TRACK */
             )}

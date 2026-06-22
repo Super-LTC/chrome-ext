@@ -7,6 +7,11 @@ import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewPopover } from './mds-list-coverage/detail.js';
 import { mdsBetaEnabled } from './mds-beta-gate.js';
 
+// KILL SWITCH — parked. Set true to re-enable the experimental MDS-list
+// interview/UDA coverage overlay (still also subject to the backend beta gate).
+// Off → the MDS In Progress list shows the native PCC table, no coverage chips.
+const ILC_ENABLED = false;
+
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
 // Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
 const CHIP_ICONS = { covered: '✓ ', in_progress: '◐ ', needed: '⚠ ', upcoming: '· ' };
@@ -109,6 +114,7 @@ function renderRow(rowEl, result, rowMeta) {
 }
 
 async function runCoverage() {
+  if (!ILC_ENABLED) return;          // parked — see KILL SWITCH note up top
   if (ILC.busy) return;
   // Beta gate (single chokepoint for all call paths: init + both observers).
   // Fails closed — non-testers get the plain MDS list with no coverage chips.

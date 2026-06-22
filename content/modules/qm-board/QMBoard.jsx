@@ -21,6 +21,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'preact/hooks'
 import { useQmBoard } from './hooks/useQmBoard.js';
 import { useFiveStar } from './hooks/useFiveStar.js';
 import { useDfs } from './hooks/useDfs.js';
+import { useQuarterRates } from './hooks/useQuarterRates.js';
+import { useRolling } from './hooks/useRolling.js';
 import { track } from '../../utils/analytics.js';
 import { totalActionable } from './lib/qm-clinical-signals.js';
 import { QmOverview } from './components/QmOverview.jsx';
@@ -70,10 +72,16 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
     useQmBoard({ facilityName, orgSlug });
   // Predicted Five-Star QM — lazy-fetched separately so the board renders first
   // and the predictor card fills in (it does a double facility-rate pass).
-  const { prediction } = useFiveStar({ facilityName, orgSlug });
+  const { prediction, loading: predictionLoading } = useFiveStar({ facilityName, orgSlug });
   // Discharge Function Score card — also lazy (rolling-12-mo short-stay measure,
   // its own service + cache). Board renders first; the DFS card fills in.
   const { dfs } = useDfs({ facilityName, orgSlug });
+  // Windowed (discharged-inclusive) quarter rates + denominator roster, and the
+  // rolling 4-quarter trend — both lazy so the board renders first. The measure
+  // tiles/detail show the active rate until quarter-rates lands, then the true
+  // CMS windowed rate; the trend chart appears once rolling lands.
+  const { quarterRates } = useQuarterRates({ facilityName, orgSlug });
+  const { rolling } = useRolling({ facilityName, orgSlug });
 
   const signalCount = useMemo(
     () => (preventableAlerts ? totalActionable(preventableAlerts) : 0),
@@ -171,7 +179,9 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 lens={lens}
                 onLensChange={setLens}
                 prediction={prediction}
+                predictionLoading={predictionLoading}
                 dfs={dfs}
+                quarterRates={quarterRates}
                 onOpenDfs={openDfs}
                 onOpenMeasure={openMeasure}
                 onOpenResident={openResident}
@@ -186,6 +196,8 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 currentlyTriggering={currentlyTriggering}
                 preventableAlerts={preventableAlerts}
                 upcoming={upcoming}
+                quarterRates={quarterRates}
+                rolling={rolling}
                 onBack={pop}
                 onOpenResident={openResident}
                 onOpenResidentById={openResidentById}
