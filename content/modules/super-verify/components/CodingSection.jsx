@@ -12,13 +12,17 @@ import { openEvidence } from '../../../utils/evidence-helpers.js';
 // inline rationale is often empty, which is why the old drawer said "no evidence".
 function EvidenceDrawer({ item, assessId }) {
   const { data, loading, error } = useItemDetail(item.mdsItem, item.raw?.categoryKey, { assessmentId: assessId });
+  // The solver's full reasoning lives on the detection; ItemDetail doesn't render
+  // it for Section-I items, so show it here in full (the card only teases 3 lines).
+  const rationale = item.raw?.rationale;
   return (
     <div className="sv-evidence">
+      {rationale ? <p className="sv-evidence__rationale">{rationale}</p> : null}
       {loading && <div className="sv-evidence__loading"><span className="sv-spinner sv-spinner--sm" /> Loading evidence…</div>}
       {error && <p className="sv-evidence__body">{error}</p>}
       {!loading && !error && (data
         ? <ItemDetail variant="compact" data={data} detectionItem={item.raw} mdsItem={item.mdsItem} onViewSource={openEvidence} />
-        : <p className="sv-evidence__body">No evidence on file for this item.</p>)}
+        : !rationale && <p className="sv-evidence__body">No evidence on file for this item.</p>)}
       {/* NO_TRACK — opens the item in PCC for the full chart */}
       <button className="sv-btn sv-btn--ghost sv-evidence__open" onClick={() => openItemInPcc(assessId, item.mdsItem)}>
         Open {item.displayCode} in PointClickCare ↗

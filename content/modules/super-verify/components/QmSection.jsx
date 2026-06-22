@@ -77,9 +77,15 @@ function Disclosure({ title, measures }) {
       </button>
       {open && (
         <ul className="svq-excluded__list">
-          {measures.map((m) => (
-            <li key={m.id}>{m.label}</li>
-          ))}
+          {measures.map((m) => {
+            const sub = m.headline || m.exclusionReason;
+            return (
+              <li key={m.id}>
+                <div className="svq-exl-label">{m.label}</div>
+                {sub ? <div className="svq-exl-sub">{sub}</div> : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
