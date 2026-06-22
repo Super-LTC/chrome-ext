@@ -232,6 +232,8 @@
 .sv-arow__main { flex: 1; min-width: 0; }
 .sv-arow__t { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .sv-arow__d { font-size: 12px; color: var(--super-gray-500); margin-top: 4px; line-height: 1.4; }
+/* Keep long detection rationales from dominating the card. */
+.sv-coding .sv-arow__d { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
 .sv-b {
   font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
@@ -319,6 +321,10 @@
 .svq-ev { font-family: var(--super-font-mono); font-size: 10.5px; border: 1px solid var(--super-gray-200); border-radius: var(--super-radius); padding: 3px 7px; color: var(--super-gray-700); }
 .svq-ev__i { color: var(--super-primary-dark); font-weight: 600; }
 .svq-acts { display: flex; gap: 7px; margin-top: 10px; }
+.svq-clear { margin-top: 10px; font-size: 12.5px; color: var(--super-gray-700); line-height: 1.4; }
+.svq-clear b { color: var(--super-gray-900); }
+.svq-carry { font-size: 12px; color: var(--super-gray-500); line-height: 1.45; padding: 4px 2px 2px; }
+.svq-carry__lbl { font-weight: 600; color: var(--super-gray-600); }
 .svq-more {
   width: 100%; text-align: left; border: 1px dashed var(--super-gray-300); background: transparent;
   border-radius: var(--super-radius-md); padding: 10px 13px; cursor: pointer; color: var(--super-gray-500);

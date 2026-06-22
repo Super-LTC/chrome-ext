@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'preact/hooks';
 import {
   summaryTiles,
+  captureTile,
   categorizeDetections,
   partitionMeasures,
   countOpenQueries,
@@ -9,7 +10,6 @@ import {
 import {
   formatPaymentRates,
   formatPaymentDelta,
-  getPaymentDeltaNumeric,
   getPaymentModeLabel,
   isPaymentApplicable,
 } from '../../../utils/payment.js';
@@ -66,11 +66,10 @@ function Reimbursement({ data, nItems }) {
   const current = rates?.current || currentRateLabel(data?.payment);
   const modeLabel = rates?.label || getPaymentModeLabel(data?.payment) || 'PDPM';
   const delta = rates?.delta || formatPaymentDelta(data?.payment, 'long');
-  const totalNum = Math.round(getPaymentDeltaNumeric(data?.payment));
 
   const { rows, maxDelta, hippsCurrent, hippsPotential } = componentBreakdown(data);
   const hipps = hippsCurrent || '—';
-  const hasBreakdown = rows.some((r) => r.changed);
+  const changedRows = rows.filter((r) => r.changed);
   const hippsLifts = hippsPotential && hippsPotential !== hippsCurrent;
 
   return (
@@ -92,10 +91,10 @@ function Reimbursement({ data, nItems }) {
             )}
           </div>
 
-          {hasBreakdown && (
+          {changedRows.length > 0 && (
             <div className="sv-reimb__bd">
-              <div className="sv-reimb__bdhead">Where the {totalNum > 0 ? `$${totalNum}` : 'lift'} is</div>
-              {rows.map((r) => (
+              <div className="sv-reimb__bdhead">Where the lift is</div>
+              {changedRows.map((r) => (
                 <ComponentRow key={r.key} row={r} maxDelta={maxDelta} />
               ))}
               {hippsLifts && (
@@ -117,36 +116,34 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
   const scrollRef = useRef(null);
 
   // Local UI state for live recompute of tiles + section counts.
-  const [decisions, setDecisions] = useState({}); // detection index → 'accept'|'dismiss'|null
-  const [qmDismissed, setQmDismissed] = useState(() => new Set());
+  const [decisions, setDecisions] = useState({}); // detection index → 'dismiss'|null
   const [queriesDismissed, setQueriesDismissed] = useState(() => new Set());
 
   const onDecided = useCallback((index, decided) => {
     setDecisions((d) => ({ ...d, [index]: decided }));
   }, []);
 
-  const toggleSet = (setter) => (id, restore) =>
-    setter((s) => {
+  const onQueryDismiss = useCallback((id, restore) =>
+    setQueriesDismissed((s) => {
       const next = new Set(s);
       if (restore) next.delete(id);
       else next.add(id);
       return next;
-    });
-  const onQmDismiss = useCallback(toggleSet(setQmDismissed), []);
-  const onQueryDismiss = useCallback(toggleSet(setQueriesDismissed), []);
+    }), []);
 
   // --- derive ---
   const baseTiles = summaryTiles(data);
+  const cap = captureTile(data?.payment);
   const partition = partitionMeasures(data?.qm);
   const { items } = categorizeDetections(data);
   const effItems = items.map((i) => ({
     ...i,
     decided: i.index in decisions ? decisions[i.index] : i.decided,
   }));
-  const pendingCount = effItems.filter((i) => i.decided === null).length;
+  const reviewCount = effItems.filter((i) => i.decided !== 'dismiss').length;
 
   const totalMeasures = data?.qm?.measures?.length || 0;
-  const qmTriggers = partition.triggering.filter((m) => !qmDismissed.has(m.id)).length;
+  const qmTriggers = partition.firingCount;
   const queriesOpen = countOpenQueries(
     (data?.outstandingQueries || []).filter((q) => !queriesDismissed.has(q.id)),
   );
@@ -154,14 +151,12 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
   const scrollTo = (anchor) =>
     scrollRef.current?.querySelector(`[data-anchor="${anchor}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const moneyLabel = baseTiles.dollarsDelta > 0 ? `+$${Math.round(baseTiles.dollarsDelta)}` : '$0';
-
   return (
     <div className="sv-results">
       <div className="sv-scroll" ref={scrollRef}>
         <div className="sv-summary">
           <Tile cls="sv-stat--qm" n={qmTriggers} label="QM triggers" muted={qmTriggers === 0} onClick={() => scrollTo('qm')} />
-          <Tile cls="sv-stat--money" n={moneyLabel} label={baseTiles.dollarsDelta > 0 ? '/day to capture' : 'captured'} muted={baseTiles.dollarsDelta === 0} onClick={() => scrollTo('reimb')} />
+          <Tile cls="sv-stat--money" n={cap.display} label={cap.label} muted={cap.muted} onClick={() => scrollTo('reimb')} />
           <Tile cls="sv-stat--warn" n={queriesOpen} label="queries open" muted={queriesOpen === 0} onClick={() => scrollTo('query')} />
           <Tile cls="sv-stat--warn" n={baseTiles.interviewsMissing} label="interview missing" muted={baseTiles.interviewsMissing === 0} onClick={() => scrollTo('uda')} />
         </div>
@@ -169,19 +164,12 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
         <Reimbursement data={data} nItems={effItems.length} />
 
         {data?.qm && (
-          <QmSection
-            partition={partition}
-            totalMeasures={totalMeasures}
-            assessId={assessId}
-            dismissed={qmDismissed}
-            onDismiss={onQmDismiss}
-            onToast={toast}
-          />
+          <QmSection partition={partition} totalMeasures={totalMeasures} assessId={assessId} />
         )}
 
         <CodingSection
           items={effItems}
-          pendingCount={pendingCount}
+          reviewCount={reviewCount}
           assessId={assessId}
           onDecided={onDecided}
           onToast={toast}

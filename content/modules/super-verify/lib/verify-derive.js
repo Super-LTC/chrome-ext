@@ -5,7 +5,7 @@
  * Field names verified against the live pdpm-potential payload (the same object
  * the PDPMAnalyzer renders) + the verify handoff doc.
  */
-import { getPaymentDeltaNumeric, formatPaymentDelta } from '../../../utils/payment.js';
+import { getPaymentDeltaNumeric, formatPaymentDelta, isPaymentApplicable } from '../../../utils/payment.js';
 
 const OPEN_QUERY_STATUSES = new Set(['pending', 'sent', 'awaiting_response']);
 const INTERVIEW_KEYS = ['bims', 'phq9', 'gg', 'pain'];
@@ -19,6 +19,21 @@ export function countOpenQueries(queries) {
 export function countMissingInterviews(compliance) {
   const checks = compliance?.checks || {};
   return INTERVIEW_KEYS.filter((k) => checks[k]?.status === 'failed').length;
+}
+
+// The "to capture" tile, mode-aware: $/day for Medicare/state, CMI points for
+// CMI facilities (never "$0" when the facility is actually on CMI).
+export function captureTile(payment) {
+  if (!isPaymentApplicable(payment)) return { display: '$0', label: 'captured', muted: true };
+  const delta = Number(payment.delta) || 0;
+  if (payment.mode === 'cmi') {
+    return delta > 0
+      ? { display: `+${delta.toFixed(2)}`, label: 'CMI to capture', muted: false }
+      : { display: '0.00', label: 'CMI captured', muted: true };
+  }
+  return delta > 0
+    ? { display: `+$${Math.round(delta)}`, label: '/day to capture', muted: false }
+    : { display: '$0', label: 'captured', muted: true };
 }
 
 export function summaryTiles(data) {
@@ -144,6 +159,9 @@ export function categorizeDetections(data) {
 export function partitionMeasures(qm) {
   const measures = qm?.measures || [];
   const triggering = measures.filter((m) => m.triggers && !m.excluded);
+  // What THIS lock does (the news) vs what's already true (a carry).
+  const newTriggers = triggering.filter((m) => m.facilityCount?.isNewTrigger);
+  const carries = triggering.filter((m) => !m.facilityCount?.isNewTrigger);
   const willClear = measures.filter((m) => !m.triggers && !m.excluded && m.facilityCount?.wouldClearOnLock);
   const excluded = measures.filter((m) => m.excluded);
   const excludedIncomplete = excluded.filter((m) => m.exclusionKind === 'incomplete');
@@ -151,6 +169,8 @@ export function partitionMeasures(qm) {
   const cleanCount = measures.filter((m) => !m.triggers && !m.excluded).length;
   return {
     triggering,
+    newTriggers,
+    carries,
     willClear,
     excluded,
     excludedIncomplete,
@@ -158,6 +178,20 @@ export function partitionMeasures(qm) {
     firingCount: triggering.length,
     cleanCount,
   };
+}
+
+// Evidence chips can repeat the same item=value (current + prior coded the
+// same). Collapse to unique item=value for display.
+export function dedupeEvidence(evidence) {
+  const seen = new Set();
+  const out = [];
+  for (const e of evidence || []) {
+    const key = `${e.mdsItem}=${e.value}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
 }
 
 // Reimbursement per-component breakdown (round-2): NTA / Nursing / SLP / PT-OT,

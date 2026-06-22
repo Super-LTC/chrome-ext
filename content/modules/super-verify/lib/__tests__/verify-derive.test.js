@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   summaryTiles,
+  captureTile,
   countOpenQueries,
   countMissingInterviews,
   categorizeDetections,
   partitionMeasures,
+  dedupeEvidence,
   componentBreakdown,
   buildImpactChips,
   detectionDisplayCode,
@@ -48,6 +50,32 @@ describe('summaryTiles', () => {
     expect(summaryTiles({})).toEqual({
       qmTriggers: 0, dollarsDelta: 0, dollarsLabel: null, queriesOpen: 0, interviewsMissing: 0,
     });
+  });
+});
+
+describe('captureTile', () => {
+  it('shows $/day for Medicare with a positive delta', () => {
+    expect(captureTile({ mode: 'medicare', delta: 48.1 })).toEqual({ display: '+$48', label: '/day to capture', muted: false });
+  });
+  it('shows CMI points (not $) for a CMI facility', () => {
+    expect(captureTile({ mode: 'cmi', delta: 0.29 })).toEqual({ display: '+0.29', label: 'CMI to capture', muted: false });
+  });
+  it('mutes CMI with no lift', () => {
+    expect(captureTile({ mode: 'cmi', delta: 0 })).toEqual({ display: '0.00', label: 'CMI captured', muted: true });
+  });
+  it('mutes when payment is not applicable', () => {
+    expect(captureTile({ mode: 'not_applicable' })).toEqual({ display: '$0', label: 'captured', muted: true });
+  });
+});
+
+describe('dedupeEvidence', () => {
+  it('collapses repeated item=value chips', () => {
+    const ev = dedupeEvidence([
+      { mdsItem: 'J1800', value: '1' },
+      { mdsItem: 'J1800', value: '1' },
+      { mdsItem: 'J1900C', value: '2' },
+    ]);
+    expect(ev.map((e) => `${e.mdsItem}=${e.value}`)).toEqual(['J1800=1', 'J1900C=2']);
   });
 });
 
@@ -122,6 +150,15 @@ describe('partitionMeasures', () => {
     expect(p.willClear.map((m) => m.id)).toEqual(['phq9_depression']);
     expect(p.excluded.map((m) => m.id)).toEqual(['catheter']);
   });
+  it('splits triggering into new triggers (isNewTrigger) vs carries', () => {
+    const q = { measures: [
+      { id: 'falls_all', triggers: true, excluded: false, facilityCount: { isNewTrigger: false } },
+      { id: 'adl_decline', triggers: true, excluded: false, facilityCount: { isNewTrigger: true } },
+    ] };
+    const p = partitionMeasures(q);
+    expect(p.newTriggers.map((m) => m.id)).toEqual(['adl_decline']);
+    expect(p.carries.map((m) => m.id)).toEqual(['falls_all']);
+  });
   it('reports firing + clean counts', () => {
     const p = partitionMeasures(qm);
     expect(p.firingCount).toBe(2);
@@ -140,8 +177,8 @@ describe('partitionMeasures', () => {
   });
   it('handles null qm', () => {
     expect(partitionMeasures(null)).toEqual({
-      triggering: [], willClear: [], excluded: [], excludedIncomplete: [], excludedClinical: [],
-      firingCount: 0, cleanCount: 0,
+      triggering: [], newTriggers: [], carries: [], willClear: [], excluded: [],
+      excludedIncomplete: [], excludedClinical: [], firingCount: 0, cleanCount: 0,
     });
   });
 });
