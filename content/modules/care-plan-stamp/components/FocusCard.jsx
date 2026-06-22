@@ -323,10 +323,11 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                 editIntervention(i, { positions: cleaned, positionOne: cleaned[0] ?? iv.positionOne });
               };
               const blank = _detectPlaceholder(iv.description);
-              // In v2 the kardex value is the engine's pre-filled choice (it IS
-              // the value), so no "✨ Recommended" badge. In v1 it's an opt-in
-              // suggestion pinned to the top of the dropdown.
-              const kardexRecommended = isV2 ? null : iv._recKardex;
+              // Kardex is opt-in in every variant: the engine's pick is surfaced
+              // as "✨ Recommended" inside the dropdown (the value stays None until
+              // the nurse opts in) — we never auto-stamp the Kardex. Positions
+              // stay auto-locked in v2 (handled below).
+              const kardexRecommended = iv._recKardex;
               return (
                 <li key={i} className="cpas-iv-row">
                   <div className="cpas-iv-row__body">

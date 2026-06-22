@@ -209,7 +209,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             });
           }
           if (cancelled) return;
-          const v2 = isV2(auditResp.audit);
           setCareplanId(cpId);
           setMiniToken(token);
           // Build CAA lookup maps from byCAA (used for rail subtitles only;
@@ -222,29 +221,22 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             (bucket.toRemove || []).forEach((it) => { if (it.focusId) focusIdToCAA.set(it.focusId, bucket.displayName); });
           });
           const audit = { ...auditResp.audit, _ruleIdToCAA: ruleIdToCAA, _focusIdToCAA: focusIdToCAA };
-          // Treat the backend's kardex pick as a per-intervention recommendation
-          // across the Comprehensive Review path too — every Add-bucket focus
-          // intervention starts as None with the original pick stashed in
-          // `_recKardex` for the dropdown's "✨ Recommended" badge. Mirrors the
-          // Initial path's behavior (don't stamp things onto the Kardex
-          // automatically — nurses opt in).
-          // V1 only: the engine's kardexCategory is a *recommendation*, not a
-          // default — stash it in _recKardex and blank the live field so nurses
-          // opt in. Under V2 the engine pre-fills kardexCategory intentionally,
-          // so leave it untouched.
-          if (!v2) {
-            (audit.toAdd || []).forEach((it) => {
-              if (!it?.focus) return;
-              it.focus = {
-                ...it.focus,
-                interventions: (it.focus.interventions || []).map((iv) => ({
-                  ...iv,
-                  _recKardex: iv.kardexCategory ?? null,
-                  kardexCategory: null,
-                })),
-              };
-            });
-          }
+          // Kardex is ALWAYS opt-in (V1 and V2): the engine's kardexCategory is a
+          // *recommendation*, not a default. Stash it in `_recKardex` (surfaced
+          // as "✨ Recommended" inside the dropdown) and blank the live field so
+          // every Add-bucket intervention starts as None — nurses opt in
+          // deliberately rather than having the Kardex auto-stamped.
+          (audit.toAdd || []).forEach((it) => {
+            if (!it?.focus) return;
+            it.focus = {
+              ...it.focus,
+              interventions: (it.focus.interventions || []).map((iv) => ({
+                ...iv,
+                _recKardex: iv.kardexCategory ?? null,
+                kardexCategory: null,
+              })),
+            };
+          });
           // Sort to-add by clinical significance (backend `score`, descending)
           // so the rail, tiles, and coverage grid surface the important focuses
           // first and sink boilerplate.
@@ -310,19 +302,18 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         // the engine and the card — only the audit *wizard shell* is comprehensive-
         // only (a new admit has no plan to diff).
         const v2init = isV2(prop);
-        // Kardex presentation: V2 keeps the engine's pick PRE-FILLED (an editable
-        // recommendation, like the comprehensive wizard). V1 keeps the legacy
-        // opt-in — every chip starts None with the suggestion shown as
-        // "✨ Recommended" inside the dropdown; nurses opt in deliberately.
+        // Kardex is ALWAYS opt-in (every version): each chip starts None with the
+        // engine's pick surfaced as "✨ Recommended" inside the dropdown. Nurses
+        // opt in deliberately — we never auto-stamp the Kardex.
         const propWithRecs = {
           ...prop,
           focuses: (prop.focuses || []).map((f) => ({
             ...f,
-            interventions: (f.interventions || []).map((iv) => (
-              v2init
-                ? iv
-                : { ...iv, _recKardex: iv.kardexCategory ?? null, kardexCategory: null }
-            )),
+            interventions: (f.interventions || []).map((iv) => ({
+              ...iv,
+              _recKardex: iv.kardexCategory ?? null,
+              kardexCategory: null,
+            })),
           })),
         };
         // Merge previously-skipped focuses (backend returned them on a
@@ -2273,7 +2264,9 @@ export const Combobox = ({
   const inputRef = useRef(null);
 
   const label = (value != null && labels[value]) ? labels[value] : (value != null ? `(${value})` : (placeholder || 'Select…'));
-  const isOnRecommendation = recommendedId != null && value != null && Number(value) === Number(recommendedId);
+  // Compare ids as strings so the match works for numeric facility ids (v1) AND
+  // canonical string ids, instead of Number()-coercing a string id to NaN.
+  const isOnRecommendation = recommendedId != null && value != null && String(value) === String(recommendedId);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2281,7 +2274,7 @@ export const Combobox = ({
     const base = q ? list.filter((o) => o.label.toLowerCase().includes(q)) : list;
     // Pin the recommended option to the top so nurses see the suggestion first.
     if (recommendedId == null) return base;
-    const recIdx = base.findIndex((o) => Number(o.id) === Number(recommendedId));
+    const recIdx = base.findIndex((o) => String(o.id) === String(recommendedId));
     if (recIdx <= 0) return base;
     const copy = base.slice();
     const [rec] = copy.splice(recIdx, 1);
@@ -2355,7 +2348,7 @@ export const Combobox = ({
             )}
             {filtered.length === 0 && <li className="cpas-combobox__empty">No matches.</li>}
             {filtered.map((o, i) => {
-              const rec = recommendedId != null && Number(o.id) === Number(recommendedId);
+              const rec = recommendedId != null && String(o.id) === String(recommendedId);
               return (
                 <li
                   key={o.id}
