@@ -64,6 +64,7 @@ import meddiagAugment from './css/meddiag-augment.css?inline';
 import carePlanStamp from './css/care-plan-stamp.css?inline';
 import roundingReports from './css/rounding-reports.css?inline';
 import mdsListCoverage from './css/mds-list-coverage.css?inline';
+import superVerify from './css/super-verify.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -106,6 +107,7 @@ const CSS_BUNDLE = [
   carePlanStamp,
   roundingReports,
   mdsListCoverage,
+  superVerify,
 ].join('\n\n');
 
 function injectCss() {

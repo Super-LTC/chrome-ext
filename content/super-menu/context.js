@@ -266,3 +266,4 @@ window.getChatContext = getChatContext;
 window.getPCCAssessmentMetaFromDOM = getPCCAssessmentMetaFromDOM;
 window.appendMDSContextParams = appendMDSContextParams;
 window.getMDSContextBodyFields = getMDSContextBodyFields;
+window.scrapeClientIdFromDOM = scrapeClientIdFromDOM;
