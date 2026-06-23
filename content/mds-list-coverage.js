@@ -5,12 +5,12 @@ import { scrapeRows } from './mds-list-coverage/scrape.js';
 import { toChips } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewPopover } from './mds-list-coverage/detail.js';
-import { mdsBetaEnabled } from './mds-beta-gate.js';
 
-// KILL SWITCH — parked. Set true to re-enable the experimental MDS-list
-// interview/UDA coverage overlay (still also subject to the backend beta gate).
-// Off → the MDS In Progress list shows the native PCC table, no coverage chips.
-const ILC_ENABLED = false;
+// GA: the MDS-list interview/UDA coverage overlay is now on for ALL authenticated
+// users (no beta allowlist gate). NOTE: this requires the backend to (a) stop
+// 403-ing /mds/interview-coverage/batch for non-allowlisted users and (b) open the
+// module-status allowlist — otherwise non-beta users get error chips. Coordinate
+// the rollout with the backend.
 
 const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
 // Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
@@ -114,11 +114,7 @@ function renderRow(rowEl, result, rowMeta) {
 }
 
 async function runCoverage() {
-  if (!ILC_ENABLED) return;          // parked — see KILL SWITCH note up top
   if (ILC.busy) return;
-  // Beta gate (single chokepoint for all call paths: init + both observers).
-  // Fails closed — non-testers get the plain MDS list with no coverage chips.
-  if (!(await mdsBetaEnabled())) return;
   const table = findListTable();
   if (!table) return;
   const rows = scrapeRows(table.querySelector('tbody') || table);
