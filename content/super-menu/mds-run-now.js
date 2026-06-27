@@ -58,6 +58,31 @@ function runnableCode(res) {
   return null;
 }
 
+/**
+ * Detect the "RUNNING" section response: a solve is already in flight for this
+ * assessment, so the section endpoint returns 404 + `code: 'RUNNING'` plus the
+ * same live progress shape `/run/status` emits (phase, sectionsDone/Total,
+ * perSection, etaSeconds). Returns a normalized progress state the surface can
+ * render as "Analyzing…", or null for any other response.
+ *
+ * Deliberately separate from runnableCode(): RUNNING must NOT offer "Run it" —
+ * re-triggering an in-progress solve is exactly what the backend (PR #767) now
+ * prevents. The surface shows progress and polls to completion instead.
+ */
+function runningState(res) {
+  if (!res || res.status !== 404) return null;
+  if (res.body?.code !== 'RUNNING') return null;
+  const b = res.body;
+  return {
+    phase: b.phase || 'solving',
+    sectionsDone: b.sectionsDone ?? 0,
+    sectionsTotal: b.sectionsTotal ?? 0,
+    perSection: Array.isArray(b.perSection) ? b.perSection : [],
+    etaSeconds: b.etaSeconds ?? null,
+    assessmentId: b.assessmentId || null,
+  };
+}
+
 /** Intro copy for the pre-click "Run it" card, by 404 code. */
 function introCopy(code) {
   return code === 'NO_RUN_YET'
@@ -313,6 +338,7 @@ function start(params, cb = {}, surface = 'unknown', code = null) {
 export const MdsRunNow = {
   start,
   runnableCode,
+  runningState,
   introCopy,
   phaseCopy,
   gatherParams,

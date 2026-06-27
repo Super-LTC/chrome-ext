@@ -144,6 +144,8 @@ const SuperRunItCard = {
   _el: null,
   _handle: null,
   _code: null,
+  _runningTimer: null,
+  _params: null,
 
   // Show the pre-click prompt. `code` is the originating 404 code.
   show(code) {
@@ -198,6 +200,44 @@ const SuperRunItCard = {
     }, 'section_overlay', this._code);
   },
 
+  // A solve is already in flight (section endpoint returned code 'RUNNING').
+  // Show live progress seeded from that response and re-poll the section
+  // endpoint until the run finishes, then re-init the overlay. There is NO
+  // "Run it" button here — re-triggering a running solve is exactly what
+  // superapp PR #767 set out to prevent.
+  showRunning(seedState, params) {
+    this._ensureEl();
+    this._params = params;
+    this._renderProgress(seedState);
+    this._scheduleRunningPoll();
+  },
+
+  _scheduleRunningPoll() {
+    clearTimeout(this._runningTimer);
+    this._runningTimer = setTimeout(() => this._pollRunning(), 3500);
+  },
+
+  async _pollRunning() {
+    if (!this._el || !this._params) return;
+    try {
+      // Success → this section is now solved. Re-init the overlay so badges +
+      // decisions load cleanly, then tear the card down (via _onDone).
+      await fetchSectionData(this._params);
+      this._onDone();
+    } catch (err) {
+      const running = window.MdsRunNow?.runningState?.(err);
+      if (running) {
+        this._renderProgress(running); // refresh ETA / sections done
+        this._scheduleRunningPoll();
+        return;
+      }
+      // No longer running (run failed, or the section resolved to a different
+      // state) → re-init so the overlay settles correctly (data, Run-it card,
+      // or error notice).
+      this._onDone();
+    }
+  },
+
   _renderProgress(state) {
     if (!this._el) return;
     const copy = window.MdsRunNow?.phaseCopy?.(state) || { title: 'Working…', detail: '', busy: true };
@@ -233,6 +273,9 @@ const SuperRunItCard = {
 
   hide() {
     if (this._handle) { this._handle.cancel(); this._handle = null; }
+    clearTimeout(this._runningTimer);
+    this._runningTimer = null;
+    this._params = null;
     if (this._el) { this._el.remove(); this._el = null; }
   },
 };
@@ -557,6 +600,15 @@ async function initSuperOverlay() {
 
   } catch (error) {
     console.error('Super LTC: Failed to fetch section data:', error);
+    // A solve is already in flight for this assessment → show live progress and
+    // poll to completion, instead of offering "Run it" (which would re-trigger
+    // the running solve). See MdsRunNow.runningState / superapp PR #767.
+    const running = window.MdsRunNow?.runningState?.(error);
+    if (running) {
+      SuperLoadingStatus.hide();
+      SuperRunItCard.showRunning(running, params);
+      return;
+    }
     // Assessment not synced / not solved yet → offer the on-demand "Run it"
     // pipeline instead of a dead-end notice.
     const runnable = window.MdsRunNow?.runnableCode?.(error);
