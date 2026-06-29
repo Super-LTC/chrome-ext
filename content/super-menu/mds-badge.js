@@ -50,6 +50,48 @@ export function formatAnswerForDisplay(answer, isNumeric = false) {
 }
 
 /**
+ * Section I only: a short, scannable label describing WHAT a diagnosis item
+ * needs, so a coder can act without opening the popover. Replaces the blunt
+ * "Yes/No/?" badge text on review & mismatch badges with "Diagnosis needed",
+ * "Treatment needed", "Query needed", etc.
+ *
+ * Derived purely from the Section I runner's `status` plus the two validation
+ * gates it already returns on every diagnosis item:
+ *   - diagnosisPassed    — the chart documents the diagnosis
+ *   - activeStatusPassed — active treatment / orders were found
+ *
+ * Returns null for items where the plain Yes/No is already clear (dont_code) or
+ * it isn't a recognized Section I status — letting the caller fall back to the
+ * existing answer text.
+ *
+ * @param {Object} [aiAnswer] - { status, diagnosisPassed, activeStatusPassed }
+ * @returns {string|null}
+ */
+export function sectionIBadgeLabel(aiAnswer = {}) {
+  const { status, diagnosisPassed: dx, activeStatusPassed: tx } = aiAnswer || {};
+
+  switch (status) {
+    case 'code':
+      return 'Code it';
+
+    case 'needs_physician_query':
+      // Treatment is documented but the diagnosis isn't — the fix is a physician
+      // query, not direct coding.
+      return 'Query needed';
+
+    case 'needs_review':
+      if (dx === false && tx === true) return 'Diagnosis needed';
+      if (dx === true && tx === false) return 'Treatment needed';
+      if (dx === false && tx === false) return 'Evidence needed';
+      return 'Needs review';
+
+    default:
+      // dont_code / error / unknown → caller shows plain Yes/No.
+      return null;
+  }
+}
+
+/**
  * Decide a badge's comparison status from the AI answer and the coded PCC answer.
  *
  * @param {Object} aiAnswer - { status, answer, reviewReason, isNumeric, ... }
