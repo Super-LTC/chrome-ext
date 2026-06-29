@@ -1,6 +1,6 @@
 // content/modules/care-plan-stamp/wizardModel.test.js
 import { describe, it, expect } from 'vitest';
-import { areaStatus, skippedItems, buildWizardModel } from './wizardModel.js';
+import { areaStatus, skippedItems, buildWizardModel, reviewedCount } from './wizardModel.js';
 import fixture from './__fixtures__/mock-audit-v2.js';
 
 const EMPTY = { groups: [], coveredAreas: [], total: 0, orderedItems: [] };
@@ -21,6 +21,30 @@ describe('skippedItems', () => {
   it('returns the array when present', () => {
     expect(skippedItems(fixture.audit)).toBe(fixture.audit.skipped);
     expect(skippedItems(fixture.audit).length).toBe(2);
+  });
+});
+
+describe('reviewedCount — a skip counts as reviewed, same as a stamp', () => {
+  const items = [{ ruleId: 'a' }, { ruleId: 'b' }, { ruleId: 'c' }];
+
+  it('counts stamped items', () => {
+    expect(reviewedCount(items, new Set(['a']), new Set())).toBe(1);
+  });
+  it('counts skipped items as reviewed (the dismissed-but-still-counted fix)', () => {
+    expect(reviewedCount(items, new Set(), new Set(['b']))).toBe(1);
+  });
+  it('counts stamped + skipped together', () => {
+    expect(reviewedCount(items, new Set(['a']), new Set(['b']))).toBe(2);
+  });
+  it('an item in BOTH sets counts once (never exceeds total)', () => {
+    expect(reviewedCount(items, new Set(['a']), new Set(['a']))).toBe(1);
+  });
+  it('none handled → 0', () => {
+    expect(reviewedCount(items, new Set(), new Set())).toBe(0);
+  });
+  it('null-safe (bad inputs → 0)', () => {
+    expect(reviewedCount(null, new Set(['a']), new Set())).toBe(0);
+    expect(reviewedCount(items, null, null)).toBe(0);
   });
 });
 

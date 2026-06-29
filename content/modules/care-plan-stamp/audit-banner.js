@@ -130,14 +130,15 @@ function _paint(banner, audit, ctx) {
     <!-- NO_TRACK: pure-UI dismiss of banner -->
     <button type="button" class="super-audit-banner__dismiss" aria-label="Dismiss">×</button>
   `;
-  banner.querySelector('.super-audit-banner__cta').addEventListener('click', () => _openWizard(ctx));
+  const isV2 = audit?.engineVersion === 'v2';
+  banner.querySelector('.super-audit-banner__cta').addEventListener('click', () => _openWizard(ctx, isV2));
   banner.querySelector('.super-audit-banner__dismiss').addEventListener('click', () => {
     sessionStorage.setItem(_dismissKeyFor(ctx.patientId), '1');
     banner.remove();
   });
 }
 
-async function _openWizard({ patientId, facilityName, orgSlug }) {
+async function _openWizard({ patientId, facilityName, orgSlug }, isV2 = false) {
   // Reuse the modal mount path from inject-button.js — duplicate the relevant
   // bits inline to avoid coupling to inject-button's internals.
   document.getElementById(OVERLAY_ID_FALLBACK)?.remove();
@@ -161,6 +162,14 @@ async function _openWizard({ patientId, facilityName, orgSlug }) {
     overlay.remove();
     document.body.style.overflow = '';
     if (fab) fab.style.display = prevFabDisplay || '';
+    // V2 only — keep V1 byte-for-byte. Re-run the audit so the banner reflects
+    // what the nurse just did: stamps refreshed PCC's plan (re-scraped on
+    // render) and skips persisted to our DB (V2 drops them from the count).
+    // _renderBanner no-ops if a banner already exists, so clear it first.
+    if (isV2) {
+      document.getElementById(BANNER_ID)?.remove();
+      _renderBanner();
+    }
   };
 
   // Scrape patient name same way inject-button does

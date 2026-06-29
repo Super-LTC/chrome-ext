@@ -32,6 +32,21 @@ export function skippedItems(audit) {
   return Array.isArray(audit?.skipped) ? audit.skipped : [];
 }
 
+/**
+ * Progress numerator: how many toAdd items the nurse has *handled* — either
+ * stamped OR skipped. A skip is a review decision, so it counts toward
+ * "reviewed" exactly like a stamp (otherwise the bar never reaches 100% for a
+ * nurse who dismisses rather than stamps, and the count contradicts what she
+ * just did). An item in both sets is counted once (OR, not sum), so the result
+ * can never exceed `items.length`.
+ */
+export function reviewedCount(items, stampedIds, skippedIds) {
+  if (!Array.isArray(items)) return 0;
+  const stamped = stampedIds || new Set();
+  const skipped = skippedIds || new Set();
+  return items.filter((it) => stamped.has(it.ruleId) || skipped.has(it.ruleId)).length;
+}
+
 function _score(item) {
   return typeof item?.score === 'number' ? item.score : 0;
 }

@@ -1,7 +1,7 @@
 import { h, Fragment } from 'preact';
 import { useState, useEffect, useMemo } from 'preact/hooks';
 import { FocusCard, FocusRationale } from './FocusCard.jsx';
-import { buildWizardModel, skippedItems } from '../wizardModel.js';
+import { buildWizardModel, skippedItems, reviewedCount } from '../wizardModel.js';
 import { areaLabel } from '../careArea.js';
 
 /**
@@ -65,7 +65,9 @@ export const AuditWizard = ({
   }, [audit, skippedSet]);
 
   // ── Progress ──
-  const done = (audit?.toAdd || []).filter((it) => stampedSet.has(it.ruleId)).length;
+  // "Reviewed" = stamped OR skipped — a dismissal is a decision, so the bar
+  // reaches 100% when every focus has been acted on (not only the stamped ones).
+  const done = reviewedCount(audit?.toAdd || [], stampedSet, skippedSet);
   const pct = total > 0 ? (done / total) * 100 : 0;
 
   // ── Collapsible state ──
