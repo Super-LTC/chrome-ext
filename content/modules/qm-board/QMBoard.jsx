@@ -25,8 +25,8 @@ import { useQuarterRates } from './hooks/useQuarterRates.js';
 import { useRolling } from './hooks/useRolling.js';
 import { track } from '../../utils/analytics.js';
 import { totalActionable } from './lib/qm-clinical-signals.js';
-import { QmOverview } from './components/QmOverview.jsx';
-import { QmFocus } from './components/QmFocus.jsx';
+import { QmInhouse } from './components/QmInhouse.jsx';
+import { QmFiveStarScorecard } from './components/QmFiveStarScorecard.jsx';
 import { ResidentDrillIn } from './components/ResidentDrillIn.jsx';
 import { MeasureDetail } from './components/MeasureDetail.jsx';
 import { ClinicalSignalsView } from './components/ClinicalSignalsView.jsx';
@@ -36,10 +36,12 @@ import { FunctionalDeclineView } from './FunctionalDecline.jsx';
 import { QmLoading } from './components/QmLoading.jsx';
 
 export function QMBoard({ facilityName, orgSlug, onClose }) {
-  // Two modes off one fetch (web PR #672): Focus is the landing ("what to do this
-  // week"); QM Board is the full board. The Focus | QM Board switch is always
-  // visible — the full board must never feel hidden.
-  const [mode, setMode] = useState('focus'); // 'focus' | 'board'
+  // Two modes off one fetch: Coordinator is the landing — the in-house "what do
+  // I clear" worklist (List/Grid/Calendar), replacing the old Focus; QM Board is
+  // the full regional board. The Coordinator | QM Board switch is always visible —
+  // the full board must never feel hidden. (Regional Five-Star scorecard will
+  // replace the 'board' mode in a later session.)
+  const [mode, setMode] = useState('coordinator'); // 'coordinator' | 'board'
   const [history, setHistory] = useState([{ kind: 'dashboard' }]);
   const view = history[history.length - 1];
   // Resident drill-in modal — layers over whatever view is showing.
@@ -93,9 +95,6 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   const openFunctional = () => push({ kind: 'functional' });
   const openSimulator = () => push({ kind: 'simulator' });
   const openDfs = () => push({ kind: 'dfs' });
-  // From Focus: jump to the full board's signals view (switch mode + push).
-  const openSignalsFromFocus = (patientId) => { setMode('board'); push({ kind: 'signals', patientId }); };
-  const openBoard = () => setMode('board');
   // scopeMeasureId: set when opened FROM a measure (measure-detail row / crosser),
   // so the drill-in leads with that measure and tucks the rest under an accordion.
   // Undefined from a worklist patient-row click → the modal shows all at once.
@@ -146,51 +145,48 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
             {/* Persistent Focus ⇄ QM Board switch — its own pill row at the top of
                 the content (matches web), so neither mode ever feels hidden. Shown
                 at each mode's top level; deeper board views carry their own back bar. */}
-            {(mode === 'focus' || view.kind === 'dashboard') && (
+            {view.kind === 'dashboard' && (
               <div className="qmc qmb__modebar">
                 <div className="qmb__modeswitch" role="tablist" aria-label="QM view mode">
-                  <button type="button" role="tab" aria-selected={mode === 'focus'} /* NO_TRACK */
-                    className={`qmb__modebtn ${mode === 'focus' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('focus')}>Focus</button>
+                  <button type="button" role="tab" aria-selected={mode === 'coordinator'} /* NO_TRACK */
+                    className={`qmb__modebtn ${mode === 'coordinator' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('coordinator')}>Coordinator</button>
                   <button type="button" role="tab" aria-selected={mode === 'board'} /* NO_TRACK */
-                    className={`qmb__modebtn ${mode === 'board' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('board')}>QM Board</button>
+                    className={`qmb__modebtn ${mode === 'board' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('board')}>Regional</button>
                 </div>
               </div>
             )}
-            {mode === 'focus' && (
-              <QmFocus
-                data={currentlyTriggering}
-                upcoming={upcoming}
-                alerts={preventableAlerts}
-                prediction={prediction}
+            {mode === 'coordinator' && view.kind === 'dashboard' && (
+              <QmInhouse
+                board={{ currentlyTriggering, upcoming, alerts: preventableAlerts }}
                 lens="five_star"
                 facilityState={currentlyTriggering?.facilityState}
+                dfs={dfs}
                 facilityName={facilityName}
                 orgSlug={orgSlug}
-                onOpenBoard={openBoard}
                 onOpenResident={openResident}
-                onOpenSignals={openSignalsFromFocus}
+                onOpenSignals={openSignals}
+                onOpenMeasure={openMeasure}
+                onOpenDfs={openDfs}
+                onOpenFunctional={openFunctional}
               />
             )}
             {mode === 'board' && view.kind === 'dashboard' && (
-              <QmOverview
-                data={currentlyTriggering}
-                upcoming={upcoming}
-                signalCount={signalCount}
-                lens={lens}
-                onLensChange={setLens}
+              <QmFiveStarScorecard
+                rolling={rolling}
                 prediction={prediction}
-                predictionLoading={predictionLoading}
+                board={{ currentlyTriggering, upcoming }}
                 dfs={dfs}
                 quarterRates={quarterRates}
-                onOpenDfs={openDfs}
+                lens={lens}
+                facilityState={currentlyTriggering?.facilityState}
+                facilityName={facilityName}
+                orgSlug={orgSlug}
                 onOpenMeasure={openMeasure}
-                onOpenResident={openResident}
-                onOpenSignals={openSignals}
-                onOpenFunctional={openFunctional}
+                onOpenDfs={openDfs}
                 onOpenSimulator={openSimulator}
               />
             )}
-            {mode === 'board' && view.kind === 'measure' && (
+            {view.kind === 'measure' && (
               <MeasureDetail
                 measureId={view.measureId}
                 currentlyTriggering={currentlyTriggering}
@@ -203,7 +199,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onOpenResidentById={openResidentById}
               />
             )}
-            {mode === 'board' && view.kind === 'signals' && (
+            {view.kind === 'signals' && (
               <ClinicalSignalsView
                 preventableAlerts={preventableAlerts}
                 currentlyTriggering={currentlyTriggering}
@@ -213,7 +209,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 initialOpenPatientId={view.patientId}
               />
             )}
-            {mode === 'board' && view.kind === 'simulator' && (
+            {view.kind === 'simulator' && (
               <WhatIfSimulator
                 prediction={prediction}
                 data={currentlyTriggering}
@@ -222,14 +218,14 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onOpenResident={openResident}
               />
             )}
-            {mode === 'board' && view.kind === 'functional' && (
+            {view.kind === 'functional' && (
               <FunctionalDeclineView
                 facilityName={facilityName}
                 orgSlug={orgSlug}
                 onBack={pop}
               />
             )}
-            {mode === 'board' && view.kind === 'dfs' && (
+            {view.kind === 'dfs' && (
               <DfsPage
                 dfs={dfs}
                 facilityName={facilityName}

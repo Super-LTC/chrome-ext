@@ -25,6 +25,9 @@
  * @property {'active'|'discharged'} dischargeStatus
  * @property {'short'|'long'|'unknown'} stayType
  * @property {number} cdif  Cumulative days in facility.
+ * @property {boolean} targetAccepted  false = counted on a not-yet-CMS-Accepted
+ *   MDS (Accepted-first hybrid → we lead iQIES). Drives the "MDS In Progress" tag.
+ * @property {string} targetArd  ARD (ISO) of the assessment that counts.
  * @property {QuarterRowMeasureView[]} measures
  *
  * @typedef {Object} QmFacilityRate

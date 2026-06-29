@@ -445,7 +445,7 @@ function RateCluster({ rate, showCmsTag }) {
   );
 }
 
-function MeasureTile({ meta, counts, urgencies, soon, windowed, delay, onClick, onViewDenominator }) {
+export function MeasureTile({ meta, counts, urgencies, soon, windowed, delay, onClick, onViewDenominator }) {
   const group = clearGroupForMechanism(meta.clearProfile?.clearMechanism);
   // Headline % = the windowed CMS rate (incl. discharged) when loaded; falls back
   // to the active-only rate until the quarter-rates fetch resolves.

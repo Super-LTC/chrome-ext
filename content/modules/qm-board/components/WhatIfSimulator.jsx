@@ -190,7 +190,9 @@ export function WhatIfSimulator({ prediction, data, upcoming, onBack, onOpenResi
   const q = query.trim().toLowerCase();
   // Points-forward readout (mirrors the points-first card): overall hero + per-domain.
   const ovProg = sim.overall.score != null ? starProgress('overall', sim.overall.score) : null;
-  const ovDelta = sim.overall.pointsDelta;
+  // Points are whole-number tiers — round so the readout never shows a fraction
+  // like "-156.5625 pts" (sub-point precision leaks from the rate→points math).
+  const ovDelta = Math.round(sim.overall.pointsDelta);
   const toggle = (k) => setOn((prev) => {
     const next = new Set(prev);
     if (next.has(k)) next.delete(k); else next.add(k);
