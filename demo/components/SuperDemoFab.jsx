@@ -14,11 +14,13 @@ import { useEffect, useState, useRef } from 'preact/hooks';
 export function SuperDemoFab({
   onOpenMds,
   onOpenQm,
+  onOpenFtag,
   onOpen24hr,
   onOpenChat,
   onOpenFeedback,
   onOpenCoverage,
   showCoverage = false,
+  showFtag = false,
   mdsBadgeCount = 0,
 }) {
   const [open, setOpen] = useState(false);
@@ -97,11 +99,23 @@ export function SuperDemoFab({
         aria-label="QM Board"
         onClick={act(onOpenQm)}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 11l3 3L22 4"/>
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-        </svg>
+        QM
       </button>
+
+      {showFtag && (
+        <button
+          id="super-ftag-action"
+          type="button"
+          class="super-dial__action super-dial__action--ftag"
+          aria-label="F-Tag Prevention"
+          onClick={act(onOpenFtag)}
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </button>
+      )}
 
       {showCoverage && (
         <button

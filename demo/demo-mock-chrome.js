@@ -11,12 +11,24 @@ import { DEMO_API_RESPONSES } from './demo-mock-data.js';
 import { SECTION_I_DETAIL } from './demo-section-i-fixtures.js';
 import { buildPlannerWeekEvents, buildPlannerSummary } from './demo-planner-fixtures.js';
 import {
-  DEMO_QM_CURRENTLY_TRIGGERING,
-  DEMO_QM_PREVENTABLE_ALERTS,
   DEMO_GG_DETAIL_BY_PATIENT,
   buildReportList,
   buildReportForDate,
 } from './demo-qm-fixtures.js';
+import {
+  DEMO_QM_BOARD,
+  DEMO_QM_FIVE_STAR,
+  DEMO_QM_DFS,
+  DEMO_QM_GG_DASHBOARD,
+  DEMO_QM_GG_AIDE_LIST,
+  DEMO_QM_GG_AIDE_DETAIL,
+} from './demo-qm-real-fixtures.js';
+import {
+  FTAG_MODULE_STATUS,
+  buildFtagFindings,
+  buildFtagMar,
+  buildFtagVitals,
+} from './demo-ftag-fixtures.js';
 
 /** In-memory schedule hour for the 24hr report settings demo. */
 let demo24hrScheduleHour = 3;
@@ -266,11 +278,11 @@ function routeApiRequest(endpoint, options = {}) {
           { code: 'J44.9', description: 'Chronic obstructive pulmonary disease, unspecified',
             queryable: true,
             carePlanStatus: {
-              status: 'partial',
+              status: 'covered',
               matchedFocus: { focusText: 'DX: Respiratory status r/t COPD AEB use of bronchodilators',
                               focusId: 'f-001', isResolved: false },
-              matchedInterventionId: null,
-              reason: 'Focus exists but no bronchodilator-administration intervention is linked. Consider adding albuterol q4h prn intervention.',
+              matchedInterventionId: 'i-001',
+              reason: 'Fully covered — Respiratory Status focus with tiotropium daily + albuterol q4h PRN and SpO2 monitoring interventions linked.',
             },
             queryHistory: { hasOutstanding: false, lastSignedAt: daysAgo(45),
                             daysSinceLastSigned: 45, totalCount: 1, recentQueries: [] },
@@ -292,7 +304,7 @@ function routeApiRequest(endpoint, options = {}) {
             carePlanStatus: {
               status: 'missing',
               matchedFocus: null, matchedInterventionId: null,
-              reason: 'No focus addresses morbid obesity. NTA scoring requires BMI ≥40 documented; consider adding a nutrition focus.',
+              reason: 'No care-plan focus addresses morbid obesity. Add a nutrition / weight-management focus to close the gap.',
             },
             queryHistory: { hasOutstanding: true, pendingCount: 1, sentCount: 0, totalCount: 1,
                             recentQueries: [{ id: 'q-100', mdsItem: 'I8000:NTA:E66', status: 'sent',
@@ -678,13 +690,74 @@ function routeApiRequest(endpoint, options = {}) {
   }
 
   // ── QM Board routes ─────────────────────────────────────────────
+  // Real captured payloads (anonymized) — see demo-qm-real-fixtures.js. The hooks
+  // call unwrap(res.data); each fixture is the inner payload object (no envelope),
+  // so unwrap returns it verbatim.
 
-  if (path === '/api/extension/qm-planner/currently-triggering') {
-    return { success: true, data: DEMO_QM_CURRENTLY_TRIGGERING };
+  // One round-trip for the whole board (currently-triggering + upcoming + alerts).
+  if (path === '/api/extension/qm-planner/board') {
+    return { success: true, data: DEMO_QM_BOARD };
   }
 
-  if (path === '/api/extension/qm-planner/preventable-alerts') {
-    return { success: true, data: DEMO_QM_PREVENTABLE_ALERTS };
+  // Five-Star predictor card.
+  if (path === '/api/extension/qm-planner/five-star') {
+    return { success: true, data: DEMO_QM_FIVE_STAR };
+  }
+
+  // Discharge Function Score page.
+  if (path === '/api/extension/qm-planner/dfs') {
+    return { success: true, data: DEMO_QM_DFS };
+  }
+
+  // GG functional-decline dashboard (Residents view).
+  if (path === '/api/extension/qm-planner/gg-decline-dashboard') {
+    return { success: true, data: DEMO_QM_GG_DASHBOARD };
+  }
+
+  // Aide scoring (CNA scorecards). With ?aideId= → single-aide detail; otherwise
+  // the facility-wide list.
+  if (path === '/api/extension/qm-planner/gg-aide-deviation') {
+    const aideId = params.get('aideId');
+    if (aideId) {
+      const detail = DEMO_QM_GG_AIDE_DETAIL[aideId];
+      if (detail) return { success: true, data: detail };
+      // Fall back to the one captured aide so any card opens to a real scorecard.
+      const sample = Object.values(DEMO_QM_GG_AIDE_DETAIL)[0];
+      return { success: true, data: sample || null };
+    }
+    return { success: true, data: DEMO_QM_GG_AIDE_LIST };
+  }
+
+  // ── F-Tag Prevention (Survey Readiness) routes ──────────────────
+  // Fabricated fixtures — see demo-ftag-fixtures.js. Specific /findings/[id]/...
+  // routes must be checked before the bare /findings feed.
+
+  if (path === '/api/extension/ftag-prevention/module-status') {
+    return { success: true, data: FTAG_MODULE_STATUS };
+  }
+
+  // Finding-anchored MAR/TAR (F684 / F697 source view).
+  const ftagMarMatch = path.match(/\/api\/extension\/ftag-prevention\/findings\/([^/]+)\/mar$/);
+  if (ftagMarMatch) {
+    const data = buildFtagMar(ftagMarMatch[1]);
+    return { success: true, data: data || { order: null, adminRecords: [], dateRange: null } };
+  }
+
+  // resolve / snooze / unsnooze (DELETE snooze) / reopen — acknowledge only;
+  // the views are optimistic and refetch on super:ftag-changed.
+  const ftagActionMatch = path.match(/\/api\/extension\/ftag-prevention\/findings\/([^/]+)\/(resolve|snooze|reopen)$/);
+  if (ftagActionMatch) {
+    return { success: true, data: { ok: true, id: ftagActionMatch[1], action: ftagActionMatch[2] } };
+  }
+
+  // Unified findings feed (status = open | snoozed | resolved).
+  if (path === '/api/extension/ftag-prevention/findings') {
+    return { success: true, data: buildFtagFindings(params.get('status') || 'open') };
+  }
+
+  // Vitals source view (F580 / F692).
+  if (path === '/api/extension/vitals') {
+    return { success: true, data: buildFtagVitals(params.get('patientId')) };
   }
 
   // /api/extension/patients/:id/gg-decline — rich detail for the GG modal
