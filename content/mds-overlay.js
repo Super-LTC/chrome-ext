@@ -8,7 +8,9 @@ import { fetchDocument, fetchClinicalNote, fetchTherapyDocument, fetchUda, forma
 import { UdaViewer } from './modules/uda-viewer/UdaViewer.jsx';
 // Badge-status logic is shared with the demo (demo/components/PCCDemoApp.jsx) so
 // the live overlay and the demo can never disagree about a badge's verdict.
-import { normalizeAnswer, formatAnswerForDisplay, determineStatus } from './super-menu/mds-badge.js';
+import { normalizeAnswer, formatAnswerForDisplay, determineStatus, sectionIBadgeLabel } from './super-menu/mds-badge.js';
+import { buildI8000ViewModel } from './i8000-overlay/i8000-model.js';
+import { I8000_MOCK_ENVELOPE } from './i8000-overlay/i8000-mock.js';
 
 // ============================================
 // State Management
@@ -598,6 +600,13 @@ async function initSuperOverlay() {
         .catch(() => SuperLoadingStatus.completeTask('careplan'));
     }
 
+    // I8000 overlay: audit entered codes + suggest missing NTA-paying diagnoses
+    // (Section I only, async, non-blocking — never breaks the page if the
+    // endpoint is undeployed). See content/i8000-overlay/.
+    if (params.section === 'I') {
+      runI8000Overlay(params);
+    }
+
   } catch (error) {
     console.error('Super LTC: Failed to fetch section data:', error);
     // A solve is already in flight for this assessment → show live progress and
@@ -811,6 +820,14 @@ function injectBadge(questionEl, result) {
   // Set status class and text
   const answerText = formatAnswerForDisplay(result.aiAnswer.answer, result.aiAnswer.isNumeric);
 
+  // Section I: replace the blunt "Yes/No/?" with a scannable "what's needed"
+  // label ("Diagnosis needed", "Treatment needed", "Query needed", "Code it")
+  // so a coder can act without opening the popover. Falls back to answerText for
+  // statuses where plain Yes/No is already clear (dont_code) and for non-Section-I.
+  const isSectionI = !!(result.mdsItem && result.mdsItem.startsWith('I'));
+  const diagLabel = isSectionI ? sectionIBadgeLabel(result.aiAnswer) : null;
+  const attentionText = diagLabel || answerText;
+
   switch (result.status) {
     case 'match':
       badge.classList.add('super-badge--match');
@@ -818,11 +835,11 @@ function injectBadge(questionEl, result) {
       break;
     case 'mismatch':
       badge.classList.add('super-badge--mismatch');
-      badge.innerHTML = `<span class="super-badge__icon">&#10007;</span> Super: ${answerText}`;
+      badge.innerHTML = `<span class="super-badge__icon">&#10007;</span> Super: ${attentionText}`;
       break;
     case 'review':
       badge.classList.add('super-badge--review');
-      badge.innerHTML = `<span class="super-badge__icon">&#9888;</span> Super: ${answerText}`;
+      badge.innerHTML = `<span class="super-badge__icon">&#9888;</span> Super: ${attentionText}`;
       break;
     case 'info': {
       // Calm informational badge — e.g. "ordered, not administered". Not a nag;
@@ -846,6 +863,17 @@ function injectBadge(questionEl, result) {
         badge.innerHTML = `<span class="super-badge__icon">&#10003;</span> Super: ${answerText}`;
       }
       break;
+  }
+
+  // Section I: surface the one-line Dx/Tx evidence summaries on hover, so the
+  // coder gets the "why" behind "Diagnosis needed" / "Treatment needed" without
+  // opening the popover. (info/dismissed set their own title above.)
+  if (isSectionI && (result.status === 'review' || result.status === 'mismatch')) {
+    const tip = [
+      result.aiAnswer.diagnosisSummary ? `Dx: ${result.aiAnswer.diagnosisSummary}` : null,
+      result.aiAnswer.treatmentSummary ? `Tx: ${result.aiAnswer.treatmentSummary}` : null,
+    ].filter(Boolean).join('\n');
+    if (tip) badge.title = tip;
   }
 
   // Add click handler
@@ -1112,6 +1140,28 @@ function extractIcd10FromElement(questionEl) {
   }
 
   return null;
+}
+
+/**
+ * Read the LIVE I8000A–J write-in values straight off the PCC DOM, keyed by
+ * field (e.g. { I8000A: "E66.01 MORBID OBESITY", I8000C: "Z94.0 ..." }). The
+ * full cell text is kept (not just the code) so the backend can show a nice
+ * display string. Blank slots are omitted.
+ *
+ * Sent to the I8000 endpoint as `enteredCodes` so the audit reflects what's on
+ * the nurse's screen RIGHT NOW, not the (possibly lagging) DB-synced snapshot —
+ * otherwise a code they just typed gets mis-audited or re-suggested until sync.
+ */
+function readLiveI8000Values() {
+  const out = {};
+  document.querySelectorAll('[id^="I8000"][id$="_wrapper"]').forEach((wrapper) => {
+    const field = wrapper.id.replace(/_wrapper$/, ''); // "I8000A".."I8000J"
+    if (!/^I8000[A-J]$/.test(field)) return;
+    let raw = wrapper.querySelector('.readonlyquestionvalue')?.textContent?.trim();
+    if (!raw) raw = wrapper.querySelector('input[type="text"][id^="I8000"]')?.value?.trim();
+    if (raw && raw !== '{blank}') out[field] = raw;
+  });
+  return out;
 }
 
 /**
@@ -4977,6 +5027,318 @@ async function loadAssessmentQueries(assessmentId, facilityName, orgSlug) {
     console.error('Super LTC: Failed to load queries (non-fatal):', error);
     // Non-fatal - queries are supplementary
   }
+}
+
+// ============================================
+// I8000 Overlay (audit entered codes + suggest missing NTA diagnoses)
+// ============================================
+// Two surfaces on a Section I page, fed by GET /sections/I/i8000:
+//   1. an inline audit badge on each entered #I8000{A–J} row, and
+//   2. a "could add N NTA points" suggestions banner above the "Other" group.
+// Both open a VIEW-ONLY modal that reuses the popover CSS for a native feel.
+
+function isI8000MockMode() {
+  try {
+    return new URLSearchParams(window.location.search).get('i8000') === 'mock';
+  } catch (_) {
+    return false;
+  }
+}
+
+async function fetchI8000Data(params) {
+  // Preview path: ?i8000=mock feeds a fixture so the overlay is visible on a
+  // real PCC Section I page before the backend endpoint deploys.
+  if (isI8000MockMode()) return I8000_MOCK_ENVELOPE;
+
+  const { assessmentId, orgSlug, facilityName } = params;
+  const qp = new URLSearchParams({
+    externalAssessmentId: assessmentId,
+    facilityName,
+    orgSlug,
+    include: 'evidence', // each result arrives with its evidence inline (no lazy 2nd fetch)
+  });
+  // Live DOM I8000 values → audit reflects the screen, not the synced snapshot.
+  const liveCodes = readLiveI8000Values();
+  if (Object.keys(liveCodes).length > 0) qp.set('enteredCodes', JSON.stringify(liveCodes));
+  window.appendMDSContextParams?.(qp);
+  const endpoint = `/api/extension/mds/sections/I/i8000?${qp}`;
+
+  const response = await chrome.runtime.sendMessage({ type: 'API_REQUEST', endpoint });
+  if (!response.success) {
+    const err = new Error(response.error);
+    err.status = response.status;
+    err.body = response.body;
+    throw err;
+  }
+  return response.data;
+}
+
+async function runI8000Overlay(params) {
+  try {
+    const response = await fetchI8000Data(params);
+    const vm = buildI8000ViewModel(response);
+    if (vm.state !== 'ok') return; // no_run / skipped → render nothing
+    renderI8000AuditBadges(vm);
+    renderI8000Banner(vm);
+  } catch (err) {
+    // Endpoint undeployed (404) or any other error → stay silent. The I8000
+    // overlay is supplementary; it must never break the Section I page.
+    console.log('Super LTC: I8000 overlay unavailable (non-fatal):', err?.status || err?.message);
+  }
+}
+
+// verdict → existing badge color class (green/red), plus a muted "outside" variant.
+const I8000_VERDICT_BADGE_CLASS = { agree: 'match', disagree: 'mismatch', outside: 'outside' };
+const I8000_VERDICT_ICON = { agree: '✓', disagree: '✗', outside: '·' };
+
+function renderI8000AuditBadges(vm) {
+  vm.audits.forEach((audit) => {
+    if (!audit.badge) return;
+    const wrapper = document.getElementById(`${audit.field}_wrapper`);
+    if (!wrapper) return;
+
+    wrapper.querySelector('.super-badge--i8000-audit')?.remove();
+
+    const badge = document.createElement('div');
+    const colorClass = I8000_VERDICT_BADGE_CLASS[audit.badge.kind] || 'review';
+    badge.className = `super-badge super-badge--i8000-audit super-badge--${colorClass}`;
+    badge.innerHTML = `<span class="super-badge__icon">${I8000_VERDICT_ICON[audit.badge.kind] || ''}</span> Super: ${escapeHTML(audit.badge.label)}`;
+    if (audit.reason) badge.title = audit.reason;
+    badge.style.marginLeft = '12px';
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.SuperAnalytics?.track?.('i8000_audit_clicked', { field: String(audit.field || ''), verdict: String(audit.verdict || '') });
+      showI8000Modal(buildAuditDetail(audit), badge);
+    });
+
+    const label = wrapper.querySelector('.question_label');
+    (label || wrapper).appendChild(badge);
+  });
+}
+
+function renderI8000Banner(vm) {
+  if (!vm.hasSuggestions) return;
+
+  const firstWrapper = document.querySelector('[id^="I8000"][id$="_wrapper"]');
+  if (!firstWrapper) return;
+  const group = firstWrapper.closest('.questiongroup') || firstWrapper.parentElement;
+  if (!group || !group.parentNode) return;
+
+  document.querySelector('.super-i8000-banner')?.remove();
+
+  const n = vm.banner.suggestionCount;
+  const pts = vm.banner.potentialNtaPoints;
+  const banner = document.createElement('div');
+  banner.className = 'super-i8000-banner';
+  banner.innerHTML = `
+    <div class="super-i8000-banner__head" role="button" tabindex="0" aria-expanded="false">
+      <span class="super-i8000-banner__spark">&#128176;</span>
+      <span class="super-i8000-banner__title">${n} diagnos${n === 1 ? 'is' : 'es'} could add ${pts} NTA point${pts === 1 ? '' : 's'}</span>
+      <span class="super-i8000-banner__sub">Super found support &mdash; click to view</span>
+      <span class="super-i8000-banner__chev" aria-hidden="true">&#9660;</span>
+    </div>
+    <div class="super-i8000-banner__list" hidden></div>
+  `;
+
+  const list = banner.querySelector('.super-i8000-banner__list');
+
+  if (vm.banner.slotsFull) {
+    const warn = document.createElement('div');
+    warn.className = 'super-i8000-banner__note super-i8000-banner__note--warn';
+    warn.innerHTML = 'All 10 I8000 slots are full &mdash; coding a suggestion means replacing an existing entry.';
+    list.appendChild(warn);
+  }
+  if (vm.stale) {
+    const stale = document.createElement('div');
+    stale.className = 'super-i8000-banner__note';
+    stale.textContent = 'Answers changed since this analysis — consider re-running Section I.';
+    list.appendChild(stale);
+  }
+
+  vm.banner.suggestions.forEach((s) => {
+    const row = document.createElement('div');
+    row.className = 'super-i8000-banner__row';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.innerHTML = `
+      <span class="super-i8000-banner__cat">${escapeHTML(s.categoryName || s.categoryKey || '')}</span>
+      <span class="super-i8000-banner__pts">+${s.ntaPoints} NTA</span>
+      <span class="super-i8000-banner__status super-i8000-banner__status--${escapeHTML(s.status || 'review')}">${escapeHTML(s.statusLabel || '')}</span>
+      <span class="super-i8000-banner__go" aria-hidden="true">&#8250;</span>
+    `;
+    const open = () => {
+      window.SuperAnalytics?.track?.('i8000_suggestion_clicked', { category: String(s.categoryKey || ''), nta_points: s.ntaPoints });
+      showI8000Modal(buildSuggestionDetail(s), row);
+    };
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    list.appendChild(row);
+  });
+
+  const head = banner.querySelector('.super-i8000-banner__head');
+  const toggle = () => {
+    const nowOpen = list.hidden;
+    list.hidden = !nowOpen;
+    banner.classList.toggle('super-i8000-banner--open', nowOpen);
+    head.setAttribute('aria-expanded', String(nowOpen));
+  };
+  head.addEventListener('click', toggle);
+  head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+
+  group.parentNode.insertBefore(banner, group);
+}
+
+// --- Modal (view-only) -----------------------------------------------------
+
+// Shape a suggestion's I8000CategoryResult into the modal's detail object.
+function buildSuggestionDetail(s) {
+  const r = s.result || {};
+  return {
+    title: s.categoryName || s.categoryKey || 'Suggested diagnosis',
+    subtitle: s.component ? `${s.component} category` : '',
+    status: r.status,
+    ntaPoints: s.ntaPoints,
+    recommendedIcd10: r.recommendedIcd10 || [],
+    // Dx/Tx live at the row level (s), not inside the raw result (r).
+    diagnosisSummary: s.diagnosisSummary,
+    diagnosisPassed: s.diagnosisPassed,
+    treatmentSummary: s.treatmentSummary,
+    activeStatusPassed: s.activeStatusPassed,
+    rationale: r.queryReason || r.rationale || '',
+    evidence: r.evidence || r.queryEvidence || r.treatmentEvidence || [],
+  };
+}
+
+// Shape an entered-code audit row into the modal's detail object.
+function buildAuditDetail(audit) {
+  const r = audit.result || {};
+  const verdictKind = audit.badge?.kind || 'review';
+  const verdictLabel = audit.badge?.label || '';
+  return {
+    title: audit.enteredDisplay || audit.enteredCode || audit.field,
+    subtitle: audit.field,
+    status: r.status,
+    ntaPoints: r.pdpmImpact?.ntaPoints,
+    verdictKind,
+    verdictLine: audit.reason ? `${verdictLabel} — ${audit.reason}` : verdictLabel,
+    recommendedIcd10: r.recommendedIcd10 || [],
+    // Dx/Tx live at the row level (audit), not inside the raw result (r).
+    diagnosisSummary: audit.diagnosisSummary,
+    diagnosisPassed: audit.diagnosisPassed,
+    treatmentSummary: audit.treatmentSummary,
+    activeStatusPassed: audit.activeStatusPassed,
+    rationale: r.rationale || '',
+    evidence: r.evidence || [],
+    noEvidenceNote: audit.verdict === 'outside_scope'
+      ? 'This code is a valid ICD-10 but not one of the 30 PDPM I8000 categories, so it adds no NTA points.'
+      : '',
+  };
+}
+
+// Read-only evidence card — same CSS as the popover's cards, minus the
+// click-to-open-viewer affordance (deep viewing is a later enhancement).
+function renderI8000EvidenceCard(ev) {
+  const quote = ev.quoteText || ev.orderDescription || ev.quote || ev.text || '';
+  const sourceType = ev.sourceType || ev.type || 'document';
+  const typeClassSuffix = String(sourceType).replace(/_/g, '-'); // CSS uses hyphens (lab-result)
+  const date = ev.effectiveDate ? ` &middot; ${escapeHTML(ev.effectiveDate)}` : '';
+  const typeLabel = (ev.displayName || sourceType) + date;
+  const body = quote || ev.rationale || '';
+  if (!body) return '';
+  const showRationale = ev.rationale && quote;
+  return `
+    <div class="super-evidence-card">
+      <div class="super-evidence-card__header">
+        <span class="super-evidence-card__type super-evidence-card__type--${escapeHTML(typeClassSuffix)}">${escapeHTML(typeLabel)}</span>
+      </div>
+      <div class="super-evidence-card__quote">${escapeHTML(body)}</div>
+      ${showRationale ? `<div class="super-evidence-card__rationale">${escapeHTML(ev.rationale)}</div>` : ''}
+    </div>
+  `;
+}
+
+function buildI8000ModalHTML(detail) {
+  const statusBadge = detail.status ? renderStatusBadge(detail.status) : '';
+  const ntaHTML = (detail.ntaPoints != null && detail.ntaPoints > 0)
+    ? `<span class="super-i8000-modal__nta">+${detail.ntaPoints} NTA</span>` : '';
+
+  const verdictHTML = detail.verdictLine
+    ? `<div class="super-i8000-modal__verdict super-i8000-modal__verdict--${escapeHTML(detail.verdictKind || 'review')}">${escapeHTML(detail.verdictLine)}</div>`
+    : '';
+
+  const icdHTML = (detail.recommendedIcd10 && detail.recommendedIcd10.length)
+    ? `<div class="super-icd10-section">
+         <div class="super-icd10-section__label">Recommended ICD-10</div>
+         <div class="super-icd10-list">${detail.recommendedIcd10.map((c) => {
+           const code = typeof c === 'string' ? c : c.code;
+           const desc = typeof c === 'string' ? '' : (c.description || '');
+           return `<span class="super-icd10-code" title="${escapeHTML(desc)}">${escapeHTML(code)}</span>`;
+         }).join('')}</div>
+       </div>`
+    : '';
+
+  const stepHTML = (detail.diagnosisSummary || detail.treatmentSummary)
+    ? `<div class="super-step-lines" style="display:flex;flex-direction:column;gap:4px;margin:8px 0;">
+         ${detail.diagnosisSummary ? `<div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.4;">
+           <span style="flex-shrink:0;color:${detail.diagnosisPassed ? 'var(--super-match)' : 'var(--super-mismatch)'};font-weight:700;">${detail.diagnosisPassed ? '✓' : '✗'}</span>
+           <span><strong style="color:var(--super-gray-600);">Dx:</strong> <span style="color:var(--super-gray-500);">${escapeHTML(detail.diagnosisSummary)}</span></span>
+         </div>` : ''}
+         ${detail.treatmentSummary ? `<div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.4;">
+           <span style="flex-shrink:0;color:${detail.activeStatusPassed ? 'var(--super-match)' : 'var(--super-mismatch)'};font-weight:700;">${detail.activeStatusPassed ? '✓' : '✗'}</span>
+           <span><strong style="color:var(--super-gray-600);">Tx:</strong> <span style="color:var(--super-gray-500);">${escapeHTML(detail.treatmentSummary)}</span></span>
+         </div>` : ''}
+       </div>`
+    : '';
+
+  const rationaleHTML = detail.rationale
+    ? `<div class="super-rationale super-rationale--collapsed">
+         <div class="super-rationale__label" onclick="this.parentElement.classList.toggle('super-rationale--collapsed')">Rationale <span class="super-rationale__chevron">&#9660;</span></div>
+         <div class="super-rationale__text">${escapeHTML(detail.rationale)}</div>
+       </div>`
+    : '';
+
+  const cards = (detail.evidence || []).map(renderI8000EvidenceCard).filter(Boolean);
+  const evidenceHTML = cards.length
+    ? `<div class="super-evidence-section">
+         <div class="super-evidence-section__label">Evidence (${cards.length})</div>
+         ${cards.join('')}
+       </div>`
+    : (detail.noEvidenceNote ? `<div class="super-evidence-empty">${escapeHTML(detail.noEvidenceNote)}</div>` : '');
+
+  return `
+    <div class="super-popover-header">
+      <div>
+        <div class="super-popover-header__title">${escapeHTML(detail.title)}</div>
+        <div class="super-popover-header__subtitle">${escapeHTML(detail.subtitle || '')}${statusBadge}${ntaHTML}</div>
+      </div>
+      <!-- NO_TRACK: close-X; engagement covered by i8000_suggestion_clicked / i8000_audit_clicked -->
+      <button class="super-popover-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="super-popover-body">
+      ${verdictHTML}
+      ${stepHTML}
+      ${icdHTML}
+      ${rationaleHTML}
+      ${evidenceHTML}
+    </div>
+  `;
+}
+
+function showI8000Modal(detail, anchorEl) {
+  closePopover();
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'super-backdrop';
+  backdrop.addEventListener('click', closePopover);
+  document.body.appendChild(backdrop);
+
+  const popover = document.createElement('div');
+  popover.className = 'super-popover super-popover--i8000';
+  popover.innerHTML = buildI8000ModalHTML(detail);
+  document.body.appendChild(popover);
+
+  positionPopover(popover, anchorEl);
+  popover.querySelector('.super-popover-close')?.addEventListener('click', closePopover);
 }
 
 // ============================================

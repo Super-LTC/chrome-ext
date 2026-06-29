@@ -1,0 +1,169 @@
+/* ============================================
+   I8000 Overlay — audit badges + suggestions banner
+   (paired with content/i8000-overlay/ + mds-overlay.js I8000 section)
+   ============================================ */
+
+/* Muted "outside_scope" audit badge — valid ICD but not a PDPM category.
+   De-emphasized on purpose: these dominate a typical assessment. */
+.super-badge--outside {
+  background: var(--super-gray-100, #f1f5f9);
+  color: var(--super-gray-500, #64748b);
+  border-color: var(--super-gray-200, #e2e8f0);
+  opacity: 0.85;
+}
+.super-badge--outside:hover {
+  background: var(--super-gray-200, #e2e8f0);
+  opacity: 1;
+}
+
+/* --- Suggestions banner (above the "Other" question group) --------------- */
+.super-i8000-banner {
+  font-family: var(--super-font);
+  margin: 10px 0 14px;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 60%);
+  box-shadow: var(--super-shadow-sm);
+  overflow: hidden;
+}
+
+.super-i8000-banner__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.super-i8000-banner__head:hover { background: rgba(245, 158, 11, 0.06); }
+
+.super-i8000-banner__spark { font-size: 15px; }
+
+.super-i8000-banner__title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #92400e;
+}
+
+.super-i8000-banner__sub {
+  font-size: 11px;
+  color: var(--super-gray-500, #64748b);
+  font-weight: 600;
+}
+
+.super-i8000-banner__chev {
+  margin-left: auto;
+  font-size: 11px;
+  color: #b45309;
+  transition: transform 0.18s ease;
+}
+.super-i8000-banner--open .super-i8000-banner__chev { transform: rotate(180deg); }
+
+.super-i8000-banner__list {
+  border-top: 1px solid #fde68a;
+  padding: 4px;
+}
+
+.super-i8000-banner__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.super-i8000-banner__row:hover { background: #fef3c7; }
+
+.super-i8000-banner__cat {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--super-gray-700, #334155);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.super-i8000-banner__pts {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: #047857;
+  background: #d1fae5;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.super-i8000-banner__status {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 8px;
+  background: var(--super-review-bg, #fef3c7);
+  color: #92400e;
+}
+.super-i8000-banner__status--code {
+  background: var(--super-match-bg, #dcfce7);
+  color: #166534;
+}
+.super-i8000-banner__status--needs_physician_query {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.super-i8000-banner__go {
+  flex-shrink: 0;
+  color: var(--super-gray-400, #94a3b8);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.super-i8000-banner__note {
+  font-size: 11px;
+  color: var(--super-gray-500, #64748b);
+  padding: 6px 10px;
+  font-weight: 600;
+}
+.super-i8000-banner__note--warn { color: #b45309; }
+
+/* --- Modal extras (reuses .super-popover) -------------------------------- */
+.super-i8000-modal__nta {
+  margin-left: 8px;
+  background: #047857;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.super-i8000-modal__verdict {
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: var(--super-gray-100, #f1f5f9);
+  color: var(--super-gray-700, #334155);
+  border-left: 3px solid var(--super-gray-300, #cbd5e1);
+}
+.super-i8000-modal__verdict--agree {
+  background: var(--super-match-bg, #dcfce7);
+  color: #166534;
+  border-left-color: var(--super-match, #22c55e);
+}
+.super-i8000-modal__verdict--disagree {
+  background: var(--super-mismatch-bg, #fee2e2);
+  color: #991b1b;
+  border-left-color: var(--super-mismatch, #ef4444);
+}
+
+.super-evidence-empty {
+  font-size: 12px;
+  color: var(--super-gray-500, #64748b);
+  padding: 10px 12px;
+  background: var(--super-gray-50, #f8fafc);
+  border-radius: 8px;
+  line-height: 1.5;
+}
