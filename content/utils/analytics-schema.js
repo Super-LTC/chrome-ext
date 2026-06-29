@@ -81,6 +81,13 @@ export const EVENT_SCHEMA = {
   // to each question). Click opens the popover. Pair with `pdpm_item_drilled_in`
   // to compare inline-vs-sidebar entry paths.
   mds_badge_clicked: ['item_code', 'column', 'status'],
+
+  // I8000 overlay (Section I "Other" diagnoses). `i8000_audit_clicked` opens the
+  // view-only detail for an entered code Super audited (`verdict`:
+  // agree|disagree|outside_scope). `i8000_suggestion_clicked` opens a suggested
+  // missing NTA-paying diagnosis from the banner.
+  i8000_audit_clicked: ['field', 'verdict'],
+  i8000_suggestion_clicked: ['category', 'nta_points'],
   // User accepted/rejected the AI suggestion. `surface` tells you which UI:
   //   'mds_overlay_popover' — inline badge popover on the PCC MDS page
   //   'pdpm_sidebar'        — PDPM Analyzer item detail view
