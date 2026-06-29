@@ -12,14 +12,20 @@
  */
 import { useState } from 'preact/hooks';
 import { buildInhouseView } from '../lib/qm-inhouse-view.js';
+import { useGgDashboard } from '../hooks/useGgDashboard.js';
 import { QmInhouseList } from './QmInhouseList.jsx';
 import { QmInhouseGrid } from './QmInhouseGrid.jsx';
 import { QmInhouseCalendar } from './QmInhouseCalendar.jsx';
 import { Bell, ArrowUpRight, List, Grid, CalendarDays, Activity } from './icons.jsx';
 
-export function QmInhouse({ board, lens, facilityState, dfs, onOpenResident, onOpenSignals, onOpenMeasure, onOpenDfs, onOpenFunctional }) {
+export function QmInhouse({ board, lens, facilityState, dfs, facilityName, orgSlug, onOpenResident, onOpenSignals, onOpenMeasure, onOpenDfs, onOpenFunctional }) {
   const [view, setView] = useState('list'); // 'list' | 'grid' | 'calendar'
   const v = buildInhouseView(board, lens, facilityState);
+
+  // Async "severe" count for the Functional decline badge — reuses the existing
+  // gg-decline-dashboard roster (non-blocking; the badge pops in when it lands).
+  const { data: ggData } = useGgDashboard({ facilityName, orgSlug, mode: 'therapy' });
+  const severeDecline = ggData?.summary?.severe ?? null;
 
   const tab = (id, label, Icon) => (
     <button
@@ -51,6 +57,9 @@ export function QmInhouse({ board, lens, facilityState, dfs, onOpenResident, onO
               <button type="button" data-track="qm_tile_clicked" data-track-prop-measure-code="open_functional" data-track-prop-view="coordinator"
                 className="qmi-fnlink" onClick={onOpenFunctional}>
                 <Activity className="qmi-fnlink__icon" /> Functional decline
+                {severeDecline != null && severeDecline > 0 && (
+                  <span className="qmi-fnlink__badge" title={`${severeDecline} severe functional decline${severeDecline === 1 ? '' : 's'}`}>{severeDecline}</span>
+                )}
               </button>
             )}
             <div className="qmi-toggle" role="tablist" aria-label="In-house view">

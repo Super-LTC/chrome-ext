@@ -1487,6 +1487,20 @@
   background:var(--sky-50);padding:4px 10px;font-size:12px;font-weight:600;color:var(--sky-700);cursor:pointer}
 .qms-panel__worklist:hover{background:var(--sky-100)}
 .qms-panel__wicon{width:14px;height:14px}
+/* clickable rate cell — the NUMBER is the drill button (no row-expand) */
+.qms-ratebtn{position:relative;display:inline-flex;align-items:baseline;gap:6px;border:1px solid transparent;border-radius:8px;padding:5px 9px;cursor:pointer;background:none;transition:background .12s,border-color .12s}
+.qms-ratebtn:hover{background:var(--slate-50);border-color:var(--slate-200)}
+.qms-ratebtn--active{background:var(--indigo-50,#eef2ff);border-color:var(--indigo-200,#c7d2fe)}
+.qms-ratebtn__peek{position:absolute;top:-7px;right:7px;border:1px solid var(--indigo-200,#c7d2fe);border-radius:5px;background:#fff;padding:0 4px;font-size:9px;font-weight:700;color:var(--indigo-600,#4f46e5);opacity:0;transition:opacity .12s}
+.qms-ratebtn:hover .qms-ratebtn__peek,.qms-ratebtn--active .qms-ratebtn__peek{opacity:1}
+/* panel scope header + close */
+.qms-panel__scope{display:flex;min-width:0;align-items:center;gap:8px;font-size:13px}
+.qms-panel__measure{font-weight:700;color:var(--slate-900)}
+.qms-panel__qtr{flex-shrink:0;border-radius:9999px;background:var(--indigo-50,#eef2ff);padding:2px 8px;font-size:11px;font-weight:700;color:var(--indigo-700,#4338ca)}
+.qms-panel__qtr--last{background:var(--slate-100);color:var(--slate-500)}
+.qms-panel__actions{display:flex;flex-shrink:0;align-items:center;gap:6px}
+.qms-panel__close{border:none;background:none;border-radius:6px;padding:3px 7px;font-size:13px;color:var(--slate-400);cursor:pointer}
+.qms-panel__close:hover{background:var(--slate-100);color:var(--slate-600)}
 .qms-panel__summary{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;border-bottom:1px solid var(--slate-100);padding:8px 12px;font-size:12px}
 .qms-panel__num>b{font-family:ui-monospace,monospace;color:var(--slate-900)}
 .qms-panel__summary b{font-family:ui-monospace,monospace}
@@ -1574,4 +1588,5 @@
   background:#fff;padding:7px 12px;font-size:13px;font-weight:600;color:var(--slate-600);cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.04)}
 .qmi-fnlink:hover{background:var(--slate-50,#f8fafc)}
 .qmi-fnlink__icon{width:14px;height:14px;color:var(--slate-400)}
+.qmi-fnlink__badge{display:inline-flex;min-width:18px;align-items:center;justify-content:center;border-radius:9999px;background:var(--rose-100);padding:1px 6px;font-size:11px;font-weight:700;color:var(--rose-700);font-variant-numeric:tabular-nums}
 @media (max-width:560px){.qmi-fnlink{display:none}}

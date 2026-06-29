@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildInhouseView, buildInhouseCalendar } from '../qm-inhouse-view.js';
+import { buildInhouseView, buildInhouseCalendar, bucketClearable, clearBucketOf } from '../qm-inhouse-view.js';
 
 const TODAY = '2026-06-25';
 
@@ -220,5 +220,33 @@ describe('buildInhouseView — signal banner', () => {
     expect(anti.label).toBe('new antipsychotic');
     // biggest bucket first
     expect(v.signals[0].id).toBe('uti_dx');
+  });
+});
+
+describe('bucketClearable — clinical never pollutes Today', () => {
+  const clearRow = (over) => ({
+    key: 'k', patient: {}, entry: {}, patientName: 'X', measureLabel: 'M',
+    clearShort: '', clearKind: 'now', daysUntilClear: 0, ardDate: null, ...over,
+  });
+
+  it('routes conditional (clinical/Dx-query) rows to the clinical group, not Today — even at d=0', () => {
+    expect(clearBucketOf(clearRow({ clearKind: 'conditional', daysUntilClear: 0 }))).toBe('clinical');
+    expect(clearBucketOf(clearRow({ clearKind: 'now', daysUntilClear: 0 }))).toBe('today');
+    expect(clearBucketOf(clearRow({ clearKind: 'date', daysUntilClear: 0 }))).toBe('today');
+    expect(clearBucketOf(clearRow({ clearKind: 'date', daysUntilClear: 3 }))).toBe('week');
+    expect(clearBucketOf(clearRow({ clearKind: 'date', daysUntilClear: 20 }))).toBe('month');
+    expect(clearBucketOf(clearRow({ clearKind: 'wait', daysUntilClear: null }))).toBe('later');
+  });
+
+  it('groups into ordered, non-empty buckets with clinical separated from Today', () => {
+    const buckets = bucketClearable([
+      clearRow({ clearKind: 'conditional', daysUntilClear: 0 }),
+      clearRow({ clearKind: 'now', daysUntilClear: 0 }),
+      clearRow({ clearKind: 'date', daysUntilClear: 5 }),
+      clearRow({ clearKind: 'wait', daysUntilClear: null }),
+    ]);
+    const byKey = Object.fromEntries(buckets.map((b) => [b.key, b.rows.length]));
+    expect(byKey).toEqual({ today: 1, week: 1, clinical: 1, later: 1 });
+    expect(buckets.map((b) => b.key)).toEqual(['today', 'week', 'clinical', 'later']);
   });
 });

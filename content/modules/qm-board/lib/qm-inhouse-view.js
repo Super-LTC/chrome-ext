@@ -140,6 +140,50 @@ export function buildInhouseView(board, lens, facilityState) {
   };
 }
 
+// ── Clearable bucketing — group the worklist by clear KIND, not raw days ──────
+//
+// A "Needs clinical fix" / "Needs Dx query" row is clearKind:'conditional' — it
+// clears on clinician action, not a date — yet daysUntilClear is 0, so a days-
+// only bucketer floods Today. Conditional rows get their own "Needs clinical
+// action" group; only dated/mechanical rows fall in Today/week/month.
+
+const BUCKET_LABEL = {
+  today: 'Today',
+  week: 'This week',
+  month: 'This month',
+  clinical: 'Needs clinical action',
+  later: 'Later',
+};
+
+/** Which bucket a clearable row belongs in — by kind, then countdown. */
+export function clearBucketOf(row) {
+  if (row.clearKind === 'conditional') return 'clinical';
+  if (row.clearKind === 'now') return 'today';
+  if (row.clearKind === 'date') {
+    const d = row.daysUntilClear;
+    if (d == null) return 'later';
+    if (d <= 0) return 'today';
+    if (d <= 7) return 'week';
+    if (d <= 30) return 'month';
+    return 'later';
+  }
+  return 'later'; // 'wait' / 'locked'
+}
+
+/** Group clearable rows into ordered, non-empty buckets (shared with the web). */
+export function bucketClearable(clearable) {
+  const order = ['today', 'week', 'month', 'clinical', 'later'];
+  const by = new Map();
+  for (const r of clearable) {
+    const k = clearBucketOf(r);
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(r);
+  }
+  return order
+    .map((key) => ({ key, label: BUCKET_LABEL[key], rows: by.get(key) ?? [] }))
+    .filter((b) => b.rows.length > 0);
+}
+
 // ── Calendar view — clearable items plotted on their actionable date ─────────
 
 export function buildInhouseCalendar(board, lens, facilityState) {
@@ -148,6 +192,8 @@ export function buildInhouseCalendar(board, lens, facilityState) {
   const items = [];
 
   for (const r of view.clearable) {
+    // Clinical/Dx-query clears have no actionable date — don't pile them on today.
+    if (r.clearKind === 'conditional') continue;
     const raw =
       r.entry.clearGuidance?.clearDate ??
       r.entry.cliffInfo?.earliestClearDate ??

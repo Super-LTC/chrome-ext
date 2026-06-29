@@ -7,33 +7,12 @@
  * Ported from qm-inhouse-list.reference.tsx → Preact + the qmc-/qmi- tone system.
  */
 import { CLEAR_TONE, prettyDate, crosserToDrill } from '../lib/qm-tones.js';
-import { buildInhouseView } from '../lib/qm-inhouse-view.js';
+import { buildInhouseView, bucketClearable } from '../lib/qm-inhouse-view.js';
 import { ChevronRight, ClipboardCheck, ArrowUpRight } from './icons.jsx';
-
-/** Split clearable rows into Today / This week / This month / Later by countdown. */
-function bucketize(rows) {
-  const today = [];
-  const week = [];
-  const month = [];
-  const later = [];
-  for (const r of rows) {
-    const d = r.daysUntilClear;
-    if (d != null && d <= 0) today.push(r);
-    else if (d != null && d <= 7) week.push(r);
-    else if (d != null && d <= 30) month.push(r);
-    else later.push(r);
-  }
-  return [
-    { label: 'Today', rows: today },
-    { label: 'This week', rows: week },
-    { label: 'This month', rows: month },
-    { label: 'Later', rows: later },
-  ];
-}
 
 export function QmInhouseList({ board, lens, facilityState, onOpenResident }) {
   const v = buildInhouseView(board, lens, facilityState);
-  const buckets = bucketize(v.clearable);
+  const buckets = bucketClearable(v.clearable);
 
   return (
     <div className="qmi-list">
@@ -78,9 +57,9 @@ export function QmInhouseList({ board, lens, facilityState, onOpenResident }) {
       ) : (
         buckets.map((b) =>
           b.rows.length === 0 ? null : (
-            <section key={b.label} className="qmi-bucket">
+            <section key={b.key} className="qmi-bucket">
               <div className="qmf-sec__head">
-                <span className="qmc-dot qmc-dot--emerald" />
+                <span className={`qmc-dot qmc-dot--${b.key === 'clinical' ? 'amber' : b.key === 'later' ? 'slate' : 'emerald'}`} />
                 <span className="qmf-sec__label">{b.label}</span>
                 <span className="qmf-sec__count">{b.rows.length}</span>
               </div>

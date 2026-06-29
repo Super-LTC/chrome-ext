@@ -161,6 +161,8 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 lens="five_star"
                 facilityState={currentlyTriggering?.facilityState}
                 dfs={dfs}
+                facilityName={facilityName}
+                orgSlug={orgSlug}
                 onOpenResident={openResident}
                 onOpenSignals={openSignals}
                 onOpenMeasure={openMeasure}

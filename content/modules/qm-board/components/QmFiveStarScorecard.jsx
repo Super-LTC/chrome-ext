@@ -17,7 +17,7 @@ import {
 import { useQuarterRates } from '../hooks/useQuarterRates.js';
 import { QmDfsStrip } from './QmDfsStrip.jsx';
 import {
-  Star, ArrowUp, ArrowDown, ArrowRight, ChevronRight, ChevronDown, TrendingDown, TrendingUp,
+  Star, ArrowUp, ArrowDown, ArrowRight, ChevronRight, TrendingDown, TrendingUp,
   Target, ListChecks, CalendarClock, Lock,
 } from './icons.jsx';
 
@@ -30,13 +30,28 @@ function mdShort(iso) {
   return mm && dd ? `${Number(mm)}/${Number(dd)}` : '';
 }
 
-function RateCell({ cell }) {
+/**
+ * A rate cell. With `onClick` the NUMBER is the button — click it to drill that
+ * quarter's residents (no row-expand, no This/Last toggle). `active` = open.
+ */
+function RateCell({ cell, onClick, active }) {
   if (!cell) return <span className="qms-rate--empty">—</span>;
-  return (
-    <span className="qms-rate">
+  const inner = (
+    <>
       <span className="qms-rate__pct">{pct(cell.rate)}</span>
       <span className="qms-rate__frac">{cell.numerator}/{cell.denominator}</span>
-    </span>
+    </>
+  );
+  if (!onClick) return <span className="qms-rate">{inner}</span>;
+  return (
+    <button
+      type="button"
+      className={`qms-ratebtn ${active ? 'qms-ratebtn--active' : ''}`}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+    >
+      {inner}
+      <span className="qms-ratebtn__peek">{active ? 'open' : 'view'}</span>
+    </button>
   );
 }
 
@@ -111,15 +126,12 @@ function ResidentGroup({ residents, badge, tone, onOpenMeasure, measureId }) {
 }
 
 /**
- * The inline expand for a measure. Roster-driven, so it includes discharged-but-
- * still-counting residents and its counts reconcile with the row's num/den. A
- * "This quarter ⇄ Last quarter" flip lets a regional see who counted in either
- * quarter. The full roster is a click away in the worklist.
+ * The inline drill for a measure × ONE quarter (the cell you clicked). Roster-
+ * driven, includes discharged-but-still-counting residents, reconciles with that
+ * cell's num/den. No quarter toggle — the clicked number is the selection; the
+ * header names the quarter and a prominent button opens the full worklist.
  */
-function ResidentPanel({ board, currentRoster, lastRoster, currentLabel, lastLabel, measureId, onOpenMeasure }) {
-  const [quarter, setQuarter] = useState('this'); // 'this' | 'last'
-  const isCurrent = quarter === 'this';
-  const roster = isCurrent ? currentRoster : lastRoster;
+function ResidentPanel({ board, roster, measureLabel, quarterLabel, isCurrent, measureId, onOpenMeasure, onClose }) {
   const residents = buildMeasureResidents(roster?.rows, measureId, { board: isCurrent ? board : null, isCurrent });
   const s = summarizeMeasureResidents(residents);
   const rateRow = roster?.rates.find((r) => r.measureId === measureId);
@@ -129,26 +141,26 @@ function ResidentPanel({ board, currentRoster, lastRoster, currentLabel, lastLab
   const discharged = residents.filter((r) => r.status === 'discharged');
 
   const openWorklist = (e) => { e.stopPropagation(); onOpenMeasure(measureId); };
-  const flip = (e, q) => { e.stopPropagation(); setQuarter(q); };
 
   return (
     <div className="qms-panel">
-      {/* quarter flip + worklist */}
+      {/* scope header (measure · which quarter) + prominent worklist */}
       <div className="qms-panel__bar">
-        <div className="qms-flip">
-          <button type="button" className={`qms-flip__tab ${isCurrent ? 'qms-flip__tab--on' : ''}`} onClick={(e) => flip(e, 'this')}> {/* NO_TRACK */}
-            This quarter{currentLabel ? ` · ${currentLabel}` : ''}
-          </button>
-          <button type="button" className={`qms-flip__tab ${!isCurrent ? 'qms-flip__tab--on' : ''}`} onClick={(e) => flip(e, 'last')}> {/* NO_TRACK */}
-            Last quarter{lastLabel ? ` · ${lastLabel}` : ''}
-          </button>
+        <div className="qms-panel__scope">
+          <b className="qms-panel__measure">{measureLabel}</b>
+          <span className={`qms-panel__qtr ${isCurrent ? '' : 'qms-panel__qtr--last'}`}>
+            {isCurrent ? 'This quarter' : 'Last quarter'}{quarterLabel ? ` · ${quarterLabel}` : ''}
+          </span>
         </div>
-        <button type="button" className="qms-panel__worklist" onClick={openWorklist}> {/* NO_TRACK */}
-          <ListChecks className="qms-panel__wicon" /> Open worklist
-        </button>
+        <div className="qms-panel__actions">
+          <button type="button" className="qms-panel__worklist" onClick={openWorklist}> {/* NO_TRACK */}
+            <ListChecks className="qms-panel__wicon" /> Open full worklist
+          </button>
+          <button type="button" className="qms-panel__close" onClick={onClose} aria-label="Close">✕</button> {/* NO_TRACK */}
+        </div>
       </div>
 
-      {/* summary that reconciles with the row's num/den */}
+      {/* summary that reconciles with the clicked cell's num/den */}
       <div className="qms-panel__summary">
         <span className="qms-panel__num">
           <b>{s.numerator}</b> in the numerator
@@ -189,7 +201,10 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
   const starDelta = sc.anchorStar != null && sc.projectedStar != null ? sc.projectedStar - sc.anchorStar : null;
   const crossers = buildUpcomingCrossers(board, lens, facilityState);
   const dfsStrip = buildDfsStrip(dfs);
-  const [expanded, setExpanded] = useState(null);
+  // Open drill = {id, q}. Driven by clicking a rate NUMBER, not the row; clicking
+  // the same number closes it. No This/Last toggle — the cell you click IS the quarter.
+  const [open, setOpen] = useState(null);
+  const toggleDrill = (id, q) => setOpen((o) => (o && o.id === id && o.q === q ? null : { id, q }));
 
   const fixHow = fix
     ? fix.clearNow > 0
@@ -202,7 +217,9 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
     : null;
 
   return (
-    <div className="qms">
+    // `qmc` brings the tone-token scope (--emerald-600 etc. are defined on .qmc);
+    // without it the whole Regional scorecard renders greyscale.
+    <div className="qmc qms">
       {/* ── HEADLINE: the diagnosis + the lever ── */}
       <div className="qms-headline qmc-rise">
         <div className="qms-headline__top">
@@ -261,17 +278,16 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
             <thead>
               <tr>
                 <th className="qms-th qms-th--left">Measure<span className="qms-th__sub">biggest opportunity first</span></th>
-                <th className="qms-th qms-th--right">Last quarter<span className="qms-th__sub">{sc.lastLabel ?? ''} · final</span></th>
-                <th className="qms-th qms-th--right qms-th--cur">This quarter<span className="qms-th__sub">{sc.currentLabel ?? ''} · projected</span></th>
+                <th className="qms-th qms-th--right">Last quarter<span className="qms-th__sub">{sc.lastLabel ?? ''} · click to drill</span></th>
+                <th className="qms-th qms-th--right qms-th--cur">This quarter<span className="qms-th__sub">{sc.currentLabel ?? ''} · click to drill</span></th>
                 <th className="qms-th qms-th--right">Star points<span className="qms-th__sub">toward your rating</span></th>
                 <th className="qms-th qms-th--right">Trend<span className="qms-th__sub">vs last qtr</span></th>
-                <th className="qms-th" />
               </tr>
             </thead>
             <tbody>
               {sc.measures.map((m) => (
                 <Fragment key={m.id}>
-                  <tr className="qms-tr" onClick={() => setExpanded(expanded === m.id ? null : m.id)}>
+                  <tr className="qms-tr">
                     <td className="qms-td qms-td--measure">
                       <div className="qms-td__name">{m.label}</div>
                       {(m.clearNow > 0 || m.crossingSoon > 0) && (
@@ -281,8 +297,8 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
                         </div>
                       )}
                     </td>
-                    <td className="qms-td qms-td--right"><RateCell cell={m.last} /></td>
-                    <td className="qms-td qms-td--right qms-td--cur"><RateCell cell={m.current} /></td>
+                    <td className="qms-td qms-td--right"><RateCell cell={m.last} onClick={() => toggleDrill(m.id, 'last')} active={open?.id === m.id && open.q === 'last'} /></td>
+                    <td className="qms-td qms-td--right qms-td--cur"><RateCell cell={m.current} onClick={() => toggleDrill(m.id, 'this')} active={open?.id === m.id && open.q === 'this'} /></td>
                     <td className="qms-td qms-td--right">
                       {m.points != null && m.maxPoints != null ? (
                         <div className="qms-pts">
@@ -301,21 +317,19 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
                       ) : <span className="qms-rate--empty">—</span>}
                     </td>
                     <td className="qms-td qms-td--right"><Trend m={m} /></td>
-                    <td className="qms-td qms-td--chev">
-                      {expanded === m.id ? <ChevronDown className="qms-chev" /> : <ChevronRight className="qms-chev qms-chev--off" />}
-                    </td>
                   </tr>
-                  {expanded === m.id && (
+                  {open?.id === m.id && (
                     <tr>
-                      <td colSpan={6} className="qms-expand">
+                      <td colSpan={5} className="qms-expand">
                         <ResidentPanel
                           board={board}
-                          currentRoster={quarterRates}
-                          lastRoster={lastQuarterRates}
-                          currentLabel={sc.currentLabel}
-                          lastLabel={sc.lastLabel}
+                          roster={open.q === 'this' ? quarterRates : lastQuarterRates}
+                          measureLabel={m.label}
+                          quarterLabel={open.q === 'this' ? sc.currentLabel : sc.lastLabel}
+                          isCurrent={open.q === 'this'}
                           measureId={m.id}
                           onOpenMeasure={onOpenMeasure}
+                          onClose={() => setOpen(null)}
                         />
                       </td>
                     </tr>
