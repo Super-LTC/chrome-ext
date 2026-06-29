@@ -38,9 +38,12 @@ function windowLabel(start, end) {
 }
 
 /** One of the two rates. `tone` drives the accent (current = emphasis). */
-function DfsNumber({ label, sub, rate, numerator, denominator, tone, footnote }) {
+function DfsNumber({ label, sub, rate, numerator, denominator, tone, footnote, onClick }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className={`qms-dfsnum qms-dfsnum--${tone}`}>
+    <Tag type={onClick ? 'button' : undefined} onClick={onClick}
+      className={`qms-dfsnum qms-dfsnum--${tone} ${onClick ? 'qms-dfsnum--clickable' : ''}`}> {/* NO_TRACK */}
+      {onClick && <span className="qms-dfsnum__peek">view ▸</span>}
       <div className="qms-dfsnum__head">
         <span className="qms-dfsnum__label">{label}</span>
         {sub && <span className="qms-dfsnum__sub">{sub}</span>}
@@ -56,7 +59,7 @@ function DfsNumber({ label, sub, rate, numerator, denominator, tone, footnote })
         <div className="qms-dfsnum__rate qms-dfsnum__rate--empty">—</div>
       )}
       <div className="qms-dfsnum__foot">{footnote}</div>
-    </div>
+    </Tag>
   );
 }
 
@@ -86,6 +89,7 @@ export function QmDfsStrip({ strip, onOpenDfs }) {
           numerator={strip.current.numerator}
           denominator={strip.current.denominator}
           tone="current"
+          onClick={onOpenDfs}
           footnote={
             strip.current.coveragePct != null
               ? `from discharges we hold · ${Math.round(strip.current.coveragePct)}% of CMS volume`
@@ -105,13 +109,19 @@ export function QmDfsStrip({ strip, onOpenDfs }) {
 
       {/* in-house coming + how it plays into the Five-Star ★ */}
       <div className="qms-dfs__cells">
-        <div className="qms-dfs__cell">
-          <Users className="qms-dfs__cellicon" />
-          <div>
-            <div className="qms-dfs__cellnum"><span className="qms-dfs__big">{strip.inHouseCount}</span> in-house now</div>
-            <div className="qms-dfs__cellsub">join the rate when they discharge</div>
-          </div>
-        </div>
+        {(() => {
+          const Tag = onOpenDfs ? 'button' : 'div';
+          return (
+            <Tag type={onOpenDfs ? 'button' : undefined} onClick={onOpenDfs}
+              className={`qms-dfs__cell ${onOpenDfs ? 'qms-dfs__cell--clickable' : ''}`}> {/* NO_TRACK */}
+              <Users className="qms-dfs__cellicon" />
+              <div>
+                <div className="qms-dfs__cellnum"><span className="qms-dfs__big">{strip.inHouseCount}</span> in-house now</div>
+                <div className="qms-dfs__cellsub">join the rate when they discharge</div>
+              </div>
+            </Tag>
+          );
+        })()}
         <div className="qms-dfs__cell">
           <Star className="qms-dfs__cellicon qms-dfs__cellicon--star" fill="currentColor" />
           <div>

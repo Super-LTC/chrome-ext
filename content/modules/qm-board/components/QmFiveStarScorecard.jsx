@@ -30,6 +30,17 @@ function mdShort(iso) {
   return mm && dd ? `${Number(mm)}/${Number(dd)}` : '';
 }
 
+/** Whole days from the facility's today to the end of its calendar quarter. */
+function daysToQuarterEnd(todayIso) {
+  if (!todayIso) return null;
+  const [y, m, d] = todayIso.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const qEndMonth = m <= 3 ? 3 : m <= 6 ? 6 : m <= 9 ? 9 : 12;
+  const qEnd = Date.UTC(y, qEndMonth, 0);
+  const today = Date.UTC(y, m - 1, d);
+  return Math.max(0, Math.round((qEnd - today) / 86400000));
+}
+
 /**
  * A rate cell. With `onClick` the NUMBER is the button — click it to drill that
  * quarter's residents (no row-expand, no This/Last toggle). `active` = open.
@@ -98,6 +109,9 @@ function ResidentGroup({ residents, badge, tone, onOpenMeasure, measureId }) {
   if (residents.length === 0) return null;
   const shown = residents.slice(0, GROUP_CAP);
   const hidden = residents.length - shown.length;
+  // Label the date (so it isn't a cryptic "04-04"); drop the verbose clear note
+  // (it's a scan view — the full action lives in the worklist).
+  const dateLabel = tone === 'crossing' ? 'crosses' : tone === 'discharged' ? "DC'd" : 'MDS';
   return (
     <div className="qms-rgroup">
       {shown.map((r) => (
@@ -107,13 +121,13 @@ function ResidentGroup({ residents, badge, tone, onOpenMeasure, measureId }) {
             {tone === 'active' && r.clearableNow ? 'Clear now' : badge}
           </span>
           <span className={`qms-rname ${tone === 'discharged' ? 'qmc-text--slate' : ''}`}>{r.name}</span>
-          {r.pendingSubmission && (
+          {r.pendingSubmission ? (
             <span className="qms-pending" title="Counted on an MDS that isn't submitted to CMS yet — we lead iQIES until it's accepted.">
               {mdShort(r.date)} MDS In Progress
             </span>
+          ) : (
+            <span className="qms-rdate">{dateLabel} {mdShort(r.date) || '—'}</span>
           )}
-          <span className="qms-rdate">{r.date ? r.date.slice(5) : '—'}</span>
-          <span className="qms-rnote">{r.note}</span>
         </div>
       ))}
       {hidden > 0 && (
@@ -224,7 +238,17 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
       <div className="qms-headline qmc-rise">
         <div className="qms-headline__top">
           <div>
-            <div className="qmc-eyebrow qmc-text--amber">Five-Star QM</div>
+            <div className="qms-headline__eyebrow">
+              <div className="qmc-eyebrow qmc-text--amber">Five-Star QM</div>
+              {(() => {
+                const daysLeft = daysToQuarterEnd(board?.currentlyTriggering?.facilityDate);
+                return daysLeft != null ? (
+                  <span className="qms-qtrcount" title="Days left in the current quarter — the window to move these numbers">
+                    {sc.currentLabel ?? 'This quarter'} · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+                  </span>
+                ) : null;
+              })()}
+            </div>
             <div className="qms-headline__stars">
               <StarBlock label="Last quarter" n={sc.anchorStar} big={false} labelClass="qmc-text--slate" />
               <ArrowRight className="qms-headline__arrow" />
