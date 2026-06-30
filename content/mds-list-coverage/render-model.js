@@ -74,6 +74,33 @@ export function toChips(result) {
   });
 }
 
+// "Complete By" (Z0500B deadline) column model. Pure: result.completeBy → display
+// model or null. Deadline + urgency are server-computed (type-specific RAI rules);
+// we ONLY render the returned fields — never recompute the date client-side.
+//
+// Tone follows the same quiet→loud color budget as the chips: only the urgent rows
+// carry saturated color. Thresholds keyed off the signed `daysRemaining`:
+//   overdue      (<0)   — red, the one thing that must grab the eye
+//   urgent       (0–3)  — amber
+//   approaching  (4–7)  — yellow
+//   ok           (>7)   — quiet neutral
+// `completeBy` rides independently of `status`, so it can populate even on
+// not_synced / error rows.
+export function completeByModel(result) {
+  const cb = result?.completeBy;
+  if (!cb || !cb.date) return null;
+  const d = Number(cb.daysRemaining);
+  let tone;
+  if (d < 0) tone = 'overdue';
+  else if (d <= 3) tone = 'urgent';
+  else if (d <= 7) tone = 'approaching';
+  else tone = 'ok';
+  // Compact urgency hint shown under the date for everything but the calm "ok"
+  // rows: "3d over" · "today" · "5d".
+  const sub = tone === 'ok' ? '' : d < 0 ? `${Math.abs(d)}d over` : d === 0 ? 'today' : `${d}d`;
+  return { text: shortDate(cb.date), sub, tone, title: cb.rule || '' };
+}
+
 function observedText(u) {
   if (!u?.date) return '';
   const end = u.observedEndDate && u.observedEndDate !== u.date ? `–${shortDate(u.observedEndDate)}` : '';

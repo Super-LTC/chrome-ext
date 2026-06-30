@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toChips, interviewDetail, INTERVIEW_LABELS } from './render-model.js';
+import { toChips, interviewDetail, completeByModel, INTERVIEW_LABELS } from './render-model.js';
 
 describe('toChips', () => {
   it('not_synced → single neutral chip, never an x', () => {
@@ -100,5 +100,42 @@ describe('interviewDetail', () => {
     expect(d.note).toMatch(/3\/12/);
     expect(d.note).toMatch(/out of window/i);
     expect(d.udaId).toBe('oowExt');
+  });
+});
+
+describe('completeByModel', () => {
+  const cb = (over) => ({ completeBy: { date: '2026-07-10', daysRemaining: over, windowDays: 14, basis: 'admission', rule: 'Admission rule.' } });
+
+  it('absent completeBy → null (render a neutral placeholder)', () => {
+    expect(completeByModel({ key: 'a', status: 'ok' })).toBeNull();
+    expect(completeByModel({ key: 'a', status: 'ok', completeBy: null })).toBeNull();
+    expect(completeByModel(undefined)).toBeNull();
+  });
+
+  it('formats the date short and carries the rule as the title', () => {
+    const m = completeByModel(cb(10));
+    expect(m.text).toBe('7/10');
+    expect(m.title).toBe('Admission rule.');
+  });
+
+  it('tones by signed daysRemaining (overdue/urgent/approaching/ok)', () => {
+    expect(completeByModel(cb(-1)).tone).toBe('overdue');
+    expect(completeByModel(cb(0)).tone).toBe('urgent');
+    expect(completeByModel(cb(3)).tone).toBe('urgent');
+    expect(completeByModel(cb(4)).tone).toBe('approaching');
+    expect(completeByModel(cb(7)).tone).toBe('approaching');
+    expect(completeByModel(cb(8)).tone).toBe('ok');
+  });
+
+  it('sub hint: "Nd over" / "today" / "Nd"; calm rows have none', () => {
+    expect(completeByModel(cb(-3)).sub).toBe('3d over');
+    expect(completeByModel(cb(0)).sub).toBe('today');
+    expect(completeByModel(cb(5)).sub).toBe('5d');
+    expect(completeByModel(cb(10)).sub).toBe('');
+  });
+
+  it('populates independently of status (not_synced / error rows still get a deadline)', () => {
+    expect(completeByModel({ key: 'a', status: 'not_synced', ...cb(2) }).tone).toBe('urgent');
+    expect(completeByModel({ key: 'a', status: 'error', ...cb(-5) }).tone).toBe('overdue');
   });
 });

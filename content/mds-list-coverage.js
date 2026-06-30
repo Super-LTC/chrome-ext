@@ -2,7 +2,7 @@
 // Overlays interview-coverage chips on the MDS List → In Progress screen.
 // Frame note: confirmed top-frame / TODO verify on live page (see plan Task 0).
 import { scrapeRows } from './mds-list-coverage/scrape.js';
-import { toChips } from './mds-list-coverage/render-model.js';
+import { toChips, completeByModel } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewPopover } from './mds-list-coverage/detail.js';
 
@@ -52,12 +52,23 @@ function getContext() {
 
 function ensureHeaderColumn(table) {
   const headRow = table.querySelector('tr');
-  if (!headRow || headRow.querySelector('.super-ilc-th')) return;
-  const th = document.createElement('th');
-  th.className = 'detailColHeader super-ilc-th';
-  th.setAttribute('nowrap', 'nowrap');
-  th.textContent = 'Interviews Due';
-  headRow.appendChild(th);
+  if (!headRow) return;
+  // Two injected columns, in reading order: Complete By (the deadline) sits to the
+  // LEFT of Interviews Due (the breakdown). Append CB first so it lands left.
+  if (!headRow.querySelector('.super-ilc-cb-th')) {
+    const cbTh = document.createElement('th');
+    cbTh.className = 'detailColHeader super-ilc-th super-ilc-cb-th';
+    cbTh.setAttribute('nowrap', 'nowrap');
+    cbTh.textContent = 'Complete By';
+    headRow.appendChild(cbTh);
+  }
+  if (!headRow.querySelector('.super-ilc-due-th')) {
+    const th = document.createElement('th');
+    th.className = 'detailColHeader super-ilc-th super-ilc-due-th';
+    th.setAttribute('nowrap', 'nowrap');
+    th.textContent = 'Interviews Due';
+    headRow.appendChild(th);
+  }
 }
 
 function ensureRowCell(rowEl) {
@@ -69,6 +80,63 @@ function ensureRowCell(rowEl) {
     rowEl.appendChild(cell);
   }
   return cell;
+}
+
+// Complete By cell, inserted to the LEFT of the Interviews Due cell (insertBefore
+// works regardless of which cell is created first).
+function ensureCbCell(rowEl) {
+  let cell = rowEl.querySelector('.super-ilc-cb');
+  if (!cell) {
+    cell = document.createElement('td');
+    cell.className = 'super-ilc-cb';
+    cell.setAttribute('valign', 'top');
+    const due = rowEl.querySelector('.super-ilc-cell');
+    if (due) rowEl.insertBefore(cell, due);
+    else rowEl.appendChild(cell);
+  }
+  return cell;
+}
+
+function renderCompleteBy(rowEl, result) {
+  const cell = ensureCbCell(rowEl);
+  const model = result ? completeByModel(result) : null;
+  const sig = result ? JSON.stringify(model) : 'loading';
+  if (cell.__cbSig === sig) return;
+  cell.__cbSig = sig;
+  cell.textContent = '';
+  cell.className = 'super-ilc-cb'; // reset tone class from a prior render
+  cell.title = '';
+
+  if (!result) {
+    const s = document.createElement('span');
+    s.className = 'super-ilc-loading';
+    s.textContent = '…';
+    cell.appendChild(s);
+    return;
+  }
+  if (!model) {
+    // No synced ARD/type → no deadline. Neutral placeholder, same calm as a
+    // not_synced interviews cell.
+    const s = document.createElement('span');
+    s.className = 'super-ilc-cb-empty';
+    s.textContent = '–';
+    s.title = 'No completion deadline available.';
+    cell.appendChild(s);
+    return;
+  }
+
+  cell.classList.add(`super-ilc-cb--${model.tone}`);
+  cell.title = model.title; // verbatim reg-citing rule, written for nurses
+  const date = document.createElement('span');
+  date.className = 'super-ilc-cb__date';
+  date.textContent = model.text;
+  cell.appendChild(date);
+  if (model.sub) {
+    const sub = document.createElement('span');
+    sub.className = 'super-ilc-cb__sub';
+    sub.textContent = model.sub;
+    cell.appendChild(sub);
+  }
 }
 
 function renderRow(rowEl, result, rowMeta) {
@@ -123,7 +191,11 @@ async function runCoverage() {
   const idSet = rows.map((r) => r.externalAssessmentId).sort().join(',');
   if (idSet === ILC.lastIdSet && Object.keys(ILC.resultsByKey).length) {
     ensureHeaderColumn(table);
-    rows.forEach((r) => renderRow(r.rowEl, ILC.resultsByKey[r.externalAssessmentId] || null, r));
+    rows.forEach((r) => {
+      const res = ILC.resultsByKey[r.externalAssessmentId] || null;
+      renderCompleteBy(r.rowEl, res);
+      renderRow(r.rowEl, res, r);
+    });
     return;
   }
 
@@ -133,7 +205,7 @@ async function runCoverage() {
   ILC.busy = true;
   ILC.lastIdSet = idSet;
   ensureHeaderColumn(table);
-  rows.forEach((r) => renderRow(r.rowEl, null, r));
+  rows.forEach((r) => { renderCompleteBy(r.rowEl, null); renderRow(r.rowEl, null, r); });
 
   try {
     const data = await fetchBatchCoverage({
@@ -142,7 +214,11 @@ async function runCoverage() {
     });
     ILC.resultsByKey = {};
     (data.results || []).forEach((res) => { ILC.resultsByKey[String(res.key)] = res; });
-    rows.forEach((r) => renderRow(r.rowEl, ILC.resultsByKey[r.externalAssessmentId] || { status: 'not_synced' }, r));
+    rows.forEach((r) => {
+      const res = ILC.resultsByKey[r.externalAssessmentId] || { status: 'not_synced' };
+      renderCompleteBy(r.rowEl, res);
+      renderRow(r.rowEl, res, r);
+    });
     window.SuperAnalytics?.track?.('mds_list_coverage_shown', {
       rows: rows.length,
       ok: (data.results || []).filter((x) => x.status === 'ok').length,
@@ -151,7 +227,7 @@ async function runCoverage() {
   } catch (err) {
     console.error('[ILC] batch coverage failed:', err);
     ILC.lastIdSet = '';
-    rows.forEach((r) => renderRow(r.rowEl, { status: 'error' }, r));
+    rows.forEach((r) => { renderCompleteBy(r.rowEl, { status: 'error' }); renderRow(r.rowEl, { status: 'error' }, r); });
     window.SuperAnalytics?.track?.('error_shown', {
       surface: 'mds_list_coverage',
       error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
@@ -179,12 +255,14 @@ if (document.readyState === 'loading') {
 // PCC re-renders the table in place on unit/floor/status filter + screen change.
 let ilcDebounce = null;
 const isOurNode = (n) => n && n.nodeType === 1 &&
-  (n.classList?.contains('super-ilc-cell') || n.classList?.contains('super-ilc-th') || n.closest?.('.super-ilc-cell'));
+  (n.classList?.contains('super-ilc-cell') || n.classList?.contains('super-ilc-cb') ||
+   n.classList?.contains('super-ilc-th') ||
+   n.closest?.('.super-ilc-cell') || n.closest?.('.super-ilc-cb'));
 const ilcObserver = new MutationObserver((muts) => {
   // Ignore mutations we caused ourselves (chip writes into our cells, header th)
   // so our own DOM writes don't re-trigger a render cycle.
   const external = muts.some((m) => {
-    if (m.target?.closest?.('.super-ilc-cell')) return false;
+    if (m.target?.closest?.('.super-ilc-cell') || m.target?.closest?.('.super-ilc-cb')) return false;
     const added = [...m.addedNodes];
     if (added.length && added.every(isOurNode)) return false;
     return true;

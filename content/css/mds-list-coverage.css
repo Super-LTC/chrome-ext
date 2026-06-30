@@ -32,6 +32,28 @@
 .super-ilc-chip--error   { color: #b91c1c; }
 .super-ilc-loading { color: #cbd5e1; font: 500 11px/1 system-ui; }
 
+/* "Complete By" column (Z0500B deadline). Same color budget as the chips: only
+   urgent/overdue rows carry saturated color; comfortable rows stay quiet gray. */
+.super-ilc-cb {
+  white-space: nowrap;
+  font: 600 11px/1.25 -apple-system, system-ui, sans-serif;
+  cursor: default;
+}
+.super-ilc-cb__date { display: block; }
+.super-ilc-cb__sub { display: block; font-size: 9px; font-weight: 600; opacity: .8; }
+.super-ilc-cb-empty { color: #cbd5e1; font: 500 11px/1 system-ui; }
+
+.super-ilc-cb--ok          { color: #64748b; font-weight: 500; }  /* >7d: quiet */
+.super-ilc-cb--approaching { color: #a16207; }                   /* 4–7d: yellow */
+.super-ilc-cb--urgent      { color: #c2410c; }                   /* 0–3d: amber */
+.super-ilc-cb--overdue     { color: #b91c1c; font-weight: 700; } /* <0: red */
+
+/* Print/PDF: colors flatten, so overdue degrades to bold+underline to stay legible. */
+@media print {
+  .super-ilc-cb { color: #000 !important; }
+  .super-ilc-cb--overdue { font-weight: 700 !important; text-decoration: underline; }
+}
+
 /* per-interview detail popover (anchored to the clicked chip) */
 .super-ilc-pop {
   position: fixed; z-index: 2147483600; min-width: 150px; max-width: 260px;
