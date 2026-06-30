@@ -82,8 +82,11 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
     offset: offset || undefined,
   }), [orgSlug, mineOnly, patientId, locationMode, currentFacilityName]);
 
-  const fetchRuns = useCallback(async () => {
-    const data = await RecertAPI.list(listParams());
+  // force=true bypasses the list TTL cache — used by liveness-driven fetches
+  // (polling, tab-focus catch-up, tracker transitions, manual Retry). Mount
+  // and toggle fetches stay cacheable so a flurry of them collapses to one call.
+  const fetchRuns = useCallback(async ({ force = false } = {}) => {
+    const data = await RecertAPI.list(listParams(), { force });
     if (data === null) { setLoadError(true); return; }
     setLoadError(false);
     setRuns(data);
@@ -110,7 +113,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
       timer = setTimeout(() => {
         if (document.visibilityState === 'visible'
             && runsRef.current?.some((r) => isInProgress(r.status))) {
-          fetchRuns();
+          fetchRuns({ force: true });
         }
         schedule();
       }, fast ? FAST_REFRESH_MS : REFRESH_MS);
@@ -119,14 +122,14 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
     const onVisible = () => {
       if (document.visibilityState === 'visible'
           && runsRef.current?.some((r) => isInProgress(r.status))) {
-        fetchRuns();
+        fetchRuns({ force: true });
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     const unsubscribe = window.McRunTracker?.subscribe(({ transitions, discovered }) => {
       // Refetch on terminal transitions AND when the watcher spots a run the
       // nurse just created over in the dashboard.
-      if (transitions.length || discovered) fetchRuns();
+      if (transitions.length || discovered) fetchRuns({ force: true });
     });
     return () => {
       clearTimeout(timer);
@@ -160,7 +163,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
       <div className="mc-list-error">
         Couldn't load clinical updates.
         {/* NO_TRACK — transient-error retry, not a user feature */}
-        <button onClick={fetchRuns}>Retry</button>
+        <button onClick={() => fetchRuns({ force: true })}>Retry</button>
       </div>
     );
   }

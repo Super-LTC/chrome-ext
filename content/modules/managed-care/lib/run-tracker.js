@@ -133,7 +133,10 @@ export const RunTracker = {
   async _poll() {
     const watching = Date.now() < this._watchUntil;
     if (!watching && !Object.values(this._statuses).some(isInProgress)) return false;
-    const runs = await RecertAPI.list({ orgSlug: this._orgSlug, mine: true, limit: 50 });
+    // force: a poll exists to detect status changes, so bypass the TTL cache.
+    // The in-flight dedup still collapses this with a concurrent RunList poll
+    // of the same mine=true query into one round-trip.
+    const runs = await RecertAPI.list({ orgSlug: this._orgSlug, mine: true, limit: 50 }, { force: true });
     if (!runs) return true; // transient failure — keep polling
     let discovered = 0;
     if (watching) {
