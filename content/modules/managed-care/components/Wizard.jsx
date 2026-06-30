@@ -19,6 +19,7 @@ const EMPTY_CONFIG = {
   documentTypeRangeOverrides: {},
   mdsSections: [],
   includeAdmissionDocs: false,
+  udaIncludeKeywords: [],   // exact assessment (UDA) form names to pull; [] = pull all
 };
 
 const DAYS_PILLS = ['3', '5', '7'];
@@ -63,6 +64,11 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
   const [openRanges, setOpenRanges] = useState({});     // groupKey → expander open?
   const [includeMds, setIncludeMds] = useState(false);
   const [customizeMds, setCustomizeMds] = useState(false);
+  // Per-recert "Assessment filter" (UDA forms). One eager fetch on open seeds
+  // the org-default selection AND fills the modal list, so the modal is instant.
+  const [udaModalOpen, setUdaModalOpen] = useState(false);
+  const [udaForms, setUdaForms] = useState([]);
+  const [udaLoading, setUdaLoading] = useState(false);
 
   // Retry path targets the failed run's patient/location, not the page we're on.
   const targetPatientId = retryTarget?.externalPatientId || patientId;
@@ -102,6 +108,34 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
   }, []);
 
   const set = (patch) => { setConfig((c) => ({ ...c, ...patch })); setStepError(null); };
+
+  // Load the facility's synced assessments once, up front. The same payload
+  // seeds the per-recert filter from the org default (UI transparency only —
+  // the ext reads the default, never writes it) and fills the picker modal.
+  // Skip the seed on the retry path: the failed run's stored config wins.
+  useEffect(() => {
+    setUdaLoading(true);
+    RecertAPI.udaPreview({ orgSlug, facilityName })
+      .then((d) => {
+        setUdaForms(d?.forms || []);
+        if (!prefillConfig && Array.isArray(d?.orgDefaultKeywords) && d.orgDefaultKeywords.length) {
+          set({ udaIncludeKeywords: d.orgDefaultKeywords });
+        }
+      })
+      .catch(() => {})   // non-fatal: leave empty = pull all
+      .finally(() => setUdaLoading(false));
+  }, []);
+
+  // Forms are already loaded (or loading) from the eager fetch above.
+  const openUdaModal = () => setUdaModalOpen(true);
+  const toggleUdaForm = (description) => {
+    const has = config.udaIncludeKeywords.some((k) => k.toLowerCase() === description.toLowerCase());
+    set({
+      udaIncludeKeywords: has
+        ? config.udaIncludeKeywords.filter((k) => k.toLowerCase() !== description.toLowerCase())
+        : [...config.udaIncludeKeywords, description],
+    });
+  };
 
   const pickDays = (mode) => {
     setDaysMode(mode);
@@ -430,6 +464,24 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
               </div>
             )}
 
+            <div className={`mc-uda-row ${config.udaIncludeKeywords.length ? 'mc-uda-row--on' : ''}`}>
+              <div className="mc-uda-row__head">
+                <span className="mc-doc-card__label">Assessment filter</span>
+                <span className="mc-uda-row__summary">
+                  {config.udaIncludeKeywords.length === 0
+                    ? 'All assessments'
+                    : `${config.udaIncludeKeywords.length} selected`}
+                </span>
+                {/* NO_TRACK — form micro-interaction */}
+                <button type="button" className="mc-link-btn" onClick={openUdaModal}>
+                  {config.udaIncludeKeywords.length ? 'Edit' : 'Choose'}
+                </button>
+              </div>
+              <div className="mc-mds-row__hint">
+                Pick which synced assessments to pull for this packet. Leave empty to pull every assessment.
+              </div>
+            </div>
+
             <div className="mc-doc-grid">
               {Object.entries(groups).map(([key, group]) => {
                 const multi = group.types.length > 1;
@@ -530,6 +582,14 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
                   {includeMds && config.mdsSections.length ? `Sections ${config.mdsSections.join(', ')}` : 'Not included'}
                 </div>
               </div>
+              <div className="mc-review-item">
+                <div className="mc-review-item__label">Assessments</div>
+                <div className="mc-review-item__value">
+                  {config.udaIncludeKeywords.length === 0
+                    ? 'All assessments'
+                    : `${config.udaIncludeKeywords.length} selected`}
+                </div>
+              </div>
               {Object.keys(config.documentTypeRangeOverrides).length > 0 && (
                 <div className="mc-review-item mc-review-item--wide">
                   <div className="mc-review-item__label">Custom date ranges</div>
@@ -563,6 +623,77 @@ export const Wizard = ({ orgSlug, patientId, facilityName, prefillConfig, retryT
           </button>
         )}
       </div>
+
+      {udaModalOpen && (
+        <div className="mc-modal__overlay" onClick={() => setUdaModalOpen(false)}>
+          <div className="mc-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="mc-modal__head">
+              <h3>Assessment filter</h3>
+              <p>Pick the assessments to pull for this clinical update. Pick none to pull every assessment.</p>
+            </div>
+
+            {config.udaIncludeKeywords.length > 0 && (
+              <div className="mc-uda__chips">
+                {config.udaIncludeKeywords.map((name) => (
+                  <span className="mc-chip" key={name}>
+                    {name}
+                    {/* NO_TRACK — form micro-interaction */}
+                    <button type="button" aria-label={`Remove ${name}`} onClick={() => set({
+                      udaIncludeKeywords: config.udaIncludeKeywords.filter((k) => k !== name),
+                    })}>×</button>
+                  </span>
+                ))}
+                {/* NO_TRACK — form micro-interaction */}
+                <button type="button" className="mc-link-btn" onClick={() => set({ udaIncludeKeywords: [] })}>
+                  Clear all
+                </button>
+              </div>
+            )}
+
+            <div className="mc-uda__list">
+              {udaLoading ? (
+                <div className="mc-uda__skeleton">
+                  <div className="mc-skel mc-uda__skel-row" />
+                  <div className="mc-skel mc-uda__skel-row" />
+                  <div className="mc-skel mc-uda__skel-row" />
+                </div>
+              ) : udaForms.length === 0 ? (
+                <div className="mc-uda__empty">No synced assessments for this facility yet.</div>
+              ) : (
+                udaForms.map((f) => {
+                  const selected = config.udaIncludeKeywords.some(
+                    (k) => k.toLowerCase() === f.description.toLowerCase()
+                  );
+                  return (
+                    // NO_TRACK — form micro-interaction
+                    <button
+                      type="button"
+                      key={f.description}
+                      className={`mc-uda__row ${selected ? 'is-selected' : ''}`}
+                      onClick={() => toggleUdaForm(f.description)}
+                    >
+                      <span className="mc-uda__check">{selected ? '✓' : ''}</span>
+                      <span className="mc-uda__name">{f.description}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mc-modal__foot">
+              <span className="mc-uda__summary">
+                {config.udaIncludeKeywords.length === 0
+                  ? `All ${udaForms.length} assessments`
+                  : `${config.udaIncludeKeywords.length} selected`}
+              </span>
+              {/* NO_TRACK — form micro-interaction */}
+              <button type="button" className="mc-btn mc-btn--primary" onClick={() => setUdaModalOpen(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
