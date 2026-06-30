@@ -906,33 +906,17 @@
    Assessment filter (per-recert UDA picker) — row + modal
    ============================================================ */
 
-/* Trigger row in Step 2, sibling to the Include-MDS row */
-.mc-uda-row {
-  border: 1px solid var(--super-gray-200, #e5e7eb);
-  border-radius: 10px;
-  padding: 11px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: #fff;
-}
-.mc-uda-row--on {
-  background: #f0fdf9;
-  border-color: #a7f3d0;
-}
-.mc-uda-row__head {
-  display: flex;
+/* Inline gear trigger on the Assessments doc-card ("All" / "N selected").
+   Mirrors the Progress-Note "Date range" affordance; opens the UDA picker modal. */
+.mc-uda-gear {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13.5px;
-  font-weight: 600;
+  gap: 4px;
 }
-.mc-uda-row__summary {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--super-gray-600, #4b5563);
-  margin-left: auto;
-  margin-right: 12px;
+.mc-uda-gear svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 /* Modal shell — sits above the panel overlay (z 100000) */
