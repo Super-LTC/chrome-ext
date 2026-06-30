@@ -98,23 +98,24 @@ describe('buildFiveStarScorecard', () => {
 });
 
 describe('summarizeMeasureResidents', () => {
-  const mk = (status, clearableNow, i) => ({
+  const mk = (status, clearKind, i) => ({
     patientId: `p${i}`,
     name: `R${i}`,
     stayType: 'long',
     status,
-    clearableNow,
+    clearKind,
+    clearShort: clearKind === 'now' ? 'Clearable now' : clearKind,
     date: '2026-05-18',
     note: 'x',
     pendingSubmission: false,
   });
 
-  it('numerator = active triggering + discharged (reconciles with the rate); counts the rest', () => {
+  it('numerator = active triggering + discharged (reconciles with the rate); splits the active by clear path', () => {
     const residents = [
-      ...Array.from({ length: 6 }, (_, i) => mk('triggering', true, i)),
-      ...Array.from({ length: 24 }, (_, i) => mk('triggering', false, 100 + i)),
-      ...Array.from({ length: 3 }, (_, i) => mk('discharged', false, 300 + i)),
-      ...Array.from({ length: 4 }, (_, i) => mk('crossing', false, 200 + i)),
+      ...Array.from({ length: 6 }, (_, i) => mk('triggering', 'now', i)), // MDS-clearable (coding fix)
+      ...Array.from({ length: 24 }, (_, i) => mk('triggering', 'conditional', 100 + i)), // clinical-gated
+      ...Array.from({ length: 3 }, (_, i) => mk('discharged', 'locked', 300 + i)),
+      ...Array.from({ length: 4 }, (_, i) => mk('crossing', 'wait', 200 + i)),
     ];
     const s = summarizeMeasureResidents(residents);
 
@@ -122,17 +123,19 @@ describe('summarizeMeasureResidents', () => {
     expect(s.dischargedCount).toBe(3);
     // the numerator includes discharged — this is what must equal rate.numerator
     expect(s.numerator).toBe(33);
-    expect(s.clearableNow).toBe(6);
+    expect(s.clearMds).toBe(6); // now/date kinds → clear with an MDS
+    expect(s.clinical).toBe(24); // conditional kind → needs a clinical fix
     expect(s.crossing).toBe(4); // crossers are NOT in the numerator
     expect(s.total).toBe(37);
   });
 
   it('counts discharged-only numerators (the UTI 1/92-is-discharged case)', () => {
-    const s = summarizeMeasureResidents([mk('discharged', false, 1)]);
+    const s = summarizeMeasureResidents([mk('discharged', 'locked', 1)]);
     expect(s.numerator).toBe(1);
     expect(s.dischargedCount).toBe(1);
     expect(s.activeCount).toBe(0);
-    expect(s.clearableNow).toBe(0);
+    expect(s.clearMds).toBe(0);
+    expect(s.clinical).toBe(0);
   });
 });
 
@@ -151,7 +154,7 @@ describe('buildMeasureResidents (roster-driven)', () => {
   const board = {
     currentlyTriggering: {
       patients: [
-        { patientId: 'a', measures: [{ id: 'uti', triggers: true, clearGuidance: { clearsOnNextObra: true, actions: [{ label: 'open a fresh MDS' }] } }], target: { ardDate: '2026-05-18' } },
+        { patientId: 'a', measures: [{ id: 'uti', triggers: true, clearability: 'clear_now', clearGuidance: { actionType: 'modification', clearsOnNextObra: true, actions: [{ label: 'open a fresh MDS' }] } }], target: { ardDate: '2026-05-18' } },
       ],
     },
     upcoming: { upcomingPatients: [] },
@@ -165,16 +168,17 @@ describe('buildMeasureResidents (roster-driven)', () => {
     expect(residents.map((r) => r.patientId).sort()).toEqual(['a', 'b']);
     const andy = residents.find((r) => r.patientId === 'a');
     expect(andy.status).toBe('triggering');
-    expect(andy.clearableNow).toBe(true); // pulled from the board
+    expect(andy.clearKind).toBe('now'); // pulled from the board's clearability ('clear_now')
     const dan = residents.find((r) => r.patientId === 'b');
     expect(dan.status).toBe('discharged');
-    expect(dan.clearableNow).toBe(false);
+    expect(dan.clearKind).toBe('locked');
   });
 
   it('past quarter: no board layered (no clear-now), discharged still shown', () => {
     const roster = [row('a', 'Active Andy', false, true), row('b', 'Discharged Dan', true, true)];
     const residents = buildMeasureResidents(roster, 'uti', { board: null, isCurrent: false });
-    expect(residents.find((r) => r.patientId === 'a').clearableNow).toBe(false);
+    // No board → active resident has no derived clear lever (falls back to 'wait', not 'now').
+    expect(residents.find((r) => r.patientId === 'a').clearKind).toBe('wait');
     expect(residents.find((r) => r.patientId === 'b').status).toBe('discharged');
   });
 });

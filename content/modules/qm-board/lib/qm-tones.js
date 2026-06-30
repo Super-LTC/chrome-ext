@@ -146,19 +146,25 @@ export function clearTiming(entry, patient, facilityDate) {
     const earliest = cliff?.earliestClearDate;
     const days = earliest && facilityDate ? daysBetween(facilityDate, earliest) : null;
     if (days == null || days <= 0) {
-      return {
-        kind: 'now',
-        big: 'Clearable now',
-        short: 'Clearable now',
-        sub: isUti ? 'the UTI has aged out — open a new MDS' : 'open a new MDS to clear',
-      };
+      // UTI has aged out of the 30-day look-back → genuinely clears on any new MDS,
+      // regardless of the resident. (Unconditional.)
+      if (isUti) {
+        return { kind: 'now', big: 'Clearable now', short: 'Clearable now', sub: 'the UTI has aged out — open a new MDS' };
+      }
+      // Matured comparison/worsening measure (ADL/Walk/B&B): the re-baseline window is
+      // open, so a new MDS CAN clear it now — but only if the resident doesn't decline
+      // again. Keep the "if held" caveat so we don't over-promise a free clear.
+      return { kind: 'now', big: 'Clears with an MDS if held', short: 'Clears with an MDS if held', sub: '' };
     }
-    return {
-      kind: 'date',
-      big: `Clears in ${days}d`,
-      short: `Clears in ${days}d`,
-      sub: isUti ? 'after the UTI ages out (30-day look-back)' : 'then open a new MDS',
-    };
+    if (isUti) {
+      // UTI ages out of the 30-day look-back on its own — clears regardless of the resident.
+      return { kind: 'date', big: `Clears in ${days}d`, short: `Clears in ${days}d`, sub: 'after the UTI ages out (30-day look-back)' };
+    }
+    // Comparison / worsening measures (ADL · Walk · Bladder&Bowel) re-baseline at the
+    // next assessment, but only roll off if the resident DOESN'T decline again — it's
+    // conditional on holding, NOT a guaranteed clear. Say "if held" so we don't
+    // over-promise a free clear for a genuine decline. No sub-line.
+    return { kind: 'date', big: `Clears in ${days}d if held`, short: `Clears in ${days}d if held`, sub: '' };
   }
   // none — no recognized roll-off path.
   return { kind: 'wait', big: 'Ages out of the window', short: 'Time-based', sub: 'time-based — no action speeds it up' };

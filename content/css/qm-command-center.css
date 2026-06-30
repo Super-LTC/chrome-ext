@@ -1510,8 +1510,8 @@
 .qms-rgroup>div+div,.qms-rrow+.qms-rrow{border-top:1px solid var(--slate-50,#f8fafc)}
 .qms-rrow{display:flex;align-items:center;gap:12px;padding:6px 12px;font-size:13px}
 .qms-rrow--discharged{background:rgba(248,250,252,.4)}
-.qms-rbadge{display:inline-flex;width:88px;flex-shrink:0;align-items:center;justify-content:center;gap:4px;border-radius:9999px;
-  padding:2px 8px;text-align:center;font-size:10px;font-weight:700;box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
+.qms-rbadge{display:inline-flex;min-width:88px;flex-shrink:0;align-items:center;justify-content:center;gap:4px;border-radius:9999px;
+  padding:2px 8px;text-align:center;font-size:10px;font-weight:700;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
 .qms-rbadge--active{background:var(--emerald-50);color:var(--emerald-600)}
 .qms-rbadge--crossing{background:var(--violet-50);color:var(--violet-600)}
 .qms-rbadge--discharged{background:var(--slate-100);color:var(--slate-500)}
