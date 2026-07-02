@@ -33,6 +33,7 @@ import { ClinicalSignalsView } from './components/ClinicalSignalsView.jsx';
 import { WhatIfSimulator } from './components/WhatIfSimulator.jsx';
 import { DfsPage } from './components/DfsPage.jsx';
 import { FunctionalDeclineView } from './FunctionalDecline.jsx';
+import { AideScoringView } from './aide-scoring/AideScoringView.jsx';
 import { QmLoading } from './components/QmLoading.jsx';
 
 export function QMBoard({ facilityName, orgSlug, onClose }) {
@@ -41,7 +42,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   // the full regional board. The Coordinator | QM Board switch is always visible —
   // the full board must never feel hidden. (Regional Five-Star scorecard will
   // replace the 'board' mode in a later session.)
-  const [mode, setMode] = useState('coordinator'); // 'coordinator' | 'board'
+  const [mode, setMode] = useState('coordinator'); // 'coordinator' | 'board' | 'cna'
   const [history, setHistory] = useState([{ kind: 'dashboard' }]);
   const view = history[history.length - 1];
   // Resident drill-in modal — layers over whatever view is showing.
@@ -152,6 +153,8 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                     className={`qmb__modebtn ${mode === 'coordinator' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('coordinator')}>Coordinator</button>
                   <button type="button" role="tab" aria-selected={mode === 'board'} /* NO_TRACK */
                     className={`qmb__modebtn ${mode === 'board' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('board')}>Regional</button>
+                  <button type="button" role="tab" aria-selected={mode === 'cna'} /* NO_TRACK */
+                    className={`qmb__modebtn ${mode === 'cna' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('cna')}>CNA</button>
                 </div>
               </div>
             )}
@@ -185,6 +188,11 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onOpenDfs={openDfs}
                 onOpenSimulator={openSimulator}
               />
+            )}
+            {mode === 'cna' && view.kind === 'dashboard' && (
+              <div className="qmc">
+                <AideScoringView facilityName={facilityName} orgSlug={orgSlug} />
+              </div>
             )}
             {view.kind === 'measure' && (
               <MeasureDetail
