@@ -1,27 +1,23 @@
 /**
- * Pure logic for the Aide Scoring Quality screen — ported verbatim from the web
- * reference (aide-scorecard.react-reference.tsx + aide-quality-panel.react-reference.tsx).
+ * Pure logic for the Aide Scoring Quality screen. Ported from the web reference
+ * and rebuilt for the plain-English clarity redesign (web PR #808).
  *
  * SIGN CONVENTION (read before touching this):
  *   deviation / averageDeviation / overallAverageDeviation = peerAverage - aideScore.
- *     positive => aide scored BELOW peers => "scoring LOW"  (residents rated less independent)
- *     negative => aide scored ABOVE peers => "scoring HIGH" (residents rated more independent)
- *   The UI FLIPS the sign for display so "+" = high and "−" = low (see `signed`).
- *   Tones: sky = high, rose = low, emerald = on track.
+ *     positive => aide scored BELOW peers => rates the resident MORE dependent (needs more help)
+ *     negative => aide scored ABOVE peers => rates the resident LESS dependent (needs less help)
+ *   Everything a nurse reads is framed in DEPENDENCE, never "high/low" or a bare
+ *   number: `less dep.` (blue/sky) vs `more dep.` (red/rose), `on track` (emerald),
+ *   `inconsistent` (amber). Magnitude is spoken in the word ("a bit / way").
+ *   GG scale: 1 = fully dependent → 6 = independent.
  *   Grade tones: A=emerald, B=teal, C=amber, D=orange, F=rose.
  */
 
 export const SHIFT_LABELS = ['Day', 'Eve', 'Night'];
 /** GG codes are 1-6, so the largest possible deviation magnitude is 5. */
 export const BAR_MAX = 5;
-
-/** Signed deviation as the user reads it: + = above peers (high), − = below (low). */
-export function signed(deviation) {
-  // deviation = peerAverage - score (positive = below peers). Flip for display.
-  const v = -(deviation ?? 0);
-  const s = v > 0 ? '+' : v < 0 ? '−' : '';
-  return `${s}${Math.abs(v).toFixed(1)}`;
-}
+/** Weeks of weekly history required before the trend chart is meaningful. */
+export const MIN_TREND_WEEKS = 3;
 
 /** `.qmc` tone suffix for a grade letter (A=emerald … F=rose). */
 export function gradeTone(grade) {
@@ -34,71 +30,65 @@ export function gradeTone(grade) {
   }
 }
 
-/** Tone for a raw deviation value (used by category bars / example scores). */
-export function deviationTone(deviation, significant = true) {
-  if (!significant) return 'slate';
-  // deviation > 0 => below peers (low) => rose; < 0 => above (high) => sky
-  return deviation > 0 ? 'rose' : 'sky';
-}
-
 /** Roster direction tone — keyed off summary.direction, gated by significance. */
 export function directionTone(summary) {
   if (!summary || !summary.isSignificant) return 'slate';
   return summary.direction === 'above' ? 'sky' : 'rose';
 }
 
-/** Short muted direction label, e.g. "+1.4 · high". */
+/** Short muted direction label for the collapsed roster row (dependence framing). */
 export function directionLabel(summary) {
   if (!summary || summary.assessmentCount === 0) return 'no data';
-  if (!summary.isSignificant) return `${signed(summary.overallAverageDeviation)} · on track`;
-  return `${signed(summary.overallAverageDeviation)} · ${summary.direction === 'above' ? 'high' : 'low'}`;
+  if (!summary.isSignificant) return 'on track';
+  return summary.direction === 'above' ? 'less dep.' : 'more dep.';
 }
 
-/** Headline status pill: { label, tone }. */
-export function statusOf(summary) {
-  if (!summary || summary.assessmentCount === 0) return { label: 'No data', tone: 'slate' };
-  if (summary.isHighVariance) return { label: 'Inconsistent', tone: 'amber' };
-  if (!summary.isSignificant) return { label: 'On Track', tone: 'emerald' };
-  return summary.direction === 'below'
-    ? { label: 'Scoring Low', tone: 'rose' }
-    : { label: 'Scoring High', tone: 'sky' };
+/**
+ * One-line plain-English verdict + a status-dot tone. Replaces the signed
+ * headline + status pill — a nurse reads the sentence, not a number.
+ */
+export function verdictOf(summary) {
+  if (!summary || summary.assessmentCount === 0)
+    return { line: 'Not enough scored assessments yet.', tone: 'slate' };
+  if (summary.isHighVariance)
+    return { line: 'Scoring is inconsistent — swings both above and below the team.', tone: 'amber' };
+  if (!summary.isSignificant)
+    return { line: 'Scores in line with the rest of the team.', tone: 'emerald' };
+  return summary.direction === 'above'
+    ? { line: 'Rates residents as less dependent — needing less help — than the team.', tone: 'sky' }
+    : { line: 'Rates residents as more dependent — needing more help — than the team.', tone: 'rose' };
 }
 
-/** One-sentence plain-English coaching line. Ported verbatim from the web ref. */
-export function coachingLine(detail) {
-  const s = detail?.summary;
-  if (!s || s.assessmentCount === 0) return 'Not enough peer-scored assessments yet.';
+/**
+ * Per-category DEPENDENCE label + tone. deviation = peerAverage − score.
+ * deviation < 0 → scored ABOVE peers → "less dep." (needs less help, sky);
+ * deviation > 0 → scored BELOW peers → "more dep." (needs more help, rose).
+ * Magnitude is spoken in the word: <1.3 = "a bit ", >2.3 = "way ", else "".
+ */
+export function categoryLabel(deviation, significant) {
+  if (!significant) return { word: 'on track', tone: 'emerald' };
+  const size = Math.abs(deviation) < 1.3 ? 'a bit ' : Math.abs(deviation) > 2.3 ? 'way ' : '';
+  const lessDep = deviation < 0;
+  return { word: `${size}${lessDep ? 'less' : 'more'} dep.`, tone: lessDep ? 'sky' : 'rose' };
+}
 
-  const cats = (detail.categoryDeviations || [])
-    .filter((c) => c.isSignificant)
-    .sort((a, b) => Math.abs(b.averageDeviation) - Math.abs(a.averageDeviation))
-    .slice(0, 3)
-    .map((c) => c.name);
-  const catList =
-    cats.length === 0
-      ? ''
-      : cats.length === 1
-        ? cats[0]
-        : `${cats.slice(0, -1).join(', ')} and ${cats[cats.length - 1]}`;
+/**
+ * Trend verdict — compare early vs late accuracy (closeness to peers; lower
+ * |dev| = better). Positive delta = the aide's scores got closer to the team.
+ */
+export function trendVerdict(pts) {
+  const half = Math.floor(pts.length / 2);
+  const avg = (a) => a.reduce((s, p) => s + Math.abs(p.averageDeviation), 0) / Math.max(a.length, 1);
+  const delta = avg(pts.slice(0, half)) - avg(pts.slice(half)); // + = got closer to team
+  if (delta > 0.3) return { word: 'Yes, improving', arrow: '↗', tone: 'emerald' };
+  if (delta < -0.3) return { word: 'Drifting further', arrow: '↘', tone: 'rose' };
+  return { word: 'Holding steady', arrow: '→', tone: 'slate' };
+}
 
-  const pts = Math.abs(s.overallAverageDeviation).toFixed(1);
-
-  if (s.isHighVariance) {
-    return `Scores swing widely against their peers (±${s.variance.toFixed(1)} pts)${
-      catList ? `, most in ${catList}` : ''
-    }. Inconsistent scoring — worth a quick check on how levels are judged.`;
-  }
-  if (!s.isSignificant) {
-    return `Scores closely match their peers (within ${pts} pts on average). No action needed.`;
-  }
-  if (s.direction === 'above') {
-    return `Tends to score about ${pts} points ABOVE their peers${
-      catList ? `, especially ${catList}` : ''
-    } — rating residents as more independent than coworkers do. Worth a quick check on how levels are judged.`;
-  }
-  return `Tends to score about ${pts} points BELOW their peers${
-    catList ? `, especially ${catList}` : ''
-  } — rating residents as less independent than coworkers do. Worth a quick check on how levels are judged.`;
+/** "Jun 28" from a YYYY-MM-DD string (UTC-safe, no timezone drift). */
+export function fmtDate(iso) {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 export const SORT_OPTIONS = [
