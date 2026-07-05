@@ -21,6 +21,8 @@ import {
   Star, ArrowUp, ArrowDown, ArrowRight, ChevronRight, TrendingDown, TrendingUp,
   Target, ListChecks, CalendarClock, Lock,
 } from './icons.jsx';
+import { FlQipView } from './FlQipView.jsx';
+import { hasActiveQip } from '../lib/qip-programs.js';
 
 const pct = (r) => (r == null ? '—' : `${(r * 100).toFixed(1)}%`);
 
@@ -229,6 +231,15 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
   const [open, setOpen] = useState(null);
   const toggleDrill = (id, q) => setOpen((o) => (o && o.id === id && o.q === q ? null : { id, q }));
 
+  // Regional sub-lens: Five-Star (default) ⇄ Florida QIP (FL facilities only).
+  const qipActive = hasActiveQip(facilityState);
+  const [scView, setScView] = useState('five_star');
+  const qipTabBtn = (v, label) => (
+    <button type="button" /* NO_TRACK */ onClick={() => setScView(v)}
+      style={{ padding: '4px 12px', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+        background: scView === v ? '#0f172a' : 'transparent', color: scView === v ? '#fff' : '#64748b' }}>{label}</button>
+  );
+
   const fixHow = fix
     ? fix.clearMds > 0
       ? `${fix.clearMds} ${fix.clearMds === 1 ? 'resident' : 'residents'} from clearing`
@@ -243,6 +254,16 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
     // `qmc` brings the tone-token scope (--emerald-600 etc. are defined on .qmc);
     // without it the whole Regional scorecard renders greyscale.
     <div className="qmc qms">
+      {qipActive && (
+        <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 8, padding: 2, marginBottom: 10, fontSize: 12 }}>
+          {qipTabBtn('five_star', 'Five-Star')}
+          {qipTabBtn('fl_qip', 'Florida QIP')}
+        </div>
+      )}
+      {scView === 'fl_qip' ? (
+        <FlQipView facilityName={facilityName} orgSlug={orgSlug} />
+      ) : (
+      <>
       {/* ── HEADLINE: the diagnosis + the lever ── */}
       <div className="qms-headline qmc-rise">
         <div className="qms-headline__top">
@@ -413,6 +434,8 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
             ))}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
