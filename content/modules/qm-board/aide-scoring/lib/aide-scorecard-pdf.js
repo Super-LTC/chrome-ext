@@ -1,20 +1,30 @@
 /**
  * Per-aide CNA scoring scorecard PDF (jsPDF + jspdf-autotable), one aide per
- * page. Mirrors the download plumbing in rounding-reports/lib/rounding-report.js:
+ * page — the "print" equivalent of the on-screen scorecard, kept in sync with
+ * the plain-English clarity redesign (web PR #808): a one-line verdict, category
+ * DEPENDENCE labels ("less dep." / "more dep."), a trend verdict (chart skipped
+ * under ~3 weeks of history), and dated newest-first recent scores.
+ *
+ * Mirrors the download plumbing in rounding-reports/lib/rounding-report.js:
  * route the data-URL through the DOWNLOAD_FILE background message so the filename
  * survives PCC's CSP.
  */
-import { signed, statusOf, coachingLine, SHIFT_LABELS } from './aide-scoring.js';
+import { verdictOf, categoryLabel, trendVerdict, fmtDate, SHIFT_LABELS, MIN_TREND_WEEKS } from './aide-scoring.js';
 
 const MARGIN = 40;
 const SLATE = 90;
-const SKY = [14, 165, 233];   // scoring high
-const ROSE = [225, 29, 72];   // scoring low
 const SLATE_FILL = [37, 99, 235];
 
-function toneRgb(deviation, significant = true) {
-  if (!significant) return [100, 116, 139];
-  return deviation > 0 ? ROSE : SKY; // >0 below peers = low = rose
+/** New-tone → RGB (matches the screen palette: sky=less dep, rose=more dep). */
+const TONE_RGB = {
+  sky: [14, 165, 233],
+  rose: [225, 29, 72],
+  emerald: [16, 185, 129],
+  amber: [217, 119, 6],
+  slate: [100, 116, 139],
+};
+function toneRgb(tone) {
+  return TONE_RGB[tone] ?? TONE_RGB.slate;
 }
 
 function safe(s) {
@@ -24,7 +34,7 @@ function safe(s) {
 /** Render one aide's scorecard onto the current page, starting at `y`. */
 function renderAidePage(doc, autoTable, detail, facilityName, dateRangeLabel) {
   const summary = detail.summary;
-  const status = statusOf(summary);
+  const verdict = verdictOf(summary);
   let y = MARGIN;
 
   // Title
@@ -39,102 +49,134 @@ function renderAidePage(doc, autoTable, detail, facilityName, dateRangeLabel) {
   doc.text(`${facilityName}  •  ${dateRangeLabel}`, MARGIN, y);
   y += 22;
 
-  // Aide name + headline
+  // Aide name + grade
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
   doc.setTextColor(0);
   doc.text(detail.aideName || '—', MARGIN, y);
-
-  const headline = summary ? signed(summary.overallAverageDeviation) : '—';
   const grade = summary?.grade || '—';
-  const [hr, hg, hb] = toneRgb(summary?.overallAverageDeviation ?? 0, summary?.isSignificant ?? false);
-  doc.setFontSize(15);
-  doc.setTextColor(hr, hg, hb);
-  doc.text(`${headline}  ·  ${status.label}  ·  Grade ${grade}`, MARGIN, y + 16);
-  y += 16;
+  doc.text(`Grade ${grade}`, 555, y, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(SLATE);
   doc.text(
-    `${summary?.assessmentCount ?? 0} scores · ${summary?.uniquePatients ?? 0} patients`,
+    `${summary?.assessmentCount ?? 0} scores · ${summary?.uniquePatients ?? 0} residents`,
     MARGIN, y + 14
   );
   y += 28;
 
-  // Coaching line (wrapped)
-  doc.setTextColor(40);
-  doc.setFontSize(10);
-  const coach = doc.splitTextToSize(coachingLine(detail), 515);
-  doc.text(coach, MARGIN, y);
-  y += coach.length * 13 + 8;
+  // Plain verdict (wrapped, in its tone color)
+  const [vr, vg, vb] = toneRgb(verdict.tone);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(vr, vg, vb);
+  const vLines = doc.splitTextToSize(verdict.line, 515);
+  doc.text(vLines, MARGIN, y);
+  y += vLines.length * 14 + 6;
 
-  // Category deviations table
+  // Trend verdict — one plain line; skip entirely under ~3 weeks of history.
+  const pts = detail.trend || [];
+  if (pts.length >= MIN_TREND_WEEKS) {
+    const tv = trendVerdict(pts);
+    const [tr, tg, tb] = toneRgb(tv.tone);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(SLATE);
+    doc.text('Getting more accurate?', MARGIN, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(tr, tg, tb);
+    doc.text(tv.word, MARGIN + 128, y);
+    y += 18;
+  }
+
+  // Category dependence table — "vs. the team", framed in dependence not high/low.
   const cats = [...(detail.categoryDeviations || [])].sort(
     (a, b) => Math.abs(b.averageDeviation) - Math.abs(a.averageDeviation)
   );
   if (cats.length > 0) {
     autoTable(doc, {
       startY: y,
-      head: [['Category', 'Avg vs peers', 'Direction']],
-      body: cats.map((c) => [
-        c.name,
-        signed(c.averageDeviation),
-        !c.isSignificant ? 'on track' : c.direction === 'above' ? 'high' : 'low',
-      ]),
+      head: [['Category', 'vs. the team']],
+      body: cats.map((c) => {
+        const { word, tone } = categoryLabel(c.averageDeviation, c.isSignificant);
+        return [{ content: c.name }, { content: word, _tone: tone }];
+      }),
       styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
       headStyles: { fillColor: SLATE_FILL, textColor: 255, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { cellWidth: 220 }, 1: { cellWidth: 110, halign: 'center' }, 2: { cellWidth: 'auto' } },
+      columnStyles: { 0: { cellWidth: 300 }, 1: { cellWidth: 'auto', fontStyle: 'bold' } },
       margin: { left: MARGIN, right: MARGIN },
+      // Colour the dependence word by tone (sky=less dep, rose=more dep, emerald=on track).
+      didParseCell: (data) => {
+        const t = data.cell.raw?._tone;
+        if (data.section === 'body' && t) data.cell.styles.textColor = toneRgb(t);
+      },
     });
-    y = doc.lastAutoTable.finalY + 14;
+    y = doc.lastAutoTable.finalY + 6;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(SLATE);
+    doc.text('more dependent  ·  matches the team  ·  less dependent', MARGIN, y + 8);
+    y += 20;
   }
 
-  // Score examples
-  const examples = [...(detail.scores || [])]
-    .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
+  // Recent scores — dependence-flagged, newest first (mirrors the screen list).
+  const notable = (detail.scores || []).filter((s) => Math.abs(s.deviation) >= 1);
+  const pool = notable.length > 0 ? notable : (detail.scores || []);
+  const examples = [...pool]
+    .sort((a, b) => String(b.recordedDate).localeCompare(String(a.recordedDate)))
     .slice(0, 12);
   if (examples.length > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(0);
-    doc.text('Score Examples', MARGIN, y);
+    doc.text('Recent scores to review', MARGIN, y);
     y += 6;
     autoTable(doc, {
       startY: y,
-      head: [['Patient', 'Category', 'Aide', 'Peer avg', 'Shift', 'Date']],
-      body: examples.map((s) => [
-        s.patientName,
-        s.categoryName,
-        String(s.aideScore),
-        s.peerAverage != null ? s.peerAverage.toFixed(1) : '—',
-        SHIFT_LABELS[s.shiftIndex] || String(s.shiftIndex),
-        s.recordedDate,
-      ]),
+      head: [['When', 'Resident', 'Category', 'Her', 'Team avg', 'vs. team']],
+      body: examples.map((s) => {
+        const lessDep = s.deviation < 0;
+        return [
+          `${fmtDate(s.recordedDate)} · ${SHIFT_LABELS[s.shiftIndex] || s.shiftIndex}`,
+          s.patientName,
+          s.categoryName,
+          String(s.aideScore),
+          s.peerAverage != null ? s.peerAverage.toFixed(1) : '—',
+          { content: lessDep ? 'less dep.' : 'more dep.', _tone: lessDep ? 'sky' : 'rose' },
+        ];
+      }),
       styles: { fontSize: 8.5, cellPadding: 4, overflow: 'linebreak' },
       headStyles: { fillColor: SLATE_FILL, textColor: 255, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
-        0: { cellWidth: 130 },
+        0: { cellWidth: 95 },
         1: { cellWidth: 120 },
-        2: { cellWidth: 45, halign: 'center' },
-        3: { cellWidth: 55, halign: 'center' },
-        4: { cellWidth: 45, halign: 'center' },
-        5: { cellWidth: 'auto', halign: 'right' },
+        2: { cellWidth: 105 },
+        3: { cellWidth: 35, halign: 'center' },
+        4: { cellWidth: 55, halign: 'center' },
+        5: { cellWidth: 'auto' },
       },
       margin: { left: MARGIN, right: MARGIN },
+      didParseCell: (data) => {
+        const t = data.cell.raw?._tone;
+        if (data.section === 'body' && t) {
+          data.cell.styles.textColor = toneRgb(t);
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
     });
   }
 
-  // Footnote — what "Peer avg" means.
+  // Footnote — what "Team avg" means + the GG scale.
   const footY = (doc.lastAutoTable?.finalY ?? y) + 16;
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
   doc.setTextColor(SLATE);
   doc.text(
     doc.splitTextToSize(
-      'Peer average = what other CNAs scored the same resident that week (same shift when available).',
+      '"Team" = other CNAs\' avg for that resident that week (same shift when available). Scores run 1 (fully dependent) to 6 (independent).',
       515
     ),
     MARGIN,

@@ -8,9 +8,9 @@
  * denominators per measure. This just picks last-complete vs current-in-progress
  * and computes the trend. Pure (no JSX); ported from qm-fivestar-view.ts.
  */
-import { measureInLens, shortLabel } from './qm-view-model.js';
+import { measureInLens, shortLabel, clearGroupForEntry } from './qm-view-model.js';
 import { fiveStarMeasure, pointsForRate, nextTier } from './qm-five-star.js';
-import { fullName } from './qm-tones.js';
+import { fullName, clearTiming } from './qm-tones.js';
 
 /** Most QM measures are lower-is-better; these few are higher-is-better. */
 const HIGHER_IS_BETTER = new Set(['influenza_vaccine', 'discharge_function']);
@@ -39,13 +39,20 @@ function trendOf(id, last, current) {
  * last complete quarter (the final number regionals want).
  */
 export function buildFiveStarScorecard(rolling, prediction, lens, facilityState, board) {
-  // Actionable counts per measure: who can be cleared now (a fresh OBRA clears
-  // it) vs who's about to cross day-101 into the long-stay denominator.
-  const clearNowBy = new Map();
+  // Actionable counts per measure, from the SHARED clearability classification
+  // (NOT the raw `clearsOnNextObra` boolean — that's true for clinical/trajectory
+  // measures too and is what made the scorecard mislabel them "clear now").
+  //   clear_mds = clears via a new MDS (coding fix or re-baseline)
+  //   clinical  = gated on a clinical fix (the clinical team's lever, not ours)
+  const clearMdsBy = new Map();
+  const clinicalBy = new Map();
   const crossingBy = new Map();
   for (const p of board?.currentlyTriggering.patients ?? []) {
     for (const e of p.measures) {
-      if (e.triggers && e.clearGuidance?.clearsOnNextObra) clearNowBy.set(e.id, (clearNowBy.get(e.id) ?? 0) + 1);
+      if (!e.triggers) continue;
+      const group = clearGroupForEntry(e);
+      if (group === 'clear_mds') clearMdsBy.set(e.id, (clearMdsBy.get(e.id) ?? 0) + 1);
+      else if (group === 'clinical') clinicalBy.set(e.id, (clinicalBy.get(e.id) ?? 0) + 1);
     }
   }
   for (const up of board?.upcoming.upcomingPatients ?? []) {
@@ -80,15 +87,17 @@ export function buildFiveStarScorecard(rolling, prediction, lens, facilityState,
     const rate4q = rolling4q.get(id) ?? currentCell?.rate ?? lastCell?.rate ?? null;
     const points = spec && rate4q != null ? pointsForRate(spec, rate4q) : null;
     const nt = spec && rate4q != null ? nextTier(spec, rate4q) : null;
-    const clearNow = clearNowBy.get(id) ?? 0;
+    const clearMds = clearMdsBy.get(id) ?? 0;
+    const clinical = clinicalBy.get(id) ?? 0;
     const crossingSoon = crossingBy.get(id) ?? 0;
     const nextGainPts = nt ? nt.points - (points ?? 0) : null;
     const nextDeltaPts = nt ? Math.round(Math.abs(nt.delta) * 1000) / 10 : null;
-    // Leverage = upside × ease + free wins + crossing urgency. Ease falls off
-    // with the rate distance to the next tier, so "0.2% from +20" beats
-    // "1.3% from +15"; clear-now residents are concrete levers, crossers urgent.
+    // Leverage = upside × ease + MDS-clearable wins + crossing urgency. Ease falls
+    // off with the rate distance to the next tier, so "0.2% from +20" beats
+    // "1.3% from +15"; clear-via-MDS residents are concrete levers, crossers urgent.
+    // (Clinical-gated residents are NOT a coordinator lever, so they don't add weight.)
     const ease = nextDeltaPts != null ? 1 / (1 + nextDeltaPts) : 0;
-    const leverage = (nextGainPts ?? 0) * ease + clearNow * 5 + crossingSoon * 3;
+    const leverage = (nextGainPts ?? 0) * ease + clearMds * 5 + crossingSoon * 3;
     measures.push({
       id,
       label,
@@ -101,7 +110,8 @@ export function buildFiveStarScorecard(rolling, prediction, lens, facilityState,
       maxed: spec != null && nt == null,
       nextGainPts,
       nextDeltaPts,
-      clearNow,
+      clearMds,
+      clinical,
       crossingSoon,
       leverage,
     });
@@ -130,7 +140,7 @@ export function buildFiveStarScorecard(rolling, prediction, lens, facilityState,
   const top = measures[0];
   const topFix =
     top && top.leverage > 0
-      ? { id: top.id, label: top.label, gainPts: top.nextGainPts, nextDeltaPts: top.nextDeltaPts, clearNow: top.clearNow, crossingSoon: top.crossingSoon }
+      ? { id: top.id, label: top.label, gainPts: top.nextGainPts, nextDeltaPts: top.nextDeltaPts, clearMds: top.clearMds, crossingSoon: top.crossingSoon }
       : null;
   const headline = { totalPoints, maxTotal, pointsBasis: 'current-rate', headroomPts, bubbleCount, drags, topFix };
 
@@ -179,27 +189,33 @@ export function buildMeasureResidents(roster, measureId, opts) {
         name: row.name,
         stayType: row.stayType,
         status: 'discharged',
-        clearableNow: false,
+        clearKind: 'locked',
+        clearShort: 'locked',
         date: row.targetArd,
         note: 'discharged · still counts this quarter',
         pendingSubmission,
       });
       continue;
     }
-    // Active resident in the numerator — pull clear-now + ARD from the board.
+    // Active resident in the numerator — derive the honest clear timing from the
+    // board entry via the SHARED `clearTiming` (same source the worklist + drill
+    // use), so the scorecard can't drift back to a blanket "clear now".
     const p = boardByPatient.get(row.patientId);
     const e = p?.measures.find((x) => x.id === measureId);
-    const clearableNow = !!e?.clearGuidance?.clearsOnNextObra;
+    const timing = e && p ? clearTiming(e, p, opts.board?.currentlyTriggering.facilityDate) : null;
+    const clearKind = timing?.kind ?? 'wait';
+    const clearShort = timing?.short ?? (opts.isCurrent ? 'no current lever' : 'counted this quarter');
     out.push({
       patientId: row.patientId,
       name: row.name,
       stayType: row.stayType,
       status: 'triggering',
-      clearableNow,
+      clearKind,
+      clearShort,
       date: row.targetArd,
       note:
         e?.clearGuidance?.actions?.[0]?.label ??
-        (clearableNow ? 'open a fresh MDS' : opts.isCurrent ? 'no current lever' : 'counted this quarter'),
+        (clearKind === 'now' ? 'open a fresh MDS' : opts.isCurrent ? 'no current lever' : 'counted this quarter'),
       pendingSubmission,
     });
   }
@@ -214,7 +230,8 @@ export function buildMeasureResidents(roster, measureId, opts) {
         name: fullName(up),
         stayType: 'short',
         status: 'crossing',
-        clearableNow: false,
+        clearKind: 'wait',
+        clearShort: '',
         date: hit.crossingDate,
         note: hit.bucket === 'preventable' ? `prevent by ${hit.preventDeadline ?? hit.crossingDate}` : 'carries over at day-101',
         pendingSubmission: false,
@@ -222,11 +239,13 @@ export function buildMeasureResidents(roster, measureId, opts) {
     }
   }
 
-  // Order: active-triggering (clearable first) → crossing → discharged (locked, last).
+  // Order: active-triggering → crossing → discharged (locked, last). Within active,
+  // most-actionable first: clear-now → clears-in-Nd → clinical → wait/locked.
   const rank = (s) => (s === 'triggering' ? 0 : s === 'crossing' ? 1 : 2);
+  const kindRank = (k) => (k === 'now' ? 0 : k === 'date' ? 1 : k === 'conditional' ? 2 : k === 'wait' ? 3 : 4);
   return out.sort((a, b) => {
     if (a.status !== b.status) return rank(a.status) - rank(b.status);
-    if (a.status === 'triggering' && a.clearableNow !== b.clearableNow) return a.clearableNow ? -1 : 1;
+    if (a.status === 'triggering' && a.clearKind !== b.clearKind) return kindRank(a.clearKind) - kindRank(b.clearKind);
     return (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.name.localeCompare(b.name);
   });
 }
@@ -275,8 +294,11 @@ export function summarizeMeasureResidents(residents) {
   const activeCount = residents.filter((r) => r.status === 'triggering').length;
   const dischargedCount = residents.filter((r) => r.status === 'discharged').length;
   const crossing = residents.filter((r) => r.status === 'crossing').length;
-  const clearableNow = residents.filter((r) => r.status === 'triggering' && r.clearableNow).length;
-  return { numerator: activeCount + dischargedCount, activeCount, dischargedCount, clearableNow, crossing, total: residents.length };
+  // clearKind → group: now/date = MDS-clearable; conditional = clinical-gated.
+  // (This mirrors clearGroupForEntry exactly — same source, so counts can't drift.)
+  const clearMds = residents.filter((r) => r.status === 'triggering' && (r.clearKind === 'now' || r.clearKind === 'date')).length;
+  const clinical = residents.filter((r) => r.status === 'triggering' && r.clearKind === 'conditional').length;
+  return { numerator: activeCount + dischargedCount, activeCount, dischargedCount, clearMds, clinical, crossing, total: residents.length };
 }
 
 // ── Discharge Function Score strip — DFS is its own thing, not a table row ──

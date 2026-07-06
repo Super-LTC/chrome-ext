@@ -15,11 +15,14 @@ import {
   buildFiveStarScorecard, buildMeasureResidents, buildUpcomingCrossers, buildDfsStrip, summarizeMeasureResidents,
 } from '../lib/qm-fivestar-view.js';
 import { useQuarterRates } from '../hooks/useQuarterRates.js';
+import { CLEAR_TONE } from '../lib/qm-tones.js';
 import { QmDfsStrip } from './QmDfsStrip.jsx';
 import {
   Star, ArrowUp, ArrowDown, ArrowRight, ChevronRight, TrendingDown, TrendingUp,
   Target, ListChecks, CalendarClock, Lock,
 } from './icons.jsx';
+import { FlQipView } from './FlQipView.jsx';
+import { hasActiveQip } from '../lib/qip-programs.js';
 
 const pct = (r) => (r == null ? '—' : `${(r * 100).toFixed(1)}%`);
 
@@ -114,11 +117,17 @@ function ResidentGroup({ residents, badge, tone, onOpenMeasure, measureId }) {
   const dateLabel = tone === 'crossing' ? 'crosses' : tone === 'discharged' ? "DC'd" : 'MDS';
   return (
     <div className="qms-rgroup">
-      {shown.map((r) => (
+      {shown.map((r) => {
+        // Non-active rows (crossing / discharged) share one static tone; ACTIVE rows
+        // colour per-resident from the shared clear-timing tone, so the badge matches
+        // the worklist/drill exactly (green now · sky countdown · amber clinical · slate wait).
+        const isActive = tone === 'active';
+        const badgeColor = isActive ? CLEAR_TONE[r.clearKind]?.badge : null;
+        return (
         <div key={`${r.status}:${r.patientId}`} className={`qms-rrow ${tone === 'discharged' ? 'qms-rrow--discharged' : ''}`}>
-          <span className={`qms-rbadge qms-rbadge--${tone}`}>
+          <span className={isActive ? `qms-rbadge qmc-clearchip--${badgeColor}` : `qms-rbadge qms-rbadge--${tone}`}>
             {tone === 'discharged' && <Lock className="qms-rbadge__lock" />}
-            {tone === 'active' && r.clearableNow ? 'Clear now' : badge}
+            {isActive ? r.clearShort : badge}
           </span>
           <span className={`qms-rname ${tone === 'discharged' ? 'qmc-text--slate' : ''}`}>{r.name}</span>
           {r.pendingSubmission ? (
@@ -129,7 +138,8 @@ function ResidentGroup({ residents, badge, tone, onOpenMeasure, measureId }) {
             <span className="qms-rdate">{dateLabel} {mdShort(r.date) || '—'}</span>
           )}
         </div>
-      ))}
+        );
+      })}
       {hidden > 0 && (
         <button type="button" className="qms-rmore" onClick={() => onOpenMeasure(measureId)}> {/* NO_TRACK */}
           + {hidden} more {badge.toLowerCase()} → worklist
@@ -181,7 +191,8 @@ function ResidentPanel({ board, roster, measureLabel, quarterLabel, isCurrent, m
           {rateRow && <span className="qmc-text--slate"> = {rateRow.numerator}/{rateRow.denominator}</span>}
         </span>
         {s.dischargedCount > 0 && <span className="qmc-text--slate"><b>{s.dischargedCount}</b> discharged · locked</span>}
-        {isCurrent && s.clearableNow > 0 && <span className="qmc-text--emerald"><b>{s.clearableNow}</b> can clear now</span>}
+        {isCurrent && s.clearMds > 0 && <span className="qmc-text--emerald"><b>{s.clearMds}</b> clear with an MDS</span>}
+        {isCurrent && s.clinical > 0 && <span className="qmc-text--amber"><b>{s.clinical}</b> need a clinical fix</span>}
         {isCurrent && s.crossing > 0 && <span className="qmc-text--violet"><b>{s.crossing}</b> crossing soon</span>}
         {s.total === 0 && <span className="qmc-text--slate">Nobody in the numerator this quarter.</span>}
       </div>
@@ -220,9 +231,18 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
   const [open, setOpen] = useState(null);
   const toggleDrill = (id, q) => setOpen((o) => (o && o.id === id && o.q === q ? null : { id, q }));
 
+  // Regional sub-lens: Five-Star (default) ⇄ Florida QIP (FL facilities only).
+  const qipActive = hasActiveQip(facilityState);
+  const [scView, setScView] = useState('five_star');
+  const qipTabBtn = (v, label) => (
+    <button type="button" /* NO_TRACK */ onClick={() => setScView(v)}
+      style={{ padding: '4px 12px', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+        background: scView === v ? '#0f172a' : 'transparent', color: scView === v ? '#fff' : '#64748b' }}>{label}</button>
+  );
+
   const fixHow = fix
-    ? fix.clearNow > 0
-      ? `${fix.clearNow} ${fix.clearNow === 1 ? 'resident' : 'residents'} from clearing`
+    ? fix.clearMds > 0
+      ? `${fix.clearMds} ${fix.clearMds === 1 ? 'resident' : 'residents'} from clearing`
       : fix.crossingSoon > 0
         ? `${fix.crossingSoon} crossing soon`
         : fix.nextDeltaPts != null
@@ -234,6 +254,16 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
     // `qmc` brings the tone-token scope (--emerald-600 etc. are defined on .qmc);
     // without it the whole Regional scorecard renders greyscale.
     <div className="qmc qms">
+      {qipActive && (
+        <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 8, padding: 2, marginBottom: 10, fontSize: 12 }}>
+          {qipTabBtn('five_star', 'Five-Star')}
+          {qipTabBtn('fl_qip', 'Florida QIP')}
+        </div>
+      )}
+      {scView === 'fl_qip' ? (
+        <FlQipView facilityName={facilityName} orgSlug={orgSlug} />
+      ) : (
+      <>
       {/* ── HEADLINE: the diagnosis + the lever ── */}
       <div className="qms-headline qmc-rise">
         <div className="qms-headline__top">
@@ -314,9 +344,10 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
                   <tr className="qms-tr">
                     <td className="qms-td qms-td--measure">
                       <div className="qms-td__name">{m.label}</div>
-                      {(m.clearNow > 0 || m.crossingSoon > 0) && (
+                      {(m.clearMds > 0 || m.clinical > 0 || m.crossingSoon > 0) && (
                         <div className="qms-td__cues">
-                          {m.clearNow > 0 && <span className="qmc-text--emerald">{m.clearNow} can clear now</span>}
+                          {m.clearMds > 0 && <span className="qmc-text--emerald">{m.clearMds} clear with an MDS</span>}
+                          {m.clinical > 0 && <span className="qmc-text--amber">{m.clinical} need a clinical fix</span>}
                           {m.crossingSoon > 0 && <span className="qmc-text--violet">{m.crossingSoon} crossing soon</span>}
                         </div>
                       )}
@@ -403,6 +434,8 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
             ))}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
