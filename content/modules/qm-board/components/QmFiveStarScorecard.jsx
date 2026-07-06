@@ -261,8 +261,7 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
         </div>
       )}
       {scView === 'fl_qip' ? (
-        <FlQipView facilityName={facilityName} orgSlug={orgSlug}
-          roster={quarterRates} lastRoster={lastQuarterRates} board={board} onOpenMeasure={onOpenMeasure} />
+        <FlQipView facilityName={facilityName} orgSlug={orgSlug} onOpenMeasure={onOpenMeasure} />
       ) : (
       <>
       {/* ── HEADLINE: the diagnosis + the lever ── */}
