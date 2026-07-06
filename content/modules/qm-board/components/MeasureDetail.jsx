@@ -26,7 +26,12 @@ const GROUP_DEFS = [
   { key: 'locked',    label: CLEAR_GROUP.locked.label,    sub: CLEAR_GROUP.locked.sub,    tone: CLEAR_GROUP.locked.tone },
 ];
 
-export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, onOpenResident, upcoming, quarterRates, rolling }) {
+export function MeasureDetail({ currentlyTriggering: data, measureId, scoreContext, onBack, onOpenResident, upcoming, quarterRates, rolling }) {
+  // Opened from the FL QIP view — that program scores on percentile bands, not
+  // Five-Star star points, so the star-point estimates below would be wrong here.
+  // The RATE what-if is still correct (bands are driven by the rate), so we keep
+  // it and just replace the point block with a pointer back to the QIP table.
+  const isFlQip = scoreContext === 'fl_qip';
   const [wif, setWif] = useState(false);
   const [cleared, setCleared] = useState(() => new Set());
   const [prevented, setPrevented] = useState(() => new Set());
@@ -186,7 +191,11 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
                 )}
               </div>
             )}
-            {spec ? (
+            {isFlQip ? (
+              <div className="qmc-pts__hint" style={{ marginTop: '8px' }}>
+                Florida QIP scores this on percentile bands — see the QIP table for points. The what-if below shows the rate move.
+              </div>
+            ) : spec ? (
               <div className="qmc-pts">
                 <span className="qmc-pts__main">
                   ≈ {curPts}{ptsMoved && <span className="qmc-text--emerald"> → {projPts}</span>}

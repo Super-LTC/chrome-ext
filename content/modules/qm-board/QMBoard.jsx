@@ -91,7 +91,10 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
     [preventableAlerts]
   );
 
-  const openMeasure = (measureId) => push({ kind: 'measure', measureId });
+  // opts.scoreContext ('fl_qip') tells MeasureDetail which scoring frame it was
+  // opened from — so it suppresses Five-Star point estimates for FL QIP (which
+  // scores on percentile bands, not star points). Undefined → Five-Star default.
+  const openMeasure = (measureId, opts) => push({ kind: 'measure', measureId, scoreContext: opts?.scoreContext });
   const openSignals = (patientId) => push({ kind: 'signals', patientId });
   const openFunctional = () => push({ kind: 'functional' });
   const openSimulator = () => push({ kind: 'simulator' });
@@ -197,6 +200,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
             {view.kind === 'measure' && (
               <MeasureDetail
                 measureId={view.measureId}
+                scoreContext={view.scoreContext}
                 currentlyTriggering={currentlyTriggering}
                 preventableAlerts={preventableAlerts}
                 upcoming={upcoming}

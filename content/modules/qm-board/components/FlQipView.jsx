@@ -317,7 +317,7 @@ export function FlQipView({ facilityName, orgSlug, onOpenMeasure }) {
           }
           return (
             <button key={m.measureId} type="button" data-track="qm_drill_in" data-track-prop-measure-code={m.measureId} data-track-prop-view="fl_qip"
-              onClick={() => onOpenMeasure(m.measureId)} title="Open this measure's residents"
+              onClick={() => onOpenMeasure(m.measureId, { scoreContext: 'fl_qip' })} title="Open this measure's residents"
               style={{ ...row, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, fontSize: 13, fontWeight: 500, color: C.body }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
