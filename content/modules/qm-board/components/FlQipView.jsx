@@ -10,8 +10,10 @@
  * Self-contained inline styles (inside the `qmc` tone scope) so it renders without
  * new CSS. Data + mutations come from useFlQip.
  */
+import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { useFlQip, FL_QIP_PROGNOSIS_KIND, FL_QIP_FLU_KIND } from '../hooks/useFlQip.js';
+import { buildMeasureResidents, summarizeMeasureResidents } from '../lib/qm-fivestar-view.js';
 
 const C = {
   ink: '#0f172a', body: '#334155', muted: '#64748b', faint: '#94a3b8', line: '#e2e8f0',
@@ -21,6 +23,12 @@ const C = {
   violet: '#7c3aed', violetBg: '#f5f3ff', sky: '#0284c7', skyBg: '#f0f9ff',
 };
 const fmtPct = (r) => (r == null ? '—' : `${Number(r).toFixed(2)}%`);
+/** ISO 'YYYY-MM-DD' → 'M/D' (no leading zeros); '' when unparseable. */
+const mdDate = (iso) => {
+  if (!iso) return '';
+  const [, mm, dd] = String(iso).slice(0, 10).split('-');
+  return mm && dd ? `${Number(mm)}/${Number(dd)}` : '';
+};
 const ptColor = (n) => (n >= 3 ? C.emerald : n >= 2 ? C.amber : n >= 1 ? C.orange : C.faint);
 const nameOf = (c) => {
   const last = (c.lastName || '').trim(); const first = (c.firstName || '').trim();
@@ -234,13 +242,109 @@ function TrackCard({ title, subtitle, total, floor, qualifying, toQualify, accen
   );
 }
 
+/** One numerator resident inside a measure drill — status chip + name + MDS/crosses date. */
+const RESIDENT_TONE = {
+  triggering: { bg: C.roseBg, fg: C.rose },
+  crossing: { bg: C.violetBg, fg: C.violet },
+  discharged: { bg: C.soft, fg: C.muted },
+};
+function ResidentLine({ r }) {
+  const tone = RESIDENT_TONE[r.status] || RESIDENT_TONE.triggering;
+  const chip =
+    r.status === 'triggering' ? (r.clearShort || 'triggering')
+      : r.status === 'crossing' ? 'crossing'
+        : 'locked';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${C.soft}`, padding: '5px 12px', fontSize: 12 }}>
+      <span style={{ flexShrink: 0, borderRadius: 4, background: tone.bg, padding: '1px 6px', fontSize: 10, fontWeight: 700, color: tone.fg }}>{chip}</span>
+      <span style={{ flex: 1, minWidth: 0, color: r.status === 'discharged' ? C.faint : C.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+      {r.pendingSubmission
+        ? <span title="Counted on an MDS not yet accepted by CMS" style={{ flexShrink: 0, fontSize: 10, color: C.amber }}>{mdDate(r.date)} · MDS in progress</span>
+        : <span style={{ flexShrink: 0, fontSize: 10, color: C.faint }}>{r.status === 'crossing' ? 'crosses ' : 'MDS '}{mdDate(r.date) || '—'}</span>}
+    </div>
+  );
+}
+
+const RESIDENT_CAP = 12;
+
+/**
+ * Per-measure numerator drill for the FL QIP table — the Five-Star drill, ported.
+ * Clicking a measure's Projected rate opens this: the residents in that measure's
+ * numerator, with a This-quarter ⇄ Last-quarter flip, reusing the exact roster
+ * builder the Five-Star scorecard uses (`buildMeasureResidents`). The OFFICIAL
+ * column can't drill (CMS's lagged, adjusted aggregate has no resident detail),
+ * and for adjusted measures the projected rate is CMS-governed, so we label the
+ * list "live/observed" — the residents won't sum to the displayed rate.
+ */
+function MeasureDrill({ measure, roster, lastRoster, board, onOpenMeasure, onClose }) {
+  const [q, setQ] = useState('this');
+  const isCurrent = q === 'this';
+  const active = isCurrent ? roster : lastRoster;
+  const hasLast = !!(lastRoster && lastRoster.rows);
+  const residents = buildMeasureResidents(active?.rows, measure.measureId, { board: isCurrent ? board : null, isCurrent });
+  const s = summarizeMeasureResidents(residents);
+  const rateRow = active?.rates?.find((r) => r.measureId === measure.measureId);
+  const shown = residents.slice(0, RESIDENT_CAP);
+  const hidden = residents.length - shown.length;
+  const tab = (v, label, enabled) => (
+    <button type="button" /* NO_TRACK */ disabled={!enabled} onClick={() => enabled && setQ(v)}
+      style={{ padding: '3px 10px', border: 'none', cursor: enabled ? 'pointer' : 'default',
+        background: q === v ? C.ink : C.white, color: q === v ? C.white : (enabled ? C.muted : C.faint) }}>{label}</button>
+  );
+  return (
+    <div style={{ borderBottom: `1px solid ${C.soft}`, background: C.softer, padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <span style={{ display: 'inline-flex', border: `1px solid ${C.line}`, borderRadius: 6, overflow: 'hidden', fontSize: 11, fontWeight: 700 }}>
+          {tab('this', 'This quarter', true)}{tab('last', 'Last quarter', hasLast)}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onOpenMeasure && (
+            <button type="button" /* NO_TRACK */ onClick={() => onOpenMeasure(measure.measureId)}
+              style={{ borderRadius: 6, border: `1px solid ${C.indigo}`, background: C.white, padding: '3px 8px', fontSize: 11, fontWeight: 700, color: C.indigo, cursor: 'pointer' }}>Open worklist →</button>
+          )}
+          <button type="button" /* NO_TRACK */ onClick={onClose} aria-label="Close" style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', fontSize: 14 }}>✕</button>
+        </div>
+      </div>
+
+      {measure.deferredToOfficial && (
+        <div style={{ marginBottom: 8, borderRadius: 6, background: C.amberBg, padding: '5px 8px', fontSize: 11, color: C.amber }}>
+          Live / observed view — this measure's scored rate is CMS-adjusted, so these residents won't sum to the {fmtPct(measure.projectedRate)} shown. Still useful for coding accuracy.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 12px', fontSize: 12, color: C.muted, marginBottom: 6 }}>
+        <span><b style={{ color: C.body }}>{s.numerator}</b> in the numerator{rateRow ? ` = ${rateRow.numerator}/${rateRow.denominator}` : ''}</span>
+        {s.dischargedCount > 0 && <span>{s.dischargedCount} discharged · locked</span>}
+        {isCurrent && s.clearMds > 0 && <span style={{ color: C.emerald }}>{s.clearMds} clear with an MDS</span>}
+        {isCurrent && s.clinical > 0 && <span style={{ color: C.amber }}>{s.clinical} need a clinical fix</span>}
+        {isCurrent && s.crossing > 0 && <span style={{ color: C.violet }}>{s.crossing} crossing soon</span>}
+      </div>
+
+      {residents.length === 0 ? (
+        <div style={{ padding: '6px 0', fontSize: 12, color: C.faint }}>Nobody in the numerator {isCurrent ? 'this' : 'last'} quarter.</div>
+      ) : (
+        <div style={{ borderRadius: 8, border: `1px solid ${C.soft}`, background: C.white, overflow: 'hidden' }}>
+          {shown.map((r) => <ResidentLine key={`${r.status}:${r.patientId}`} r={r} />)}
+          {hidden > 0 && onOpenMeasure && (
+            <button type="button" /* NO_TRACK */ onClick={() => onOpenMeasure(measure.measureId)}
+              style={{ display: 'block', width: '100%', borderTop: `1px solid ${C.soft}`, border: 'none', background: C.white, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.indigo, cursor: 'pointer', textAlign: 'left' }}>
+              + {hidden} more → worklist
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The main Florida QIP view. Rendered inside a `.qmc` tone scope by the caller. */
-export function FlQipView({ facilityName, orgSlug }) {
+export function FlQipView({ facilityName, orgSlug, roster, lastRoster, board, onOpenMeasure }) {
   const { data, loading, error, saveInputs, setDismiss } = useFlQip({ facilityName, orgSlug });
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const [coverageOpen, setCoverageOpen] = useState(false);
+  const [openDrill, setOpenDrill] = useState(null);
 
   if (loading && !data) return <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: C.faint }}>Loading Florida QIP…</div>;
   if (error && !data) return <div style={{ borderRadius: 12, border: `1px solid ${C.roseBg}`, background: C.roseBg, padding: 16, fontSize: 13, color: C.rose }}>Couldn't load the Florida QIP comparison.</div>;
@@ -298,17 +402,37 @@ export function FlQipView({ facilityName, orgSlug }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', gap: 8, borderBottom: `1px solid ${C.line}`, background: C.softer, padding: '6px 12px' }}>
           <span style={th}>Measure</span><span style={th}>Official (CMS)</span><span style={th}>Projected (ours)</span>
         </div>
-        {(data.measures || []).map((m) => (
-          <div key={m.measureId} style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.soft}`, padding: '8px 12px' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: C.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              {m.officialUnavailable ? <span style={{ fontSize: 11, color: C.faint }}>not scored</span> : <><Pts n={m.officialPoints} /><span style={{ fontSize: 11, color: C.faint }}>{fmtPct(m.officialRate)}</span></>}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <Pts n={m.projectedPoints} muted={m.deferredToOfficial} /><span style={{ fontSize: 11, color: m.deferredToOfficial ? C.faint : C.muted }}>{fmtPct(m.projectedRate)}</span>
-            </span>
-          </div>
-        ))}
+        {(data.measures || []).map((m) => {
+          const drillable = !!(roster && roster.rows);
+          const isOpen = openDrill === m.measureId;
+          return (
+            <Fragment key={m.measureId}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', alignItems: 'center', gap: 8, borderBottom: isOpen ? 'none' : `1px solid ${C.soft}`, padding: '8px 12px', background: isOpen ? C.softer : undefined }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: C.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  {m.officialUnavailable ? <span style={{ fontSize: 11, color: C.faint }}>not scored</span> : <><Pts n={m.officialPoints} /><span style={{ fontSize: 11, color: C.faint }}>{fmtPct(m.officialRate)}</span></>}
+                </span>
+                {drillable ? (
+                  <button type="button" /* NO_TRACK */ onClick={() => setOpenDrill(isOpen ? null : m.measureId)}
+                    title="Drill into the residents on this measure"
+                    style={{ display: 'flex', alignItems: 'baseline', gap: 6, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+                    <Pts n={m.projectedPoints} muted={m.deferredToOfficial} />
+                    <span style={{ fontSize: 11, color: m.deferredToOfficial ? C.faint : C.muted }}>{fmtPct(m.projectedRate)}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: isOpen ? C.indigo : C.faint }}>{isOpen ? '▾' : 'view'}</span>
+                  </button>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <Pts n={m.projectedPoints} muted={m.deferredToOfficial} /><span style={{ fontSize: 11, color: m.deferredToOfficial ? C.faint : C.muted }}>{fmtPct(m.projectedRate)}</span>
+                  </span>
+                )}
+              </div>
+              {isOpen && drillable && (
+                <MeasureDrill measure={m} roster={roster} lastRoster={lastRoster} board={board}
+                  onOpenMeasure={onOpenMeasure} onClose={() => setOpenDrill(null)} />
+              )}
+            </Fragment>
+          );
+        })}
         <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', gap: 8, borderTop: `1px solid ${C.line}`, background: C.softer, padding: '8px 12px', fontSize: 13, fontWeight: 700, color: C.body }}>
           <span>Quality-measure points</span><span>{data.officialMdsPoints} pts</span><span>{data.projectedMdsPoints} pts</span>
         </div>
