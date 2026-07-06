@@ -13,6 +13,7 @@ import {
   projectedNum, ratePct, shortLabel, measureCode, clearGroupForEntry, displayMdsValue,
 } from '../lib/qm-view-model.js';
 import { fiveStarMeasure, pointsForRate, nextTier } from '../lib/qm-five-star.js';
+import { scoreFlQipMeasure, flQipBandLabel, flQipImprovementPct } from '../lib/fl-qip-scorer.js';
 import { buildDenominatorView, windowedRate } from '../lib/qm-denominator-view.js';
 import { quarterTrendForMeasure } from '../lib/qm-quarter-trend-view.js';
 import { CROSSING, CLEAR_GROUP, clearMicrocopy, crosserToDrill, fullName, prettyDate, quarterLabel, nextQuarterLabel, stayDayLabel } from '../lib/qm-tones.js';
@@ -26,7 +27,12 @@ const GROUP_DEFS = [
   { key: 'locked',    label: CLEAR_GROUP.locked.label,    sub: CLEAR_GROUP.locked.sub,    tone: CLEAR_GROUP.locked.tone },
 ];
 
-export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, onOpenResident, upcoming, quarterRates, rolling }) {
+export function MeasureDetail({ currentlyTriggering: data, measureId, scoreContext, qip, onBack, onOpenResident, upcoming, quarterRates, rolling }) {
+  // Opened from the FL QIP view — that program scores on percentile bands, not
+  // Five-Star star points, so the star-point estimates below would be wrong here.
+  // The RATE what-if is still correct (bands are driven by the rate), so we keep
+  // it and just replace the point block with a pointer back to the QIP table.
+  const isFlQip = scoreContext === 'fl_qip';
   const [wif, setWif] = useState(false);
   const [cleared, setCleared] = useState(() => new Set());
   const [prevented, setPrevented] = useState(() => new Set());
@@ -104,6 +110,29 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
   // assign — that's the windowed rate when loaded.
   const nt = spec ? nextTier(spec, windowed ? windowed.rate : rate.rate) : null;
   const ptsMoved = moved && spec != null && projPts !== curPts;
+
+  // FL QIP band what-if: recompute the measure's percentile-band points from its
+  // YEAR-TO-DATE rate as residents clear, bounded by the locked (banked-quarter)
+  // numerator — you can only move the current quarter's share. Adjusted measures
+  // defer to CMS's rate, so clearing residents can't move them (qipView = null).
+  const qipView = useMemo(() => {
+    if (!isFlQip || !qip || qip.deferred) return null;
+    const den = qip.den ?? 0;
+    const baseNum = qip.num ?? 0;
+    const clearN = wif ? cleared.size : 0;
+    const newNum = Math.max(qip.locked ?? 0, baseNum - clearN);
+    const newRate = den > 0 ? (newNum / den) * 100 : 0;
+    const yoy = flQipImprovementPct(newRate, qip.priorYearRate, qip.direction);
+    const scored = scoreFlQipMeasure(measureId, newRate, yoy != null ? yoy : qip.improvementPct);
+    const curPoints = qip.currentPoints ?? 0;
+    const newPoints = scored ? scored.points : curPoints;
+    const deltaPts = newPoints - curPoints;
+    return {
+      den, newNum, newRate, band: scored?.band, curPoints, newPoints, deltaPts,
+      newTotal: (qip.total ?? 0) + deltaPts, floor: qip.floor,
+      clearable: Math.max(0, baseNum - (qip.locked ?? 0)),
+    };
+  }, [isFlQip, qip, wif, cleared.size, measureId]);
 
   const toggleSet = (setter) => (id, value) => setter((prev) => {
     const next = new Set(prev);
@@ -186,7 +215,37 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, onBack, on
                 )}
               </div>
             )}
-            {spec ? (
+            {isFlQip ? (
+              qip && qip.deferred ? (
+                <div className="qmc-pts__hint qmc-text--amber" style={{ marginTop: '8px' }} title="Antipsychotic / pressure-ulcer / incontinence are CMS risk-/claims-adjusted; the QIP scores the adjusted rate, which the what-if can't move.">
+                  Florida QIP · CMS-adjusted — the official rate governs the points; clearing residents here won't move the QIP score.
+                </div>
+              ) : qipView ? (
+                <div style={{ marginTop: '10px', borderRadius: '8px', border: '1px solid var(--slate-200)', background: 'var(--slate-50)', padding: '8px 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '13px' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--slate-700)' }}>Florida QIP · year-to-date</span>
+                    <span style={{ color: 'var(--slate-500)' }}>{qipView.newRate.toFixed(2)}% · {qipView.newNum}/{qipView.den}</span>
+                    <span style={{ borderRadius: '999px', background: 'var(--slate-100)', padding: '1px 8px', fontSize: '11px', fontWeight: 700, color: 'var(--slate-600)' }}>{flQipBandLabel(qipView.band)}</span>
+                    <span style={{ fontWeight: 800 }}>
+                      {qipView.curPoints}{qipView.deltaPts !== 0 && <span className="qmc-text--emerald"> → {qipView.newPoints}</span>}
+                      <span style={{ fontWeight: 400, color: 'var(--slate-400)' }}> / 3 pts</span>
+                    </span>
+                  </div>
+                  {qipView.deltaPts !== 0 ? (
+                    <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--slate-600)' }}>
+                      Facility total {(qipView.newTotal - qipView.deltaPts).toFixed(1)} → <b>{qipView.newTotal.toFixed(1)}</b>
+                      <span className={qipView.newTotal >= qipView.floor ? 'qmc-text--emerald' : 'qmc-text--rose'}> · {qipView.newTotal >= qipView.floor ? `clears the ${qipView.floor} floor` : `${(qipView.floor - qipView.newTotal).toFixed(1)} below the ${qipView.floor} floor`}</span>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--slate-400)' }}>
+                      {wif ? `Mark residents Cleared below to model the band move (up to the ${qipView.clearable} you can still move this year).` : 'Turn on What-if to model clearing residents → band + points.'}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="qmc-pts__hint" style={{ marginTop: '8px' }}>Florida QIP — see the QIP table for points.</div>
+              )
+            ) : spec ? (
               <div className="qmc-pts">
                 <span className="qmc-pts__main">
                   ≈ {curPts}{ptsMoved && <span className="qmc-text--emerald"> → {projPts}</span>}
