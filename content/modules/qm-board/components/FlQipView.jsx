@@ -235,7 +235,7 @@ function TrackCard({ title, subtitle, total, floor, qualifying, toQualify, accen
 }
 
 /** The main Florida QIP view. Rendered inside a `.qmc` tone scope by the caller. */
-export function FlQipView({ facilityName, orgSlug }) {
+export function FlQipView({ facilityName, orgSlug, onOpenMeasure }) {
   const { data, loading, error, saveInputs, setDismiss } = useFlQip({ facilityName, orgSlug });
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -298,17 +298,41 @@ export function FlQipView({ facilityName, orgSlug }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', gap: 8, borderBottom: `1px solid ${C.line}`, background: C.softer, padding: '6px 12px' }}>
           <span style={th}>Measure</span><span style={th}>Official (CMS)</span><span style={th}>Projected (ours)</span>
         </div>
-        {(data.measures || []).map((m) => (
-          <div key={m.measureId} style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.soft}`, padding: '8px 12px' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: C.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              {m.officialUnavailable ? <span style={{ fontSize: 11, color: C.faint }}>not scored</span> : <><Pts n={m.officialPoints} /><span style={{ fontSize: 11, color: C.faint }}>{fmtPct(m.officialRate)}</span></>}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <Pts n={m.projectedPoints} muted={m.deferredToOfficial} /><span style={{ fontSize: 11, color: m.deferredToOfficial ? C.faint : C.muted }}>{fmtPct(m.projectedRate)}</span>
-            </span>
-          </div>
-        ))}
+        {(data.measures || []).map((m) => {
+          const official = m.officialUnavailable
+            ? <span style={{ fontSize: 11, color: C.faint }}>not scored</span>
+            : <><Pts n={m.officialPoints} /><span style={{ fontSize: 11, color: C.faint }}>{fmtPct(m.officialRate)}</span></>;
+          const projected = <><Pts n={m.projectedPoints} muted={m.deferredToOfficial} /><span style={{ fontSize: 11, color: m.deferredToOfficial ? C.faint : C.muted }}>{fmtPct(m.projectedRate)}</span></>;
+          const row = { display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', alignItems: 'center', gap: 8, borderBottom: `1px solid ${C.soft}`, padding: '8px 12px', fontFamily: 'inherit', width: '100%' };
+          // Click a measure → the SAME MeasureDetail surface Five-Star opens
+          // (residents + rate + what-if). onOpenMeasure is hosted by QMBoard.
+          if (!onOpenMeasure) {
+            return (
+              <div key={m.measureId} style={row}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: C.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>{official}</span>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>{projected}</span>
+              </div>
+            );
+          }
+          return (
+            <button key={m.measureId} type="button" data-track="qm_drill_in" data-track-prop-measure-code={m.measureId} data-track-prop-view="fl_qip"
+              onClick={() => onOpenMeasure(m.measureId, { scoreContext: 'fl_qip', qip: {
+                num: m.projectedNumerator, den: m.projectedDenominator, locked: m.lockedNumerator,
+                rate: m.projectedRate, priorYearRate: m.priorYearRate, direction: m.direction,
+                improvementPct: m.improvementPct, currentPoints: m.projectedPoints,
+                total: data.projectedTotalPoints, floor: data.floor, deferred: m.deferredToOfficial,
+              } })} title="Open this measure's residents"
+              style={{ ...row, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, fontSize: 13, fontWeight: 500, color: C.body }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
+                <span style={{ flexShrink: 0, fontSize: 12, color: C.faint }}>›</span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>{official}</span>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>{projected}</span>
+            </button>
+          );
+        })}
         <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr 1fr', gap: 8, borderTop: `1px solid ${C.line}`, background: C.softer, padding: '8px 12px', fontSize: 13, fontWeight: 700, color: C.body }}>
           <span>Quality-measure points</span><span>{data.officialMdsPoints} pts</span><span>{data.projectedMdsPoints} pts</span>
         </div>
