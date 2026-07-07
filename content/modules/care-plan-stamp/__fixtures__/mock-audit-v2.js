@@ -789,8 +789,65 @@ const fixture = {
       },
     ],
 
-    toRemove: [],
-    toCheck: [],
+    // toRemove: existing focuses whose driving condition resolved / was
+    // discontinued. Each carries pccFocusId + pccFocusStdItemId (to resolve in
+    // PCC) plus a plain-language `reason`. Drug names are allowed inside the
+    // reason (it cites the discontinued order); never inside a stamped
+    // intervention. Transcribed from careplan-v8-sidebar-MOCK.html (F[3], F[4]).
+    toRemove: [
+      {
+        focusId: 'pcc-focus-infection',
+        pccFocusId: 'pcc-focus-infection',
+        pccFocusStdItemId: 'std-infection',
+        caa: 'infection_control',
+        caaName: 'Infection Control',
+        focusText: 'The resident is at risk for infection related to sepsis.',
+        reason: 'Resolved. A41.9 sepsis marked resolved 6/25 · Levofloxacin discontinued 6/28. No active infection diagnosis or antibiotic remains — nothing to keep this focus on the plan.',
+      },
+      {
+        focusId: 'pcc-focus-anticoag',
+        pccFocusId: 'pcc-focus-anticoag',
+        pccFocusStdItemId: 'std-anticoag',
+        caa: 'anticoagulation',
+        caaName: 'Anticoagulation',
+        focusText: 'The resident is on anticoagulant therapy related to atrial fibrillation.',
+        reason: 'Discontinued. Apixaban (Eliquis) 5 mg order discontinued 6/29; no active anticoagulant remains.',
+      },
+    ],
+
+    // toCheck: ambiguous focuses the engine won't auto-remove — nurse's call.
+    // Same read-only shape as toRemove plus a `kind` (history_focus) so the UI
+    // can label it "your judgment".
+    toCheck: [
+      {
+        focusId: 'pcc-focus-cdiff',
+        pccFocusId: 'pcc-focus-cdiff',
+        pccFocusStdItemId: 'std-cdiff',
+        caa: 'elimination_gi',
+        caaName: 'Elimination / GI',
+        kind: 'history_focus',
+        focusText: 'History of Clostridium difficile colitis.',
+        detail: 'Ambiguous — your call. A04.7 resolved 5/30, but the focus is written “history of.” We won’t auto-remove a historical focus; keep it if your policy tracks C. diff history.',
+      },
+    ],
+
+    // dropped: focuses the AI review+fill pass REMOVED as over-fires before
+    // returning the proposal. Today's payload is {ruleId, description, reason}
+    // only (no stampable focus) → the ext renders an acknowledge-first "we
+    // removed N, tap to confirm" list (never silent). When the backend later
+    // ships a full `focus` here, the ext's Re-add path lights up automatically.
+    dropped: [
+      {
+        ruleId: 'dx.multiple_sclerosis',
+        description: 'Resident has impaired mobility related to multiple sclerosis',
+        reason: 'Over-fired: gabapentin here treats diabetic neuropathy, not MS. No multiple-sclerosis diagnosis on the chart — the pain focus already covers the neuropathy.',
+      },
+      {
+        ruleId: 'universal.activities',
+        description: 'Standard activities / recreation focus',
+        reason: 'Removed as a blind universal — no dx, order, MDS, or UDA signal indicates an activities need for this resident.',
+      },
+    ],
 
     // One entry per care area present in toAdd/onPlan.
     byCAA: [
