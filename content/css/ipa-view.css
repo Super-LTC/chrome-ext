@@ -82,13 +82,39 @@
 .ipa-netbox__hipps b { color: var(--super-gray-900, #111827); }
 .ipa-modal__note { font-size: 11px; color: var(--super-gray-500, #6b7280); margin-top: 8px; }
 
-.ipa-ledger { margin-top: 14px; }
-.ipa-ledger h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
+.ipa-ledger { margin-top: 16px; }
+.ipa-ledger h4 { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
+.ipa-ledger h4::before { content: ''; width: 7px; height: 7px; border-radius: 999px; background: currentColor; flex: none; }
 .ipa-ledger--gain h4 { color: #059669; }
 .ipa-ledger--keep h4 { color: #0369a1; }
 .ipa-ledger--lose h4 { color: #b45309; }
+
+/* Trigger block — one gained MDS item (the thing driving the gain) + its evidence.
+   The item is the headline so it's obvious what's causing the change. */
+.ipa-trigger { margin-bottom: 16px; }
+.ipa-trigger:last-child { margin-bottom: 0; }
+.ipa-trigger__head { margin-bottom: 8px; }
+.ipa-trigger__main { display: flex; align-items: center; gap: 8px; }
+.ipa-trigger__label { font-size: 15px; font-weight: 700; color: var(--super-gray-900, #111827); line-height: 1.25; }
+.ipa-trigger__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 4px; }
+.ipa-trigger__code { font-family: var(--super-font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 600; color: var(--super-gray-600, #4b5563); background: var(--super-gray-100, #f3f4f6); border-radius: 5px; padding: 2px 7px; }
+.ipa-trigger__seen { font-size: 11px; color: var(--super-gray-400, #9ca3af); white-space: nowrap; }
+
+/* Evidence rows — plain, dated proof lines nested under the item */
+.ipa-ev-list { display: flex; flex-direction: column; gap: 6px; }
+.ipa-ev { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 7px; background: var(--super-gray-50, #f8fafc); cursor: default; font: inherit; }
+.ipa-ev__meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.ipa-ev__type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--super-gray-400, #9ca3af); }
+.ipa-ev__date { font-size: 11px; color: var(--super-gray-400, #9ca3af); }
+.ipa-ev__text { display: block; font-size: 13px; line-height: 1.5; color: var(--super-gray-700, #374151); white-space: pre-line; }
+
+/* Linkable evidence — opens the source in the in-extension viewer */
+.ipa-ev--link { cursor: pointer; transition: background .12s; }
+.ipa-ev--link:hover { background: var(--super-gray-100, #f3f4f6); }
+.ipa-ev__go { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--super-primary, #2563eb); white-space: nowrap; }
+.ipa-ev--link:hover .ipa-ev__go { text-decoration: underline; }
+
 .ipa-lrow { display: flex; gap: 9px; padding: 8px 10px; border-radius: 8px; margin-bottom: 5px; font-size: 12px; align-items: flex-start; }
-.ipa-ledger--gain .ipa-lrow { background: #f0fdf4; }
 .ipa-ledger--keep .ipa-lrow { background: #f0f9ff; }
 .ipa-ledger--lose .ipa-lrow { background: #fffbeb; }
 .ipa-lrow__ic { flex: none; width: 14px; text-align: center; }
@@ -97,7 +123,7 @@
 .ipa-admin { font-size: 11px; margin-top: 1px; }
 .ipa-admin--on { color: #059669; }
 .ipa-admin--off { color: #b45309; font-weight: 600; }
-.ipa-verify { display: inline-block; font-size: 10px; color: #b45309; background: #fef3c7; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; }
+.ipa-verify { display: inline-block; font-size: 10px; color: #b45309; background: #fef3c7; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
 
 .ipa-modal__verify { font-size: 11px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; margin-top: 14px; }
 .ipa-modal__verify--loss { color: #7f1d1d; background: #fef2f2; border-color: #fecaca; }

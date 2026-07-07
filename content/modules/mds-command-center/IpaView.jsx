@@ -41,6 +41,54 @@ function gainSummary(c) {
   return (c.triggers || []).map((t) => t.label).join(' · ');
 }
 
+// ── Evidence helpers ──
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Format an ISO date (YYYY-MM-DD…) as "Jul 6" — parse the parts directly to avoid TZ drift.
+function fmtDate(iso) {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${MONTHS[+m[2] - 1]} ${+m[3]}`;
+}
+
+const SOURCE_LABELS = {
+  order: 'Order',
+  'progress-note': 'Progress note',
+  progress_note: 'Progress note',
+  document: 'Document',
+  uda: 'Assessment',
+  mar: 'MAR',
+  tar: 'TAR',
+};
+
+function sourceLabel(t) {
+  if (!t) return 'Source';
+  return SOURCE_LABELS[t] || (t.charAt(0).toUpperCase() + t.slice(1).replace(/[-_]/g, ' '));
+}
+
+// Open the underlying source in the shared in-extension evidence viewer.
+// Orders → the MAR/administration modal; anything else falls back to the generic dispatcher.
+function openEvidenceSource(e) {
+  if (!e || !e.sourceId || e.linkable === false) return;
+  track('ipa_evidence_open', { sourceType: e.sourceType });
+  if (e.sourceType === 'order' && typeof window.showAdministrationModal === 'function') {
+    window.showAdministrationModal(e.sourceId);
+    return;
+  }
+  if (typeof window.openEvidence === 'function') {
+    window.openEvidence({
+      sourceType: e.sourceType,
+      sourceId: e.sourceId,
+      id: e.sourceId,
+      evidenceId: e.sourceId,
+      text: e.text,
+      quote: e.text,
+    });
+  }
+}
+
 function keepsLine(c) {
   const stays = (c.loseItLedger || []).filter((l) => l.stays);
   if (!stays.length) return null;
@@ -97,16 +145,43 @@ function ReviewModal({ candidate, onClose, onActed }) {
 
           {gains.length > 0 && (
             <div class="ipa-ledger ipa-ledger--gain">
-              <h4>▲ You'll gain</h4>
+              <h4>You'll gain</h4>
               {gains.map((t) => (
-                <div class="ipa-lrow" key={t.mdsItem}>
-                  <span class="ipa-lrow__ic">✓</span>
-                  <span class="ipa-lrow__txt">
-                    <b>{t.label}{t.needsNurseVerify && <span class="ipa-verify">nurse-verify</span>}</b>
-                    {(t.evidence || []).slice(0, 2).map((e, i) => (
-                      <span class="ipa-lrow__ev" key={i}>{e.text}</span>
-                    ))}
-                  </span>
+                <div class="ipa-trigger" key={t.mdsItem}>
+                  <div class="ipa-trigger__head">
+                    <div class="ipa-trigger__main">
+                      <span class="ipa-trigger__label">{t.label}</span>
+                      {t.needsNurseVerify && <span class="ipa-verify">nurse-verify</span>}
+                    </div>
+                    <div class="ipa-trigger__meta">
+                      {t.mdsItem && <span class="ipa-trigger__code">Code {t.mdsItem}</span>}
+                      {t.firstSeen && <span class="ipa-trigger__seen">new since {fmtDate(t.firstSeen)}</span>}
+                    </div>
+                  </div>
+                  {(t.evidence || []).length > 0 && (
+                    <div class="ipa-ev-list">
+                      {(t.evidence || []).map((e, i) => {
+                        const linkable = e.sourceId && e.linkable !== false;
+                        return (
+                          <button
+                            class={`ipa-ev${linkable ? ' ipa-ev--link' : ''}`}
+                            key={i}
+                            type="button"
+                            disabled={!linkable}
+                            data-track={linkable ? 'ipa_evidence_open' : undefined}
+                            onClick={linkable ? () => openEvidenceSource(e) : undefined}
+                          >
+                            <span class="ipa-ev__meta">
+                              <span class="ipa-ev__type">{sourceLabel(e.sourceType)}</span>
+                              {e.date && <span class="ipa-ev__date">{fmtDate(e.date)}</span>}
+                              {linkable && <span class="ipa-ev__go">View</span>}
+                            </span>
+                            <span class="ipa-ev__text">{e.text}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -114,7 +189,7 @@ function ReviewModal({ candidate, onClose, onActed }) {
 
           {keeps.length > 0 && (
             <div class="ipa-ledger ipa-ledger--keep">
-              <h4>■ Stays counted</h4>
+              <h4>Stays counted</h4>
               {keeps.map((l) => (
                 <div class="ipa-lrow" key={l.mdsItem}>
                   <span class="ipa-lrow__ic">✓</span>
@@ -126,7 +201,7 @@ function ReviewModal({ candidate, onClose, onActed }) {
 
           {drops.length > 0 && (
             <div class="ipa-ledger ipa-ledger--lose">
-              <h4>▼ Would drop off</h4>
+              <h4>Would drop off</h4>
               {drops.map((l) => (
                 <div class="ipa-lrow" key={l.mdsItem}>
                   <span class="ipa-lrow__ic">✕</span>
