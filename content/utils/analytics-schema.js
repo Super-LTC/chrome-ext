@@ -227,6 +227,10 @@ export const EVENT_SCHEMA = {
   care_plan_audit_remove_kept_click: [],
   care_plan_audit_commit: ['source'],
   care_plan_audit_commit_stamped: ['scope', 'n_focuses', 'n_goals', 'n_interventions'],
+  // === Care Plan V8 worklist === (patient_id / focus_id stripped by guardrail)
+  care_plan_audit_focus_kept: [],                      // Remove/Check "keep on plan"
+  care_plan_audit_dropped_confirmed: ['rule_id'],      // acknowledged a dropped[] over-fire
+  care_plan_audit_dropped_readded: ['rule_id'],        // re-added a dropped[] focus
 
   // === F-Tag Prevention ===
   // `ftag` is the survey tag code (e.g. "F684") — categorical.
