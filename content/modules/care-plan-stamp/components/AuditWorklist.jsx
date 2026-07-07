@@ -200,7 +200,7 @@ export const AuditWorklist = ({
                 </button>
                 {droppedOpen && model.dropped.map((item) => {
                   const rowSel = selected?.kind === 'dropped' && selected.key === item._rowId;
-                  const ack = ackSet.has(item.ruleId);
+                  const ack = ackSet.has(item.ruleId || item._rowId);
                   return (
                     <button
                       key={item._rowId}
@@ -246,7 +246,7 @@ export const AuditWorklist = ({
               status={rStatus[selItem.focusId]} kept={keptSet.has(selItem.focusId) || keptSet.has(selItem._rowId)}
               stamping={stamping} onResolve={onResolve} onKeep={onKeep} />
           ) : selected.kind === 'dropped' ? (
-            <DroppedDetail item={selItem} acknowledged={ackSet.has(selItem.ruleId)}
+            <DroppedDetail item={selItem} acknowledged={ackSet.has(selItem.ruleId || selItem._rowId)}
               onReAdd={onReAddDropped} onConfirm={onConfirmDropped} />
           ) : (
             <CoveredDetail item={selItem} areaLabel={model.areaOf(selItem)} />

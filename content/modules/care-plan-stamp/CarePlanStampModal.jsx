@@ -850,11 +850,13 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // "Confirm removal" — acknowledge a dropped[] over-fire. The row dims but
   // stays visible (never silent); no PCC write (the focus was never added).
   const _confirmDropped = useCallback((item) => {
-    if (!item?.ruleId) return;
-    setAcknowledgedDropped((prev) => new Set(prev).add(item.ruleId));
+    if (!item) return;
+    // Key on ruleId when present, else the always-stamped _rowId — so a dropped
+    // item missing a ruleId can still be acknowledged (never a silent no-op).
+    setAcknowledgedDropped((prev) => new Set(prev).add(item.ruleId || item._rowId));
     window.SuperAnalytics?.track?.('care_plan_audit_dropped_confirmed', {
       patient_id: patientId,
-      rule_id: item.ruleId,
+      rule_id: item.ruleId || null,
     });
   }, [patientId]);
 
@@ -1092,7 +1094,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               linkageCounts={linkageCounts}
               stampedAddIds={stampedAddIds}
               skippedAddIds={skippedAddIds}
-              onStampAll={isV2(audit) ? () => _commitAuditAdds() : undefined}
               onEnterStep={(step, opts) => {
                 setComprehensiveStep(step);
                 const bucket = opts?.bucket || null;
