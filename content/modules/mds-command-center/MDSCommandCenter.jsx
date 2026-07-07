@@ -23,6 +23,8 @@ import { useTrending } from '../care-plan-coverage/hooks/useTrending.js';
 import { ComplianceView } from '../care-plan-coverage/ComplianceView.jsx';
 import { MdsPlanner } from '../mds-planner/MdsPlanner.jsx';
 import { RoundingReports } from '../rounding-reports/RoundingReports.jsx';
+import { IpaView } from './IpaView.jsx';
+import { useIpaOpportunities } from './hooks/useIpaOpportunities.js';
 import { RevokeQueryModal } from './RevokeQueryModal.jsx';
 import { track } from '../../utils/analytics.js';
 import { TrackedButton } from '../../components/TrackedButton.jsx';
@@ -657,6 +659,17 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
   // Trending data for compliance chart
   const { data: trendingData } = useTrending({ facilityName, orgSlug, enabled: true });
 
+  // IPA / new-quarterly opportunities — gated per-org (enabled=false → tab hidden).
+  const {
+    candidates: ipaCandidates,
+    counts: ipaCounts,
+    enabled: ipaEnabled,
+    loading: ipaLoading,
+    error: ipaError,
+    retry: ipaRetry,
+  } = useIpaOpportunities({ facilityName, orgSlug });
+  const ipaCount = ipaCounts?.recommended || 0;
+
   // Command Center is always facility-wide — no patient scoping even when
   // opened from a patient page. The Certs badge and content must match.
 
@@ -775,6 +788,8 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
           certCount={certCount}
           certHasUnseen={certHasUnseen}
           certsEnabled={certsEnabled}
+          ipaEnabled={ipaEnabled}
+          ipaCount={ipaCount}
           complianceGaps={complianceGaps}
           payerFilter={payerFilter}
           onPayerFilterChange={setPayerFilter}
@@ -886,6 +901,17 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
             <RoundingReports
               facilityName={facilityName}
               orgSlug={orgSlug}
+            />
+          )}
+
+          {/* IPA / new-quarterly opportunities */}
+          {activeView === 'ipa' && (
+            <IpaView
+              candidates={ipaCandidates}
+              counts={ipaCounts}
+              loading={ipaLoading}
+              error={ipaError}
+              onRefetch={ipaRetry}
             />
           )}
 

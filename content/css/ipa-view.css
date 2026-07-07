@@ -1,0 +1,107 @@
+/* IPA / new-quarterly opportunities — MDS Command Center tab.
+   Scoped under .ipa-view; modal is portalled to body so it's scoped by its own class. */
+
+.ipa-view { display: flex; flex-direction: column; gap: 10px; }
+.ipa-empty { padding: 32px 16px; text-align: center; color: var(--super-gray-500, #6b7280); font-size: 13px; }
+.ipa-link { background: none; border: none; color: var(--super-primary, #2563eb); cursor: pointer; text-decoration: underline; font-size: 13px; }
+
+/* Tallies */
+.ipa-tallies { display: flex; gap: 8px; }
+.ipa-tally { flex: 1; background: var(--super-gray-50, #f8fafc); border: 1px solid var(--super-gray-200, #e5e7eb); border-radius: 8px; padding: 8px; text-align: center; }
+.ipa-tally b { display: block; font-size: 18px; color: var(--super-gray-900, #111827); }
+.ipa-tally span { font-size: 10px; color: var(--super-gray-500, #6b7280); }
+.ipa-tally--good b { color: #059669; }
+.ipa-tally--warn b { color: #d97706; }
+
+.ipa-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--super-gray-500, #6b7280); margin: 8px 2px 2px; }
+
+/* Card */
+.ipa-card { background: #fff; border: 1px solid var(--super-gray-200, #e5e7eb); border-radius: 10px; padding: 12px; }
+.ipa-card--loss { background: #fdfdfd; border-color: #f1f1f3; }
+.ipa-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ipa-card__who { font-weight: 600; font-size: 13px; color: var(--super-gray-900, #111827); }
+
+/* Lever pill — the IPA vs Qtr signal */
+.ipa-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ipa-pill--ipa { background: #e0f2fe; color: #0369a1; }
+.ipa-pill--qtr { background: #ede9fe; color: #6d28d9; }
+.ipa-pill--review { background: var(--super-gray-100, #f3f4f6); color: var(--super-gray-600, #4b5563); }
+
+.ipa-card__impact { display: flex; align-items: baseline; gap: 6px; margin: 8px 0 4px; }
+.ipa-card__big { font-size: 20px; font-weight: 800; color: var(--super-gray-400, #9ca3af); }
+.ipa-card__impact--pos .ipa-card__big { color: #059669; }
+.ipa-card__impact--neg .ipa-card__big { color: #b91c1c; }
+.ipa-card__unit { font-size: 12px; font-weight: 600; color: var(--super-gray-500, #6b7280); }
+.ipa-card__impact--pos .ipa-card__unit { color: #059669; }
+.ipa-card__impact--neg .ipa-card__unit { color: #b91c1c; }
+.ipa-card__hipps { margin-left: auto; font-size: 11px; color: var(--super-gray-400, #9ca3af); font-family: var(--super-font-mono, ui-monospace, monospace); }
+
+.ipa-card__gain { font-size: 12px; margin: 4px 0; color: var(--super-gray-700, #374151); }
+.ipa-card__gain b { color: var(--super-gray-900, #111827); }
+.ipa-card__keeps { font-size: 11px; color: #059669; margin-top: 4px; }
+.ipa-card__reason { font-size: 11px; color: #7c2d12; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
+
+.ipa-card__actions { display: flex; gap: 6px; margin-top: 10px; align-items: stretch; position: relative; }
+
+.ipa-btn { flex: 1; font-size: 12px; font-weight: 600; padding: 7px; border-radius: 7px; border: 1px solid var(--super-gray-300, #d1d5db); background: #fff; cursor: pointer; color: var(--super-gray-700, #374151); }
+.ipa-btn:hover { background: var(--super-gray-50, #f8fafc); }
+.ipa-btn--primary { background: var(--super-gray-900, #0f172a); color: #fff; border-color: var(--super-gray-900, #0f172a); }
+.ipa-btn--primary:hover { background: #1e293b; }
+.ipa-btn:disabled { opacity: .6; cursor: default; }
+
+/* Kebab overflow menu */
+.ipa-kebab-wrap { flex: none; position: relative; }
+.ipa-kebab { width: 32px; height: 100%; font-size: 15px; line-height: 1; color: var(--super-gray-400, #9ca3af); background: #fff; border: 1px solid var(--super-gray-300, #d1d5db); border-radius: 7px; cursor: pointer; }
+.ipa-menu { position: absolute; right: 0; bottom: 40px; background: #fff; border: 1px solid var(--super-gray-200, #e5e7eb); border-radius: 8px; box-shadow: var(--super-shadow-lg, 0 8px 24px rgba(15,23,42,.16)); padding: 4px; min-width: 160px; z-index: 20; }
+.ipa-menu button { display: block; width: 100%; text-align: left; font-size: 12px; padding: 7px 9px; border: none; background: #fff; border-radius: 6px; cursor: pointer; color: var(--super-gray-700, #374151); }
+.ipa-menu button:hover { background: var(--super-gray-100, #f3f4f6); }
+.ipa-menu__hint { font-size: 10px; color: var(--super-gray-400, #9ca3af); padding: 5px 9px 4px; line-height: 1.3; border-top: 1px solid var(--super-gray-100, #f3f4f6); margin-top: 2px; }
+
+/* No-change (collapsed) */
+.ipa-nochange { margin-top: 4px; }
+.ipa-nochange__toggle { width: 100%; text-align: left; font-size: 12px; color: var(--super-gray-500, #6b7280); background: var(--super-gray-50, #f8fafc); border: 1px dashed var(--super-gray-200, #e5e7eb); border-radius: 8px; padding: 9px 12px; cursor: pointer; }
+
+/* ── Review modal ── */
+.ipa-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 2147483000; }
+.ipa-modal { width: 100%; max-width: 440px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: var(--super-shadow-xl, 0 20px 60px rgba(15,23,42,.4)); overflow: hidden; }
+.ipa-modal__head { flex: none; background: var(--super-gray-900, #0f172a); color: #fff; padding: 16px 18px; position: relative; }
+.ipa-modal__head--loss { background: #7f1d1d; }
+.ipa-modal__x { position: absolute; top: 12px; right: 14px; background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
+.ipa-modal__who { font-size: 16px; font-weight: 600; }
+.ipa-modal__sub { margin-top: 6px; }
+.ipa-modal__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 18px; }
+
+.ipa-netbox { display: flex; align-items: center; gap: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 12px 14px; }
+.ipa-netbox--flat { background: var(--super-gray-50, #f8fafc); border-color: var(--super-gray-200, #e5e7eb); }
+.ipa-netbox--loss { background: #fef2f2; border-color: #fecaca; }
+.ipa-netbox__n { font-size: 26px; font-weight: 800; color: #059669; line-height: 1; }
+.ipa-netbox--loss .ipa-netbox__n { color: #b91c1c; }
+.ipa-netbox--flat .ipa-netbox__n { color: var(--super-gray-500, #6b7280); }
+.ipa-netbox__u { font-size: 11px; color: var(--super-gray-500, #6b7280); margin-top: 2px; }
+.ipa-netbox__hipps { margin-left: auto; text-align: right; font-family: var(--super-font-mono, ui-monospace, monospace); font-size: 12px; color: var(--super-gray-500, #6b7280); }
+.ipa-netbox__hipps b { color: var(--super-gray-900, #111827); }
+.ipa-modal__note { font-size: 11px; color: var(--super-gray-500, #6b7280); margin-top: 8px; }
+
+.ipa-ledger { margin-top: 14px; }
+.ipa-ledger h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
+.ipa-ledger--gain h4 { color: #059669; }
+.ipa-ledger--keep h4 { color: #0369a1; }
+.ipa-ledger--lose h4 { color: #b45309; }
+.ipa-lrow { display: flex; gap: 9px; padding: 8px 10px; border-radius: 8px; margin-bottom: 5px; font-size: 12px; align-items: flex-start; }
+.ipa-ledger--gain .ipa-lrow { background: #f0fdf4; }
+.ipa-ledger--keep .ipa-lrow { background: #f0f9ff; }
+.ipa-ledger--lose .ipa-lrow { background: #fffbeb; }
+.ipa-lrow__ic { flex: none; width: 14px; text-align: center; }
+.ipa-lrow__txt b { display: block; color: var(--super-gray-900, #111827); }
+.ipa-lrow__ev { display: block; font-size: 11px; color: var(--super-gray-500, #6b7280); margin-top: 1px; }
+.ipa-admin { font-size: 11px; margin-top: 1px; }
+.ipa-admin--on { color: #059669; }
+.ipa-admin--off { color: #b45309; font-weight: 600; }
+.ipa-verify { display: inline-block; font-size: 10px; color: #b45309; background: #fef3c7; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; }
+
+.ipa-modal__verify { font-size: 11px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; margin-top: 14px; }
+.ipa-modal__verify--loss { color: #7f1d1d; background: #fef2f2; border-color: #fecaca; }
+
+.ipa-modal__actions { flex: none; display: flex; gap: 8px; background: #fff; border-top: 1px solid var(--super-gray-100, #f3f4f6); padding: 12px 18px; }
+.ipa-modal__actions .ipa-btn { padding: 10px; }
+.ipa-modal__done { flex: 1; font-size: 12px; color: #059669; text-align: center; padding: 8px; font-weight: 600; }

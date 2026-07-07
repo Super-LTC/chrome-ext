@@ -41,6 +41,8 @@ export function CommandCenterHeader({
   certCount,
   certHasUnseen,
   certsEnabled,
+  ipaEnabled,
+  ipaCount,
   complianceGaps,
   payerFilter,
   onPayerFilterChange,
@@ -136,6 +138,16 @@ export function CommandCenterHeader({
         >
           Assessments
         </button>
+        {ipaEnabled && (
+          <button
+            class={`mds-cc__view-tab${activeView === 'ipa' ? ' mds-cc__view-tab--active' : ''}`}
+            onClick={() => onViewChange('ipa')}
+            title="IPA (Medicare A) and new-quarterly (Medicaid case-mix) payment opportunities"
+          >
+            IPA
+            {ipaCount > 0 && <span class="mds-cc__view-tab-badge">{ipaCount}</span>}
+          </button>
+        )}
         <button
           class={`mds-cc__view-tab${activeView === 'queries' ? ' mds-cc__view-tab--active' : ''}`}
           onClick={() => onViewChange('queries')}
