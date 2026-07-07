@@ -277,6 +277,7 @@ const AddDetail = ({
         ) : isSkipped ? (
           <Fragment>
             <span className="cpas-wl__skip-tag">− skipped</span>
+            {/* NO_TRACK: parent's onReopen (_reopenSkipped) owns telemetry. */}
             <button type="button" className="cpas-btn cpas-btn--ghost" onClick={() => onReopen?.(item)}>Include</button>
           </Fragment>
         ) : (
@@ -290,6 +291,7 @@ const AddDetail = ({
             >
               ✓ Add this focus
             </button>
+            {/* NO_TRACK: parent's onSkip (_skipAuditAddItem) owns telemetry. */}
             <button type="button" className="cpas-btn cpas-btn--ghost" disabled={stamping} onClick={() => onSkip?.(item)}>Skip</button>
             {blocked && <span className="cpas-wl__hint">fill {touches} amber slot{touches === 1 ? '' : 's'} first</span>}
           </Fragment>
@@ -362,9 +364,11 @@ const ResolveDetail = ({ item, kind, areaLabel, status, kept, stamping, onResolv
         </div>
       ) : (
         <div className="cpas-wl__d-actions">
+          {/* NO_TRACK: parent's onResolve (_resolveAuditItem) owns telemetry. */}
           <button type="button" className="cpas-wl__danger" disabled={stamping || status === 'pending'} onClick={() => onResolve?.(item)}>
             {status === 'pending' ? 'Removing…' : 'Remove this focus'}
           </button>
+          {/* NO_TRACK: parent's onKeep (_keepFocus) owns telemetry. */}
           <button type="button" className="cpas-btn cpas-btn--ghost" disabled={stamping} onClick={() => onKeep?.(item)}>Keep on plan</button>
           {kind === 'check' && <span className="cpas-wl__hint cpas-wl__hint--chk">your judgment</span>}
         </div>
@@ -390,10 +394,12 @@ const DroppedDetail = ({ item, acknowledged, onReAdd, onConfirm }) => {
       ) : (
         <div className="cpas-wl__d-actions">
           {canReAdd && (
+            // NO_TRACK: parent's onReAdd (_reAddDropped) owns telemetry.
             <button type="button" className="cpas-wl__primary" onClick={() => onReAdd?.(item)} title="The review was wrong — put this focus back">
               Re-add to plan
             </button>
           )}
+          {/* NO_TRACK: parent's onConfirm (_confirmDropped) owns telemetry. */}
           <button type="button" className="cpas-btn cpas-btn--ghost" onClick={() => onConfirm?.(item)}>Confirm removal</button>
           {!canReAdd && <span className="cpas-wl__hint">review only — nothing added to the plan</span>}
         </div>
