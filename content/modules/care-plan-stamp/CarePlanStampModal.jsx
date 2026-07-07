@@ -249,6 +249,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           (audit.toRemove || []).forEach((it, i) => { it._rowId = `remove-${i}-${it.focusId || 'na'}`; });
           (audit.onPlan || []).forEach((it, i) => { it._rowId = `onplan-${i}-${it.ruleId || it.focusId || 'na'}`; });
           (audit.skipped || []).forEach((it, i) => { it._rowId = `skip-${i}-${it.ruleId || it.caa || 'na'}`; });
+          (audit.dropped || []).forEach((it, i) => { it._rowId = `dropped-${i}-${it.ruleId || 'na'}`; });
           setAudit(audit);
           const a = audit;
           // Note: unlike the Initial wizard, the audit rail hides skipped items,
@@ -1391,6 +1392,22 @@ function _auditNeedsInputByRowId(audit, auditFocusStates) {
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
     const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
     m.set(it._rowId, flatBlank || tokenBlank);
+  });
+  return m;
+}
+
+// Per-row amber-touches COUNT for the V8 worklist. Mirrors _auditNeedsInputByRowId
+// but returns a number (unfilled token-key count, or 1 for a flat `___` blank) so
+// the worklist can show a per-focus badge + a summed "fill N amber slots" total.
+function _auditTouchesByRowId(audit, auditFocusStates) {
+  const m = new Map();
+  (audit?.toAdd || []).forEach((it) => {
+    if (!it.focus) { m.set(it._rowId, 0); return; }
+    const state = auditFocusStates[it.ruleId] || _emptyFocusState();
+    const keys = _focusUnfilledTokenKeys(it.focus, state.tokenValues);
+    if (keys.length > 0) { m.set(it._rowId, keys.length); return; }
+    const composed = _composeFocus(it.focus, state);
+    m.set(it._rowId, _descNeedsInput(composed.description, it.focus.descriptionSegments) ? 1 : 0);
   });
   return m;
 }
