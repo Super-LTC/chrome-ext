@@ -10,6 +10,8 @@ import { areaLabel } from './careArea.js';
 // Round 13: Verify dropped — AuditVerifyPane deleted.
 import { AuditRemovePane } from './components/AuditRemovePane.jsx';
 import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.jsx';
+import { isV2, devForceMock } from './v2-flag.js';
+import { AuditWorklist } from './components/AuditWorklist.jsx';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -96,6 +98,13 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // Care-area filter — set when the nurse clicks a coverage-grid chip; scopes
   // the rail to one care area (covered + to-add together). Null otherwise.
   const [caaFilter, setCaaFilter] = useState(null);
+  // -------- V8 worklist state --------
+  // focusIds the nurse chose to "keep on plan" (a Remove/Check dismissal — the
+  // engine was right to flag it, but the nurse's judgment is to leave it).
+  const [keptIds, setKeptIds] = useState(new Set());
+  // ruleIds of dropped[] over-fires the nurse acknowledged (tapped "Confirm
+  // removal"). Acknowledged rows dim but STAY visible — never silently dropped.
+  const [acknowledgedDropped, setAcknowledgedDropped] = useState(new Set());
 
   // -------- Assessment cross-check header count --------
   // audit.assessmentLinkages cross-checks each UDA/MDS assessment against the
@@ -140,6 +149,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setComprehensiveStep('dashboard');
     setAddBucketFilter(null);
     setCaaFilter(null);
+    setKeptIds(new Set());
+    setAcknowledgedDropped(new Set());
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -189,14 +200,23 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
 
         if (mode === 'comprehensive') {
           // Comprehensive Review path — full audit of the existing plan.
-          const auditResp = await window.CarePlanAuditAPI.fetchAudit({
-            patientId,
-            facilityName,
-            orgSlug,
-            patientName,
-            orgDropdowns,
-            existingFocusTexts: fullPlan.focusTexts,
-          });
+          // Under the dev mock override, swap the network call for the bundled
+          // fixture. Dynamic import keeps the (large) fixture out of the main
+          // chunk for prod users — it only loads when devForceMock() is set.
+          let auditResp;
+          if (devForceMock()) {
+            const mod = await import('./__fixtures__/mock-audit-v2.js');
+            auditResp = mod.default;
+          } else {
+            auditResp = await window.CarePlanAuditAPI.fetchAudit({
+              patientId,
+              facilityName,
+              orgSlug,
+              patientName,
+              orgDropdowns,
+              existingFocusTexts: fullPlan.focusTexts,
+            });
+          }
           if (cancelled) return;
           setCareplanId(cpId);
           setMiniToken(token);
@@ -210,12 +230,11 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             (bucket.toRemove || []).forEach((it) => { if (it.focusId) focusIdToCAA.set(it.focusId, bucket.displayName); });
           });
           const audit = { ...auditResp.audit, _ruleIdToCAA: ruleIdToCAA, _focusIdToCAA: focusIdToCAA };
-          // Treat the backend's kardex pick as a per-intervention recommendation
-          // across the Comprehensive Review path too — every Add-bucket focus
-          // intervention starts as None with the original pick stashed in
-          // `_recKardex` for the dropdown's "✨ Recommended" badge. Mirrors the
-          // Initial path's behavior (don't stamp things onto the Kardex
-          // automatically — nurses opt in).
+          // Kardex is ALWAYS opt-in (V1 and V2): the engine's kardexCategory is a
+          // *recommendation*, not a default. Stash it in `_recKardex` (surfaced
+          // as "✨ Recommended" inside the dropdown) and blank the live field so
+          // every Add-bucket intervention starts as None — nurses opt in
+          // deliberately rather than having the Kardex auto-stamped.
           (audit.toAdd || []).forEach((it) => {
             if (!it?.focus) return;
             it.focus = {
@@ -238,6 +257,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           (audit.toCheck || []).forEach((it, i) => { it._rowId = `verify-${i}-${it.focusId || it.detail || 'na'}`; });
           (audit.toRemove || []).forEach((it, i) => { it._rowId = `remove-${i}-${it.focusId || 'na'}`; });
           (audit.onPlan || []).forEach((it, i) => { it._rowId = `onplan-${i}-${it.ruleId || it.focusId || 'na'}`; });
+          (audit.skipped || []).forEach((it, i) => { it._rowId = `skip-${i}-${it.ruleId || it.caa || 'na'}`; });
+          (audit.dropped || []).forEach((it, i) => { it._rowId = `dropped-${i}-${it.ruleId || 'na'}`; });
           setAudit(audit);
           const a = audit;
           // Note: unlike the Initial wizard, the audit rail hides skipped items,
@@ -286,9 +307,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           console.warn('[CarePlanAutoPop] Unresolved canonicals (some fields will stamp without them):', unresolved);
         }
 
-        // Treat the backend's kardex pick as a per-intervention recommendation,
-        // not a default. Every chip starts as None; the suggestion shows up
-        // inside the dropdown as "✨ Recommended". Nurses opt in deliberately.
+        // V2 initial focuses already carry the engine-resolved kardexCategory +
+        // autoSelect + rationale + caa (auto-pop's enrich()). So initial is V2 at
+        // the engine and the card — only the audit *wizard shell* is comprehensive-
+        // only (a new admit has no plan to diff).
+        const v2init = isV2(prop);
+        // Kardex is ALWAYS opt-in (every version): each chip starts None with the
+        // engine's pick surfaced as "✨ Recommended" inside the dropdown. Nurses
+        // opt in deliberately — we never auto-stamp the Kardex.
         const propWithRecs = {
           ...prop,
           focuses: (prop.focuses || []).map((f) => ({
@@ -330,10 +356,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         setCareplanId(cpId);
         setMiniToken(token);
         setFocusStates(mergedFocuses.map((f, i) => ({
-          // Pre-skip only if backend marked this already-on-plan OR it came from
-          // the previously-skipped tail. Everything else defaults ON (included);
-          // the nurse skips what they don't want.
-          skipped: !!f.alreadyOnPlan || i >= (propWithRecs.focuses?.length || 0),
+          // Pre-skip if backend marked this already-on-plan, it came from the
+          // previously-skipped tail, OR (V2 only) it's an opt-in focus
+          // (autoSelect:false) — boilerplate universals with no signal start
+          // skipped so evidence-backed focuses are pre-checked and the random
+          // ones are opt-in, not stamped on every plan. The nurse can include
+          // any of them. V1 never sends autoSelect, so this is a no-op there.
+          skipped: !!f.alreadyOnPlan
+            || i >= (propWithRecs.focuses?.length || 0)
+            || (v2init && f.autoSelect === false),
           focusText: null,
           goals: null,
           interventions: null,
@@ -787,6 +818,68 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     });
   }, [audit, patientId, orgSlug, facilityName, skippedAddIds, stampedAddIds]);
 
+  // V2 wizard — un-skip an item from the Skipped fold. Persist the un-skip and
+  // optimistically move it into the live toAdd so the nurse can act on it now.
+  const _reopenSkipped = useCallback((item) => {
+    if (!item?.ruleId) return;
+    // Drop from session-skip set if present.
+    setSkippedAddIds((prev) => { const n = new Set(prev); n.delete(item.ruleId); return n; });
+    // Move into live toAdd + out of skipped (idempotent on ruleId).
+    setAudit((prev) => {
+      if (!prev) return prev;
+      const already = (prev.toAdd || []).some((it) => it.ruleId === item.ruleId);
+      const reAdded = already ? prev.toAdd : [...(prev.toAdd || []), { ...item, _rowId: item._rowId || `add-reopen-${item.ruleId}` }];
+      return { ...prev, toAdd: reAdded, skipped: (prev.skipped || []).filter((s) => s.ruleId !== item.ruleId) };
+    });
+    setSelectedRail({ kind: 'add', key: item._rowId || `add-reopen-${item.ruleId}` });
+    window.CarePlanStampAPI?.persistSkip?.({ patientId, orgSlug, facilityName, ruleId: item.ruleId, isSkipping: false });
+  }, [patientId, orgSlug, facilityName]);
+
+  // -------- V8 worklist: keep / dropped handlers --------
+  // "Keep on plan" — dismiss a Remove/Check row without resolving it in PCC.
+  // The engine flagged it, but the nurse's judgment is to leave the focus.
+  const _keepFocus = useCallback((item) => {
+    if (!item) return;
+    setKeptIds((prev) => new Set(prev).add(item.focusId || item._rowId));
+    window.SuperAnalytics?.track?.('care_plan_audit_focus_kept', {
+      patient_id: patientId,
+      focus_id: item.focusId || null,
+    });
+  }, [patientId]);
+
+  // "Confirm removal" — acknowledge a dropped[] over-fire. The row dims but
+  // stays visible (never silent); no PCC write (the focus was never added).
+  const _confirmDropped = useCallback((item) => {
+    if (!item) return;
+    // Key on ruleId when present, else the always-stamped _rowId — so a dropped
+    // item missing a ruleId can still be acknowledged (never a silent no-op).
+    setAcknowledgedDropped((prev) => new Set(prev).add(item.ruleId || item._rowId));
+    window.SuperAnalytics?.track?.('care_plan_audit_dropped_confirmed', {
+      patient_id: patientId,
+      rule_id: item.ruleId || null,
+    });
+  }, [patientId]);
+
+  // "Re-add to plan" — the review was wrong; put a dropped focus back into the
+  // live worklist as a normal add row. Only possible when the backend ships a
+  // stampable `focus` on the dropped item (fast-follow); acknowledge-only until
+  // then. Mirrors _reopenSkipped's optimistic move into toAdd.
+  const _reAddDropped = useCallback((item) => {
+    if (!item?.ruleId || !item?.focus) return;
+    const rowId = `add-readd-${item.ruleId}`;
+    setAudit((prev) => {
+      if (!prev) return prev;
+      const already = (prev.toAdd || []).some((it) => it.ruleId === item.ruleId);
+      const toAdd = already ? prev.toAdd : [...(prev.toAdd || []), { ...item, _rowId: rowId }];
+      return { ...prev, toAdd, dropped: (prev.dropped || []).filter((d) => d.ruleId !== item.ruleId) };
+    });
+    setSelectedRail({ kind: 'add', key: rowId });
+    window.SuperAnalytics?.track?.('care_plan_audit_dropped_readded', {
+      patient_id: patientId,
+      rule_id: item.ruleId,
+    });
+  }, [patientId]);
+
   const _resolveAuditItem = useCallback(async (item, fromBucket) => {
     if (!item?.pccFocusId || !careplanId) {
       setResolveStatus((prev) => ({ ...prev, [item.focusId]: 'error' }));
@@ -965,7 +1058,37 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               />
             </div>
           )}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep === 'dashboard' && (
+          {/* V8 sidebar-worklist — the single v2-comprehensive surface. Replaces
+              the AuditDashboard tile step AND the AuditWizard drill-in. V1 orgs
+              keep the dashboard/rail path below (each guarded !isV2). */}
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && isV2(audit) && (
+            <AuditWorklist
+              audit={audit}
+              dropdowns={dropdowns}
+              auditFocusStates={auditFocusStates}
+              composeFocus={_composeFocus}
+              emptyFocusState={_emptyFocusState}
+              stampedAddIds={stampedAddIds}
+              skippedAddIds={skippedAddIds}
+              touchesByRowId={_auditTouchesByRowId(audit, auditFocusStates)}
+              resolveStatus={resolveStatus}
+              keptIds={keptIds}
+              acknowledgedDropped={acknowledgedDropped}
+              selected={selectedRail}
+              stamping={stage === 'stamping'}
+              onSelect={setSelectedRail}
+              onPatchFocusState={_patchAuditFocusStateByRuleId}
+              onStampOne={_stampAuditAddOne}
+              onSkip={_skipAuditAddItem}
+              onReopen={_reopenSkipped}
+              onStampAll={() => _commitAuditAdds()}
+              onResolve={(item) => _resolveAuditItem(item, 'worklist')}
+              onKeep={_keepFocus}
+              onReAddDropped={_reAddDropped}
+              onConfirmDropped={_confirmDropped}
+            />
+          )}
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && !isV2(audit) && comprehensiveStep === 'dashboard' && (
             <AuditDashboard
               audit={audit}
               linkageCounts={linkageCounts}
@@ -1001,10 +1124,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               }}
             />
           )}
-          {mode === 'comprehensive' && stage === 'ready' && audit && comprehensiveStep === 'on_plan' && (
+          {mode === 'comprehensive' && stage === 'ready' && audit && !isV2(audit) && comprehensiveStep === 'on_plan' && (
             <CoveredOverview audit={audit} focusRowId={selectedRail?.kind === 'on_plan' ? selectedRail.key : null} />
           )}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && comprehensiveStep !== 'dashboard' && comprehensiveStep !== 'on_plan' && (
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && !isV2(audit) && comprehensiveStep !== 'dashboard' && comprehensiveStep !== 'on_plan' && (
             <div className="cpas-modal__columns">
               <AuditRail
                 audit={railAudit}
@@ -1308,6 +1431,22 @@ function _auditNeedsInputByRowId(audit, auditFocusStates) {
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
     const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
     m.set(it._rowId, flatBlank || tokenBlank);
+  });
+  return m;
+}
+
+// Per-row amber-touches COUNT for the V8 worklist. Mirrors _auditNeedsInputByRowId
+// but returns a number (unfilled token-key count, or 1 for a flat `___` blank) so
+// the worklist can show a per-focus badge + a summed "fill N amber slots" total.
+function _auditTouchesByRowId(audit, auditFocusStates) {
+  const m = new Map();
+  (audit?.toAdd || []).forEach((it) => {
+    if (!it.focus) { m.set(it._rowId, 0); return; }
+    const state = auditFocusStates[it.ruleId] || _emptyFocusState();
+    const keys = _focusUnfilledTokenKeys(it.focus, state.tokenValues);
+    if (keys.length > 0) { m.set(it._rowId, keys.length); return; }
+    const composed = _composeFocus(it.focus, state);
+    m.set(it._rowId, _descNeedsInput(composed.description, it.focus.descriptionSegments) ? 1 : 0);
   });
   return m;
 }
@@ -2181,7 +2320,9 @@ export const Combobox = ({
   const inputRef = useRef(null);
 
   const label = (value != null && labels[value]) ? labels[value] : (value != null ? `(${value})` : (placeholder || 'Select…'));
-  const isOnRecommendation = recommendedId != null && value != null && Number(value) === Number(recommendedId);
+  // Compare ids as strings so the match works for numeric facility ids (v1) AND
+  // canonical string ids, instead of Number()-coercing a string id to NaN.
+  const isOnRecommendation = recommendedId != null && value != null && String(value) === String(recommendedId);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2189,7 +2330,7 @@ export const Combobox = ({
     const base = q ? list.filter((o) => o.label.toLowerCase().includes(q)) : list;
     // Pin the recommended option to the top so nurses see the suggestion first.
     if (recommendedId == null) return base;
-    const recIdx = base.findIndex((o) => Number(o.id) === Number(recommendedId));
+    const recIdx = base.findIndex((o) => String(o.id) === String(recommendedId));
     if (recIdx <= 0) return base;
     const copy = base.slice();
     const [rec] = copy.splice(recIdx, 1);
@@ -2263,7 +2404,7 @@ export const Combobox = ({
             )}
             {filtered.length === 0 && <li className="cpas-combobox__empty">No matches.</li>}
             {filtered.map((o, i) => {
-              const rec = recommendedId != null && Number(o.id) === Number(recommendedId);
+              const rec = recommendedId != null && String(o.id) === String(recommendedId);
               return (
                 <li
                   key={o.id}

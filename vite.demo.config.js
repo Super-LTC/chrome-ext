@@ -93,6 +93,10 @@ export default defineConfig(({ command }) => ({
     cssCodeSplit: false,
   },
   resolve: {
+    // Dedupe so a single preact / preact-hooks instance is shared across the
+    // demo entry and the dynamically/statically imported feature modules —
+    // otherwise hooks break with "Cannot read properties of undefined ('__H')".
+    dedupe: ['preact', 'preact/hooks', 'preact/jsx-runtime', 'preact/compat'],
     alias: {
       'react': 'preact/compat',
       'react-dom': 'preact/compat'
