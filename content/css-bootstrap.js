@@ -66,6 +66,7 @@ import roundingReports from './css/rounding-reports.css?inline';
 import mdsListCoverage from './css/mds-list-coverage.css?inline';
 import superVerify from './css/super-verify.css?inline';
 import i8000Overlay from './css/i8000-overlay.css?inline';
+import ipaView from './css/ipa-view.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -110,6 +111,7 @@ const CSS_BUNDLE = [
   mdsListCoverage,
   superVerify,
   i8000Overlay,
+  ipaView,
 ].join('\n\n');
 
 function injectCss() {
