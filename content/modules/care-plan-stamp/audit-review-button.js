@@ -113,10 +113,11 @@ function _paint(banner, audit, ctx) {
     <!-- NO_TRACK: opened_from_review_page tracked in _openWizard click handler -->
     <button type="button" class="super-audit-banner__cta">Open audit →</button>
   `;
-  banner.querySelector('.super-audit-banner__cta').addEventListener('click', () => _openWizard(ctx));
+  const isV2 = audit?.engineVersion === 'v2';
+  banner.querySelector('.super-audit-banner__cta').addEventListener('click', () => _openWizard(ctx, isV2));
 }
 
-async function _openWizard({ patientId, facilityName, orgSlug }) {
+async function _openWizard({ patientId, facilityName, orgSlug }, isV2 = false) {
   document.getElementById(OVERLAY_ID_FALLBACK)?.remove();
 
   const [{ render, h }, { CarePlanStampModal }] = await Promise.all([
@@ -138,6 +139,14 @@ async function _openWizard({ patientId, facilityName, orgSlug }) {
     overlay.remove();
     document.body.style.overflow = '';
     if (fab) fab.style.display = prevFabDisplay || '';
+    // V2 only — keep V1 byte-for-byte. Re-run the audit so the banner reflects
+    // what the nurse just did: stamps refreshed PCC's plan (re-scraped on
+    // render) and skips persisted to our DB (V2 drops them from the count).
+    // _renderBanner no-ops if a banner already exists, so clear it first.
+    if (isV2) {
+      document.getElementById(BANNER_ID)?.remove();
+      _renderBanner();
+    }
   };
 
   // The review page header shows "Client: Smith, John (6106)" — scrape if available.
