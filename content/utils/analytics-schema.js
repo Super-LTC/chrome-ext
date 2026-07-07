@@ -136,6 +136,22 @@ export const EVENT_SCHEMA = {
   mds_cc_item_popover_opened: ['item_code'],
   mds_cc_item_actioned: ['item_code', 'action'],
 
+  // === MDS CC — IPA / new-quarterly opportunities tab ===
+  ipa_review_open: [],
+  ipa_see_why: [],
+  ipa_review_confirmed: ['lever', 'tier'],
+  ipa_card_action: ['action'],
+  ipa_dismiss: [],
+  ipa_snooze: [],
+  ipa_menu_open: [],
+  ipa_nochange_toggle: [],
+  ipa_evidence_open: ['sourceType'],
+  ipa_modal_open: [],
+  ipa_modal_close: [],
+  ipa_modal_cancel: [],
+  ipa_modal_confirm: [],
+  ipa_retry: [],
+
   mds_planner_view_switched: ['from_view', 'to_view'],
   mds_planner_event_clicked: ['event_type'],
 
