@@ -1,30 +1,5 @@
 import { useState, useCallback, useRef } from 'preact/hooks';
-
-/**
- * Build the recommendedIcd10 payload for a query create call.
- *
- * Guarantees a single entry { code, description } with a NON-EMPTY
- * description whenever any code is resolvable — this is what makes the
- * physician sign-portal's code picker pre-populate so the query is signable.
- * An empty recommendedIcd10 is a silent dead-end (created+sent but unsignable),
- * so we exhaust every description source and finally fall back to the code
- * string itself rather than ever emitting an empty description.
- */
-function buildRecommendedIcd10(item, icd10Code, preferredIcd10) {
-  const descFor = (code) =>
-    (preferredIcd10 && preferredIcd10.code === code ? preferredIcd10.description : '') ||
-    (item.recommendedIcd10 || []).find(x => x.code === code)?.description ||
-    item.mdsItemName || item.description || code;
-
-  if (icd10Code) {
-    return [{ code: icd10Code, description: descFor(icd10Code) }];
-  }
-  // No single resolved code — fall back to the item's own list, but still
-  // ensure each entry has a non-empty description.
-  return (item.recommendedIcd10 || [])
-    .filter(x => x && x.code)
-    .map(x => ({ code: x.code, description: x.description || item.mdsItemName || x.code }));
-}
+import { toRecommendedIcd10 } from '../../../queries/lib/icd10-picker-util.js';
 
 /**
  * Batch query state machine hook
@@ -145,12 +120,14 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
   }, []);
 
   /**
-   * Update the selected ICD-10 code for a specific item
+   * Update the nurse's attached ICD-10 code for a specific item.
+   * `selected` is a { code, description } object (from the picker) or null
+   * when the nurse chose to send without a code.
    */
-  const updateIcd10 = useCallback((mdsItem, icd10Code) => {
+  const updateIcd10 = useCallback((mdsItem, selected) => {
     setGeneratedQueries(prev =>
       prev.map(gq =>
-        gq.item.mdsItem === mdsItem ? { ...gq, selectedIcd10: icd10Code } : gq
+        gq.item.mdsItem === mdsItem ? { ...gq, selectedIcd10: selected } : gq
       )
     );
   }, []);
@@ -172,19 +149,12 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
       for (let i = 0; i < generatedQueries.length; i++) {
         if (abortRef.current) break;
 
-        const { item, noteText, selectedIcd10, preferredIcd10 } = generatedQueries[i];
+        const { item, noteText, selectedIcd10 } = generatedQueries[i];
         setProgress({ current: i, total: generatedQueries.length });
 
-        // Resolve the code to seed. Fall back to the source row code
-        // (item.icd10Code) so we ALWAYS have a code even when note
-        // generation returned no preferredIcd10 (thin evidence).
-        const icd10Code = selectedIcd10 || preferredIcd10?.code || item.icd10Code || null;
-        // HARD REQUIREMENT: recommendedIcd10 must carry a single code with a
-        // NON-EMPTY description, otherwise the physician sign-portal's code
-        // picker comes up empty and the query is created+sent but impossible
-        // to sign (silent dead-end). Seed the description from the strongest
-        // source available; never ship an empty recommendedIcd10.
-        const recommendedIcd10 = buildRecommendedIcd10(item, icd10Code, preferredIcd10);
+        // Only the code the nurse deliberately attached via the picker.
+        // Empty is fine now — a codeless query lets the physician pick the code.
+        const recommendedIcd10 = toRecommendedIcd10(selectedIcd10);
 
         try {
           // Step 1: Create the query
@@ -264,11 +234,12 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
       for (let i = 0; i < generatedQueries.length; i++) {
         if (abortRef.current) break;
 
-        const { item, noteText, selectedIcd10, preferredIcd10 } = generatedQueries[i];
+        const { item, noteText, selectedIcd10 } = generatedQueries[i];
         setProgress({ current: i, total: generatedQueries.length, label: 'printing' });
 
-        const icd10Code = selectedIcd10 || preferredIcd10?.code || item.icd10Code || null;
-        const recommendedIcd10 = buildRecommendedIcd10(item, icd10Code, preferredIcd10);
+        // Codeless print is allowed — the physician fills the ICD-10 in on paper.
+        const recommendedIcd10 = toRecommendedIcd10(selectedIcd10);
+        const icd10Code = recommendedIcd10[0]?.code || '';
         const icd10Description = recommendedIcd10[0]?.description || '';
 
         try {

@@ -11,6 +11,7 @@ import { UdaViewer } from './modules/uda-viewer/UdaViewer.jsx';
 import { normalizeAnswer, formatAnswerForDisplay, determineStatus, sectionIBadgeLabel } from './super-menu/mds-badge.js';
 import { buildI8000ViewModel } from './i8000-overlay/i8000-model.js';
 import { I8000_MOCK_ENVELOPE } from './i8000-overlay/i8000-mock.js';
+import { toRecommendedIcd10 } from './queries/lib/icd10-picker-util.js';
 
 // ============================================
 // State Management
@@ -4231,12 +4232,9 @@ function renderQueryModalContent(modal, result, context, practitioners) {
         <div class="super-query-diagnosis-name">${escapeHTML(ai.mdsItemName || result.description)}</div>
       </div>
 
-      <!-- ICD-10 Code Selection -->
+      <!-- ICD-10 Code picker — nothing pre-selected; nurse optionally attaches -->
       <div class="super-query-section">
-        <div class="super-query-section__label">ICD-10 Code</div>
-        <select class="super-query-icd10-select" id="super-query-icd10">
-          <option value="">Loading ICD-10 codes...</option>
-        </select>
+        <div id="super-query-icd10-picker-legacy"></div>
       </div>
 
       <!-- Note (editable) -->
@@ -4315,29 +4313,14 @@ function renderQueryModalContent(modal, result, context, practitioners) {
 async function fetchAndPopulateNote(modal, result) {
   const textarea = modal.querySelector('#super-query-note');
   const spinner = modal.querySelector('.super-query-note-spinner');
-  const icd10Select = modal.querySelector('#super-query-icd10');
 
   if (!textarea) return;
 
   try {
-    const { note, preferredIcd10, icd10Options } = await fetchAIGeneratedNote(result);
+    // Only the AI note text is used now — the ICD-10 code is chosen deliberately
+    // by the nurse via the code picker, never pre-filled from an AI guess.
+    const { note } = await fetchAIGeneratedNote(result);
     textarea.value = note;
-
-    // Populate ICD-10 dropdown if we have options
-    if (icd10Select && icd10Options.length > 0) {
-      const optionsHTML = icd10Options.map(opt => {
-        const code = typeof opt === 'object' ? opt.code : opt;
-        const desc = typeof opt === 'object' ? opt.description : '';
-        const isPreferred = preferredIcd10 && preferredIcd10.code === code;
-        return `<option value="${escapeHTML(code)}" ${isPreferred ? 'selected' : ''}>${escapeHTML(code)}${desc ? ` - ${escapeHTML(desc)}` : ''}</option>`;
-      }).join('');
-      icd10Select.innerHTML = `<option value="">Select ICD-10 code...</option>${optionsHTML}`;
-
-      // If we have a preferred code, pre-select it
-      if (preferredIcd10) {
-        icd10Select.value = preferredIcd10.code;
-      }
-    }
   } catch (error) {
     console.error('Super LTC: Failed to generate AI note, using fallback', error);
     textarea.value = generateDefaultNote(result);
@@ -4383,7 +4366,24 @@ function renderQueryModalError(modal, message) {
 
 // Setup event listeners for query modal
 function setupQueryModalListeners(modal, result, context) {
+  // Mount the ICD-10 code picker. Nothing is pre-selected; the picker
+  // auto-searches the library seeded with the diagnosis name so relevant codes
+  // are one click away, and sending without a code stays the default.
+  let selectedIcd10 = null;
+  const pickerContainer = modal.querySelector('#super-query-icd10-picker-legacy');
+  let picker = null;
+  if (pickerContainer && window.Icd10CodePicker) {
+    const ai = result.aiAnswer || {};
+    const seedQuery = ai.mdsItemName || ai.kbCategory?.categoryName || result.description || '';
+    picker = window.Icd10CodePicker.create(pickerContainer, {
+      seedQuery,
+      initialSelected: null,
+      onChange: (selected) => { selectedIcd10 = selected; }
+    });
+  }
+
   const closeModal = () => {
+    picker?.destroy?.();
     modal.remove();
     document.body.style.overflow = '';
   };
@@ -4406,7 +4406,6 @@ function setupQueryModalListeners(modal, result, context) {
   sendBtn.addEventListener('click', async () => {
     const practitionerId = practitionerSelect.value;
     const noteText = modal.querySelector('#super-query-note').value;
-    const selectedIcd10 = modal.querySelector('#super-query-icd10')?.value || '';
 
     if (!practitionerId) {
       window.SuperAnalytics?.track?.('error_shown', {
@@ -4437,11 +4436,8 @@ function setupQueryModalListeners(modal, result, context) {
     try {
       const ai = result.aiAnswer;
 
-      // Build recommendedIcd10 array - include selected code first if present
-      let recommendedIcd10 = ai.recommendedIcd10 || [];
-      if (selectedIcd10 && !recommendedIcd10.some(c => (typeof c === 'object' ? c.code : c) === selectedIcd10)) {
-        recommendedIcd10 = [{ code: selectedIcd10 }, ...recommendedIcd10];
-      }
+      // Only the code the nurse deliberately attached (empty = doctor picks).
+      const recommendedIcd10 = toRecommendedIcd10(selectedIcd10);
 
       const queryData = {
         mdsItem: result.mdsItem,

@@ -1,4 +1,4 @@
-import { useMemo } from 'preact/hooks';
+import { Icd10CodePicker } from './Icd10CodePicker.jsx';
 
 /**
  * Inline review page shown after queries are generated.
@@ -128,40 +128,10 @@ export const BatchReviewPage = ({
 const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled }) => {
   const itemName = gq.item.pdpmCategoryName || gq.item.mdsItemName || gq.item.mdsItem;
 
-  // Merge ICD-10 options: AI preferred + AI options + item recommended, deduplicated
-  const icd10Options = useMemo(() => {
-    const seen = new Set();
-    const options = [];
-
-    const addOption = (code, description, source) => {
-      if (!code || seen.has(code)) return;
-      seen.add(code);
-      options.push({ code, description: description || '', source });
-    };
-
-    // AI preferred first
-    if (gq.preferredIcd10) {
-      addOption(gq.preferredIcd10.code, gq.preferredIcd10.description, 'recommended');
-    }
-
-    // AI options
-    if (gq.icd10Options) {
-      for (const opt of gq.icd10Options) {
-        addOption(opt.code, opt.description, 'ai');
-      }
-    }
-
-    // Item's recommended codes
-    if (gq.item.recommendedIcd10) {
-      for (const opt of gq.item.recommendedIcd10) {
-        addOption(opt.code, opt.description, 'item');
-      }
-    }
-
-    return options;
-  }, [gq]);
-
-  const selectedCode = gq.selectedIcd10 || gq.preferredIcd10?.code || '';
+  // Seed the picker with the source code (the row the nurse clicked) when we
+  // have one, else the diagnosis name — so the top relevant codes surface
+  // immediately. Nothing is pre-selected; every code shown is a deliberate pick.
+  const seedQuery = gq.item.icd10Code || itemName || '';
 
   return (
     <div className="qr__card">
@@ -174,30 +144,15 @@ const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled })
 
       {/* Card body — form fields */}
       <div className="qr__card-body">
-        {/* ICD-10 field */}
-        {icd10Options.length > 0 && (
-          <div className="qr__field">
-            <div className="qr__field-label">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
-              ICD-10 Code
-            </div>
-            <select
-              className="qr__icd10-select"
-              value={selectedCode}
-              onChange={(e) => onUpdateIcd10(gq.item.mdsItem, e.target.value)}
-              disabled={disabled}
-            >
-              {icd10Options.map(opt => (
-                <option key={opt.code} value={opt.code}>
-                  {opt.code}{opt.description ? ` — ${opt.description}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* ICD-10 code picker */}
+        <div className="qr__field">
+          <Icd10CodePicker
+            seedQuery={seedQuery}
+            selected={gq.selectedIcd10 || null}
+            onChange={(selected) => onUpdateIcd10(gq.item.mdsItem, selected)}
+            disabled={disabled}
+          />
+        </div>
 
         {/* Note field */}
         <div className="qr__field">
