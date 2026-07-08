@@ -12,7 +12,18 @@
  *   - createCustomGoal({...}) → goalId | true (true if response shape lacks ID)
  *   - createCustomIntervention({...}) → interId | true
  *   - orchestrateStamp({ proposal, careplanId, miniToken, deptNames, onProgress }) → StampResult
+ *
+ * SUP-54: when a focus carries `libraryStdId` (and its goals/interventions carry
+ * theirs), it's added FROM THE FACILITY LIBRARY (std-id-linked) via pcc-library-stamp
+ * instead of the custom endpoints. Off-library items (no id) still custom-stamp.
  */
+import {
+  createLibraryFocus,
+  addLibraryGoals,
+  addLibraryInterventions,
+  isLibraryFocus,
+  partitionByLibrary,
+} from './pcc-library-stamp.js';
 
 const FOCUS_URL = '/care/chart/cp/neededitcust_rev.jsp';
 const GOAL_URL = '/care/chart/cp/goaledit_rev.jsp';
@@ -253,16 +264,28 @@ async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, on
 
     onProgress?.({ ...phaseBase, phase: 'focus' });
 
+    // SUP-54: library-linked focus (add from the facility library) vs custom.
+    const library = isLibraryFocus(focus);
+
     let focusId;
     try {
-      focusId = await createCustomFocus({
-        patientId: proposal.patientId,
-        careplanId,
-        miniToken,
-        description: focus.description,
-        reviewDepartments: focus.reviewDepartments || [],
-        deptNames,
-      });
+      focusId = library
+        ? await createLibraryFocus({
+            patientId: proposal.patientId,
+            careplanId,
+            miniToken,
+            stdNeedId: focus.libraryStdId,
+            description: focus.description,
+            reviewDepartments: focus.reviewDepartments || [],
+          })
+        : await createCustomFocus({
+            patientId: proposal.patientId,
+            careplanId,
+            miniToken,
+            description: focus.description,
+            reviewDepartments: focus.reviewDepartments || [],
+            deptNames,
+          });
       result.focusesStamped += 1;
     } catch (e) {
       result.ok = false;
@@ -270,16 +293,35 @@ async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, on
       continue; // can't stamp goals/interventions without a focus ID
     }
 
-    // Goals
+    // Goals — batch the library ones by std id (single wizard POST); custom-stamp the rest.
     const goals = focus.goals || [];
-    for (let g = 0; g < goals.length; g++) {
-      onProgress?.({ ...phaseBase, phase: 'goal', subIndex: g, subTotal: goals.length });
+    const goalSplit = library ? partitionByLibrary(goals) : { libraryStdIds: [], custom: goals };
+    if (goalSplit.libraryStdIds.length) {
+      onProgress?.({ ...phaseBase, phase: 'goal', subIndex: 0, subTotal: goals.length });
+      try {
+        result.goalsStamped += await addLibraryGoals({
+          patientId: proposal.patientId,
+          careplanId,
+          miniToken,
+          genNeedId: focusId,
+          needId: focusId,
+          stdNeedId: focus.libraryStdId,
+          goalStdIds: goalSplit.libraryStdIds,
+          focusDescription: focus.description,
+        });
+      } catch (e) {
+        result.ok = false;
+        result.errors.push({ ruleId: focus.ruleId, phase: 'goal', error: e.message });
+      }
+    }
+    for (let g = 0; g < goalSplit.custom.length; g++) {
+      onProgress?.({ ...phaseBase, phase: 'goal', subIndex: g, subTotal: goalSplit.custom.length });
       try {
         await createCustomGoal({
           patientId: proposal.patientId,
           focusId,
           miniToken,
-          description: goals[g].description,
+          description: goalSplit.custom[g].description,
           focusDescription: focus.description,
         });
         result.goalsStamped += 1;
@@ -289,11 +331,29 @@ async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, on
       }
     }
 
-    // Interventions
+    // Interventions — same split. Position/kardex per-intervention (interedit) is phase 2.
     const inters = focus.interventions || [];
-    for (let v = 0; v < inters.length; v++) {
-      const inter = inters[v];
-      onProgress?.({ ...phaseBase, phase: 'intervention', subIndex: v, subTotal: inters.length });
+    const interSplit = library ? partitionByLibrary(inters) : { libraryStdIds: [], custom: inters };
+    if (interSplit.libraryStdIds.length) {
+      onProgress?.({ ...phaseBase, phase: 'intervention', subIndex: 0, subTotal: inters.length });
+      try {
+        result.interventionsStamped += await addLibraryInterventions({
+          patientId: proposal.patientId,
+          careplanId,
+          miniToken,
+          genNeedId: focusId,
+          needId: focusId,
+          stdNeedId: focus.libraryStdId,
+          interStdIds: interSplit.libraryStdIds,
+        });
+      } catch (e) {
+        result.ok = false;
+        result.errors.push({ ruleId: focus.ruleId, phase: 'intervention', error: e.message });
+      }
+    }
+    for (let v = 0; v < interSplit.custom.length; v++) {
+      const inter = interSplit.custom[v];
+      onProgress?.({ ...phaseBase, phase: 'intervention', subIndex: v, subTotal: interSplit.custom.length });
       try {
         // Migration: if intervention has `positions[]`, use that; else fall back
         // to `positionOne` (legacy from current backend proposal API).
