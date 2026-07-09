@@ -2,6 +2,7 @@
 // Step 1: Review query details, Step 2: Select practitioner and send
 
 import { track, toErrorCode } from '../utils/analytics.js';
+import { toRecommendedIcd10 } from './lib/icd10-picker-util.js';
 
 // Map a free-text practitioner title/specialty to a categorical role.
 // Keep the bucket list small so PostHog values stay clean.
@@ -171,7 +172,7 @@ const QuerySendModal = {
       }
     ]);
 
-    // Setup note textarea listener
+    // Setup note textarea listener + mount the ICD-10 code picker
     setTimeout(() => {
       const textarea = document.querySelector('#super-query-note-input');
       if (textarea) {
@@ -180,17 +181,19 @@ const QuerySendModal = {
         });
       }
 
-      // Track ICD-10 select changes so Print/Send use the nurse's pick
-      const icd10Select = document.querySelector('#super-query-icd10-select');
-      if (icd10Select) {
-        icd10Select.addEventListener('change', (e) => {
-          const code = e.target.value;
-          const opt = (this._state.noteData?.icd10Options || []).find(o => {
-            const c = typeof o === 'object' ? o.code : o;
-            return c === code;
-          });
-          const description = opt && typeof opt === 'object' ? (opt.description || '') : '';
-          this._state.selectedIcd10 = { code, description };
+      // Mount the deliberate-attach code picker. Nothing is pre-selected; the
+      // picker auto-searches the library seeded with the diagnosis name so the
+      // top relevant codes are one click away, and "no code" stays the default.
+      const pickerContainer = document.querySelector('#super-query-icd10-picker');
+      if (pickerContainer && window.Icd10CodePicker) {
+        this._picker?.destroy?.();
+        const result = this._state.result;
+        const ai = result?.aiAnswer || {};
+        const seedQuery = this._state.existingQuery?.mdsItemName || ai.mdsItemName || result?.description || '';
+        this._picker = window.Icd10CodePicker.create(pickerContainer, {
+          seedQuery,
+          initialSelected: this._state.selectedIcd10,
+          onChange: (selected) => { this._state.selectedIcd10 = selected; }
         });
       }
     }, 50);
@@ -307,8 +310,6 @@ const QuerySendModal = {
       // If no existing query, create one first
       if (!queryId) {
         const ai = this._state.result.aiAnswer;
-        const selectedIcd10 = this._state.noteData?.preferredIcd10?.code ||
-                              (this._state.noteData?.icd10Options?.[0]?.code);
 
         const createData = {
           patientId: this._state.context.patientId,
@@ -320,7 +321,8 @@ const QuerySendModal = {
           queryReason: ai.rationale || ai.queryReason || '',
           keyFindings: ai.keyFindings || [],
           queryEvidence: ai.evidence || ai.queryEvidence || [],
-          recommendedIcd10: selectedIcd10 ? [{ code: selectedIcd10 }] : [],
+          // Only the code the nurse deliberately attached (empty = doctor picks).
+          recommendedIcd10: toRecommendedIcd10(this._state.selectedIcd10),
           aiGeneratedNote: this._state.noteText
         };
 
@@ -391,24 +393,12 @@ const QuerySendModal = {
   },
 
   /**
-   * Resolve the initial ICD-10 selection from generated note data or an
-   * existing query's recommendedIcd10 list. Returns `{ code, description }`
-   * or null if nothing usable is available.
+   * Resolve the initial ICD-10 selection. We NEVER pre-select an AI-guessed
+   * code (product decision): the only pre-fill is a code a human already
+   * attached to an existing draft query. Fresh queries start with no code and
+   * the nurse deliberately attaches one via the picker (or sends without).
    */
   _resolveInitialIcd10() {
-    const nd = this._state.noteData;
-    if (nd?.preferredIcd10?.code) {
-      return {
-        code: nd.preferredIcd10.code,
-        description: nd.preferredIcd10.description || ''
-      };
-    }
-    const first = nd?.icd10Options?.[0];
-    if (first) {
-      const code = typeof first === 'object' ? first.code : first;
-      const description = typeof first === 'object' ? (first.description || '') : '';
-      if (code) return { code, description };
-    }
     const existing = this._state.existingQuery?.recommendedIcd10?.[0];
     if (existing?.code) {
       return { code: existing.code, description: existing.description || '' };
@@ -438,7 +428,7 @@ const QuerySendModal = {
       queryReason: ai.rationale || ai.queryReason || '',
       keyFindings: ai.keyFindings || [],
       queryEvidence: ai.evidence || ai.queryEvidence || [],
-      recommendedIcd10: selected?.code ? [{ code: selected.code, description: selected.description || '' }] : [],
+      recommendedIcd10: toRecommendedIcd10(selected),
       aiGeneratedNote: this._state.noteText
     };
 
@@ -455,12 +445,9 @@ const QuerySendModal = {
    * service worker.
    */
   async _handlePrint(btn) {
+    // No code required — a codeless print leaves the ICD-10 line blank for the
+    // physician to fill in on paper (matches the codeless-send path).
     const selected = this._state.selectedIcd10;
-    if (!selected?.code || !selected?.description) {
-      track('error_shown', { surface: 'query_print', error_code: 'no_icd10', error_type: 'validation' });
-      SuperToast.warning('Pick a recommended code to print');
-      return;
-    }
 
     const originalText = btn.textContent;
     btn.textContent = 'Preparing...';
@@ -483,8 +470,8 @@ const QuerySendModal = {
       const filename = `query-${topic}-${queryId.slice(0, 8)}.pdf`;
 
       await QueryAPI.printQueryPdf(queryId, {
-        code: selected.code,
-        description: selected.description,
+        code: selected?.code || '',
+        description: selected?.description || '',
         filename
       });
 
@@ -526,26 +513,13 @@ const QuerySendModal = {
     const diagnosisName = existingQuery?.mdsItemName || ai.mdsItemName || result?.description || 'Unknown';
     const mdsItem = existingQuery?.mdsItem || result?.mdsItem || '';
 
-    // ICD-10 options
-    const icd10Options = this._state.noteData?.icd10Options || [];
-    const preferredIcd10 = this._state.noteData?.preferredIcd10;
-    let icd10HTML = '';
-    if (icd10Options.length > 0) {
-      const optionsHTML = icd10Options.map(opt => {
-        const code = typeof opt === 'object' ? opt.code : opt;
-        const desc = typeof opt === 'object' ? opt.description : '';
-        const isPreferred = preferredIcd10?.code === code;
-        return `<option value="${code}" ${isPreferred ? 'selected' : ''}>${code}${desc ? ` - ${desc}` : ''}</option>`;
-      }).join('');
-      icd10HTML = `
-        <div class="super-query-send__field">
-          <label class="super-query-send__label">ICD-10 Code</label>
-          <select class="super-query-send__select" id="super-query-icd10-select">
-            ${optionsHTML}
-          </select>
-        </div>
-      `;
-    }
+    // ICD-10 code picker — always shown, nothing pre-selected. The nurse
+    // optionally attaches a code (mounted in _renderStep1 after render).
+    const icd10HTML = `
+      <div class="super-query-send__field">
+        <div id="super-query-icd10-picker"></div>
+      </div>
+    `;
 
     return `
       <div class="super-query-send super-query-send--step1">
