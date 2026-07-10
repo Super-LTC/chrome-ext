@@ -499,3 +499,190 @@
   to { opacity: 0; transform: translateX(20px); }
 }
 
+
+/* ============================================================
+   ICD-10 Code Picker (shared: QuerySendModal, MDS overlay, batch)
+   Nurse deliberately attaches an optional suggested code.
+   ============================================================ */
+.super-icd10-picker {
+  font-family: var(--super-font);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.super-icd10-picker__label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.super-icd10-picker__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--super-gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.super-icd10-picker__optional {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--super-gray-400);
+}
+
+/* --- selection state --- */
+.super-icd10-picker__empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--super-gray-50);
+  border: 1px dashed var(--super-gray-300);
+  border-radius: var(--super-radius);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--super-gray-600);
+}
+
+.super-icd10-picker__empty-icon {
+  color: var(--super-gray-400);
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.super-icd10-picker__chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+  background: var(--super-primary);
+  color: #fff;
+  border-radius: var(--super-radius);
+}
+
+.super-icd10-picker__chip-code {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.super-icd10-picker__chip-desc {
+  font-size: 12.5px;
+  opacity: 0.92;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.super-icd10-picker__chip-remove {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.super-icd10-picker__chip-remove:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* --- search input --- */
+.super-icd10-picker__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--super-gray-300);
+  border-radius: var(--super-radius);
+  font-size: 13px;
+  font-family: var(--super-font);
+  color: var(--super-gray-800);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.super-icd10-picker__input:focus {
+  border-color: var(--super-primary-light);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* --- results list --- */
+.super-icd10-picker__results {
+  display: flex;
+  flex-direction: column;
+  max-height: 210px;
+  overflow-y: auto;
+  border-radius: var(--super-radius);
+}
+
+.super-icd10-picker__results:not(:empty) {
+  border: 1px solid var(--super-gray-200);
+}
+
+.super-icd10-picker__results-heading {
+  padding: 7px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--super-gray-500);
+  background: var(--super-gray-50);
+  position: sticky;
+  top: 0;
+}
+
+.super-icd10-picker__result {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  background: #fff;
+  border: none;
+  border-top: 1px solid var(--super-gray-100);
+  cursor: pointer;
+  font-family: var(--super-font);
+  transition: background 0.12s ease;
+}
+
+.super-icd10-picker__result:first-of-type {
+  border-top: none;
+}
+
+.super-icd10-picker__result:hover {
+  background: var(--super-gray-50);
+}
+
+.super-icd10-picker__result-code {
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--super-primary-dark);
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.super-icd10-picker__result-desc {
+  font-size: 12.5px;
+  color: var(--super-gray-700);
+  line-height: 1.35;
+}
+
+.super-icd10-picker__loading,
+.super-icd10-picker__no-results {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--super-gray-500);
+}

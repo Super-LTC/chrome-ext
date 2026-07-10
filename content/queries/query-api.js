@@ -136,15 +136,13 @@ const QueryAPI = {
    * @returns {Promise<{downloadId: number}>}
    */
   async printQueryPdf(queryId, { code, description, filename } = {}) {
-    if (!code || !description) {
-      throw new Error('selectedIcd10Code and selectedIcd10Description are required');
-    }
-
+    // A codeless print is allowed — the physician fills the ICD-10 line in on
+    // paper. Send empty strings so the print PDF just leaves the code blank.
     const response = await chrome.runtime.sendMessage({
       type: 'PRINT_QUERY_PDF',
       queryId,
-      selectedIcd10Code: code,
-      selectedIcd10Description: description,
+      selectedIcd10Code: code || '',
+      selectedIcd10Description: description || '',
       filename,
     });
 
@@ -250,6 +248,34 @@ const QueryAPI = {
       preferredIcd10: response.data.preferredIcd10 || null,
       icd10Options: response.data.icd10Options || []
     };
+  },
+
+  /**
+   * Full-library ICD-10 search for the nurse's "attach a suggested code" picker.
+   * Backend searches the entire dictionary by code or description (min 2 chars)
+   * and already scrubs initial-encounter (…A/…B/…C) codes server-side, so the
+   * extension does not filter. Returns the raw `{ results }` payload data;
+   * callers normalize via normalizeSearchResults().
+   * @param {string} q - Search text (code or description)
+   * @returns {Promise<{results: Array<{code: string, description: string}>}>}
+   */
+  async searchIcd10(q) {
+    const query = (q || '').trim();
+    if (query.length < 2) return { results: [] };
+
+    const endpoint = `/api/extension/icd10-search?q=${encodeURIComponent(query)}`;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint
+    });
+
+    if (!response.success) {
+      _trackApiFail('/api/extension/icd10-search', response);
+      throw new Error(response.error || 'Failed to search ICD-10 codes');
+    }
+
+    return { results: response.data?.results || [] };
   },
 
   /**

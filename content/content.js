@@ -38,6 +38,7 @@ import './modules/notifications/notifications-api.js';
 
 // 4. Import query system
 import './queries/query-api.js';
+import './queries/icd10-code-picker.js';
 import './queries/query-state.js';
 import './queries/query-badges.js';
 import './queries/query-panel.js';
