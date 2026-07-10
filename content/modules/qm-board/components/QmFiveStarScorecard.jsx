@@ -22,7 +22,7 @@ import {
   Target, ListChecks, CalendarClock, Lock,
 } from './icons.jsx';
 import { FlQipView } from './FlQipView.jsx';
-import { hasActiveQip } from '../lib/qip-programs.js';
+import { hasQipScorer, qipDisplayLabel } from '../lib/qip-programs.js';
 
 const pct = (r) => (r == null ? '—' : `${(r * 100).toFixed(1)}%`);
 
@@ -231,8 +231,12 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
   const [open, setOpen] = useState(null);
   const toggleDrill = (id, q) => setOpen((o) => (o && o.id === id && o.q === q ? null : { id, q }));
 
-  // Regional sub-lens: Five-Star (default) ⇄ Florida QIP (FL facilities only).
-  const qipActive = hasActiveQip(facilityState);
+  // Regional sub-lens: Five-Star (default) ⇄ state QIP. Only show the toggle where
+  // we've actually built the QIP scorer (FL today) — gating on hasActiveQip lit the
+  // toggle for every state with a program on paper (OH/TX/GA…) and rendered the
+  // FL-specific view for them. Label comes from the registry, never hardcoded.
+  const qipShowScorer = hasQipScorer(facilityState);
+  const qipLabel = qipDisplayLabel(facilityState) ?? 'State QIP';
   const [scView, setScView] = useState('five_star');
   const qipTabBtn = (v, label) => (
     <button type="button" /* NO_TRACK */ onClick={() => setScView(v)}
@@ -254,13 +258,13 @@ export function QmFiveStarScorecard({ rolling, prediction, board, dfs, quarterRa
     // `qmc` brings the tone-token scope (--emerald-600 etc. are defined on .qmc);
     // without it the whole Regional scorecard renders greyscale.
     <div className="qmc qms">
-      {qipActive && (
+      {qipShowScorer && (
         <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 8, padding: 2, marginBottom: 10, fontSize: 12 }}>
           {qipTabBtn('five_star', 'Five-Star')}
-          {qipTabBtn('fl_qip', 'Florida QIP')}
+          {qipTabBtn('fl_qip', qipLabel)}
         </div>
       )}
-      {scView === 'fl_qip' ? (
+      {scView === 'fl_qip' && qipShowScorer ? (
         <FlQipView facilityName={facilityName} orgSlug={orgSlug} onOpenMeasure={onOpenMeasure} />
       ) : (
       <>
