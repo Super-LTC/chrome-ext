@@ -107,3 +107,27 @@ export function qipMeasureSet(state) {
 export function hasActiveQip(state) {
   return qipForState(state)?.active ?? false;
 }
+
+/**
+ * States for which the full Official-vs-Projected QIP SCORER is built (percentile
+ * bands + official CMS path + non-MDS inputs). The regional QIP toggle only lights
+ * up here — NOT on `hasActiveQip`, which is true for every state with a program on
+ * paper (OH/TX/GA…) even though we've only built the FL scorer. Gating on
+ * `hasActiveQip` is what made an Ohio facility show the Florida QIP view.
+ * Mirrors web/components/quality-measures/qip-programs.ts. Add a state's scorer →
+ * add it here → its toggle appears. Registry-driven, no FL hardcode.
+ */
+const QIP_SCORER_STATES = new Set(['FL']);
+export function hasQipScorer(state) {
+  return !!state && QIP_SCORER_STATES.has(String(state).toUpperCase());
+}
+
+/** Short display label for a state's QIP program, e.g. "Florida QIP". Null if no program. */
+const QIP_STATE_NAMES = {
+  FL: 'Florida', GA: 'Georgia', AL: 'Alabama', TN: 'Tennessee', TX: 'Texas', OH: 'Ohio', WI: 'Wisconsin',
+};
+export function qipDisplayLabel(state) {
+  const p = qipForState(state);
+  if (!p) return null;
+  return `${QIP_STATE_NAMES[p.state] ?? p.state} QIP`;
+}
