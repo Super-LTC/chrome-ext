@@ -124,8 +124,8 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
   // In curated mode the live search results override the curated list once the
   // nurse runs a real query. With no active query the curated list is the default
   // body. A ≥2-char curated search that returns empty shows a no-results message.
-  const showNoResults = isCurated && hasActiveQuery && !loading && results.length === 0;
-  const showCuratedList = isCurated && !hasActiveQuery && results.length === 0 && !loading;
+  const showNoResults = isCurated && !selected && hasActiveQuery && !loading && results.length === 0;
+  const showCuratedList = isCurated && !selected && !hasActiveQuery && results.length === 0 && !loading;
 
   return (
     <div className="super-icd10-picker">
@@ -149,7 +149,9 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
         ) : (
           <div className="super-icd10-picker__empty">
             <span className="super-icd10-picker__empty-icon">&#9432;</span>
-            <span>No code attached — the physician will choose. Attaching one helps them; search below to add it.</span>
+            <span>{isCurated
+              ? 'Tap a code below to attach it for the physician — or send without one.'
+              : 'No code attached — the physician will choose. Attaching one helps them; search below to add it.'}</span>
           </div>
         )}
       </div>
@@ -162,6 +164,7 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
           onClick={() => setSearchOpen(true)}
           disabled={disabled}
         >
+          <span className="super-icd10-picker__toggle-icon" aria-hidden="true">⌕</span>
           Search for a different code
         </button>
       )}
@@ -193,7 +196,6 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
             {r.recommended && <span className="super-icd10-picker__result-badge">★ Recommended</span>}
             <span className="super-icd10-picker__result-code">{r.code}</span>
             <span className="super-icd10-picker__result-desc">{r.description || ''}</span>
-            {r.recommended && <span className="super-icd10-picker__result-attach">+ Attach</span>}
           </button>
         ))}
         {showNoResults && (
