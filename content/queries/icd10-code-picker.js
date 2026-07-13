@@ -53,7 +53,7 @@ const Icd10CodePicker = {
       <div class="super-icd10-picker__selection" data-role="selection"></div>
       ${isCurated ? `
       <!-- NO_TRACK: intra-widget code-picker control; business event fires at query send -->
-      <button type="button" class="super-icd10-picker__toggle-search" data-role="toggle-search">Search for a different code</button>
+      <button type="button" class="super-icd10-picker__toggle-search" data-role="toggle-search"><span class="super-icd10-picker__toggle-icon" aria-hidden="true">&#8981;</span>Search for a different code</button>
       ` : ''}
       <div class="super-icd10-picker__search"${isCurated ? ' hidden' : ''}>
         <input type="text" class="super-icd10-picker__input" data-role="input"
@@ -79,10 +79,13 @@ const Icd10CodePicker = {
           </div>
         `;
       } else {
+        const emptyMsg = isCurated
+          ? 'Tap a code below to attach it for the physician — or send without one.'
+          : 'No code attached — the physician will choose. Attaching one helps them; search below to add it.';
         selectionEl.innerHTML = `
           <div class="super-icd10-picker__empty">
             <span class="super-icd10-picker__empty-icon">&#9432;</span>
-            <span>No code attached — the physician will choose. Attaching one helps them; search below to add it.</span>
+            <span>${emptyMsg}</span>
           </div>
         `;
       }
@@ -125,7 +128,6 @@ const Icd10CodePicker = {
           ${r.recommended ? '<span class="super-icd10-picker__result-badge">★ Recommended</span>' : ''}
           <span class="super-icd10-picker__result-code">${escapeHTML(r.code)}</span>
           <span class="super-icd10-picker__result-desc">${escapeHTML(r.description || '')}</span>
-          ${r.recommended ? '<span class="super-icd10-picker__result-attach">+ Attach</span>' : ''}
         </button>
       `).join('');
       resultsEl.innerHTML = rows;
