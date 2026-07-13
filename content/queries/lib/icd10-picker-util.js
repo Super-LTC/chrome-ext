@@ -43,3 +43,25 @@ export function normalizeSearchResults(data) {
   }
   return out;
 }
+
+/**
+ * Build the ordered, deduped suggestion list for the picker's curated mode.
+ * Preferred goes first (recommended: true); remaining options follow in order.
+ * Dedupes by code, drops entries without a code, coerces descriptions.
+ * @param {{preferred?: {code, description}|null, options?: Array<{code, description}>}} input
+ * @returns {Array<{code: string, description: string, recommended: boolean}>}
+ */
+export function buildSuggestedList({ preferred, options } = {}) {
+  const seen = new Set();
+  const out = [];
+  const push = (entry, recommended) => {
+    if (!entry) return;
+    const code = entry.code;
+    if (!code || seen.has(code)) return;
+    seen.add(code);
+    out.push({ code, description: entry.description || '', recommended });
+  };
+  push(preferred, true);
+  for (const o of Array.isArray(options) ? options : []) push(o, false);
+  return out;
+}
