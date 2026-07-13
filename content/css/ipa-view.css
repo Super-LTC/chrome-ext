@@ -38,6 +38,12 @@
 
 .ipa-card__gain { font-size: 12px; margin: 4px 0; color: var(--super-gray-700, #374151); }
 .ipa-card__gain b { color: var(--super-gray-900, #111827); }
+/* One-line preview of the top piece of evidence — real proof text, truncated,
+   so the coordinator sees what's behind the recommendation before opening Review. */
+.ipa-card__evidence { display: flex; align-items: baseline; gap: 6px; font-size: 11px; margin-top: 4px; min-width: 0; }
+.ipa-card__ev-tag { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--super-gray-400, #9ca3af); }
+.ipa-card__ev-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--super-gray-600, #4b5563); }
+.ipa-card__ev-more { flex: none; font-weight: 600; color: var(--super-gray-400, #9ca3af); }
 .ipa-card__keeps { font-size: 11px; color: #059669; margin-top: 4px; }
 .ipa-card__reason { font-size: 11px; color: #7c2d12; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
 
@@ -48,6 +54,11 @@
 .ipa-btn--primary { background: var(--super-gray-900, #0f172a); color: #fff; border-color: var(--super-gray-900, #0f172a); }
 .ipa-btn--primary:hover { background: #1e293b; }
 .ipa-btn:disabled { opacity: .6; cursor: default; }
+
+/* Ghost — a de-emphasized secondary action (Dismiss) so it doesn't compete
+   with the primary "Review & open" for visual weight. */
+.ipa-btn--ghost { flex: none; border-color: transparent; background: transparent; color: var(--super-gray-500, #6b7280); }
+.ipa-btn--ghost:hover { background: var(--super-gray-100, #f3f4f6); color: var(--super-gray-700, #374151); }
 
 /* Kebab overflow menu */
 .ipa-kebab-wrap { flex: none; position: relative; }
@@ -100,19 +111,21 @@
 .ipa-trigger__code { font-family: var(--super-font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 600; color: var(--super-gray-600, #4b5563); background: var(--super-gray-100, #f3f4f6); border-radius: 5px; padding: 2px 7px; }
 .ipa-trigger__seen { font-size: 11px; color: var(--super-gray-400, #9ca3af); white-space: nowrap; }
 
-/* Evidence rows — plain, dated proof lines nested under the item */
+/* Evidence rows — plain, dated proof lines nested under the item.
+   Note: border is explicitly transparent so <button> rows don't pick up the
+   chunky default user-agent button outline. */
 .ipa-ev-list { display: flex; flex-direction: column; gap: 6px; }
-.ipa-ev { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 7px; background: var(--super-gray-50, #f8fafc); cursor: default; font: inherit; }
+.ipa-ev { display: block; width: 100%; text-align: left; margin: 0; padding: 9px 11px; border: 1px solid transparent; border-radius: 8px; background: var(--super-gray-50, #f8fafc); cursor: default; font: inherit; -webkit-appearance: none; appearance: none; }
 .ipa-ev__meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
 .ipa-ev__type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--super-gray-400, #9ca3af); }
 .ipa-ev__date { font-size: 11px; color: var(--super-gray-400, #9ca3af); }
 .ipa-ev__text { display: block; font-size: 13px; line-height: 1.5; color: var(--super-gray-700, #374151); white-space: pre-line; }
 
-/* Linkable evidence — opens the source in the in-extension viewer */
-.ipa-ev--link { cursor: pointer; transition: background .12s; }
-.ipa-ev--link:hover { background: var(--super-gray-100, #f3f4f6); }
+/* Linkable evidence — opens the source in the in-extension viewer. A light
+   border (blue on hover) is the only affordance; non-linkable rows stay plain. */
+.ipa-ev--link { cursor: pointer; border-color: var(--super-gray-200, #e5e7eb); transition: background .12s, border-color .12s; }
+.ipa-ev--link:hover { background: #fff; border-color: var(--super-primary, #2563eb); }
 .ipa-ev__go { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--super-primary, #2563eb); white-space: nowrap; }
-.ipa-ev--link:hover .ipa-ev__go { text-decoration: underline; }
 
 .ipa-lrow { display: flex; gap: 9px; padding: 8px 10px; border-radius: 8px; margin-bottom: 5px; font-size: 12px; align-items: flex-start; }
 .ipa-ledger--keep .ipa-lrow { background: #f0f9ff; }
