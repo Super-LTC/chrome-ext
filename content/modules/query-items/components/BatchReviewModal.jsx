@@ -144,17 +144,7 @@ const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled })
 
       {/* Card body — form fields */}
       <div className="qr__card-body">
-        {/* ICD-10 code picker */}
-        <div className="qr__field">
-          <Icd10CodePicker
-            seedQuery={seedQuery}
-            selected={gq.selectedIcd10 || null}
-            onChange={(selected) => onUpdateIcd10(gq.item.mdsItem, selected)}
-            disabled={disabled}
-          />
-        </div>
-
-        {/* Note field */}
+        {/* Note field — physician-facing deliverable, lead with it */}
         <div className="qr__field">
           <div className="qr__field-label">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -169,6 +159,18 @@ const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled })
             onInput={(e) => onUpdateNote(gq.item.mdsItem, e.target.value)}
             disabled={disabled}
             rows={5}
+          />
+        </div>
+
+        {/* ICD-10 code picker */}
+        <div className="qr__field">
+          <Icd10CodePicker
+            seedQuery={seedQuery}
+            preferred={gq.preferredIcd10 || null}
+            options={gq.icd10Options || []}
+            selected={gq.selectedIcd10 || null}
+            onChange={(selected) => onUpdateIcd10(gq.item.mdsItem, selected)}
+            disabled={disabled}
           />
         </div>
       </div>
