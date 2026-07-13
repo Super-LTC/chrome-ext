@@ -13,6 +13,7 @@
 import { useState } from 'preact/hooks';
 import { postIpaAction } from './hooks/useIpaOpportunities.js';
 import { track } from '../../utils/analytics.js';
+import { openEvidence } from '../../utils/evidence-helpers.js';
 
 // ── Formatting helpers ──
 
@@ -39,6 +40,16 @@ function leverMeta(c) {
 
 function gainSummary(c) {
   return (c.triggers || []).map((t) => t.label).join(' · ');
+}
+
+// All evidence across a candidate's triggers, flattened — so the card can show
+// a real preview of the underlying proof (not just a count).
+function allEvidence(c) {
+  const out = [];
+  for (const t of c.triggers || []) {
+    for (const e of t.evidence || []) out.push(e);
+  }
+  return out;
 }
 
 // ── Evidence helpers ──
@@ -69,24 +80,25 @@ function sourceLabel(t) {
 }
 
 // Open the underlying source in the shared in-extension evidence viewer.
-// Orders → the MAR/administration modal; anything else falls back to the generic dispatcher.
 function openEvidenceSource(e) {
   if (!e || !e.sourceId || e.linkable === false) return;
   track('ipa_evidence_open', { sourceType: e.sourceType });
+  // Orders open the MAR/TAR administration modal. There's no MDS assessment in
+  // this facility-level view, so the backend derives the window from the order.
   if (e.sourceType === 'order' && typeof window.showAdministrationModal === 'function') {
     window.showAdministrationModal(e.sourceId);
     return;
   }
-  if (typeof window.openEvidence === 'function') {
-    window.openEvidence({
-      sourceType: e.sourceType,
-      sourceId: e.sourceId,
-      id: e.sourceId,
-      evidenceId: e.sourceId,
-      text: e.text,
-      quote: e.text,
-    });
-  }
+  // Everything else — progress notes, documents, UDAs, labs — routes through the
+  // shared evidence dispatcher (clinical-note / document / uda viewers, etc.).
+  openEvidence({
+    sourceType: e.sourceType,
+    sourceId: e.sourceId,
+    id: e.sourceId,
+    evidenceId: e.sourceId,
+    quote: e.text,
+    quoteText: e.text,
+  });
 }
 
 function keepsLine(c) {
@@ -162,22 +174,30 @@ function ReviewModal({ candidate, onClose, onActed }) {
                     <div class="ipa-ev-list">
                       {(t.evidence || []).map((e, i) => {
                         const linkable = e.sourceId && e.linkable !== false;
-                        return (
-                          <button
-                            class={`ipa-ev${linkable ? ' ipa-ev--link' : ''}`}
-                            key={i}
-                            type="button"
-                            disabled={!linkable}
-                            data-track={linkable ? 'ipa_evidence_open' : undefined}
-                            onClick={linkable ? () => openEvidenceSource(e) : undefined}
-                          >
+                        const inner = (
+                          <>
                             <span class="ipa-ev__meta">
                               <span class="ipa-ev__type">{sourceLabel(e.sourceType)}</span>
                               {e.date && <span class="ipa-ev__date">{fmtDate(e.date)}</span>}
-                              {linkable && <span class="ipa-ev__go">View</span>}
+                              {linkable && <span class="ipa-ev__go">View {'→'}</span>}
                             </span>
                             <span class="ipa-ev__text">{e.text}</span>
+                          </>
+                        );
+                        // Clickable evidence is a button with a clear affordance;
+                        // non-linkable evidence renders as plain proof text.
+                        return linkable ? (
+                          <button
+                            class="ipa-ev ipa-ev--link"
+                            key={i}
+                            type="button"
+                            data-track="ipa_evidence_open"
+                            onClick={() => openEvidenceSource(e)}
+                          >
+                            {inner}
                           </button>
+                        ) : (
+                          <div class="ipa-ev" key={i}>{inner}</div>
                         );
                       })}
                     </div>
@@ -245,6 +265,9 @@ function Card({ candidate, onReview, onAction }) {
   const isLoss = candidate.tier === 'not_recommended';
   const keeps = keepsLine(candidate);
   const drops = (candidate.loseItLedger || []).filter((l) => !l.stays);
+  const evidence = allEvidence(candidate);
+  const topEv = evidence[0];
+  const moreEv = evidence.length - 1;
 
   return (
     <div class={`ipa-card${isLoss ? ' ipa-card--loss' : ''}`}>
@@ -263,6 +286,14 @@ function Card({ candidate, onReview, onAction }) {
 
       <div class="ipa-card__gain"><b>New:</b> {gainSummary(candidate)}</div>
 
+      {topEv && (
+        <div class="ipa-card__evidence">
+          <span class="ipa-card__ev-tag">{sourceLabel(topEv.sourceType)}{topEv.date ? ` · ${fmtDate(topEv.date)}` : ''}</span>
+          <span class="ipa-card__ev-text">{topEv.text}</span>
+          {moreEv > 0 && <span class="ipa-card__ev-more">+{moreEv}</span>}
+        </div>
+      )}
+
       {isLoss ? (
         <div class="ipa-card__reason">
           {drops.length > 0
@@ -280,7 +311,7 @@ function Card({ candidate, onReview, onAction }) {
         {isLoss && (
           <button class="ipa-btn" data-track="ipa_see_why" onClick={() => onReview(candidate)}>See why</button>
         )}
-        <button class="ipa-btn" data-track="ipa_dismiss" onClick={() => onAction(candidate.id, 'dismiss')}>Dismiss</button>
+        <button class="ipa-btn ipa-btn--ghost" data-track="ipa_dismiss" onClick={() => onAction(candidate.id, 'dismiss')}>Dismiss</button>
         <div class="ipa-kebab-wrap">
           <button class="ipa-kebab" data-track="ipa_menu_open" onClick={() => setMenuOpen((v) => !v)}>⋯</button>
           {menuOpen && (

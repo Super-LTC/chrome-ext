@@ -3523,7 +3523,10 @@ async function showAdministrationModal(orderId) {
   // Get current page context
   const params = await getAPIParams();
 
-  // Create and show loading modal
+  // Note: in facility-level contexts (e.g. the Command Center IPA tab) there is
+  // no opened MDS assessment in the URL, so params.assessmentId is null. We send
+  // no externalAssessmentId in that case (see fetchAdministrations) and let the
+  // backend derive the default MAR/TAR window from the order itself.
   const modal = createAdminModalShell();
   document.body.appendChild(modal);
 
@@ -3952,14 +3955,19 @@ function formatDateForAPI(date) {
 
 // API fetch function
 async function fetchAdministrations(orderId, params, dateRange = {}) {
-  let endpoint = `/api/extension/orders/${orderId}/administrations?` +
-    `externalAssessmentId=${params.assessmentId}` +
-    `&facilityName=${encodeURIComponent(params.facilityName)}` +
-    `&orgSlug=${params.orgSlug}` +
-    `&type=both`;
+  const qs = new URLSearchParams();
+  // Only send externalAssessmentId when we actually have one. On facility-level
+  // pages it's null — sending the literal string "null" makes the backend look up
+  // a bogus assessment and hard-fail with "Assessment not found". With no
+  // assessment the backend derives the default window from the order itself.
+  if (params.assessmentId) qs.set('externalAssessmentId', params.assessmentId);
+  if (params.facilityName) qs.set('facilityName', params.facilityName);
+  if (params.orgSlug) qs.set('orgSlug', params.orgSlug);
+  qs.set('type', 'both');
+  if (dateRange.startDate) qs.set('startDate', dateRange.startDate);
+  if (dateRange.endDate) qs.set('endDate', dateRange.endDate);
 
-  if (dateRange.startDate) endpoint += `&startDate=${dateRange.startDate}`;
-  if (dateRange.endDate) endpoint += `&endDate=${dateRange.endDate}`;
+  const endpoint = `/api/extension/orders/${orderId}/administrations?${qs.toString()}`;
 
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',
