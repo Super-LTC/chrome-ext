@@ -155,9 +155,12 @@ const Icd10CodePicker = {
       const val = e.target.value;
       clearTimeout(debounceTimer);
       if (val.trim().length < 2) {
-        // Empty/short query — fall back to seeded suggestions.
+        // Empty/short query — fall back. Curated mode's fallback is the curated
+        // list itself, never a seed search (that's the junk list it exists to avoid).
         clearTimeout(debounceTimer);
-        if (seedQuery && seedQuery.trim().length >= 2) {
+        if (isCurated) {
+          renderCuratedList();
+        } else if (seedQuery && seedQuery.trim().length >= 2) {
           runSearch(seedQuery, { heading: 'Suggested for this diagnosis' });
         } else {
           resultsEl.innerHTML = '';
