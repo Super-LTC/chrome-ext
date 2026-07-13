@@ -116,10 +116,16 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
     }
   };
 
-  // In curated mode with no selection, the live search results only override the
-  // curated list once the nurse actually types (results populated). Otherwise the
-  // curated list is the default body.
-  const showCuratedList = isCurated && !selected && results.length === 0 && !loading;
+  // An "active" free-text search is one with a runnable query (≥2 chars). This
+  // distinguishes "the nurse is searching and got nothing" (→ no-results) from
+  // "no query typed" (→ curated list default).
+  const hasActiveQuery = query.trim().length >= 2;
+
+  // In curated mode the live search results override the curated list once the
+  // nurse runs a real query. With no active query the curated list is the default
+  // body. A ≥2-char curated search that returns empty shows a no-results message.
+  const showNoResults = isCurated && hasActiveQuery && !loading && results.length === 0;
+  const showCuratedList = isCurated && !hasActiveQuery && results.length === 0 && !loading;
 
   return (
     <div className="super-icd10-picker">
@@ -148,7 +154,7 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
         )}
       </div>
 
-      {isCurated && !searchOpen && !selected && (
+      {isCurated && !searchOpen && (
         /* NO_TRACK: intra-widget code-picker control; business event fires at query send */
         <button
           type="button"
@@ -160,7 +166,7 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
         </button>
       )}
 
-      {(!isCurated || searchOpen || selected) && (
+      {(!isCurated || searchOpen) && (
         <div className="super-icd10-picker__search">
           <input
             type="text"
@@ -190,10 +196,13 @@ export const Icd10CodePicker = ({ seedQuery = '', selected, onChange, disabled =
             {r.recommended && <span className="super-icd10-picker__result-attach">+ Attach</span>}
           </button>
         ))}
-        {!loading && !showCuratedList && heading && results.length > 0 && (
+        {showNoResults && (
+          <div className="super-icd10-picker__no-results">No matching codes</div>
+        )}
+        {!loading && !showCuratedList && !showNoResults && heading && results.length > 0 && (
           <div className="super-icd10-picker__results-heading">{heading}</div>
         )}
-        {!loading && !showCuratedList && results.map(r => (
+        {!loading && !showCuratedList && !showNoResults && results.map(r => (
           <button
             key={r.code}
             type="button"
