@@ -4477,6 +4477,7 @@ function setupQueryModalListeners(modal, result, context) {
 
   const closeModal = () => {
     picker?.destroy?.();
+    modal._remountIcd10Picker = null;
     modal.remove();
     document.body.style.overflow = '';
   };
