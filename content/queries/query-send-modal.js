@@ -192,6 +192,8 @@ const QuerySendModal = {
         const seedQuery = this._state.existingQuery?.mdsItemName || ai.mdsItemName || result?.description || '';
         this._picker = window.Icd10CodePicker.create(pickerContainer, {
           seedQuery,
+          preferred: this._state.noteData?.preferredIcd10 || null,
+          options: this._state.noteData?.icd10Options || [],
           initialSelected: this._state.selectedIcd10,
           onChange: (selected) => { this._state.selectedIcd10 = selected; }
         });
@@ -548,10 +550,7 @@ const QuerySendModal = {
           </div>
         </div>
 
-        <!-- ICD-10 -->
-        ${icd10HTML}
-
-        <!-- Note -->
+        <!-- Note — the physician-facing deliverable, so it leads -->
         <div class="super-query-send__field">
           <label class="super-query-send__label">Note for Physician</label>
           <textarea
@@ -561,6 +560,9 @@ const QuerySendModal = {
             placeholder="Enter note for physician..."
           >${this._escapeHTML(this._state.noteText)}</textarea>
         </div>
+
+        <!-- ICD-10 -->
+        ${icd10HTML}
       </div>
     `;
   },

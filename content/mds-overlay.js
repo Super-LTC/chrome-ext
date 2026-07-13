@@ -4400,13 +4400,20 @@ async function fetchAndPopulateNote(modal, result) {
   if (!textarea) return;
 
   try {
-    // Only the AI note text is used now — the ICD-10 code is chosen deliberately
-    // by the nurse via the code picker, never pre-filled from an AI guess.
-    const { note } = await fetchAIGeneratedNote(result);
+    // The AI note text populates the textarea. The ICD-10 code is still chosen
+    // deliberately by the nurse via the picker (never pre-filled from an AI
+    // guess), but the backend supplies a curated preferred/options list so the
+    // right codes are recommended first — re-mount the picker with that data.
+    const { note, preferredIcd10, icd10Options } = await fetchAIGeneratedNote(result);
     textarea.value = note;
+    modal._remountIcd10Picker?.({
+      preferred: preferredIcd10 || null,
+      options: icd10Options || []
+    });
   } catch (error) {
     console.error('Super LTC: Failed to generate AI note, using fallback', error);
     textarea.value = generateDefaultNote(result);
+    // Leave the legacy-mode picker in place on failure (clean fallback).
   } finally {
     // Remove loading state
     textarea.classList.remove('super-query-note--loading');
@@ -4455,18 +4462,30 @@ function setupQueryModalListeners(modal, result, context) {
   let selectedIcd10 = null;
   const pickerContainer = modal.querySelector('#super-query-icd10-picker-legacy');
   let picker = null;
-  if (pickerContainer && window.Icd10CodePicker) {
-    const ai = result.aiAnswer || {};
-    const seedQuery = ai.mdsItemName || ai.kbCategory?.categoryName || result.description || '';
+  const ai = result.aiAnswer || {};
+  const seedQuery = ai.mdsItemName || ai.kbCategory?.categoryName || result.description || '';
+  // Mount/re-mount the picker. Initially mounts in legacy mode (no curated data
+  // yet); once the AI note resolves we re-mount with the backend's curated
+  // preferred/options, preserving any code the nurse already picked.
+  const mountPicker = ({ preferred = null, options = [] } = {}) => {
+    if (!pickerContainer || !window.Icd10CodePicker) return;
+    const prevSelected = picker?.getSelected?.() ?? selectedIcd10;
+    picker?.destroy?.();
     picker = window.Icd10CodePicker.create(pickerContainer, {
       seedQuery,
-      initialSelected: null,
+      preferred,
+      options,
+      initialSelected: prevSelected,
       onChange: (selected) => { selectedIcd10 = selected; }
     });
-  }
+  };
+  mountPicker();
+  // Expose the re-mount hook so the async note fetch can supply curated data.
+  modal._remountIcd10Picker = mountPicker;
 
   const closeModal = () => {
     picker?.destroy?.();
+    modal._remountIcd10Picker = null;
     modal.remove();
     document.body.style.overflow = '';
   };

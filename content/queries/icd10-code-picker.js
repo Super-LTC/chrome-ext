@@ -17,7 +17,7 @@
 //   picker.getSelected();  // -> {code, description} | null
 //   picker.destroy();
 
-import { normalizeSearchResults } from './lib/icd10-picker-util.js';
+import { normalizeSearchResults, buildSuggestedList } from './lib/icd10-picker-util.js';
 
 const DEBOUNCE_MS = 250;
 
@@ -31,13 +31,18 @@ function escapeHTML(str) {
 const Icd10CodePicker = {
   /**
    * @param {HTMLElement} container
-   * @param {{seedQuery?: string, initialSelected?: {code,description}|null, onChange?: Function}} opts
+   * @param {{seedQuery?: string, initialSelected?: {code,description}|null, onChange?: Function, preferred?: {code,description}|null, options?: Array<{code,description}>}} opts
    * @returns {{getSelected: Function, destroy: Function}}
    */
-  create(container, { seedQuery = '', initialSelected = null, onChange = () => {} } = {}) {
+  create(container, { seedQuery = '', initialSelected = null, onChange = () => {}, preferred = null, options = [] } = {}) {
     let selected = initialSelected && initialSelected.code ? { ...initialSelected } : null;
     let searchToken = 0;
     let debounceTimer = null;
+
+    // Curated mode: caller supplied backend-vetted codes. Render them recommended-first
+    // with no network call, and demote free-text search behind a disclosure toggle.
+    const curated = buildSuggestedList({ preferred, options });
+    const isCurated = curated.length > 0;
 
     container.classList.add('super-icd10-picker');
     container.innerHTML = `
@@ -46,7 +51,11 @@ const Icd10CodePicker = {
         <span class="super-icd10-picker__optional">Optional</span>
       </div>
       <div class="super-icd10-picker__selection" data-role="selection"></div>
-      <div class="super-icd10-picker__search">
+      ${isCurated ? `
+      <!-- NO_TRACK: intra-widget code-picker control; business event fires at query send -->
+      <button type="button" class="super-icd10-picker__toggle-search" data-role="toggle-search">Search for a different code</button>
+      ` : ''}
+      <div class="super-icd10-picker__search"${isCurated ? ' hidden' : ''}>
         <input type="text" class="super-icd10-picker__input" data-role="input"
                placeholder="Search ICD-10 by code or description…" autocomplete="off" />
       </div>
@@ -56,6 +65,8 @@ const Icd10CodePicker = {
     const selectionEl = container.querySelector('[data-role="selection"]');
     const inputEl = container.querySelector('[data-role="input"]');
     const resultsEl = container.querySelector('[data-role="results"]');
+    const searchEl = container.querySelector('.super-icd10-picker__search');
+    const toggleSearchEl = container.querySelector('[data-role="toggle-search"]');
 
     function renderSelection() {
       if (selected) {
@@ -106,6 +117,20 @@ const Icd10CodePicker = {
       resultsEl.innerHTML = headingHTML + rows;
     }
 
+    function renderCuratedList() {
+      const rows = curated.map(r => `
+        <!-- NO_TRACK: intra-widget code-picker result; business event fires at query send -->
+        <button type="button" class="super-icd10-picker__result${r.recommended ? ' super-icd10-picker__result--recommended' : ''}"
+                data-code="${escapeHTML(r.code)}" data-desc="${escapeHTML(r.description || '')}">
+          ${r.recommended ? '<span class="super-icd10-picker__result-badge">★ Recommended</span>' : ''}
+          <span class="super-icd10-picker__result-code">${escapeHTML(r.code)}</span>
+          <span class="super-icd10-picker__result-desc">${escapeHTML(r.description || '')}</span>
+          ${r.recommended ? '<span class="super-icd10-picker__result-attach">+ Attach</span>' : ''}
+        </button>
+      `).join('');
+      resultsEl.innerHTML = rows;
+    }
+
     async function runSearch(q, { heading } = {}) {
       const token = ++searchToken;
       const query = (q || '').trim();
@@ -130,9 +155,12 @@ const Icd10CodePicker = {
       const val = e.target.value;
       clearTimeout(debounceTimer);
       if (val.trim().length < 2) {
-        // Empty/short query — fall back to seeded suggestions.
+        // Empty/short query — fall back. Curated mode's fallback is the curated
+        // list itself, never a seed search (that's the junk list it exists to avoid).
         clearTimeout(debounceTimer);
-        if (seedQuery && seedQuery.trim().length >= 2) {
+        if (isCurated) {
+          renderCuratedList();
+        } else if (seedQuery && seedQuery.trim().length >= 2) {
           runSearch(seedQuery, { heading: 'Suggested for this diagnosis' });
         } else {
           resultsEl.innerHTML = '';
@@ -154,7 +182,9 @@ const Icd10CodePicker = {
     const onSelectionClick = (e) => {
       if (e.target.closest('[data-role="remove"]')) {
         setSelected(null);
-        if (seedQuery && seedQuery.trim().length >= 2) {
+        if (isCurated) {
+          renderCuratedList();
+        } else if (seedQuery && seedQuery.trim().length >= 2) {
           runSearch(seedQuery, { heading: 'Suggested for this diagnosis' });
         }
         inputEl.focus();
@@ -162,9 +192,18 @@ const Icd10CodePicker = {
     };
     selectionEl.addEventListener('click', onSelectionClick);
 
+    const onToggleSearch = () => {
+      if (searchEl) searchEl.hidden = false;
+      if (toggleSearchEl) toggleSearchEl.hidden = true;
+      inputEl.focus();
+    };
+    if (toggleSearchEl) toggleSearchEl.addEventListener('click', onToggleSearch);
+
     // ---- init ----
     renderSelection();
-    if (!selected && seedQuery && seedQuery.trim().length >= 2) {
+    if (isCurated) {
+      renderCuratedList();
+    } else if (!selected && seedQuery && seedQuery.trim().length >= 2) {
       runSearch(seedQuery, { heading: 'Suggested for this diagnosis' });
     }
 
@@ -176,6 +215,7 @@ const Icd10CodePicker = {
         inputEl.removeEventListener('input', onInput);
         resultsEl.removeEventListener('click', onResultsClick);
         selectionEl.removeEventListener('click', onSelectionClick);
+        if (toggleSearchEl) toggleSearchEl.removeEventListener('click', onToggleSearch);
       }
     };
   }
