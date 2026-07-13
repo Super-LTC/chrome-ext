@@ -81,21 +81,51 @@ Respects the existing shipped contract: **no AI-guessed code is pre-attached.**
 - After Attach, the code renders as a removable chip
   (`Attached: [ D50 Iron deficiency anemia ✕ ]`).
 
+## Three send surfaces — all must be updated
+
+The picker is shared but mounted on three surfaces, **each of which already
+fetches `generate-note`** (so `preferredIcd10` + `icd10Options` are already in
+scope — currently unused). All three need the data threaded in.
+
+| # | Surface | File(s) | Picker | Data today |
+|---|---------|---------|--------|------------|
+| 1 | Single-query "Send Diagnosis Query" modal | `content/queries/query-send-modal.js` (~L114 fetch, ~L176–199 mount) | vanilla | `_state.noteData.preferredIcd10/icd10Options` stored, unused |
+| 2 | Batch "Review & Send" | `content/modules/query-items/components/BatchReviewModal.jsx` (~L149) + `content/modules/query-items/hooks/useBatchQuery.js` (~L57–66) | Preact | `gq.preferredIcd10/icd10Options` already in `generatedQueries` state, unused |
+| 3 | Legacy MDS overlay modal | `content/mds-overlay.js` (~L4201 fetch, ~L4443–4458 mount) | vanilla | fetched then discarded (only `note` used) |
+
 ## Affected files
 
-- `content/queries/query-send-modal.js` — pass `preferredIcd10` + `icd10Options`
-  from the `generate-note` result into the picker; reorder modal so note leads.
-  (Current wiring ~L184–199; codeless contract ~L395–407.)
-- `content/queries/icd10-code-picker.js` — vanilla picker: accept
-  `preferred` + `options` props, render curated list + emphasized recommended
-  row, demote free search behind disclosure, drop the auto-seed search on mount.
-- `content/modules/query-items/components/Icd10CodePicker.jsx` — Preact mirror.
-- `content/queries/lib/icd10-picker-util.js` — keep `normalizeSearchResults`
-  for the free-search path (still discards non-code/description fields there).
-- `content/queries/query-api.js` — `searchIcd10` unchanged (used by the
-  disclosed free-search only).
-- `diagnosis-query-modal.css` — recommended-row emphasis, disclosure, note
-  section height/edge, chip styles.
+**Shared picker (redesign once, benefits all three):**
+- `content/queries/icd10-code-picker.js` — vanilla picker: accept `preferred`
+  + `options` props; render emphasized recommended row + curated `options` list;
+  demote free-text search behind a "Search for a different code" disclosure;
+  drop the auto-seed search on mount when `options` are supplied.
+- `content/modules/query-items/components/Icd10CodePicker.jsx` — Preact mirror,
+  same new `preferred` / `options` props + behavior.
+- `content/queries/lib/icd10-picker-util.js` — keep `normalizeSearchResults` /
+  `toRecommendedIcd10`; free-search path unchanged.
+- `content/queries/query-api.js` — `searchIcd10` unchanged (disclosed search only).
+
+**Thread data + note-first layout at each mount site:**
+- `content/queries/query-send-modal.js` — pass `noteData.preferredIcd10` /
+  `icd10Options` to the picker; reorder so note leads. Codeless contract
+  (~L395–407) unchanged.
+- `content/modules/query-items/components/BatchReviewModal.jsx` — pass
+  `gq.preferredIcd10` / `gq.icd10Options` per card; note already visible on this
+  wide surface, keep it as the card anchor.
+- `content/mds-overlay.js` — stop discarding `preferredIcd10` / `icd10Options`;
+  defer picker creation until after `fetchAIGeneratedNote()` resolves so the
+  data is available at mount.
+
+**Styling:**
+- `diagnosis-query-modal.css` — recommended-row emphasis, disclosure toggle,
+  note section height/edge, attached chip styles. (Confirm the batch surface
+  pulls the same stylesheet / class names.)
+
+## Attach behavior applies identically on all three (Option A)
+
+Nothing pre-attached anywhere; `preferredIcd10` is a one-tap on every surface;
+codeless-send stays valid on every surface.
 
 ## Out of scope / non-goals
 
