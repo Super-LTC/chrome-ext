@@ -736,6 +736,11 @@ function processQuestion(questionEl, item, column, aiAnswer) {
 
   // Inject badge
   injectBadge(questionEl, result);
+
+  // Keep the badge live: re-evaluate when the nurse changes the PCC answer, so
+  // picking the value herself flips yellow→green immediately (and drops it from
+  // the "N items to review" count) without needing to also click "Agree".
+  attachLiveRevaluation(questionEl, result);
 }
 
 /**
@@ -800,6 +805,72 @@ function getPCCAnswer(questionEl) {
 function determineStatusForOverlay(aiAnswer, pccAnswer) {
   const dismissed = SuperOverlay.dismissedItems.has(`${aiAnswer.mdsItem}-${aiAnswer.column}`);
   return determineStatus(aiAnswer, pccAnswer, { dismissed });
+}
+
+/**
+ * Keep a badge in sync with the live PCC form. The status is computed once at
+ * injection time and never revisited, so when the nurse selects the answer
+ * herself on the PCC page the badge stays yellow ("review") and keeps counting
+ * against the section's "N items to review" tally until she separately clicks
+ * "Agree". This watches the question for answer changes and re-runs the same
+ * status logic, so a value that now matches the solver turns green on its own.
+ *
+ * A badge she has explicitly agreed/disagreed with is left alone — her decision
+ * stands. The observer is disconnected around our own badge re-render so the
+ * DOM write can't re-trigger it.
+ */
+function attachLiveRevaluation(questionEl, result) {
+  if (result.__superLiveAttached) return;
+  result.__superLiveAttached = true;
+
+  let scheduled = false;
+
+  const reevaluate = () => {
+    scheduled = false;
+
+    // Respect an explicit user decision — never override agree/disagree.
+    const dismissKey = `${result.mdsItem}-${result.column}`;
+    if (SuperOverlay.dismissedItems.has(dismissKey)) return;
+
+    const newPcc = getPCCAnswer(questionEl);
+    if (newPcc === result.pccAnswer) return; // nothing actually changed
+    result.pccAnswer = newPcc;
+
+    const newStatus = determineStatusForOverlay(result.aiAnswer, newPcc);
+    if (newStatus === result.status) return;
+    result.status = newStatus;
+
+    // Re-render badge + section counts. Disconnect first so our own DOM write
+    // doesn't feed back into the observer.
+    observer.disconnect();
+    injectBadge(questionEl, result);
+    createSummaryPanel();
+    connect();
+  };
+
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    // Defer: let PCC's own click handler finish toggling `.selected` first.
+    setTimeout(reevaluate, 0);
+  };
+
+  const observer = new MutationObserver(schedule);
+  const connect = () =>
+    observer.observe(questionEl, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+  connect();
+
+  // Typed answers (weights, insulin day-counts, etc.) live in inputs, whose
+  // value changes don't surface as a `.selected` class mutation.
+  questionEl.querySelectorAll('input[type="text"], input[type="number"]').forEach((inp) => {
+    inp.addEventListener('input', schedule);
+    inp.addEventListener('change', schedule);
+  });
 }
 
 // ============================================
@@ -1990,7 +2061,11 @@ function renderDrugRegimenIssues(issuesFound) {
 function formatFallDate(dateStr) {
   if (!dateStr) return '';
   try {
-    const date = new Date(dateStr);
+    // Use the shared parser, NOT new Date(dateStr). Fall dates arrive date-only
+    // ("YYYY-MM-DD"); new Date() parses those as UTC midnight, which renders as
+    // the PREVIOUS day in US timezones — the "falls are a day off" bug. parseDate
+    // treats date-only strings as local midnight so the calendar date is exact.
+    const date = parseDate(dateStr);
     if (isNaN(date.getTime())) return dateStr;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
