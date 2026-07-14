@@ -10,12 +10,11 @@
  * injection, polling init, MutationObserver re-injection on SPA nav, and a
  * dynamic Preact import so the modal stays out of the initial bundle.
  *
- * Beta-gated: the button only injects for users on the backend MDS beta
- * allowlist (same gate as the interview scheduler + list-coverage overlay).
- * Fails closed — non-testers see PCC's native page unchanged.
+ * GA: injects for ALL users (no beta allowlist — the interview scheduler is
+ * the only surface still behind mds-beta-gate). The verify route itself is
+ * gated server-side on org `mdsSolver` module access; orgs without it get the
+ * modal's 403 error state, and logged-out users get the login alert on click.
  */
-
-import { mdsBetaEnabled } from '../../mds-beta-gate.js';
 
 const BTN_ID = 'super-verify-btn';
 const OVERLAY_ID = 'super-verify-overlay';
@@ -116,13 +115,6 @@ async function _openModal({ assessId, patientId }) {
 export async function injectSuperVerifyButton() {
   if (!_isSectionListingPage()) return;
   if (document.getElementById(BTN_ID)) return; // already injected
-
-  // Beta gate (single chokepoint for both call paths: polling + URL observer).
-  // Cached/in-flight-shared, so the repeated polling calls cost one round-trip.
-  if (!(await mdsBetaEnabled())) return;
-  // Re-check idempotency after the async gate — concurrent polling/observer
-  // passes can all clear the early check before any of them injects.
-  if (document.getElementById(BTN_ID)) return;
 
   const btn = _makeButton();
   const form = document.getElementById('verifyBtnForm');
