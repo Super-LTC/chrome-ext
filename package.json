@@ -45,8 +45,8 @@
   },
   "dependencies": {
     "driver.js": "^1.4.0",
-    "jspdf": "^2.5.2",
-    "jspdf-autotable": "^3.8.4",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "pdfjs-dist": "^3.11.174",
     "posthog-js": "^1.372.1",
     "preact": "^10.28.3",
