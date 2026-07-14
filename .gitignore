@@ -25,3 +25,6 @@ store/
 /*.png
 .claude/scheduled_tasks.lock
 .context/
+
+# Marketing screenshots (update-email collateral)
+screenshots-update-email/

@@ -1,5 +1,19 @@
 # Super LTC Chrome Extension - Development Guide
 
+## Linear (issue tracking)
+
+Work is tracked in Linear (team `Superltc`, issue prefix `SUP-`) — the **same** team and issue set as the `superltc` backend repo. Issues are workspace-wide, not per-repo; many span both repos. Projects = durable workstreams; customer names are labels (Lilac, Millennial, Garden Springs, Allure, NexTier, Empire, Regents, Powder Springs). The `repo:extension` label marks extension-side work.
+
+**Every PR must close its Linear issue automatically.** Include a magic word + issue ID in the PR body so the GitHub↔Linear integration moves the issue to Done on merge:
+
+```
+Closes SUP-123
+```
+
+- Use `Closes SUP-XXX` (or `Fixes SUP-XXX`) — one line per issue the PR resolves. Multiple allowed.
+- Prefer Linear's generated branch name (`andrew/sup-123-...`) so the branch links the issue and flips it to **In Progress** on push.
+- If a change has no Linear issue yet, create one (or ask) rather than shipping untracked.
+
 ## 🏗️ Architecture Overview
 
 This Chrome extension is currently in a **hybrid architecture** state:

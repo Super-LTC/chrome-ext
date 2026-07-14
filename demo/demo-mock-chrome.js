@@ -12,6 +12,7 @@ import { SECTION_I_DETAIL } from './demo-section-i-fixtures.js';
 import { buildPlannerWeekEvents, buildPlannerSummary } from './demo-planner-fixtures.js';
 import {
   DEMO_GG_DETAIL_BY_PATIENT,
+  buildGgDetailFor,
   buildReportList,
   buildReportForDate,
 } from './demo-qm-fixtures.js';
@@ -764,9 +765,10 @@ function routeApiRequest(endpoint, options = {}) {
   const ggMatch = path.match(/\/api\/extension\/patients\/([^/]+)\/gg-decline$/);
   if (ggMatch) {
     const patientId = ggMatch[1];
-    const data = DEMO_GG_DETAIL_BY_PATIENT[patientId];
-    if (data) return { success: true, data };
-    return { success: false, error: `Demo: no GG detail for ${patientId}` };
+    // Hand-authored fixture when we have one; otherwise synthesize a plausible
+    // decline story so every QM Board resident opens to a populated chart.
+    const data = DEMO_GG_DETAIL_BY_PATIENT[patientId] || buildGgDetailFor(patientId);
+    return { success: true, data };
   }
 
   // Snooze mutations — just acknowledge; no state persistence in the demo.

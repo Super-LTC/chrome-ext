@@ -821,6 +821,116 @@ export const DEMO_GG_DETAIL_BY_PATIENT = {
   },
 };
 
+// ── Synthetic GG detail for any patient not in the hand-authored map above ───
+// The QM Board is driven by real anonymized HAR data (patient IDs like
+// "txves9mhdu48"), so its residents never match the four demo-p-100X fixtures.
+// Rather than error, deterministically fabricate a plausible decline story from
+// the patientId so every board resident opens to a populated chart. Same
+// patientId always yields the same charts (seeded PRNG — no Math.random).
+
+const GG_ITEM_CATALOG = [
+  { mdsKey: 'GG0170D', name: 'Sit to Stand' },
+  { mdsKey: 'GG0170F', name: 'Toilet Transfer' },
+  { mdsKey: 'GG0170I', name: 'Walk 10 Feet' },
+  { mdsKey: 'GG0170J', name: 'Walk 50 Feet' },
+  { mdsKey: 'GG0170K', name: 'Walk 150 Feet' },
+  { mdsKey: 'GG0130A', name: 'Eating' },
+  { mdsKey: 'GG0130B', name: 'Oral Hygiene' },
+  { mdsKey: 'GG0170B', name: 'Sit to Lying' },
+  { mdsKey: 'GG0170C', name: 'Lying to Sitting' },
+  { mdsKey: 'GG0170E', name: 'Chair/Bed Transfer' },
+];
+
+const GG_LOCATIONS = [
+  'Unit 1 — 104', 'Unit 1 — 118-A', 'Unit 2 — 214-A', 'Unit 2 — 221',
+  'Unit 3 — 308-B', 'Unit 3 — 312-A', 'Unit 4 — 410-B', 'Unit 4 — 402',
+];
+
+const GG_ARD_DATES = [
+  '2026-01-18', '2026-01-22', '2026-01-28', '2026-02-01',
+  '2026-02-11', '2026-02-20', '2026-03-03', '2026-03-14',
+];
+
+function ggSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < String(str).length; i += 1) {
+    h ^= String(str).charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// mulberry32 — small deterministic PRNG so the same patient renders the same
+// charts across page loads (Math.random would reshuffle on every open).
+function mulberry32(a) {
+  return function next() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function ggSeverity(mag) {
+  if (mag >= 2) return 'severe';
+  if (mag >= 1.3) return 'moderate';
+  return 'mild';
+}
+
+export function buildGgDetailFor(patientId) {
+  const rng = mulberry32(ggSeed(patientId));
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+
+  const pool = [...GG_ITEM_CATALOG];
+  const count = 2 + Math.floor(rng() * 3); // 2..4 items
+  const chosen = [];
+  for (let i = 0; i < count && pool.length; i += 1) {
+    chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  }
+
+  const baselines = [];
+  const declines = [];
+  const scoreItems = [];
+  let maxMag = 0;
+
+  chosen.forEach((it, idx) => {
+    const baseline = 3 + Math.floor(rng() * 3); // 3..5
+    // First item always tells a real decline story; others vary.
+    const mag = idx === 0
+      ? +(1.3 + rng() * 1.0).toFixed(1)  // 1.3..2.3
+      : +(0.7 + rng() * 1.6).toFixed(1); // 0.7..2.3
+    const worst = Math.max(1, +(baseline - mag).toFixed(1));
+    const declineMagnitude = +(baseline - worst).toFixed(1);
+    if (declineMagnitude > maxMag) maxMag = declineMagnitude;
+
+    baselines.push({
+      mdsKey: it.mdsKey, name: it.name,
+      value: baseline, rawValue: String(baseline).padStart(2, '0'),
+    });
+    if (declineMagnitude >= 1) {
+      declines.push({
+        mdsKey: it.mdsKey, name: it.name,
+        baseline, worstShiftAverage: worst,
+        declineMagnitude, severity: ggSeverity(declineMagnitude),
+      });
+    }
+    scoreItems.push({ mdsKey: it.mdsKey, name: it.name, baseline, worstShiftAverage: worst });
+  });
+
+  return {
+    decline: {
+      locationName: pick(GG_LOCATIONS),
+      mdsArdDate: pick(GG_ARD_DATES),
+      overallSeverity: ggSeverity(maxMag),
+      baselines,
+      declines,
+    },
+    scores: buildScores(patientId, scoreItems),
+    snooze: null,
+  };
+}
+
 // ── 24-Hour Report fixtures ─────────────────────────────────────────────────
 // List shape: { timezone, locationId, reports: [{ id, reportDate, status, counts }] }
 // Day shape:  { report: { id, reportDate, status, counts, findings: [...] } }
