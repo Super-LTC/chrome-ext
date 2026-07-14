@@ -88,6 +88,8 @@ export const EVENT_SCHEMA = {
   // missing NTA-paying diagnosis from the banner.
   i8000_audit_clicked: ['field', 'verdict'],
   i8000_suggestion_clicked: ['category', 'nta_points'],
+  // Modal evidence card → source viewer (viewer: administrations|evidence).
+  i8000_evidence_opened: ['source_type', 'viewer'],
   // User accepted/rejected the AI suggestion. `surface` tells you which UI:
   //   'mds_overlay_popover' — inline badge popover on the PCC MDS page
   //   'pdpm_sidebar'        — PDPM Analyzer item detail view

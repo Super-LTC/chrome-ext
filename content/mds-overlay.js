@@ -11,6 +11,7 @@ import { UdaViewer } from './modules/uda-viewer/UdaViewer.jsx';
 import { normalizeAnswer, formatAnswerForDisplay, determineStatus, sectionIBadgeLabel } from './super-menu/mds-badge.js';
 import { buildI8000ViewModel } from './i8000-overlay/i8000-model.js';
 import { I8000_MOCK_ENVELOPE } from './i8000-overlay/i8000-mock.js';
+import { openEvidence } from './utils/evidence-helpers.js';
 import { toRecommendedIcd10 } from './queries/lib/icd10-picker-util.js';
 
 // ============================================
@@ -603,7 +604,7 @@ async function initSuperOverlay() {
 
     // I8000 overlay: audit entered codes + suggest missing NTA-paying diagnoses
     // (Section I only, async, non-blocking — never breaks the page if the
-    // endpoint is undeployed). See content/i8000-overlay/.
+    // endpoint errors). See content/i8000-overlay/.
     if (params.section === 'I') {
       runI8000Overlay(params);
     }
@@ -5144,8 +5145,8 @@ function isI8000MockMode() {
 }
 
 async function fetchI8000Data(params) {
-  // Preview path: ?i8000=mock feeds a fixture so the overlay is visible on a
-  // real PCC Section I page before the backend endpoint deploys.
+  // Preview path: ?i8000=mock feeds a fixture so the overlay can be demoed on
+  // a real PCC Section I page without a solver run.
   if (isI8000MockMode()) return I8000_MOCK_ENVELOPE;
 
   const { assessmentId, orgSlug, facilityName } = params;
@@ -5179,8 +5180,8 @@ async function runI8000Overlay(params) {
     renderI8000AuditBadges(vm);
     renderI8000Banner(vm);
   } catch (err) {
-    // Endpoint undeployed (404) or any other error → stay silent. The I8000
-    // overlay is supplementary; it must never break the Section I page.
+    // Any endpoint error → stay silent. The I8000 overlay is supplementary;
+    // it must never break the Section I page.
     console.log('Super LTC: I8000 overlay unavailable (non-fatal):', err?.status || err?.message);
   }
 }
@@ -5291,8 +5292,9 @@ function renderI8000Banner(vm) {
 // Shape a suggestion's I8000CategoryResult into the modal's detail object.
 function buildSuggestionDetail(s) {
   const r = s.result || {};
+  const name = s.categoryName || s.categoryKey || 'Suggested diagnosis';
   return {
-    title: s.categoryName || s.categoryKey || 'Suggested diagnosis',
+    title: name,
     subtitle: s.component ? `${s.component} category` : '',
     status: r.status,
     ntaPoints: s.ntaPoints,
@@ -5304,6 +5306,16 @@ function buildSuggestionDetail(s) {
     activeStatusPassed: s.activeStatusPassed,
     rationale: r.queryReason || r.rationale || '',
     evidence: r.evidence || r.queryEvidence || r.treatmentEvidence || [],
+    // "Query Physician" action → QuerySendModal, same shape the Section I
+    // popovers pass. The AI note generator feeds on queryReason/queryEvidence;
+    // the ICD-10 picker seeds its search with mdsItemName (nurse still picks —
+    // AI-guessed codes are never auto-attached).
+    canQuery: r.status === 'needs_physician_query',
+    queryResult: {
+      mdsItem: 'I8000',
+      description: name,
+      aiAnswer: { ...r, mdsItemName: name },
+    },
   };
 }
 
@@ -5333,24 +5345,67 @@ function buildAuditDetail(audit) {
   };
 }
 
-// Read-only evidence card — same CSS as the popover's cards, minus the
-// click-to-open-viewer affordance (deep viewing is a later enhancement).
-function renderI8000EvidenceCard(ev) {
+// Friendlier chip labels for the raw evidence `type` values the I8000 endpoint
+// ships (clinical_note / order / medication). Fallback: the raw type.
+const I8000_EVIDENCE_TYPE_LABEL = {
+  clinical_note: 'Progress Note',
+  order: 'Order',
+  medication: 'MAR',
+};
+
+// Resolve an evidence row to its in-extension viewer, or null when there's
+// nothing to open (no sourceId, or a source we have no viewer for).
+function i8000EvidenceAction(ev) {
+  const sourceId = String(ev?.sourceId || '');
+  if (!sourceId) return null;
+  const type = String(ev?.type || ev?.sourceType || '');
+  // Orders + MAR administrations (sourceId "admin-<orderId>") → administrations modal.
+  if (type === 'order') return { kind: 'admin', orderId: sourceId.replace(/^order-/, ''), label: 'View administrations' };
+  if (type === 'medication' || sourceId.startsWith('admin-')) return { kind: 'admin', orderId: sourceId.replace(/^admin-/, ''), label: 'View administrations' };
+  // Everything else routes through the shared evidence dispatcher.
+  if (type === 'clinical_note' || /^(pcc-prognote|pcc-practnote|patient-practnote)-/.test(sourceId)) return { kind: 'evidence', label: 'View note' };
+  if (sourceId.startsWith('uda-')) return { kind: 'evidence', label: 'View assessment' };
+  if (type === 'document' || sourceId.includes('-chunk-')) return { kind: 'evidence', label: 'View document' };
+  return null;
+}
+
+function openI8000Evidence(ev) {
+  const action = i8000EvidenceAction(ev);
+  if (!action) return;
+  window.SuperAnalytics?.track?.('i8000_evidence_opened', {
+    source_type: String(ev.type || ev.sourceType || ''),
+    viewer: action.kind === 'admin' ? 'administrations' : 'evidence',
+  });
+  if (action.kind === 'admin') {
+    window.showAdministrationModal?.(action.orderId);
+    return;
+  }
+  openEvidence({ ...ev, quoteText: ev.quoteText || ev.text || '' });
+}
+
+// Evidence card — same CSS as the popover's cards; clickable when the source
+// resolves to one of our viewers (progress note, order administrations, UDA…).
+function renderI8000EvidenceCard(ev, idx) {
   const quote = ev.quoteText || ev.orderDescription || ev.quote || ev.text || '';
   const sourceType = ev.sourceType || ev.type || 'document';
   const typeClassSuffix = String(sourceType).replace(/_/g, '-'); // CSS uses hyphens (lab-result)
-  const date = ev.effectiveDate ? ` &middot; ${escapeHTML(ev.effectiveDate)}` : '';
-  const typeLabel = (ev.displayName || sourceType) + date;
+  const rawDate = ev.effectiveDate || ev.date || '';
+  const dateText = /^\d{4}-\d{2}-\d{2}/.test(rawDate) ? rawDate.slice(0, 10) : rawDate;
+  const date = dateText ? ` &middot; ${escapeHTML(dateText)}` : '';
+  const typeLabel = (ev.displayName || I8000_EVIDENCE_TYPE_LABEL[sourceType] || sourceType) + date;
   const body = quote || ev.rationale || '';
   if (!body) return '';
   const showRationale = ev.rationale && quote;
+  const action = i8000EvidenceAction(ev);
+  const linkAttrs = action ? ` data-ev-idx="${idx}" role="button" tabindex="0"` : '';
   return `
-    <div class="super-evidence-card">
+    <div class="super-evidence-card${action ? ' super-evidence-card--link' : ''}"${linkAttrs}>
       <div class="super-evidence-card__header">
         <span class="super-evidence-card__type super-evidence-card__type--${escapeHTML(typeClassSuffix)}">${escapeHTML(typeLabel)}</span>
       </div>
       <div class="super-evidence-card__quote">${escapeHTML(body)}</div>
       ${showRationale ? `<div class="super-evidence-card__rationale">${escapeHTML(ev.rationale)}</div>` : ''}
+      ${action ? `<div class="super-evidence-card__action">${escapeHTML(action.label)} &#8250;</div>` : ''}
     </div>
   `;
 }
@@ -5403,6 +5458,13 @@ function buildI8000ModalHTML(detail) {
        </div>`
     : (detail.noEvidenceNote ? `<div class="super-evidence-empty">${escapeHTML(detail.noEvidenceNote)}</div>` : '');
 
+  const actionsHTML = detail.canQuery
+    ? `<div class="super-popover-actions">
+         <!-- NO_TRACK: opens QuerySendModal which fires its own query_modal_opened -->
+         <button class="super-btn super-btn--query" data-action="i8000-query">? Query Physician</button>
+       </div>`
+    : '';
+
   return `
     <div class="super-popover-header">
       <div>
@@ -5419,6 +5481,7 @@ function buildI8000ModalHTML(detail) {
       ${rationaleHTML}
       ${evidenceHTML}
     </div>
+    ${actionsHTML}
   `;
 }
 
@@ -5437,6 +5500,22 @@ function showI8000Modal(detail, anchorEl) {
 
   positionPopover(popover, anchorEl);
   popover.querySelector('.super-popover-close')?.addEventListener('click', closePopover);
+
+  // Evidence cards → open the underlying source (note / administrations / doc).
+  popover.querySelectorAll('.super-evidence-card--link').forEach((card) => {
+    const open = () => {
+      const ev = (detail.evidence || [])[Number(card.dataset.evIdx)];
+      if (ev) openI8000Evidence(ev);
+    };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  });
+
+  // "Query Physician" → hand off to the shared diagnosis-query send flow.
+  popover.querySelector('[data-action="i8000-query"]')?.addEventListener('click', () => {
+    closePopover();
+    window.QuerySendModal?.show(detail.queryResult);
+  });
 }
 
 // ============================================
