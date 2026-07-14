@@ -13,17 +13,23 @@
  *   - createCustomIntervention({...}) → interId | true
  *   - orchestrateStamp({ proposal, careplanId, miniToken, deptNames, onProgress }) → StampResult
  *
- * SUP-54: when a focus carries `libraryStdId` (and its goals/interventions carry
- * theirs), it's added FROM THE FACILITY LIBRARY (std-id-linked) via pcc-library-stamp
- * instead of the custom endpoints. Off-library items (no id) still custom-stamp.
+ * SUP-54: when a focus carries `libraryStdId`, the FOCUS + its goals + interventions are
+ * added FROM THE FACILITY LIBRARY through PCC's own wizard (neededit → goalwizard →
+ * interwizard, one draft id throughout) — see pcc-library-stamp.stampLibraryFocus. The
+ * library std ids ride as `chkbox`, so all three are real library items, not custom.
+ * Only focuses/goals/interventions WITHOUT a std id (built-in / AI-authored) fall back to
+ * the custom endpoints (neededitcust / goaledit / intereditcust).
  */
-import {
-  createLibraryFocus,
-  addLibraryGoals,
-  addLibraryInterventions,
-  isLibraryFocus,
-  partitionByLibrary,
-} from './pcc-library-stamp.js';
+import { stampLibraryFocus, isLibraryFocus } from './pcc-library-stamp.js';
+
+// Verbose stamping trace — flip false once the library-add path is confirmed in real
+// PCC. Logs every PCC POST (url / status / response snippet) + per-item outcome as
+// [cp-stamp]. The response snippet is the tell: a 200 that attached nothing looks
+// different from a 200 that did.
+const STAMP_DEBUG = true;
+function _dlog(...args) {
+  if (STAMP_DEBUG) console.log('[cp-stamp]', ...args);
+}
 
 const FOCUS_URL = '/care/chart/cp/neededitcust_rev.jsp';
 const GOAL_URL = '/care/chart/cp/goaledit_rev.jsp';
@@ -77,6 +83,7 @@ async function _postForm(url, body) {
   });
   if (!res.ok) throw new Error(`PCC POST ${url} → status ${res.status}`);
   const html = await res.text();
+  _dlog('POST', url, '→', res.status, '| len', html.length, '| resp:', html.slice(0, 240).replace(/\s+/g, ' ').trim());
   if (html.includes('<title>Login</title>') || html.includes('loginForm')) {
     throw new Error('PCC session expired');
   }
@@ -84,6 +91,13 @@ async function _postForm(url, body) {
   if (/class="errormsg"/i.test(html)) {
     const m = html.match(/class="errormsg"[^>]*>([^<]+)/i);
     throw new Error(`PCC error: ${m ? m[1].trim() : 'unknown'}`);
+  }
+  // Plain-text refusal (200, no errormsg class) — e.g. "***The related focus has been
+  // deleted. Goal/Intervention will not be saved." Must be treated as a hard failure,
+  // never silently counted as saved.
+  if (/will not be saved/i.test(html) || /related focus has been (deleted|resolved)/i.test(html)) {
+    const m = html.match(/\*\*\*\s*([^<\n]{5,160})/);
+    throw new Error(`PCC refused save: ${m ? m[1].trim() : 'related focus unavailable'}`);
   }
   return html;
 }
@@ -239,6 +253,59 @@ async function createCustomIntervention({ patientId, focusId, miniToken, descrip
   return m && m[1] && m[1] !== '-1' ? m[1] : true;
 }
 
+/** A usable PCC std id: present, non-empty, not the "-1" custom sentinel. */
+function _hasStd(id) {
+  return id != null && String(id) !== '' && String(id) !== '-1';
+}
+
+/**
+ * Stamp goals + interventions onto an EXISTING focus id via the custom endpoints
+ * (goaledit / intereditcust). Used for non-library focuses and for the odd library
+ * item that has no std id. Mutates `result` (counts + errors) in place.
+ */
+async function _stampCustomItems({ proposal, focus, focusId, miniToken, goals, interventions, result, phaseBase, onProgress }) {
+  for (let g = 0; g < goals.length; g++) {
+    onProgress?.({ ...phaseBase, phase: 'goal', subIndex: g, subTotal: goals.length });
+    try {
+      await createCustomGoal({
+        patientId: proposal.patientId,
+        focusId,
+        miniToken,
+        description: goals[g].description,
+        focusDescription: focus.description,
+      });
+      result.goalsStamped += 1;
+    } catch (e) {
+      result.ok = false;
+      result.errors.push({ ruleId: focus.ruleId, phase: 'goal', error: e.message });
+      _dlog('custom goal FAILED:', e.message);
+    }
+  }
+  for (let v = 0; v < interventions.length; v++) {
+    const inter = interventions[v];
+    onProgress?.({ ...phaseBase, phase: 'intervention', subIndex: v, subTotal: interventions.length });
+    try {
+      const positionList = Array.isArray(inter.positions) && inter.positions.length > 0
+        ? inter.positions
+        : (inter.positionOne != null ? [inter.positionOne] : []);
+      await createCustomIntervention({
+        patientId: proposal.patientId,
+        focusId,
+        miniToken,
+        description: inter.description,
+        instruction: inter.instruction,
+        kardexCategory: inter.kardexCategory,
+        positions: positionList,
+      });
+      result.interventionsStamped += 1;
+    } catch (e) {
+      result.ok = false;
+      result.errors.push({ ruleId: focus.ruleId, phase: 'intervention', error: e.message });
+      _dlog('custom intervention FAILED:', e.message);
+    }
+  }
+}
+
 /**
  * Orchestrate the full stamp for a proposal.
  *
@@ -246,7 +313,7 @@ async function createCustomIntervention({ patientId, focusId, miniToken, descrip
  * to it, and we don't parallelize across focuses to keep PCC happy and progress
  * UX simple. Errors are captured per-focus; no rollback (per backend agent's call).
  */
-async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, onProgress }) {
+export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, onProgress }) {
   const focuses = (proposal.focuses || []).filter((f) => !f._skipped);
   const result = {
     ok: true,
@@ -257,133 +324,101 @@ async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, on
   };
 
   const t0 = Date.now();
+  _dlog('START build=wizard-committedid-2026-07-08', { patientId: proposal.patientId, careplanId, focuses: focuses.length });
 
   for (let i = 0; i < focuses.length; i++) {
     const focus = focuses[i];
     const phaseBase = { focusIndex: i, focusTotal: focuses.length, ruleId: focus.ruleId, ruleLabel: focus.description.slice(0, 60) };
+    const library = isLibraryFocus(focus);
+    const goals = focus.goals || [];
+    const inters = focus.interventions || [];
 
     onProgress?.({ ...phaseBase, phase: 'focus' });
+    _dlog(`focus[${i}]`, focus.ruleId, library ? 'LIBRARY' : 'custom', 'stdId=' + focus.libraryStdId,
+      'goals=' + goals.length, 'interv=' + inters.length);
 
-    // SUP-54: library-linked focus (add from the facility library) vs custom.
-    const library = isLibraryFocus(focus);
+    // SUP-54 library path: focus + its library goals/interventions go through PCC's own
+    // wizard in one shot (see stampLibraryFocus). Std-id-bearing items are library-checked;
+    // any without a std id (AI-authored / built-in mixed in) fall back to custom stamping
+    // on the SAME focus id.
+    if (library) {
+      const libGoalIds = goals.filter((g) => _hasStd(g.libraryStdId)).map((g) => String(g.libraryStdId));
+      const libInterIds = inters.filter((v) => _hasStd(v.libraryStdId)).map((v) => String(v.libraryStdId));
+      const customGoals = goals.filter((g) => !_hasStd(g.libraryStdId));
+      const customInters = inters.filter((v) => !_hasStd(v.libraryStdId));
 
+      let focusId;
+      try {
+        onProgress?.({ ...phaseBase, phase: 'goal', subIndex: 0, subTotal: goals.length });
+        const r = await stampLibraryFocus({
+          patientId: proposal.patientId,
+          careplanId,
+          miniToken,
+          stdNeedId: focus.libraryStdId,
+          description: focus.description,
+          reviewDepartments: focus.reviewDepartments || [],
+          goalStdIds: libGoalIds,
+          interventionStdIds: libInterIds,
+        });
+        focusId = r.focusId;
+        result.focusesStamped += 1;
+        result.goalsStamped += r.goalsStamped;
+        result.interventionsStamped += r.interventionsStamped;
+        for (const err of r.errors) {
+          result.ok = false;
+          result.errors.push({ ruleId: focus.ruleId, phase: err.phase, error: err.error });
+        }
+        _dlog(`focus[${i}] library stamp → focusId=${focusId}`, r);
+      } catch (e) {
+        result.ok = false;
+        result.errors.push({ ruleId: focus.ruleId, phase: 'focus', error: e.message });
+        _dlog(`focus[${i}] LIBRARY FOCUS FAILED:`, e.message);
+        continue; // no focus id → nothing to attach stragglers to
+      }
+
+      // Custom stragglers (rare) — goals/interventions the library row had no std id for.
+      await _stampCustomItems({ proposal, focus, focusId, miniToken, goals: customGoals, interventions: customInters, result, phaseBase, onProgress });
+      continue;
+    }
+
+    // Non-library focus: custom focus + custom goals/interventions (the existing path).
     let focusId;
     try {
-      focusId = library
-        ? await createLibraryFocus({
-            patientId: proposal.patientId,
-            careplanId,
-            miniToken,
-            stdNeedId: focus.libraryStdId,
-            description: focus.description,
-            reviewDepartments: focus.reviewDepartments || [],
-          })
-        : await createCustomFocus({
-            patientId: proposal.patientId,
-            careplanId,
-            miniToken,
-            description: focus.description,
-            reviewDepartments: focus.reviewDepartments || [],
-            deptNames,
-          });
+      focusId = await createCustomFocus({
+        patientId: proposal.patientId,
+        careplanId,
+        miniToken,
+        description: focus.description,
+        reviewDepartments: focus.reviewDepartments || [],
+        deptNames,
+      });
       result.focusesStamped += 1;
+      _dlog(`focus[${i}] custom created → focusId=${focusId}`);
     } catch (e) {
       result.ok = false;
       result.errors.push({ ruleId: focus.ruleId, phase: 'focus', error: e.message });
-      continue; // can't stamp goals/interventions without a focus ID
+      _dlog(`focus[${i}] CUSTOM CREATE FAILED:`, e.message);
+      continue;
     }
-
-    // Goals — batch the library ones by std id (single wizard POST); custom-stamp the rest.
-    const goals = focus.goals || [];
-    const goalSplit = library ? partitionByLibrary(goals) : { libraryStdIds: [], custom: goals };
-    if (goalSplit.libraryStdIds.length) {
-      onProgress?.({ ...phaseBase, phase: 'goal', subIndex: 0, subTotal: goals.length });
-      try {
-        result.goalsStamped += await addLibraryGoals({
-          patientId: proposal.patientId,
-          careplanId,
-          miniToken,
-          genNeedId: focusId,
-          needId: focusId,
-          stdNeedId: focus.libraryStdId,
-          goalStdIds: goalSplit.libraryStdIds,
-          focusDescription: focus.description,
-        });
-      } catch (e) {
-        result.ok = false;
-        result.errors.push({ ruleId: focus.ruleId, phase: 'goal', error: e.message });
-      }
-    }
-    for (let g = 0; g < goalSplit.custom.length; g++) {
-      onProgress?.({ ...phaseBase, phase: 'goal', subIndex: g, subTotal: goalSplit.custom.length });
-      try {
-        await createCustomGoal({
-          patientId: proposal.patientId,
-          focusId,
-          miniToken,
-          description: goalSplit.custom[g].description,
-          focusDescription: focus.description,
-        });
-        result.goalsStamped += 1;
-      } catch (e) {
-        result.ok = false;
-        result.errors.push({ ruleId: focus.ruleId, phase: 'goal', error: e.message });
-      }
-    }
-
-    // Interventions — same split. Position/kardex per-intervention (interedit) is phase 2.
-    const inters = focus.interventions || [];
-    const interSplit = library ? partitionByLibrary(inters) : { libraryStdIds: [], custom: inters };
-    if (interSplit.libraryStdIds.length) {
-      onProgress?.({ ...phaseBase, phase: 'intervention', subIndex: 0, subTotal: inters.length });
-      try {
-        result.interventionsStamped += await addLibraryInterventions({
-          patientId: proposal.patientId,
-          careplanId,
-          miniToken,
-          genNeedId: focusId,
-          needId: focusId,
-          stdNeedId: focus.libraryStdId,
-          interStdIds: interSplit.libraryStdIds,
-        });
-      } catch (e) {
-        result.ok = false;
-        result.errors.push({ ruleId: focus.ruleId, phase: 'intervention', error: e.message });
-      }
-    }
-    for (let v = 0; v < interSplit.custom.length; v++) {
-      const inter = interSplit.custom[v];
-      onProgress?.({ ...phaseBase, phase: 'intervention', subIndex: v, subTotal: interSplit.custom.length });
-      try {
-        // Migration: if intervention has `positions[]`, use that; else fall back
-        // to `positionOne` (legacy from current backend proposal API).
-        const positionList = Array.isArray(inter.positions) && inter.positions.length > 0
-          ? inter.positions
-          : (inter.positionOne != null ? [inter.positionOne] : []);
-        await createCustomIntervention({
-          patientId: proposal.patientId,
-          focusId,
-          miniToken,
-          description: inter.description,
-          instruction: inter.instruction,
-          kardexCategory: inter.kardexCategory,
-          positions: positionList,
-        });
-        result.interventionsStamped += 1;
-      } catch (e) {
-        result.ok = false;
-        result.errors.push({ ruleId: focus.ruleId, phase: 'intervention', error: e.message });
-      }
-    }
+    await _stampCustomItems({ proposal, focus, focusId, miniToken, goals, interventions: inters, result, phaseBase, onProgress });
   }
 
   result.durationMs = Date.now() - t0;
+  _dlog('DONE', {
+    focusesStamped: result.focusesStamped,
+    goalsStamped: result.goalsStamped,
+    interventionsStamped: result.interventionsStamped,
+    ok: result.ok,
+    errors: result.errors,
+  });
   return result;
 }
 
-window.CarePlanStampClient = {
-  createCustomFocus,
-  createCustomGoal,
-  createCustomIntervention,
-  orchestrateStamp,
-};
+if (typeof window !== 'undefined') {
+  window.CarePlanStampClient = {
+    createCustomFocus,
+    createCustomGoal,
+    createCustomIntervention,
+    orchestrateStamp,
+  };
+}

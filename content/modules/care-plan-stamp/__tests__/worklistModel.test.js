@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildWorklistModel,
+  actionableChecks,
   touchesForItem,
   addAllReady,
   totalTouches,
-} from './worklistModel.js';
+  coveredText,
+} from '../worklistModel.js';
 
 const auditFx = {
   engineVersion: 'v2',
@@ -58,6 +60,20 @@ describe('buildWorklistModel', () => {
     expect(m.groups).toEqual([]);
     expect(m.totalAdds).toBe(0);
   });
+  it('keeps area_covered rows OFF the rail (map-only states, not check cards)', () => {
+    const withArea = {
+      ...auditFx,
+      toCheck: [
+        ...auditFx.toCheck,
+        { _rowId: 'chk-1', kind: 'area_covered', caa: 'elimination', detail: 'elimination',
+          matchedFocusText: 'at risk for constipation' },
+      ],
+    };
+    const m = buildWorklistModel(withArea);
+    const check = m.groups.find((g) => g.kind === 'check');
+    expect(check.items.map((i) => i._rowId)).toEqual(['chk-0']);
+    expect(actionableChecks(withArea).map((i) => i._rowId)).toEqual(['chk-0']);
+  });
 });
 
 // Stand-in for the modal's private _focusUnfilledTokenKeys — the model injects
@@ -69,6 +85,21 @@ const unfilled = (focus, tv) => {
   });
   return [...keys];
 };
+
+describe('coveredText', () => {
+  it('reads matchedFocusText for an onPlan item that has no focusText (fixes the "—" pane)', () => {
+    // Real onPlan items ship matchedFocusText (the covering focus), NOT focusText.
+    // The covered detail pane must read it or it renders a bare em-dash.
+    expect(coveredText({ ruleId: 'x', caa: 'cognition', matchedFocusText: 'Alert & oriented x3, BIMS 15' }))
+      .toBe('Alert & oriented x3, BIMS 15');
+  });
+  it('prefers focusText, then matchedFocusText, then focus.description; empty when nothing', () => {
+    expect(coveredText({ focusText: 'DM2', matchedFocusText: 'other' })).toBe('DM2');
+    expect(coveredText({ focus: { description: 'CHF focus' } })).toBe('CHF focus');
+    expect(coveredText({})).toBe('');
+    expect(coveredText(null)).toBe('');
+  });
+});
 
 describe('touchesForItem', () => {
   it('counts unfilled token slots', () => {

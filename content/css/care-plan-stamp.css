@@ -903,6 +903,68 @@
 .cpas-seg-factor.is-removed .cpas-seg-sparkle {
   opacity: 0.35;
 }
+/* Evidence-menu group: N "AEB --(...)" bullets as ONE checklist control.
+   Chip summarizes ("2 of 5 apply ⌄"); popover lists clauses with checkboxes.
+   Amber-dashed while nothing is checked (an open ask), teal once checked. */
+.cpas-seg-msg { position: relative; display: inline-flex; }
+.cpas-seg-msg__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 0.92em;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.cpas-seg-msg.has-checked .cpas-seg-msg__chip {
+  color: #0f766e;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+}
+.cpas-seg-msg__pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 320px;
+  max-width: 440px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+.cpas-seg-msg__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #1f2937;
+  cursor: pointer;
+}
+.cpas-seg-msg__item:hover { background: #f8fafc; }
+.cpas-seg-msg__item input { margin-top: 2px; accent-color: #0d9488; cursor: pointer; }
+.cpas-seg-msg__label { display: flex; flex-direction: column; gap: 2px; }
+.cpas-seg-msg__receipt {
+  font-size: 10.5px;
+  color: #0f766e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 380px;
+}
 .cpas-seg-sparkle {
   display: inline-block;
   margin-left: 2px;
@@ -2934,6 +2996,11 @@
   margin: 8px 0 0; padding-left: 18px;
   font-size: 13px; line-height: 1.6; color: #1f2937;
 }
+/* Authored trigger→focus bridge, e.g. "— diuretic therapy increases
+   dehydration risk". Muted connective tissue under the evidence. */
+.cpas-detail__rationale-bridge {
+  margin-top: 6px; font-size: 12.5px; font-style: italic; color: #6b7280;
+}
 
 /* ── Coverage-by-care-area matrix (dashboard) ─────────────────────────── */
 .cpas-cov { margin-top: 22px; }
@@ -4209,6 +4276,9 @@
   padding: 1px 7px;
 }
 .cpas-wl__why-ev { color: #3a4250; }
+/* Authored trigger→focus bridge — muted connective tissue after the evidence,
+   e.g. "— diuretic therapy increases dehydration risk". */
+.cpas-wl__why-bridge { color: #6b7280; font-style: italic; }
 .cpas-wl__whymore {
   border: 0;
   background: none;
@@ -4240,3 +4310,100 @@
   flex-shrink: 0;
   width: 42px;
 }
+
+/* ── Auto-filled r/t causes with chart receipts (hover-why) ───────────── */
+.cpas-detail__causes {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin-top: 9px; padding-top: 9px;
+  border-top: 1px dashed #fde68a;
+}
+.cpas-detail__causes-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.4px; color: #92400e;
+}
+.cpas-detail__cause-pill {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 2px 9px;
+  font-size: 11.5px; font-weight: 600; border-radius: 999px;
+  background: #e5e7eb; color: #374151; border: 1px solid #d1d5db;
+  cursor: help;
+  text-decoration: underline dotted rgba(55, 65, 81, 0.45);
+  text-underline-offset: 2px;
+}
+.cpas-detail__cause-pill.is-diagnosis { background: #ccfbf1; color: #0f766e; border-color: #99f6e4; }
+.cpas-detail__cause-pill.is-assessment { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
+.cpas-detail__cause-pill.is-order { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.cpas-detail__cause-receipt {
+  font-size: 10px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0; max-width: 0; overflow: hidden; white-space: nowrap;
+  transition: opacity 0.15s ease, max-width 0.2s ease;
+}
+.cpas-detail__cause-pill:hover .cpas-detail__cause-receipt {
+  opacity: 0.85; max-width: 180px;
+}
+
+/* ── Care-area map (v2 comprehensive HOME screen) ─────────────────────── */
+.cpam { flex: 1; padding: 20px 26px 24px; overflow: auto; }
+.cpam__strip { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.cpam__counts { display: flex; gap: 20px; }
+.cpam__count .cpam__n { font-size: 22px; font-weight: 800; line-height: 1; }
+.cpam__count .cpam__l { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #94a3b8; margin-top: 3px; }
+.cpam__count.is-gap .cpam__n { color: #d97706; }
+.cpam__count.is-rem .cpam__n { color: #dc2626; }
+.cpam__count.is-cov .cpam__n { color: #16a34a; }
+.cpam__count.is-skip .cpam__n { color: #94a3b8; }
+.cpam__ctas { display: flex; gap: 10px; }
+.cpam__cta { padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 700; cursor: pointer; border: 1px solid transparent; }
+.cpam__cta.is-primary { background: #16a34a; color: #fff; box-shadow: 0 2px 8px rgba(22,163,74,.35); }
+.cpam__cta.is-ghost { background: #fff; border-color: #e2e8f0; color: #475569; font-weight: 600; }
+.cpam__grid-title { font-size: 11.5px; font-weight: 800; letter-spacing: .6px; color: #64748b; text-transform: uppercase; margin: 4px 0 10px; }
+.cpam__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 9px; }
+.cpam__cell { border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; background: #fff; }
+.cpam__cell.is-clickable { cursor: pointer; transition: transform .06s; }
+.cpam__cell.is-clickable:hover { transform: translateY(-1px); }
+.cpam__cell-name { font-size: 12.5px; font-weight: 650; display: flex; align-items: center; gap: 6px; color: #0f172a; }
+.cpam__cell-icon { font-weight: 900; }
+.cpam__cell-why { font-size: 10.5px; color: #94a3b8; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpam__cell-act { font-size: 10.5px; font-weight: 800; margin-top: 6px; }
+.cpam__cell.is-gap { border-color: #fcd34d; background: #fffbeb; box-shadow: 0 1px 4px rgba(217,119,6,.12); }
+.cpam__cell.is-gap .cpam__cell-icon, .cpam__cell.is-gap .cpam__cell-act { color: #d97706; }
+.cpam__cell.is-gap .cpam__cell-why { color: #b45309; }
+.cpam__cell.is-remove { border-color: #fecaca; background: #fff5f5; }
+.cpam__cell.is-remove .cpam__cell-icon, .cpam__cell.is-remove .cpam__cell-act { color: #dc2626; }
+.cpam__cell.is-verify { border-color: #a5f3fc; background: #f5feff; }
+.cpam__cell.is-verify .cpam__cell-icon, .cpam__cell.is-verify .cpam__cell-act { color: #0e7490; }
+.cpam__cell.is-held { border-color: #e9d5ff; background: #fcfaff; }
+.cpam__cell.is-held .cpam__cell-icon, .cpam__cell.is-held .cpam__cell-act { color: #9333ea; }
+.cpam__cell.is-covered { border-color: #d1fae5; background: #f7fdf9; }
+.cpam__cell.is-covered .cpam__cell-icon { color: #16a34a; }
+.cpam__cell.is-skipped { background: #f8fafc; }
+.cpam__cell.is-skipped .cpam__cell-name { color: #94a3b8; }
+.cpam__cell.is-skipped .cpam__cell-icon, .cpam__cell.is-skipped .cpam__cell-act { color: #94a3b8; }
+.cpam__cell.is-dim { border-style: dashed; opacity: .55; }
+.cpam__cell.is-dim .cpam__cell-icon { color: #cbd5e1; }
+/* Assurance folds: covered + not-indicated collapse below the work grid. */
+.cpam__all-clear { padding: 18px 14px; font-size: 13.5px; font-weight: 650; color: #16a34a; background: #f7fdf9; border: 1px dashed #d1fae5; border-radius: 11px; }
+.cpam__fold { margin-top: 12px; }
+.cpam__fold-head { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; background: transparent; border: none; border-radius: 8px; cursor: pointer; }
+.cpam__fold-head:hover { background: #f1f5f9; }
+.cpam__fold-head.is-cov { color: #16a34a; }
+.cpam__fold-head.is-dim { color: #94a3b8; }
+.cpam__fold-caret { font-size: 10px; color: #94a3b8; }
+.cpam__fold-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 2px; }
+.cpam__chip { padding: 4px 10px; font-size: 11.5px; font-weight: 600; border-radius: 999px; border: 1px solid #e2e8f0; background: #fff; color: #475569; }
+.cpam__chip.is-cov { border-color: #d1fae5; background: #f7fdf9; color: #15803d; }
+.cpam__chip.is-dim { border-style: dashed; color: #94a3b8; }
+.cpam__chip.is-clickable { cursor: pointer; }
+.cpam__chip.is-clickable:hover { border-color: #86efac; }
+
+.cpam__legend { display: flex; gap: 14px; font-size: 11px; color: #64748b; margin-top: 16px; }
+.cpam__legend b { font-weight: 800; }
+.cpam__legend .is-gap { color: #d97706; } .cpam__legend .is-rem { color: #dc2626; }
+.cpam__legend .is-ver { color: #0e7490; } .cpam__legend .is-cov { color: #16a34a; }
+.cpam__legend .is-held { color: #9333ea; }
+.cpam__legend .is-skip { color: #94a3b8; } .cpam__legend .is-dim { color: #cbd5e1; }
+
+/* ── Skip-with-reason mini-form ───────────────────────────────────────── */
+.cpas-wl__skip-form { display: inline-flex; align-items: center; gap: 6px; }
+.cpas-wl__skip-reason { width: 260px; padding: 7px 10px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.cpas-wl__skip-reason:focus { outline: none; border-color: #94a3b8; }

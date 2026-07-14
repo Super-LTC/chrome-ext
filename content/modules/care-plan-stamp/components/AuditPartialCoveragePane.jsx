@@ -218,7 +218,9 @@ export const AuditPartialCoveragePane = ({
 
       <div className="cpas-audit-section">
         <div className="cpas-audit-section__label">Matched focus on plan</div>
-        <div className="cpas-audit-section__body">{item.matchedFocusText || '—'}</div>
+        <div className="cpas-audit-section__body">
+          {item.matchedFocusText || 'No single matching focus identified — review whether an existing focus covers this.'}
+        </div>
       </div>
 
       {item.existingFocus && (Array.isArray(item.existingFocus.goals) || Array.isArray(item.existingFocus.interventions)) && (

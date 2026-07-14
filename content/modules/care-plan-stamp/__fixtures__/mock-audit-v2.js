@@ -47,6 +47,20 @@ const fixture = {
             { description: 'Reorient resident as needed.', kardexCategory: 'discharge_planning', positions: [9882] },
             { description: 'Communicate with family/caregivers regarding resident capabilities.', kardexCategory: 'communication', positions: [9897] },
             { description: 'Administer medications as ordered; monitor for side effects.', kardexCategory: 'monitors', positions: [9897] },
+            // Token-bearing intervention (two same-tokenKey "inline" [select]s) — exercises
+            // the segment renderer's inline dropdowns (the "Bathing" case from prod).
+            {
+              description: 'Bathing: Provide [select] assistance of [select] person(s) for bathing',
+              kardexCategory: 'monitors',
+              positions: [9882],
+              descriptionSegments: [
+                { kind: 'text', value: 'Bathing: Provide ' },
+                { kind: 'token', tokenKey: 'inline', needsFilling: true, value: '[select]', options: ['total', 'extensive', 'limited', 'supervision', 'setup'] },
+                { kind: 'text', value: ' assistance of ' },
+                { kind: 'token', tokenKey: 'inline', needsFilling: true, value: '[select]', options: ['1', '2', '2+'] },
+                { kind: 'text', value: ' person(s) for bathing' },
+              ],
+            },
           ],
         },
       },

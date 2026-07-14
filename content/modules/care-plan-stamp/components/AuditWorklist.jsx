@@ -1,7 +1,8 @@
 import { h, Fragment } from 'preact';
 import { useState, useMemo } from 'preact/hooks';
 import { FocusCard } from './FocusCard.jsx';
-import { buildWorklistModel, addAllReady, totalTouches } from '../worklistModel.js';
+import { AuditPartialCoveragePane } from './AuditPartialCoveragePane.jsx';
+import { buildWorklistModel, actionableChecks, addAllReady, totalTouches, coveredText } from '../worklistModel.js';
 
 /**
  * AuditWorklist — V2 comprehensive-audit V8 sidebar-worklist.
@@ -47,6 +48,10 @@ export const AuditWorklist = ({
   onKeep,
   onReAddDropped,
   onConfirmDropped,
+  onStampPartial,        // (item, checkedInterventions) → stamp onto existing focus
+  onDismissVerify,       // (item) → dismiss a partial-coverage row
+  partialStampStatus,    // { [_rowId]: 'pending'|'done'|'error' }
+  partialStampError,     // { [_rowId]: string }
 }) => {
   const model = useMemo(() => buildWorklistModel(audit), [audit]);
   const stampedSet = stampedAddIds || new Set();
@@ -62,7 +67,7 @@ export const AuditWorklist = ({
   // ── Progress: every actionable row (add + remove + check) counts toward the
   // tally. "done" = an add stamped/skipped, or a remove/check resolved/kept.
   const removes = audit?.toRemove || [];
-  const checks = audit?.toCheck || [];
+  const checks = actionableChecks(audit);
   const _resolvedOrKept = (it) =>
     rStatus[it.focusId] === 'done' || keptSet.has(it.focusId) || keptSet.has(it._rowId);
   const addsDone = model.orderedAdds.filter((it) => stampedSet.has(it.ruleId) || skippedSet.has(it.ruleId)).length;
@@ -185,7 +190,8 @@ export const AuditWorklist = ({
               </div>
             )}
 
-            {/* Dropped — NEVER silent. "we removed N — tap to confirm". */}
+            {/* Dropped — NEVER silent, but honest: these are PROPOSALS the AI
+                review held back, nothing was removed from the care plan. */}
             {model.dropped.length > 0 && (
               <div className="cpas-wl__grp cpas-wl__grp--dropped">
                 <button
@@ -195,7 +201,7 @@ export const AuditWorklist = ({
                   aria-expanded={droppedOpen}
                 >
                   <span className="cpas-wl__gdot is-dropped" aria-hidden="true" />
-                  We removed {model.dropped.length} — tap to confirm
+                  Held back {model.dropped.length} — not proposed, your call
                   <span className="cpas-wl__caret" aria-hidden="true">{droppedOpen ? '▾' : '▸'}</span>
                 </button>
                 {droppedOpen && model.dropped.map((item) => {
@@ -242,9 +248,24 @@ export const AuditWorklist = ({
               status={rStatus[selItem.focusId]} kept={keptSet.has(selItem.focusId) || keptSet.has(selItem._rowId)}
               stamping={stamping} onResolve={onResolve} onKeep={onKeep} />
           ) : selected.kind === 'check' ? (
-            <ResolveDetail item={selItem} kind="check" areaLabel={model.areaOf(selItem)}
-              status={rStatus[selItem.focusId]} kept={keptSet.has(selItem.focusId) || keptSet.has(selItem._rowId)}
-              stamping={stamping} onResolve={onResolve} onKeep={onKeep} />
+            selItem.kind === 'partial_coverage' ? (
+              // Partial coverage has its own pane: "this dx is only partly
+              // covered — add these interventions to the existing focus". The
+              // generic check pane's Remove/Keep actions are the wrong verbs.
+              <AuditPartialCoveragePane
+                key={selItem._rowId}
+                item={selItem}
+                onStamp={(checked) => onStampPartial?.(selItem, checked)}
+                onSkip={() => onDismissVerify?.(selItem)}
+                stampStatus={partialStampStatus?.[selItem._rowId]}
+                errorMessage={partialStampError?.[selItem._rowId]}
+                dropdowns={dropdowns}
+              />
+            ) : (
+              <ResolveDetail item={selItem} kind="check" areaLabel={model.areaOf(selItem)}
+                status={rStatus[selItem.focusId]} kept={keptSet.has(selItem.focusId) || keptSet.has(selItem._rowId)}
+                stamping={stamping} onResolve={onResolve} onKeep={onKeep} />
+            )
           ) : selected.kind === 'dropped' ? (
             <DroppedDetail item={selItem} acknowledged={ackSet.has(selItem.ruleId || selItem._rowId)}
               onReAdd={onReAddDropped} onConfirm={onConfirmDropped} />
@@ -262,6 +283,10 @@ const AddDetail = ({
   item, dropdowns, state, composeFocus, areaLabel, touches, isStamped, isSkipped,
   stamping, onPatchFocusState, onStampOne, onSkip, onReopen,
 }) => {
+  // Skip mini-form: which row's Skip is asking for an optional reason, and its
+  // text. Local to the detail pane (resets when the nurse moves to another row).
+  const [skipPromptFor, setSkipPromptFor] = useState(null);
+  const [skipReason, setSkipReason] = useState('');
   const composed = composeFocus(item.focus, state);
   // Strip rationale from the card so FocusCard's own "Why this is proposed" box
   // doesn't render — the worklist owns the compact Why + receipts below instead.
@@ -292,7 +317,25 @@ const AddDetail = ({
               ✓ Add this focus
             </button>
             {/* NO_TRACK: parent's onSkip (_skipAuditAddItem) owns telemetry. */}
-            <button type="button" className="cpas-btn cpas-btn--ghost" disabled={stamping} onClick={() => onSkip?.(item)}>Skip</button>
+            {skipPromptFor === item._rowId ? (
+              <span className="cpas-wl__skip-form">
+                <input
+                  type="text"
+                  className="cpas-wl__skip-reason"
+                  placeholder="why? (optional — e.g. handled by hospice)"
+                  maxLength={200}
+                  value={skipReason}
+                  onInput={(e) => setSkipReason(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { onSkip?.(item, skipReason.trim() || null); setSkipPromptFor(null); setSkipReason(''); } if (e.key === 'Escape') { setSkipPromptFor(null); setSkipReason(''); } }}
+                  autoFocus
+                />
+                {/* NO_TRACK: parent's onSkip owns telemetry */}
+                <button type="button" className="cpas-btn cpas-btn--ghost" onClick={() => { onSkip?.(item, skipReason.trim() || null); setSkipPromptFor(null); setSkipReason(''); }}>Skip</button>
+              </span>
+            ) : (
+              // NO_TRACK: pure-UI open of the reason mini-form; onSkip owns telemetry
+              <button type="button" className="cpas-btn cpas-btn--ghost" disabled={stamping} onClick={() => { setSkipPromptFor(item._rowId); setSkipReason(''); }}>Skip</button>
+            )}
             {blocked && <span className="cpas-wl__hint">fill {touches} amber slot{touches === 1 ? '' : 's'} first</span>}
           </Fragment>
         )}
@@ -321,12 +364,15 @@ const WhyReceipts = ({ rationale, focus }) => {
   const evidence = rationale?.evidence || [];
   const filled = _autoFilledReceipts(focus);
   const hasReceipts = evidence.length > 0 || filled.length > 0;
-  if (!rationale?.basisLabel && !hasReceipts) return null;
+  if (!rationale?.basisLabel && !hasReceipts && !rationale?.whyClause) return null;
   return (
     <div className="cpas-wl__why">
       <span className="cpas-wl__why-k">Why</span>
       {rationale?.basisLabel && <span className="cpas-wl__why-tag">{rationale.basisLabel}</span>}
       {evidence.slice(0, 1).map((e, i) => <span key={i} className="cpas-wl__why-ev">{e}</span>)}
+      {/* Authored bridge (trigger → focus): "Lasix … — diuretic therapy
+          increases dehydration risk". Inline, never behind the fold. */}
+      {rationale?.whyClause && <span className="cpas-wl__why-bridge">— {rationale.whyClause}</span>}
       {hasReceipts && (
         // NO_TRACK: pure-UI disclosure of the AI-fill receipts.
         <button type="button" className="cpas-wl__whymore" onClick={() => setOpen((o) => !o)}>
@@ -384,24 +430,24 @@ const DroppedDetail = ({ item, acknowledged, onReAdd, onConfirm }) => {
   return (
     <section className="cpas-detail">
       <header className="cpas-detail__header cpas-detail__header--v2">
-        <span className="cpas-detail__badge-sec">Removed by review</span>
-        <span className="cpas-detail__pos">over-fire</span>
+        <span className="cpas-detail__badge-sec">Held back by review</span>
+        <span className="cpas-detail__pos">not proposed</span>
       </header>
       <p className="cpas-wl__ftext">{item.description || '—'}</p>
-      <div className="cpas-wl__reason"><b>Why we removed it.</b> {item.reason || 'Flagged as an over-fire.'}</div>
+      <div className="cpas-wl__reason"><b>Why we held it back.</b> {item.reason || 'Flagged as an over-fire.'} <i>Nothing was changed on the care plan — this focus was never added.</i></div>
       {acknowledged ? (
-        <div className="cpas-wl__d-actions"><span className="cpas-wl__done-tag">✓ removal confirmed</span></div>
+        <div className="cpas-wl__d-actions"><span className="cpas-wl__done-tag">✓ agreed — left off</span></div>
       ) : (
         <div className="cpas-wl__d-actions">
           {canReAdd && (
             // NO_TRACK: parent's onReAdd (_reAddDropped) owns telemetry.
-            <button type="button" className="cpas-wl__primary" onClick={() => onReAdd?.(item)} title="The review was wrong — put this focus back">
-              Re-add to plan
+            <button type="button" className="cpas-wl__primary" onClick={() => onReAdd?.(item)} title="The review was wrong — propose this focus after all">
+              Propose it anyway
             </button>
           )}
           {/* NO_TRACK: parent's onConfirm (_confirmDropped) owns telemetry. */}
-          <button type="button" className="cpas-btn cpas-btn--ghost" onClick={() => onConfirm?.(item)}>Confirm removal</button>
-          {!canReAdd && <span className="cpas-wl__hint">review only — nothing added to the plan</span>}
+          <button type="button" className="cpas-btn cpas-btn--ghost" onClick={() => onConfirm?.(item)}>Agree — leave it off</button>
+          {!canReAdd && <span className="cpas-wl__hint">review only — nothing was added to the plan</span>}
         </div>
       )}
     </section>
@@ -417,7 +463,7 @@ const CoveredDetail = ({ item, areaLabel }) => {
         <span className="cpas-detail__badge-sec">{areaLabel}</span>
         <span className="cpas-detail__pos">✓ on plan · read only</span>
       </header>
-      <p className="cpas-wl__ftext">{item.focusText || item.description || item.focus?.description || '—'}</p>
+      <p className="cpas-wl__ftext">{coveredText(item) || '—'}</p>
       {evidence.length > 0 && (
         <div className="cpas-wl__why">
           <span className="cpas-wl__why-k">Covered</span>

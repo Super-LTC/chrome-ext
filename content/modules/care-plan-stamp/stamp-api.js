@@ -65,7 +65,7 @@ async function fetchProposal({ patientId, facilityName, orgSlug, scope = 'initia
  *
  * Wizard-cosmetic only: coverage / dashboards do NOT read this table.
  */
-async function persistSkip({ patientId, orgSlug, facilityName, ruleId, isSkipping }) {
+async function persistSkip({ patientId, orgSlug, facilityName, ruleId, isSkipping, reason }) {
   try {
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
@@ -77,6 +77,7 @@ async function persistSkip({ patientId, orgSlug, facilityName, ruleId, isSkippin
           orgSlug: orgSlug || '',
           facilityName: facilityName || '',
           ruleId,
+          ...(isSkipping && reason ? { reason } : {}),
         }),
       },
     });

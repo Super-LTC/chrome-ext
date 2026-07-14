@@ -12,6 +12,9 @@ import { AuditRemovePane } from './components/AuditRemovePane.jsx';
 import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.jsx';
 import { isV2, devForceMock } from './v2-flag.js';
 import { AuditWorklist } from './components/AuditWorklist.jsx';
+import { CareAreaMap } from './components/CareAreaMap.jsx';
+import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector } from './segmentTokens.js';
+import { actionableChecks } from './worklistModel.js';
 
 /**
  * Full-screen wizard for Care Plan Auto-Pop (v0: Initial scope only).
@@ -85,6 +88,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [skippedAddIds, setSkippedAddIds] = useState(new Set());    // ruleIds locally skipped
   // Round 9 — rail selection + collapse state
   const [selectedRail, setSelectedRail] = useState(null);           // { kind, key } | null
+  // V2 comprehensive HOME: the care-area map opens first (orientation + menu);
+  // any CTA/cell click drops into the worklist. Reset to true on each audit load.
+  const [mapHome, setMapHome] = useState(true);
   // Round 14 — verify (partial_coverage + informational) state
   const [dismissedVerifyIds, setDismissedVerifyIds] = useState(new Set());
   const [stampedVerifyIds, setStampedVerifyIds] = useState(new Set());  // verify rows successfully stamped
@@ -260,6 +266,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           (audit.skipped || []).forEach((it, i) => { it._rowId = `skip-${i}-${it.ruleId || it.caa || 'na'}`; });
           (audit.dropped || []).forEach((it, i) => { it._rowId = `dropped-${i}-${it.ruleId || 'na'}`; });
           setAudit(audit);
+          setMapHome(true);
           const a = audit;
           // Note: unlike the Initial wizard, the audit rail hides skipped items,
           // so we do NOT auto-skip autoSelect:false here (they'd vanish with no
@@ -273,7 +280,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           window.SuperAnalytics?.track?.('care_plan_audit_modal_opened', {
             patient_id: patientId,
             n_to_add: a.toAdd?.length ?? 0,
-            n_to_verify: a.toCheck?.length ?? 0,
+            n_to_verify: actionableChecks(a).length,
             n_to_remove: a.toRemove?.length ?? 0,
             has_coverage_check_data: !!a.hasCoverageCheckData,
           });
@@ -779,7 +786,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     }
   }, [audit, careplanId, miniToken, patientId, auditFocusStates, stampedAddIds, skippedAddIds]);
 
-  const _skipAuditAddItem = useCallback(async (item) => {
+  const _skipAuditAddItem = useCallback(async (item, reason = null) => {
     if (!item) return;
     const nextSkipped = new Set([...skippedAddIds, item.ruleId]);
     setSkippedAddIds(nextSkipped);
@@ -810,6 +817,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         patientId, orgSlug, facilityName,
         ruleId: item.ruleId,
         isSkipping: true,
+        reason,
       });
     } catch (_) { /* persistSkip already logs */ }
     window.SuperAnalytics?.track?.('care_plan_audit_item_skipped', {
@@ -981,6 +989,17 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             </p>
           </div>
           <div className="cpas-modal__header-actions">
+            {mode === 'comprehensive' && stage === 'ready' && audit && isV2(audit) && !mapHome && (
+              // NO_TRACK: pure-UI return to the care-area map home
+              <button
+                type="button"
+                className="cpas-modal__library-btn"
+                onClick={() => setMapHome(true)}
+                title="Back to the care-area map"
+              >
+                ⊞ Map
+              </button>
+            )}
             <ScopeToggle
               mode={mode}
               onChange={(next) => {
@@ -1061,7 +1080,30 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           {/* V8 sidebar-worklist — the single v2-comprehensive surface. Replaces
               the AuditDashboard tile step AND the AuditWizard drill-in. V1 orgs
               keep the dashboard/rail path below (each guarded !isV2). */}
-          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && isV2(audit) && (
+          {mode === 'comprehensive' && stage === 'ready' && audit && isV2(audit) && mapHome && (
+            <CareAreaMap
+              audit={audit}
+              stampedAddIds={stampedAddIds}
+              skippedAddIds={skippedAddIds}
+              acknowledgedDropped={acknowledgedDropped}
+              onOpen={(target) => {
+                window.SuperAnalytics?.track?.('care_plan_map_cell_opened', { patient_id: patientId, kind: target.kind });
+                setMapHome(false);
+                if (['add', 'remove', 'check', 'on_plan', 'dropped'].includes(target.kind)) {
+                  setSelectedRail({ kind: target.kind, key: target.key });
+                }
+              }}
+              onStartReview={() => {
+                window.SuperAnalytics?.track?.('care_plan_map_start_review', { patient_id: patientId });
+                setMapHome(false);
+              }}
+              onInitialWizard={() => {
+                window.SuperAnalytics?.track?.('care_plan_audit_scope_toggled', { patient_id: patientId, from_mode: mode, to_mode: 'initial' });
+                setMode('initial');
+              }}
+            />
+          )}
+          {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && isV2(audit) && (!mapHome || stage === 'stamping') && (
             <AuditWorklist
               audit={audit}
               dropdowns={dropdowns}
@@ -1086,6 +1128,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               onKeep={_keepFocus}
               onReAddDropped={_reAddDropped}
               onConfirmDropped={_confirmDropped}
+              onStampPartial={_stampPartialCoverage}
+              onDismissVerify={_dismissVerifyItem}
+              partialStampStatus={partialStampStatus}
+              partialStampError={partialStampError}
             />
           )}
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && !isV2(audit) && comprehensiveStep === 'dashboard' && (
@@ -1137,7 +1183,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 stampedAddIds={stampedAddIds}
                 skippedAddIds={skippedAddIds}
                 resolveStatus={resolveStatus}
-                toCheck={comprehensiveStep === 'verify' ? (audit.toCheck || []) : []}
+                toCheck={comprehensiveStep === 'verify' ? actionableChecks(audit) : []}
                 dismissedVerifyIds={dismissedVerifyIds}
                 addNeedsInputByRowId={_auditNeedsInputByRowId(railAudit, auditFocusStates)}
                 selected={selectedRail}
@@ -1463,7 +1509,11 @@ function _emptyFocusState() {
   };
 }
 
-function _composeFocus(original, state) {
+function _composeFocus(rawOriginal, state) {
+  // Stamp stable, unique keys onto goal/intervention tokens so same-tokenKey
+  // slots (e.g. two "[select]"s in one Bathing intervention) don't collide in
+  // the shared tokenValues map. Focus-level tokens are untouched.
+  const original = withStableTokenKeys(rawOriginal);
   const tokenValues = state.tokenValues || {};
   const removedFactors = state.removedFactors || null;
 
@@ -1476,29 +1526,20 @@ function _composeFocus(original, state) {
     baseDesc = original.description;
   }
 
-  // Goals: substitute when nurse hasn't done a full replace.
-  let goals;
-  if (state.goals != null) {
-    goals = state.goals;
-  } else {
-    goals = (original.goals || []).map((g) =>
-      _segmentsHaveAnyToken(g.descriptionSegments)
-        ? { ...g, description: _renderSegmentsWithTokens(g.descriptionSegments, tokenValues) }
-        : g
+  // Goals + interventions: re-substitute tokens from segments EVERY compose, even
+  // when a state override array exists — a kardex/position edit sets the override
+  // but the item keeps its segments, so a token picked afterwards must still flow
+  // in (previously the override "froze" the text at its pre-pick substitution). A
+  // manual free-text edit drops the item's segments (see editGoal/editIntervention),
+  // so it correctly stops re-substituting and honors the nurse's wording.
+  const substituteTokens = (list) =>
+    (list || []).map((item) =>
+      _segmentsHaveAnyToken(item.descriptionSegments)
+        ? { ...item, description: _renderSegmentsWithTokens(item.descriptionSegments, tokenValues) }
+        : item
     );
-  }
-
-  // Interventions: same pattern.
-  let interventions;
-  if (state.interventions != null) {
-    interventions = state.interventions;
-  } else {
-    interventions = (original.interventions || []).map((iv) =>
-      _segmentsHaveAnyToken(iv.descriptionSegments)
-        ? { ...iv, description: _renderSegmentsWithTokens(iv.descriptionSegments, tokenValues) }
-        : iv
-    );
-  }
+  const goals = substituteTokens(state.goals != null ? state.goals : original.goals);
+  const interventions = substituteTokens(state.interventions != null ? state.interventions : original.interventions);
 
   // Defense in depth: a focus with 0 goals has no business carrying interventions.
   const safeInterventions = (Array.isArray(goals) && goals.length === 0) ? [] : interventions;
@@ -1531,6 +1572,7 @@ function _renderSegmentsWithTokens(segments, tokenValues, removedFactors) {
     ? removedFactors
     : new Set(removedFactors || []);
   const pieces = [];
+  let droppedMenu = false;
   for (let i = 0; i < arr.length; i++) {
     const s = arr[i];
     if (!s) continue;
@@ -1554,7 +1596,15 @@ function _renderSegmentsWithTokens(segments, tokenValues, removedFactors) {
       continue;
     }
     if (s.kind === 'token') {
-      const v = tokenValues?.[s.tokenKey];
+      // Evidence-menu bullet: composes only when CHECKED (evidence-backed
+      // default or an explicit nurse check) — never asserted by default.
+      if (s.tokenKey === 'multiselect') {
+        if (isMenuChecked(s, tokenValues)) pieces.push(s.value || '');
+        else droppedMenu = true;
+        continue;
+      }
+      const v = tokenValues?.[tokenKeyOf(s)];
+      if (v === TOKEN_OMIT) continue;
       if (v && String(v).trim()) { pieces.push(String(v).trim()); continue; }
       if (!s.needsFilling) { pieces.push(s.value || ''); continue; }
       pieces.push(s.value || '___');
@@ -1562,18 +1612,28 @@ function _renderSegmentsWithTokens(segments, tokenValues, removedFactors) {
     }
     pieces.push(s.value || '');
   }
-  return pieces.join('');
+  const joined = pieces.join('');
+  // All menu bullets unchecked → don't stamp a dangling "…AEB".
+  return droppedMenu ? trimComposedConnector(joined) : joined;
 }
 // Unique tokenKeys still needing input across focus/goals/interventions.
-function _focusUnfilledTokenKeys(focus, tokenValues) {
-  if (!focus) return [];
+function _focusUnfilledTokenKeys(rawFocus, tokenValues) {
+  if (!rawFocus) return [];
+  // Same unique-key stamping as compose, so a picked goal/intervention token
+  // actually clears its amber "touch" (keyed by _ukey, not the shared tokenKey).
+  const focus = withStableTokenKeys(rawFocus);
   const tv = tokenValues || {};
   const keys = new Set();
   const walk = (segs) => {
     for (const s of segs || []) {
       if (s && s.kind === 'token' && s.needsFilling) {
-        const v = tv[s.tokenKey];
-        if (!v || !String(v).trim()) keys.add(s.tokenKey);
+        // Multiselect menu bullets have a sensible default (evidence-backed
+        // clauses pre-checked, the rest omitted — zero checked composes cleanly
+        // via the connector trim), so they never block or count as a touch.
+        if (s.tokenKey === 'multiselect') continue;
+        const key = tokenKeyOf(s);
+        const v = tv[key];
+        if (!v || !String(v).trim()) keys.add(key);
       }
     }
   };

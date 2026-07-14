@@ -10,6 +10,35 @@ import { areaLabel } from './careArea.js';
 
 function _score(i) { return typeof i?.score === 'number' ? i.score : 0; }
 
+/**
+ * toCheck rows that belong on the worklist RAIL (actions). `area_covered` rows
+ * are STATES ("this area is already covered by X — glance and move on"), not
+ * actions — the check pane's buttons (Remove this focus / Keep on plan) make
+ * no sense for them, so they render only as map verify cells. Counts shown to
+ * the nurse use this too.
+ */
+export function actionableChecks(audit) {
+  return (Array.isArray(audit?.toCheck) ? audit.toCheck : []).filter(
+    (it) => it.kind !== 'area_covered',
+  );
+}
+
+/**
+ * Display text for a covered / on-plan row — the focus that already covers the
+ * area. Real onPlan items ship `matchedFocusText` (the covering focus) and NO
+ * `focusText`, so a pane that reads only focusText renders a bare "—". Falls
+ * through every shape a covered item can take.
+ */
+export function coveredText(item) {
+  return (
+    item?.focusText ||
+    item?.matchedFocusText ||
+    item?.focus?.description ||
+    item?.description ||
+    ''
+  );
+}
+
 const KIND_ORDER = ['add', 'remove', 'check'];
 const KIND_LABEL = {
   add: 'Add',
@@ -39,7 +68,7 @@ export function buildWorklistModel(audit) {
   const adds = (Array.isArray(audit.toAdd) ? audit.toAdd : [])
     .slice().sort((a, b) => _score(b) - _score(a));
   const removes = Array.isArray(audit.toRemove) ? audit.toRemove : [];
-  const checks = Array.isArray(audit.toCheck) ? audit.toCheck : [];
+  const checks = actionableChecks(audit);
 
   const byKind = { add: adds, remove: removes, check: checks };
   const groups = [];

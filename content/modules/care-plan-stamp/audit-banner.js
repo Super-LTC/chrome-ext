@@ -103,7 +103,9 @@ async function _renderBanner() {
 
 function _paint(banner, audit, ctx) {
   const a = audit?.toAdd?.length || 0;
-  const c = audit?.toCheck?.length || 0;
+  // area_covered rows are map-only states, not worklist actions — keep them out
+  // of the "N to review" count (mirrors worklistModel.actionableChecks).
+  const c = (audit?.toCheck || []).filter((it) => it.kind !== 'area_covered').length;
   const r = audit?.toRemove?.length || 0;
   const total = a + c + r;
 

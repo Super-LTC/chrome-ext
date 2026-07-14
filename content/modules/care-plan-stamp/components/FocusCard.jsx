@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { Combobox } from '../CarePlanStampModal.jsx';
+import { tokenKeyOf, withStableTokenKeys, TOKEN_OMIT, groupEvidenceMenus, isMenuChecked } from '../segmentTokens.js';
 
 /**
  * FocusCard — right-pane detail view of a single proposed/composed focus.
@@ -221,7 +222,9 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
               className={`cpas-detail__statement ${hasUnsubstituted ? 'has-blank' : ''}`}
             >
               <DescriptionSegments
-                segments={rawFocus.descriptionSegments}
+                // Stamped (_ukey'd) segments so same-tokenKey slots don't
+                // collide — MUST match _composeFocus, which stamps the same way.
+                segments={withStableTokenKeys(rawFocus).descriptionSegments}
                 tokenValues={state.tokenValues}
                 removedFactors={state.removedFactors}
                 onTokenCommit={onTokenCommit}
@@ -270,26 +273,43 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
           even when a positive screen exists); evidence[] lists the supporting
           screens / firing dx-orders. Empty evidence → tag only, no empty box.
           Renders only when rawFocus.rationale is present (Initial wizard). */}
-      <FocusRationale rationale={rawFocus?.rationale} />
+      <FocusRationale rationale={rawFocus?.rationale} causes={rawFocus?.causes} />
 
       {/* Goals — always inline-editable */}
       <h3 className="cpas-detail__section">Goals ({goals.length})</h3>
           <ul className="cpas-detail__list cpas-detail__list--editable">
             {goals.map((g, i) => {
               const blank = _detectPlaceholder(g.description);
+              // Token-bearing goals render the interactive segment view (picker
+              // chips / free-text inputs / filled-value sparkles) — same as the
+              // focus statement — so "[select]"/blanks become real controls.
+              const gHasTokens = _segmentsHaveTokens(g.descriptionSegments);
               return (
                 <li key={i} className="cpas-iv-row cpas-iv-row--goal">
                   <div className="cpas-iv-row__body">
                     <div className="cpas-iv-row__text-wrap">
-                      <textarea
-                        className="cpas-iv-row__text"
-                        value={g.description}
-                        onInput={(e) => editGoal(i, e.target.value)}
-                        rows={1}
-                        disabled={readOnly}
-                        placeholder="Goal text…"
-                      />
-                      {blank && (
+                      {gHasTokens ? (
+                        <div className="cpas-iv-row__text cpas-iv-row__text--segments">
+                          <DescriptionSegments
+                            segments={g.descriptionSegments}
+                            tokenValues={state.tokenValues}
+                            removedFactors={null}
+                            onTokenCommit={onTokenCommit}
+                            onToggleFactor={null}
+                            readOnly={readOnly}
+                          />
+                        </div>
+                      ) : (
+                        <textarea
+                          className="cpas-iv-row__text"
+                          value={g.description}
+                          onInput={(e) => editGoal(i, e.target.value)}
+                          rows={1}
+                          disabled={readOnly}
+                          placeholder="Goal text…"
+                        />
+                      )}
+                      {blank && !gHasTokens && (
                         <span className="cpas-detail__inline-blank-tag" title={`Needs input: ${blank}`}>needs input</span>
                       )}
                     </div>
@@ -323,6 +343,11 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                 editIntervention(i, { positions: cleaned, positionOne: cleaned[0] ?? iv.positionOne });
               };
               const blank = _detectPlaceholder(iv.description);
+              // Token-bearing interventions render the interactive segment view so
+              // inline "[select]" slots become dropdowns (e.g. Bathing's assist-level
+              // + person-count pickers) and evidence-filled slots show their value +
+              // "why" receipt — instead of dead "[select]" text.
+              const ivHasTokens = _segmentsHaveTokens(iv.descriptionSegments);
               // Kardex is opt-in in every variant: the engine's pick is surfaced
               // as "✨ Recommended" inside the dropdown (the value stays None until
               // the nurse opts in) — we never auto-stamp the Kardex. Positions
@@ -332,15 +357,28 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                 <li key={i} className="cpas-iv-row">
                   <div className="cpas-iv-row__body">
                     <div className="cpas-iv-row__text-wrap">
-                      <textarea
-                        className="cpas-iv-row__text"
-                        value={iv.description}
-                        onInput={(e) => editIntervention(i, { description: e.target.value })}
-                        rows={1}
-                        disabled={readOnly}
-                        placeholder="Intervention text…"
-                      />
-                      {blank && (
+                      {ivHasTokens ? (
+                        <div className="cpas-iv-row__text cpas-iv-row__text--segments">
+                          <DescriptionSegments
+                            segments={iv.descriptionSegments}
+                            tokenValues={state.tokenValues}
+                            removedFactors={null}
+                            onTokenCommit={onTokenCommit}
+                            onToggleFactor={null}
+                            readOnly={readOnly}
+                          />
+                        </div>
+                      ) : (
+                        <textarea
+                          className="cpas-iv-row__text"
+                          value={iv.description}
+                          onInput={(e) => editIntervention(i, { description: e.target.value })}
+                          rows={1}
+                          disabled={readOnly}
+                          placeholder="Intervention text…"
+                        />
+                      )}
+                      {blank && !ivHasTokens && (
                         <span className="cpas-detail__inline-blank-tag" title={`Needs input: ${blank}`}>needs input</span>
                       )}
                     </div>
@@ -357,14 +395,10 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                         allowClear
                         placeholder="Select Kardex (none)"
                       />
-                      {isV2 ? (
-                        // v2: positions are auto-assigned by the engine and
-                        // locked — display-only chips, no dropdown / remove / add.
-                        posList.map((p, j) => (
-                          <PositionChipLocked key={j} label={positionLabels[p] || p} />
-                        ))
-                      ) : (
-                        posList.map((p, j) => (
+                      {/* Positions are editable in BOTH v1 and v2. In v2 the engine's
+                          auto-assigned position seeds the first chip, but the nurse can
+                          change it, remove it, or add more (CNA + RN, …) — matching v1. */}
+                      {posList.map((p, j) => (
                         <PositionChip
                           key={j}
                           value={p}
@@ -378,9 +412,8 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                           onRemove={posList.length > 1 ? () => setPositions(posList.filter((_, k) => k !== j)) : null}
                           disabled={readOnly}
                         />
-                        ))
-                      )}
-                      {!isV2 && !readOnly && posList.length < 5 && (
+                      ))}
+                      {!readOnly && posList.length < 5 && (
                         // NO_TRACK: pure-UI position add
                         <button
                           className="cpas-iv-row__chip-add"
@@ -431,14 +464,29 @@ const RATIONALE_BASIS_CLASS = {
   order: 'is-order',
   assessment: 'is-assessment',
 };
-export const FocusRationale = ({ rationale }) => {
-  if (!rationale || (!rationale.basisLabel && !(rationale.evidence || []).length)) return null;
-  const evidence = rationale.evidence || [];
+// A cause receipt ("dx F03.90", "MDS C0500=09", order text) → pill tint class,
+// matching the rationale-tag palette so dx/MDS/order read consistently.
+const _causeTint = (receipt) => {
+  const r = String(receipt || '').toLowerCase();
+  if (r.startsWith('dx')) return 'is-diagnosis';
+  if (r.startsWith('mds') || r.startsWith('uda')) return 'is-assessment';
+  return 'is-order';
+};
+
+export const FocusRationale = ({ rationale, causes }) => {
+  const causeList = (causes || []).filter((c) => c && c.label);
+  if (
+    (!rationale ||
+      (!rationale.basisLabel && !(rationale.evidence || []).length && !rationale.whyClause)) &&
+    !causeList.length
+  )
+    return null;
+  const evidence = rationale?.evidence || [];
   return (
     <div className="cpas-detail__rationale">
       <div className="cpas-detail__rationale-head">
         <span className="cpas-detail__rationale-title">Why this is proposed</span>
-        {rationale.basisLabel && (
+        {rationale?.basisLabel && (
           <span className={`cpas-detail__rationale-tag ${RATIONALE_BASIS_CLASS[rationale.basis] || ''}`}>
             {rationale.basisLabel}
           </span>
@@ -448,6 +496,31 @@ export const FocusRationale = ({ rationale }) => {
         <ul className="cpas-detail__rationale-list">
           {evidence.map((e, i) => <li key={i}>{e}</li>)}
         </ul>
+      )}
+      {/* Authored bridge (trigger → focus): "diuretic therapy increases
+          dehydration risk" — the connective tissue after the raw trigger. */}
+      {rationale?.whyClause && (
+        <div className="cpas-detail__rationale-bridge">— {rationale.whyClause}</div>
+      )}
+      {/* Auto-filled r/t etiologies with their chart receipts. Each pill's label
+          appears in the focus statement's "r/t …" clause; hovering shows WHAT on
+          the chart put it there (the dx code / MDS item+value). Data ships on
+          every proposal as `causes[{label, receipt}]` — display-only here; the
+          nurse edits the text itself to remove one. */}
+      {causeList.length > 0 && (
+        <div className="cpas-detail__causes">
+          <span className="cpas-detail__causes-label">r/t linked to chart:</span>
+          {causeList.map((c, i) => (
+            <span
+              key={i}
+              className={`cpas-detail__cause-pill ${_causeTint(c.receipt)}`}
+              title={c.receipt ? `From chart: ${c.receipt}` : 'Derived from chart'}
+            >
+              {c.label}
+              {c.receipt ? <span className="cpas-detail__cause-receipt">{c.receipt}</span> : null}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -462,9 +535,27 @@ const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCom
   const stopEdit = (idx) => setEditing((s) => { const n = new Set(s); n.delete(idx); return n; });
   if (!_hasSegments(segments)) return null;
   const tv = tokenValues || {};
+  // Consecutive evidence-menu bullets render as ONE "check what applies"
+  // control instead of N inline boxes (the Gomez/Morales psychosocial wall).
+  const plan = groupEvidenceMenus(segments);
   return (
     <span className="cpas-seg">
-      {segments.map((s, i) => {
+      {plan.map((p) => {
+        if (p.kind === 'msgroup') {
+          return (
+            <EvidenceMenuGroup
+              key={`msg-${p.tokens[0].idx}`}
+              tokens={p.tokens}
+              tokenValues={tv}
+              readOnly={readOnly}
+              onToggle={(seg, checked) =>
+                onTokenCommit(tokenKeyOf(seg), checked ? seg.value : TOKEN_OMIT)
+              }
+            />
+          );
+        }
+        const s = p.seg;
+        const i = p.idx;
         if (!s) return null;
         if (s.kind === 'text') return <span key={i}>{s.value}</span>;
         if (s.kind === 'factor') {
@@ -483,7 +574,11 @@ const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCom
           );
         }
         if (s.kind === 'token') {
-          const typed = tv[s.tokenKey];
+          // Value is keyed by the token's UNIQUE key (_ukey for goal/intervention
+          // tokens, tokenKey for focus tokens) so same-tokenKey slots don't collide;
+          // the human label still comes from tokenKey.
+          const tkey = tokenKeyOf(s);
+          const typed = tv[tkey];
           const typedVal = (typed && String(typed).trim()) || '';
           const backendFilled = !s.needsFilling && s.value;
           const currentValue = typedVal || (backendFilled ? s.value : '');
@@ -519,7 +614,7 @@ const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCom
                 segment={s}
                 currentValue={isFilled ? currentValue : null}
                 autoOpen={reEditing}
-                onCommit={(v) => { onTokenCommit(s.tokenKey, v); stopEdit(i); }}
+                onCommit={(v) => { onTokenCommit(tkey, v); stopEdit(i); }}
                 onDismiss={() => stopEdit(i)}
               />
             );
@@ -592,6 +687,73 @@ const FilledTokenSpan = ({ value, tokenKey, editable, onEdit }) => {
         <span className="cpas-seg-sparkle" aria-hidden="true">✨</span>
       </span>
     </HoverTooltip>
+  );
+};
+
+// Evidence-menu group: N consecutive "AEB --(...)" bullets as ONE checklist
+// control. The chip summarizes ("2 of 5 apply ⌄"); the popover lists every
+// clause with a checkbox. Checked = composes into the stamped text. Defaults
+// are evidence-driven (isMenuChecked): a clause the chart already answers
+// (PHQ-9/UDA match, receipt attached) starts checked; the rest start unchecked
+// — the nurse's assertion, never the engine's. Zero checked is valid: compose
+// drops the dangling connector.
+const EvidenceMenuGroup = ({ tokens, tokenValues, readOnly, onToggle }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+  const checked = tokens.filter((t) => isMenuChecked(t.seg, tokenValues));
+  if (readOnly) {
+    // Mirror compose: only checked clauses appear, connector handling upstream.
+    if (!checked.length) return null;
+    return <span>{checked.map((t) => t.seg.value).join('; ')}</span>;
+  }
+  const summary = checked.length
+    ? `${checked.length} of ${tokens.length} apply`
+    : 'select what applies';
+  return (
+    <span className={`cpas-seg-msg ${checked.length ? 'has-checked' : ''}`} ref={wrapRef}>
+      <button
+        type="button"
+        className="cpas-seg-msg__chip"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Check the statements that apply to this resident"
+      >
+        {summary}
+        <IconChevronDown />
+      </button>
+      {open && (
+        <span className="cpas-seg-msg__pop">
+          {tokens.map((t) => {
+            const isOn = isMenuChecked(t.seg, tokenValues);
+            return (
+              <label key={tokenKeyOf(t.seg)} className="cpas-seg-msg__item">
+                <input
+                  type="checkbox"
+                  checked={isOn}
+                  onChange={() => onToggle(t.seg, !isOn)}
+                />
+                <span className="cpas-seg-msg__label">
+                  {t.seg.value}
+                  {t.seg.receipt && (
+                    <span className="cpas-seg-msg__receipt" title={t.seg.receipt}>
+                      ✓ {t.seg.receipt}
+                    </span>
+                  )}
+                </span>
+              </label>
+            );
+          })}
+        </span>
+      )}
+    </span>
   );
 };
 
@@ -783,20 +945,17 @@ const PositionChip = ({ value, labels, options, onChange, onRemove, disabled }) 
   </span>
 );
 
-/**
- * PositionChipLocked — v2 display-only position pill. The wizard's positions
- * are auto-assigned by the engine, so there's no dropdown, no remove "×", and
- * no add button. Label resolution mirrors PositionChip (positionLabels[id] →
- * human text like "CNA" / "RN").
- */
-const PositionChipLocked = ({ label }) => (
-  <span className="cpas-chip cpas-chip--pos is-locked" title="Auto-assigned position">{label}</span>
-);
-
 // ---------- Local helpers (small, pure) ----------
 
 function _hasSegments(segments) {
   return Array.isArray(segments) && segments.length > 0;
+}
+
+// True when a goal/intervention carries at least one fillable token segment — the
+// signal to render the interactive segment view (dropdowns / inputs) instead of a
+// plain textarea.
+function _segmentsHaveTokens(segments) {
+  return Array.isArray(segments) && segments.some((s) => s && s.kind === 'token');
 }
 
 function _isTokenPlaceholderValue(v) {
@@ -806,8 +965,24 @@ function _isTokenPlaceholderValue(v) {
   return false;
 }
 
+// Internal slot-type token keys → nurse-facing words. Without this, backend
+// type names leak into the UI ("Select inline", "Type multiselect here").
+const TOKEN_TYPE_LABELS = {
+  inline: 'an option',
+  multiselect: 'what applies',
+  bare: 'a value',
+  other: 'details',
+  freq: 'frequency',
+  count: 'a number',
+  med: 'medication',
+  o2: 'oxygen flow',
+  painlevel: 'pain level',
+  skinrisk: 'skin risk level',
+};
+
 function _tokenLabelFromKey(key) {
-  return String(key || '').replace(/_/g, ' ');
+  const k = String(key || '');
+  return TOKEN_TYPE_LABELS[k] || k.replace(/_/g, ' ');
 }
 
 function _factorTooltipContent(s) {

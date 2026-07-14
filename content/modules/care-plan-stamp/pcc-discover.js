@@ -298,14 +298,88 @@ async function scrapeFullCarePlan(patientId) {
   return { careplanId, focusTexts: Array.from(seen) };
 }
 
-window.CarePlanStampDiscover = {
-  discoverCarePlanId,
-  discoverMiniToken,
-  scrapeOrgDropdowns,
-  validateProposalIds,
-  discoverLibraries,
-  discoverCategoriesForLibrary,
-  discoverFocusesForCategory,
-  discoverFocusContents,
-  scrapeFullCarePlan,
-};
+/**
+ * Parse the REAL focus (need) id from an `editNeed(<instanceId>, <needId>)` link. PCC's
+ * care-plan rows expose TWO ids; the SECOND is the focus that goals/interventions persist
+ * under — verified against the backend care-plan API (writing to the first id returns an
+ * id but silently no-ops). Single-arg links fall back to that arg. Tolerates quotes/space.
+ */
+export function parseEditNeedFocusId(src) {
+  const m = String(src || '').match(/editNeed\(\s*['"]?(\d+)['"]?(?:\s*,\s*['"]?(\d+))?/);
+  return m ? (m[2] || m[1]) : null;
+}
+
+/**
+ * Scrape the care plan's focus rows AS { focusId, focusText }. Unlike scrapeFullCarePlan
+ * (texts only), this keeps the editNeed(id) so a just-created library focus can be
+ * resolved to its REAL committed id. PCC's create/save responses report an unreliable
+ * id (the save response returns a phantom that isn't on the plan), so the only reliable
+ * id is the one that actually holds the focus on the live care plan. Walks all pages;
+ * same DOM selectors as scrapeFullCarePlan. Returns [] where DOMParser is unavailable.
+ */
+export async function scrapeCarePlanFocusRows(patientId) {
+  if (typeof DOMParser === 'undefined') {
+    console.log('[cp-scrape] DOMParser unavailable → []');
+    return [];
+  }
+  const PAGE_SIZE = 5;
+  const MAX_PAGES = 60;
+  const rows = [];
+  const seen = new Set();
+  let row = 1;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const url = `${CARE_PLAN_DETAIL_PATH}?ESOLclientid=${encodeURIComponent(patientId)}&ESOLrow=${row}&showresolved=N&ESOLsortby=C`;
+    let html;
+    try {
+      html = await _fetchText(url);
+    } catch (e) {
+      console.log('[cp-scrape] fetch failed:', e?.message);
+      break;
+    }
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    // PCC's focus rows historically use editNeed(<id>); tolerate a couple of variants.
+    const links = doc.querySelectorAll('a[href*="editNeed("], a[href*="editNeed("], a[onclick*="editNeed("]');
+    if (i === 0) {
+      console.log('[cp-scrape] page0 htmlLen', html.length, 'editNeed links', links.length);
+      console.log('[cp-scrape]   link srcs:', JSON.stringify(
+        Array.from(links).slice(0, 5).map((a) => ((a.getAttribute('href') || '') + ' ' + (a.getAttribute('onclick') || '')).replace(/\s+/g, ' ').trim()),
+      ).slice(0, 500));
+      if (links.length === 0) {
+        const sample = Array.from(doc.querySelectorAll('a')).slice(0, 10)
+          .map((a) => a.getAttribute('href') || a.getAttribute('onclick') || a.textContent?.trim())
+          .filter(Boolean);
+        console.log('[cp-scrape]   0 links — sample anchors:', JSON.stringify(sample).slice(0, 400));
+      }
+    }
+    const before = seen.size;
+    links.forEach((a) => {
+      const src = (a.getAttribute('href') || '') + ' ' + (a.getAttribute('onclick') || '');
+      const fid = parseEditNeedFocusId(src);
+      if (!fid || seen.has(fid)) return;
+      const tr = a.closest('tr');
+      const span = tr ? tr.querySelector('span.text1') : null;
+      const text = (span?.textContent || tr?.textContent || '').replace(/\s+/g, ' ').trim();
+      seen.add(fid);
+      rows.push({ focusId: fid, focusText: text });
+    });
+    if (seen.size === before) break;
+    row += PAGE_SIZE;
+  }
+  console.log('[cp-scrape] total focus rows', rows.length, rows.slice(0, 4).map((r) => `${r.focusId}:${r.focusText.slice(0, 30)}`));
+  return rows;
+}
+
+if (typeof window !== 'undefined') {
+  window.CarePlanStampDiscover = {
+    discoverCarePlanId,
+    discoverMiniToken,
+    scrapeOrgDropdowns,
+    validateProposalIds,
+    discoverLibraries,
+    discoverCategoriesForLibrary,
+    discoverFocusesForCategory,
+    discoverFocusContents,
+    scrapeFullCarePlan,
+    scrapeCarePlanFocusRows,
+  };
+}
