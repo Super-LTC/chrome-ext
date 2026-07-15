@@ -3,6 +3,7 @@ import { useState, useMemo } from 'preact/hooks';
 import { FocusCard } from './FocusCard.jsx';
 import { AuditPartialCoveragePane } from './AuditPartialCoveragePane.jsx';
 import { buildWorklistModel, actionableChecks, addAllReady, totalTouches, coveredText } from '../worklistModel.js';
+import { authoringPct, chartQualityMessage } from '../generateModel.js';
 
 /**
  * AuditWorklist — V2 comprehensive-audit V8 sidebar-worklist.
@@ -52,6 +53,9 @@ export const AuditWorklist = ({
   onDismissVerify,       // (item) → dismiss a partial-coverage row
   partialStampStatus,    // { [_rowId]: 'pending'|'done'|'error' }
   partialStampError,     // { [_rowId]: string }
+  genAuthoring,          // {done,total} | {} while the V3 polish authors | null (SUP-116)
+  polishedInfo,          // { count, at } after polished content swapped in | null
+  chartQualityFlags,     // string[] | null — junk/under-synced chart warning
 }) => {
   const model = useMemo(() => buildWorklistModel(audit), [audit]);
   const stampedSet = stampedAddIds || new Set();
@@ -63,6 +67,12 @@ export const AuditWorklist = ({
 
   const [coveredOpen, setCoveredOpen] = useState(false);
   const [droppedOpen, setDroppedOpen] = useState(true);
+  const [qualityDismissed, setQualityDismissed] = useState(false);
+
+  // V3 authoring strip state (SUP-116): live % while the background AI pass
+  // runs; a quiet "polished N" note once the swap lands.
+  const polishPct = genAuthoring ? authoringPct(genAuthoring) : null;
+  const qualityMsg = !qualityDismissed ? chartQualityMessage(chartQualityFlags) : '';
 
   // ── Progress: every actionable row (add + remove + check) counts toward the
   // tally. "done" = an add stamped/skipped, or a remove/check resolved/kept.
@@ -99,12 +109,35 @@ export const AuditWorklist = ({
       <div className="cpas-wl__progress">
         <div className="cpas-wl__progress-t">
           <span><b>{done}</b> of {total} done</span>
+          {genAuthoring && (
+            <span className="cpas-wl__polishing">
+              ✨ Polishing plan{polishPct != null ? `… ${polishPct}%` : '…'}
+            </span>
+          )}
+          {!genAuthoring && polishedInfo?.count > 0 && (
+            <span className="cpas-wl__polished" title="AI selected the most relevant goals/interventions and filled blanks from the chart — your edits are never overwritten.">
+              ✨ Polished {polishedInfo.count} focus{polishedInfo.count === 1 ? '' : 'es'}
+            </span>
+          )}
           <span className={touchesLeft > 0 ? 'cpas-wl__warn' : 'cpas-wl__ok'}>
             {touchesLeft > 0 ? `${touchesLeft} to fill` : '✓ all filled'}
           </span>
         </div>
         <div className="cpas-wl__pbar"><i style={{ width: `${pct}%` }} /></div>
+        {genAuthoring && (
+          <div className="cpas-wl__polishbar">
+            <i style={polishPct != null ? { width: `${polishPct}%` } : {}} className={polishPct == null ? 'is-indeterminate' : ''} />
+          </div>
+        )}
       </div>
+
+      {qualityMsg && (
+        <div className="cpas-wl__quality" role="status">
+          <span className="cpas-wl__quality-ic" aria-hidden="true">⚠</span>
+          <span className="cpas-wl__quality-msg">{qualityMsg}</span>
+          <button type="button" data-track="care_plan_chart_quality_dismissed" className="cpas-wl__quality-x" aria-label="Dismiss" onClick={() => setQualityDismissed(true)}>×</button>
+        </div>
+      )}
 
       <div className="cpas-wl__body">
         <aside className="cpas-wl__side">

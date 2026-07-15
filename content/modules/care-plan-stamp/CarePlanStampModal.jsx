@@ -14,6 +14,7 @@ import { isV2, devForceMock } from './v2-flag.js';
 import { AuditWorklist } from './components/AuditWorklist.jsx';
 import { CareAreaMap } from './components/CareAreaMap.jsx';
 import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector } from './segmentTokens.js';
+import { shouldPoll, polishByStdId, applyPolish, POLL_INTERVAL_MS } from './generateModel.js';
 import { actionableChecks } from './worklistModel.js';
 
 /**
@@ -112,6 +113,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // removal"). Acknowledged rows dim but STAY visible — never silently dropped.
   const [acknowledgedDropped, setAcknowledgedDropped] = useState(new Set());
 
+  // -------- V3 cached generate (SUP-116) --------
+  // Fired in PARALLEL with the audit; can only ADD (progress bar, polished
+  // content, chart-quality banner) — a 409/unmapped org or any error leaves
+  // the worklist exactly as today. `stopped` = fingerprint moved mid-session.
+  const [gen, setGen] = useState({ payload: null, error: null, startedAt: 0, stopped: false });
+  // { count, at } after the polished content swapped in — drives the header note.
+  const [polishedInfo, setPolishedInfo] = useState(null);
+  const polishAppliedRef = useRef(false);
+
   // -------- Assessment cross-check header count --------
   // audit.assessmentLinkages cross-checks each UDA/MDS assessment against the
   // plan. The per-focus detail now lives in each focus's `rationale.evidence`
@@ -157,6 +167,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setCaaFilter(null);
     setKeptIds(new Set());
     setAcknowledgedDropped(new Set());
+    setGen({ payload: null, error: null, startedAt: 0, stopped: false });
+    setPolishedInfo(null);
+    polishAppliedRef.current = false;
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -205,6 +218,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         });
 
         if (mode === 'comprehensive') {
+          // V3 cached generate (SUP-116) — fired in PARALLEL with the audit,
+          // never awaited: the worklist paints from the audit; this call only
+          // adds the authoring progress bar, the polished-content swap, and
+          // the chart-quality banner. 409 (org not concept-mapped) or any
+          // error = feature quietly off.
+          setGen({ payload: null, error: null, startedAt: Date.now(), stopped: false });
+          window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, orgSlug, facilityName })
+            .then((p) => { if (!cancelled) setGen((g) => ({ ...g, payload: p })); })
+            .catch((e) => {
+              if (!cancelled) setGen((g) => ({ ...g, error: e }));
+              if (e?.status !== 409) console.warn('[care-plan-generate] fetch failed (feature off)', e?.message);
+            });
+
           // Comprehensive Review path — full audit of the existing plan.
           // Under the dev mock override, swap the network call for the bundled
           // fixture. Dynamic import keeps the (large) fixture out of the main
@@ -407,6 +433,71 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     })();
     return () => { cancelled = true; };
   }, [patientId, facilityName, orgSlug, mode]);
+
+  // -------- V3 cached generate: poll while authoring (SUP-116) --------
+  // Each poll is a cheap server-side cache read of the SAME url. Stops when the
+  // polished payload lands, the modal closes/mode flips (cleanup), the chart
+  // fingerprint moves mid-session, or the 90s cap passes (polish p50 ~13s).
+  useEffect(() => {
+    if (mode !== 'comprehensive') return undefined;
+    if (!shouldPoll({ ...gen, now: Date.now() })) return undefined;
+    const t = setTimeout(async () => {
+      try {
+        const p = await window.CarePlanGenerateAPI.fetchGenerate({ patientId, orgSlug, facilityName });
+        setGen((g) => {
+          // Chart moved mid-session (fingerprint changed): the polished result
+          // describes a DIFFERENT chart. Keep the deterministic view, stop
+          // polling — the next modal open regenerates against the new chart.
+          if (g.payload?.fingerprint && p.fingerprint !== g.payload.fingerprint) {
+            return { ...g, stopped: true };
+          }
+          return { ...g, payload: p };
+        });
+      } catch (e) {
+        setGen((g) => ({ ...g, error: e }));
+      }
+    }, POLL_INTERVAL_MS);
+    return () => clearTimeout(t);
+  }, [mode, gen, patientId, orgSlug, facilityName]);
+
+  // -------- V3 cached generate: swap polished content into untouched rows --------
+  useEffect(() => {
+    if (mode !== 'comprehensive' || !audit || polishAppliedRef.current) return;
+    const p = gen.payload;
+    if (!p?.authored || gen.stopped) return;
+    polishAppliedRef.current = true; // one shot per modal-load, even if nothing matches
+    const touched = new Set([
+      ...Object.keys(auditFocusStates).filter((k) => auditFocusStates[k]),
+      ...stampedAddIds,
+      ...skippedAddIds,
+    ]);
+    const { items, swappedCount } = applyPolish(audit.toAdd, polishByStdId(p), touched);
+    if (!swappedCount) return;
+    // Swapped rows re-enter through the same conventions as the initial load:
+    // Kardex stays opt-in (engine pick → _recKardex, live field None).
+    const rekardexed = items.map((it) =>
+      it._polished
+        ? {
+            ...it,
+            focus: {
+              ...it.focus,
+              interventions: (it.focus.interventions || []).map((iv) => ({
+                ...iv,
+                _recKardex: iv.kardexCategory ?? null,
+                kardexCategory: null,
+              })),
+            },
+          }
+        : it,
+    );
+    setAudit((a) => (a ? { ...a, toAdd: rekardexed } : a));
+    setPolishedInfo({ count: swappedCount, at: Date.now() });
+    window.SuperAnalytics?.track?.('care_plan_polish_swapped', {
+      patient_id: patientId,
+      n_swapped: swappedCount,
+      n_to_add: items.length,
+    });
+  }, [gen, audit, mode, auditFocusStates, stampedAddIds, skippedAddIds, patientId]);
 
   // -------- Combined raw focuses: auto-picks + library picks --------
   const allRawFocuses = useMemo(() => {
@@ -1132,6 +1223,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               onDismissVerify={_dismissVerifyItem}
               partialStampStatus={partialStampStatus}
               partialStampError={partialStampError}
+              genAuthoring={gen.payload && !gen.payload.authored && !gen.stopped && !gen.error ? (gen.payload.authoringProgress || {}) : null}
+              polishedInfo={polishedInfo}
+              chartQualityFlags={gen.payload?.chartQuality?.flags || null}
             />
           )}
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && !isV2(audit) && comprehensiveStep === 'dashboard' && (
