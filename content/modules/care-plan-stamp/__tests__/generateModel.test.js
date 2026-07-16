@@ -44,20 +44,30 @@ describe('shouldPoll', () => {
 describe('polishByStdId / applyPolish', () => {
   const gen = {
     focuses: [
-      { libraryStdId: '100', description: 'Polished falls focus', goals: [{ description: 'G' }], interventions: [{ description: 'I1' }] },
+      { libraryStdId: '100', conceptId: 'universal.falls', description: 'Polished falls focus', goals: [{ description: 'G' }], interventions: [{ description: 'I1' }] },
       { libraryStdId: '200', description: 'Polished skin focus', goals: [], interventions: [] },
       { description: 'no stdId — unmatchable' },
     ],
   };
-  const row = (rowId, stdId, desc = 'Deterministic') => ({
+  const row = (rowId, stdId, desc = 'Deterministic', conceptId = undefined) => ({
     _rowId: rowId,
     ruleId: `rule-${rowId}`,
-    focus: { libraryStdId: stdId, description: desc, goals: [], interventions: [{ description: 'A' }, { description: 'B' }] },
+    focus: { libraryStdId: stdId, conceptId, description: desc, goals: [], interventions: [{ description: 'A' }, { description: 'B' }] },
   });
 
-  it('indexes only focuses that carry a libraryStdId', () => {
+  it('indexes by concept and stdId keys, skipping focuses with neither', () => {
     const map = polishByStdId(gen);
-    expect([...map.keys()].sort()).toEqual(['100', '200']);
+    expect([...map.keys()].sort()).toEqual(['concept:universal.falls', 'std:100', 'std:200']);
+  });
+
+  it('joins by conceptId when the audit row selected a DIFFERENT library row for the same concept', () => {
+    // The real Hamlet failure: audit picked row 3606 for hydration, V3 picked
+    // row 856 — zero stdId overlap. Concept is the stable key.
+    const items = [row('a', '3606', 'v2 dehydration row', 'universal.falls')];
+    const { items: out, swappedCount } = applyPolish(items, polishByStdId(gen), new Set());
+    expect(swappedCount).toBe(1);
+    expect(out[0].focus.description).toBe('Polished falls focus');
+    expect(out[0].focus.libraryStdId).toBe('100'); // stamps the V3 library row
   });
 
   it('swaps polished content into untouched matching rows', () => {
