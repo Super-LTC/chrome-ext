@@ -18,7 +18,7 @@
  * as "feature off", never as a modal error.
  */
 
-async function fetchGenerate({ patientId, orgSlug, facilityName }) {
+async function fetchGenerate({ patientId, orgSlug, facilityName, orgDropdowns }) {
   const qs = new URLSearchParams({
     patientId: String(patientId),
     orgSlug: orgSlug || '',
@@ -26,6 +26,10 @@ async function fetchGenerate({ patientId, orgSlug, facilityName }) {
     mode: 'comprehensive',
     cache: '1',
   });
+  // Facility dropdown labels — backend resolves the payload's CANONICAL
+  // kardex/position/reviewDept names to this facility's numeric IDs (without
+  // this, swapped rows render raw '(rn)'/'(nurse_any)' chips and can't stamp).
+  if (orgDropdowns) qs.set('orgDropdowns', JSON.stringify(orgDropdowns));
   const endpoint = `/api/extension/care-plan/generate?${qs.toString()}`;
 
   const response = await chrome.runtime.sendMessage({

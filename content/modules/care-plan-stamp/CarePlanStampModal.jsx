@@ -224,7 +224,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // the chart-quality banner. 409 (org not concept-mapped) or any
           // error = feature quietly off.
           setGen({ payload: null, error: null, startedAt: Date.now(), stopped: false });
-          window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, orgSlug, facilityName })
+          window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, orgSlug, facilityName, orgDropdowns })
             .then((p) => { if (!cancelled) setGen((g) => ({ ...g, payload: p })); })
             .catch((e) => {
               if (!cancelled) setGen((g) => ({ ...g, error: e }));
@@ -443,7 +443,12 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     if (!shouldPoll({ ...gen, now: Date.now() })) return undefined;
     const t = setTimeout(async () => {
       try {
-        const p = await window.CarePlanGenerateAPI.fetchGenerate({ patientId, orgSlug, facilityName });
+        // Same dropdowns wire shape as the initial call — the backend resolves
+        // the payload's canonical kardex/position names to facility IDs.
+        const orgDropdowns = dropdowns
+          ? { positions: dropdowns.positionLabels || {}, kardex: dropdowns.kardexLabels || {}, reviewDepts: dropdowns.reviewDeptLabels || {} }
+          : undefined;
+        const p = await window.CarePlanGenerateAPI.fetchGenerate({ patientId, orgSlug, facilityName, orgDropdowns });
         setGen((g) => {
           // Chart moved mid-session (fingerprint changed): the polished result
           // describes a DIFFERENT chart. Keep the deterministic view, stop
@@ -458,7 +463,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       }
     }, POLL_INTERVAL_MS);
     return () => clearTimeout(t);
-  }, [mode, gen, patientId, orgSlug, facilityName]);
+  }, [mode, gen, patientId, orgSlug, facilityName, dropdowns]);
 
   // -------- V3 cached generate: swap polished content into untouched rows --------
   useEffect(() => {
