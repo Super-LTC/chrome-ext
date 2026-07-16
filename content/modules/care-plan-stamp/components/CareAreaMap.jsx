@@ -55,15 +55,7 @@ export function buildMapCells(audit, { stampedAddIds, skippedAddIds, acknowledge
       why: _clip(it.reason, 44), act: 'Review removal →', target: { kind: 'remove', key: it._rowId },
     });
   }
-  for (const it of audit?.dropped || []) {
-    if (acked.has(it._rowId)) continue;
-    // Reviewer-held-back PROPOSAL — never on the plan. Its own state (own icon/
-    // tint) so "?" keeps exactly one meaning: an actionable verify.
-    cells.push({
-      state: 'held', label: _clip(it.description, 26),
-      why: _clip(it.reason, 44), act: 'Your call →', target: { kind: 'dropped', key: it._rowId },
-    });
-  }
+  // Reviewer-held-back proposals are not surfaced (see worklistModel.js).
   for (const it of audit?.toCheck || []) {
     if (it.kind === 'area_covered') {
       // "Already covered by X" is assurance, not work — it renders as a badged
@@ -158,8 +150,7 @@ export const CareAreaMap = ({
   const gaps = n('gap');
   const removals = n('remove');
   const verifies = n('verify');
-  const held = n('held');
-  const todo = gaps + removals + verifies + held;
+  const todo = gaps + removals + verifies;
 
   return (
     <div className="cpam">
@@ -250,7 +241,6 @@ export const CareAreaMap = ({
         <span><b className="is-gap">+</b> gap</span>
         <span><b className="is-rem">−</b> removal</span>
         <span><b className="is-ver">?</b> verify</span>
-        <span><b className="is-held">⊝</b> held back</span>
         <span><b className="is-cov">✓</b> covered</span>
         <span><b className="is-skip">⊘</b> skipped</span>
         <span><b className="is-dim">·</b> not indicated</span>

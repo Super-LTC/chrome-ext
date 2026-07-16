@@ -47,10 +47,10 @@ describe('buildWorklistModel', () => {
     const m = buildWorklistModel({ engineVersion: 'v2', toAdd: auditFx.toAdd });
     expect(m.groups.map((g) => g.kind)).toEqual(['add']);
   });
-  it('surfaces covered + dropped', () => {
+  it('surfaces covered; reviewer-held-back proposals are NOT surfaced (killed Jul 2026)', () => {
     const m = buildWorklistModel(auditFx);
     expect(m.covered).toHaveLength(1);
-    expect(m.dropped).toHaveLength(1);
+    expect(m.dropped).toHaveLength(0); // wire field ignored — the fold read as re-litigation noise
   });
   it('counts total add rows', () => {
     expect(buildWorklistModel(auditFx).totalAdds).toBe(2);

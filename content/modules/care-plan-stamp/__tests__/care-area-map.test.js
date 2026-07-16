@@ -32,14 +32,12 @@ describe('buildMapCells', () => {
     const by = (s) => cells.filter((c) => c.state === s);
     expect(by('gap')).toHaveLength(2);
     expect(by('gap')[0].why).toContain('Braden 13');
-    // One glyph per meaning: reviewer-held-back proposals get their OWN state
-    // ('held', ⊝) and '?' verify is reserved for actionable partial-coverage
+    // Reviewer-held-back proposals are NOT rendered (killed Jul 2026); '?'
+    // verify is reserved for actionable partial-coverage
     // rows. area_covered ("already covered by X") is NOT its own glyph — it
     // folds into a plain ✓ covered chip (assurance, not a task).
     expect(by('remove')).toHaveLength(0);
-    expect(by('held')).toHaveLength(1);
-    expect(by('held')[0].act).toBe('Your call →');
-    expect(by('held')[0].target).toEqual({ kind: 'dropped', key: 'dropped-0-x' });
+    expect(by('held')).toHaveLength(0);
     // No '✓?' glance state survives — the whole concept is gone from the map.
     expect(by('glance')).toHaveLength(0);
     expect(by('verify')).toHaveLength(1);

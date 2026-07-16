@@ -78,7 +78,12 @@ export function buildWorklistModel(audit) {
   }
 
   const covered = Array.isArray(audit.onPlan) ? audit.onPlan : [];
-  const dropped = Array.isArray(audit.dropped) ? audit.dropped : [];
+  // Reviewer-held-back proposals are NOT surfaced (killed Jul 2026): the fold
+  // read as "the AI rejected these, now re-litigate" — pure confusion with zero
+  // action value. The reviewer still vetoes over-fires server-side; we just
+  // don't show the reject pile. Wire field ignored, kept here as [] so
+  // downstream shapes stay stable.
+  const dropped = [];
 
   return {
     groups,
