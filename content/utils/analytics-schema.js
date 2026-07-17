@@ -53,6 +53,8 @@ export const EVENT_SCHEMA = {
   cert_digest_banner_shown: [],
   cert_digest_banner_enabled: [],
   cert_digest_banner_dismissed: [],
+  cert_reason_generate_clicked: ['cert_type', 'is_regenerate', 'surface'],
+  cert_reason_generated: ['cert_type', 'source', 'surface'],
   care_plan_coverage_opened: ['source'],
   care_plan_stamp_submitted: ['source'],
   rounding_reports_opened: ['source'],

@@ -217,6 +217,31 @@ const CertAPI = {
   },
 
   /**
+   * Generate an AI draft "Clinical Reason for Continued Stay" for a recert.
+   * Only generates + returns a draft — does NOT persist. Caller populates the
+   * editable field; nurse reviews/edits, then saves via saveClinicalReason.
+   * Recerts only (backend 400s on initial/signed certs).
+   * @param {string} certId — certification internal id (from GET certifications)
+   * @returns {Promise<{ clinicalReason: string, source: 'ai'|'fallback' }>}
+   */
+  async generateClinicalReason(certId) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/${certId}/generate-clinical-reason`,
+      options: { method: 'POST' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to generate clinical reason');
+    }
+
+    return {
+      clinicalReason: response.data?.clinicalReason || '',
+      source: response.data?.source || 'ai'
+    };
+  },
+
+  /**
    * Send certification to practitioners
    * @param {string} certId
    * @param {Array<string>} practitionerIds
