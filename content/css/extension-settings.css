@@ -320,6 +320,10 @@
 .sset-select:focus { outline: none; border-color: var(--sset-indigo); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16); }
 .sset-tz { font-size: 11px; color: var(--sset-faint); margin: 10px 2px 0; }
 
+/* Single-building read-only coverage line (shown instead of the delivery switch). */
+.sset-coverage { padding: 13px 14px; font-size: 12.5px; color: var(--sset-muted); line-height: 1.4; }
+.sset-coverage strong { color: var(--sset-ink); font-weight: 650; }
+
 /* ---- Text inputs (profile) ------------------------------------------- */
 .sset-field { padding: 14px 14px 4px; }
 .sset-field + .sset-field { border-top: 1px solid var(--sset-hair); }
