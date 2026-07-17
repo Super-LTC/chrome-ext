@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { CertModal } from './CertModal.jsx';
 import { DischargePlanPicker, parseDischargePlan, composeDischargePlan, isDischargePlanValid } from './DischargePlanPicker.jsx';
+import { GenerateReasonButton } from './GenerateReasonButton.jsx';
 
 /**
  * SendCertModal — single-screen send flow.
@@ -125,6 +126,13 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </span>
             <span class="cm-section__label">Clinical Reason</span>
+            <GenerateReasonButton
+              certId={cert.id}
+              certType={cert.type}
+              hasText={!!clinicalReason.trim()}
+              surface="send"
+              onGenerated={(text) => setClinicalReason(text)}
+            />
           </div>
           <textarea
             class="cm-input cm-input--textarea"
