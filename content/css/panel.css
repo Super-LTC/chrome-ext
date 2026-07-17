@@ -287,6 +287,8 @@
 .super-dial__action--coverage { background: #06b6d4; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.02em; font-family: inherit; }
 .super-dial__action--ftag { background: #e11d48; color: #fff; }
 .super-dial__action--ftag svg { display: block; }
+.super-dial__action--settings { background: #334155; color: #fff; }
+.super-dial__action--settings svg { display: block; }
 #super-bubbles-container.super-dial--open .super-dial__action {
   opacity: 1; transform: scale(1) translateY(0); pointer-events: auto;
 }
