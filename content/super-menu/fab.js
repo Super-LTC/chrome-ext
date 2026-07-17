@@ -6,6 +6,12 @@ function createBubbles() {
   const container = document.createElement('div');
   container.id = 'super-bubbles-container';
   container.innerHTML = `
+    <button id="super-settings-action" class="super-dial__action super-dial__action--settings" aria-label="Settings" data-track="fab_clicked" data-track-prop-fab="settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
     <button id="super-feedback-action" class="super-dial__action super-dial__action--feedback" aria-label="Send Feedback" data-track="fab_clicked" data-track-prop-fab="feedback">?</button>
     <button id="super-chat-action" class="super-dial__action super-dial__action--chat" aria-label="Open Chat" data-track="fab_clicked" data-track-prop-fab="chat">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -139,6 +145,18 @@ function createBubbles() {
       FeedbackLauncher.close();
     } else {
       FeedbackLauncher.open();
+    }
+  });
+
+  // Settings button → opens the Settings panel (Weekly Reports / Profile)
+  const settingsAction = document.getElementById('super-settings-action');
+  settingsAction.addEventListener('click', (e) => {
+    e.stopPropagation();
+    container.classList.remove('super-dial--open');
+    if (SettingsLauncher.isOpen()) {
+      SettingsLauncher.close();
+    } else {
+      SettingsLauncher.open();
     }
   });
 
@@ -598,6 +616,73 @@ const QMBoardLauncher = {
       this._preactUnmount = () => render(null, overlayEl);
     } catch (err) {
       console.error('[QMBoard] Failed to load module:', err);
+      overlayEl.remove();
+      this._overlayEl = null;
+    }
+  },
+
+  close() {
+    if (this._escapeHandler) {
+      document.removeEventListener('keydown', this._escapeHandler);
+      this._escapeHandler = null;
+    }
+    if (this._preactUnmount) {
+      this._preactUnmount();
+      this._preactUnmount = null;
+    }
+    if (this._overlayEl) {
+      this._overlayEl.remove();
+      this._overlayEl = null;
+    }
+  },
+
+  isOpen() { return !!this._overlayEl; }
+};
+
+// Settings Launcher — dynamic import pattern (same as QMBoardLauncher). Opens the
+// Settings overlay (Weekly Reports / Profile) with the current facility context.
+const SettingsLauncher = {
+  _overlayEl: null,
+  _preactUnmount: null,
+  _escapeHandler: null,
+
+  async open() {
+    if (this._overlayEl) return;
+
+    let facilityName, orgSlug;
+    try {
+      orgSlug = getOrg()?.org;
+      facilityName = getChatFacilityInfo();
+    } catch (e) {
+      console.error('[Settings] Could not get org/facility:', e);
+    }
+
+    const overlayEl = document.createElement('div');
+    overlayEl.id = 'super-settings-overlay';
+    document.body.appendChild(overlayEl);
+    this._overlayEl = overlayEl;
+
+    this._escapeHandler = (e) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this._escapeHandler);
+
+    try {
+      const [{ render, h }, { SettingsPanel }] = await Promise.all([
+        import('preact'),
+        import('../modules/extension-settings/SettingsPanel.jsx')
+      ]);
+
+      render(
+        h(SettingsPanel, {
+          facilityName: facilityName || '',
+          orgSlug: orgSlug || '',
+          onClose: () => this.close()
+        }),
+        overlayEl
+      );
+
+      this._preactUnmount = () => render(null, overlayEl);
+    } catch (err) {
+      console.error('[Settings] Failed to load module:', err);
       overlayEl.remove();
       this._overlayEl = null;
     }
