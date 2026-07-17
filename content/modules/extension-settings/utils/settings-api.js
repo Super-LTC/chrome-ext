@@ -29,13 +29,12 @@ async function request(endpoint, method, body) {
   return unwrap(res.data);
 }
 
-/** GET the current user's weekly-report config for the given building context. */
-export function getWeeklyReport(facilityName, orgSlug) {
-  const qs = new URLSearchParams({ facilityName, orgSlug }).toString();
-  return request(`/api/extension/weekly-report?${qs}`, 'GET');
+/** GET the current user's weekly-report config (user-global — covers all their buildings). */
+export function getWeeklyReport() {
+  return request('/api/extension/weekly-report', 'GET');
 }
 
-/** POST a partial weekly-report patch. body must carry { facilityName, orgSlug, ... }. */
+/** POST a partial weekly-report patch: { enabled?, cards?, deliveryMode?, dayOfWeek?, hour? }. */
 export function saveWeeklyReport(body) {
   return request('/api/extension/weekly-report', 'POST', body);
 }

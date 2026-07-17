@@ -1,7 +1,9 @@
 /**
- * Weekly Reports subtab — opt in/out, pick which reports, choose scope
- * (this building ↔ all my buildings), and set the delivery day + time.
- * Reads/writes /api/extension/weekly-report through settings-api.
+ * Weekly Reports subtab — opt in/out, pick which reports, choose how multi-building
+ * reports are delivered (one combined roll-up vs one email per building), and set
+ * the delivery day + time. The report always covers every building the user can
+ * access; delivery is the only building-related choice, and only when they have
+ * more than one building. Reads/writes /api/extension/weekly-report via settings-api.
  */
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { getWeeklyReport, saveWeeklyReport } from './utils/settings-api.js';
@@ -32,20 +34,13 @@ const CHECK = (
   </svg>
 );
 
-const BUILDING = (
-  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01M10 17h.01M14 17h.01" />
-  </svg>
-);
-
-export function WeeklyReportsTab({ facilityName, orgSlug }) {
-  const hasContext = !!(facilityName && orgSlug);
-
-  const [loading, setLoading] = useState(hasContext);
+export function WeeklyReportsTab({ facilityName }) {
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [enabled, setEnabled] = useState(true);
   const [cards, setCards] = useState([]);
-  const [scope, setScope] = useState('building');
+  const [deliveryMode, setDeliveryMode] = useState('rollup');
+  const [buildingCount, setBuildingCount] = useState(1);
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [hour, setHour] = useState(9);
   const [dirty, setDirty] = useState(false);
@@ -53,15 +48,15 @@ export function WeeklyReportsTab({ facilityName, orgSlug }) {
   const [status, setStatus] = useState(null);
 
   useEffect(() => {
-    if (!hasContext) return;
     let alive = true;
     (async () => {
       try {
-        const cfg = await getWeeklyReport(facilityName, orgSlug);
+        const cfg = await getWeeklyReport();
         if (!alive) return;
         setEnabled(cfg.enabled ?? true);
         setCards(Array.isArray(cfg.cards) ? cfg.cards : []);
-        setScope(cfg.scope === 'regional' ? 'regional' : 'building');
+        setDeliveryMode(cfg.deliveryMode === 'per_building' ? 'per_building' : 'rollup');
+        setBuildingCount(typeof cfg.buildingCount === 'number' ? cfg.buildingCount : 1);
         setDayOfWeek(typeof cfg.dayOfWeek === 'number' ? cfg.dayOfWeek : 1);
         setHour(typeof cfg.hour === 'number' ? cfg.hour : 9);
       } catch (e) {
@@ -71,7 +66,7 @@ export function WeeklyReportsTab({ facilityName, orgSlug }) {
       }
     })();
     return () => { alive = false; };
-  }, [facilityName, orgSlug, hasContext]);
+  }, []);
 
   const mark = () => { setDirty(true); setStatus(null); };
   // Toggle preserves existing order and appends newly-added reports at the end,
@@ -85,8 +80,14 @@ export function WeeklyReportsTab({ facilityName, orgSlug }) {
     setSaving(true);
     setStatus(null);
     try {
-      await saveWeeklyReport({ facilityName, orgSlug, enabled, cards, scope, dayOfWeek, hour });
-      track('weekly_report_settings_saved', { source: 'extension', enabled, scope, cardCount: cards.length });
+      await saveWeeklyReport({ enabled, cards, deliveryMode, dayOfWeek, hour });
+      track('weekly_report_settings_saved', {
+        source: 'extension',
+        enabled,
+        deliveryMode,
+        buildingCount,
+        cardCount: cards.length,
+      });
       setDirty(false);
       setStatus({ kind: 'ok', text: 'Saved — your weekly report is updated.' });
     } catch (e) {
@@ -94,22 +95,7 @@ export function WeeklyReportsTab({ facilityName, orgSlug }) {
     } finally {
       setSaving(false);
     }
-  }, [facilityName, orgSlug, enabled, cards, scope, dayOfWeek, hour]);
-
-  if (!hasContext) {
-    return (
-      <div class="sset-body">
-        <div class="sset-notice">
-          <span class="sset-notice__icon">{BUILDING}</span>
-          <div class="sset-notice__title">Open on a facility page</div>
-          <div class="sset-notice__text">
-            Weekly report settings are tied to a building. Open a PointClickCare facility page,
-            then reopen Settings. Your profile is still editable in the Profile tab.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  }, [enabled, cards, deliveryMode, dayOfWeek, hour, buildingCount]);
 
   if (loading) {
     return (
@@ -130,13 +116,15 @@ export function WeeklyReportsTab({ facilityName, orgSlug }) {
     );
   }
 
+  const multi = buildingCount > 1;
+
   return (
     <>
       <div class="sset-body">
         <div class="sset-master">
           <div class="sset-master__text">
             <div class="sset-master__title">Weekly report email</div>
-            <div class="sset-master__sub">A clear summary of your building, every week.</div>
+            <div class="sset-master__sub">A clear summary of what needs attention, every week.</div>
           </div>
           <Switch checked={enabled} onChange={(v) => { setEnabled(v); mark(); }} />
         </div>
@@ -160,24 +148,32 @@ export function WeeklyReportsTab({ facilityName, orgSlug }) {
             ))}
           </Section>
 
-          <Section label="Buildings">
-            <div class="sset-seg">
-              <button
-                type="button"
-                class={`sset-seg__opt${scope === 'building' ? ' is-active' : ''}`}
-                onClick={() => { setScope('building'); mark(); }}
-              >
-                This building<small>{facilityName}</small>
-              </button>
-              <button
-                type="button"
-                class={`sset-seg__opt${scope === 'regional' ? ' is-active' : ''}`}
-                onClick={() => { setScope('regional'); mark(); }}
-              >
-                All my buildings<small>Regional roll-up</small>
-              </button>
-            </div>
-          </Section>
+          {multi ? (
+            <Section label="Delivery" hint={`${buildingCount} buildings`}>
+              <div class="sset-seg">
+                <button
+                  type="button"
+                  class={`sset-seg__opt${deliveryMode === 'rollup' ? ' is-active' : ''}`}
+                  onClick={() => { setDeliveryMode('rollup'); mark(); }}
+                >
+                  One combined email<small>All {buildingCount} buildings in a roll-up</small>
+                </button>
+                <button
+                  type="button"
+                  class={`sset-seg__opt${deliveryMode === 'per_building' ? ' is-active' : ''}`}
+                  onClick={() => { setDeliveryMode('per_building'); mark(); }}
+                >
+                  One per building<small>A separate email for each</small>
+                </button>
+              </div>
+            </Section>
+          ) : (
+            <Section label="Coverage">
+              <div class="sset-coverage">
+                Covers <strong>{facilityName || 'your building'}</strong>.
+              </div>
+            </Section>
+          )}
 
           <Section label="When it arrives">
             <div class="sset-sched">
