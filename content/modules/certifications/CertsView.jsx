@@ -11,6 +11,7 @@ import { RevokeCertModal } from './components/RevokeCertModal.jsx';
 import { EditClinicalReasonModal } from './components/EditClinicalReasonModal.jsx';
 import { DelayCertModal } from './components/DelayCertModal.jsx';
 import { PractitionerWorkloadView } from './components/PractitionerWorkloadView.jsx';
+import { CertAuditView } from './components/CertAuditView.jsx';
 import { track } from '../../utils/analytics.js';
 import { getCertUrgency as resolveCertUrgency, isOverdueUrgency } from './cert-urgency.js';
 
@@ -28,6 +29,7 @@ const SUB_TABS = [
   { id: 'dueSoon', label: 'Due Soon' },
   { id: 'signed', label: 'Signed' },
   { id: 'discharged', label: 'Discharged' },
+  { id: 'audit', label: 'All' },
 ];
 
 /**
@@ -143,6 +145,15 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       track('cert_discharged_tab_opened', { source: 'mds_cc' });
     }
   }, [activeSubTab, dischargedOpened]);
+
+  // Fire-once when the Audit tab is first opened.
+  const [auditOpened, setAuditOpened] = useState(false);
+  useEffect(() => {
+    if (activeSubTab === 'audit' && !auditOpened) {
+      setAuditOpened(true);
+      track('cert_audit_tab_opened', { source: 'mds_cc' });
+    }
+  }, [activeSubTab, auditOpened]);
 
   const refetchAll = useCallback(() => {
     refetchActive();
@@ -357,6 +368,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
   }
 
   const isDischarged = activeSubTab === 'discharged';
+  const isAudit = activeSubTab === 'audit';
   const loading = activeSubTab === 'signed' ? signedLoading : activeLoading;
 
 
@@ -395,6 +407,10 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
 
       {/* Stay type filter + Sub-tabs */}
       <div class="cert__filters">
+        {/* Stay-type (payer) filter doesn't apply to the Audit tab — that list is
+            paginated server-side, so a client-only payer filter would be
+            misleading. The Audit tab has its own status/date filters instead. */}
+        {!isAudit && (
         <div class="cert__stay-type-filter">
           {STAY_TYPES.map(t => (
             // NO_TRACK
@@ -410,10 +426,11 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
             </button>
           ))}
         </div>
+        )}
         <div class="cert__sub-tabs-row">
         <div class="cert__sub-tabs">
-          {/* Discharged is a facility-wide archive; hide it in per-patient overlay */}
-          {SUB_TABS.filter(tab => tab.id !== 'discharged' || !patientId).map(tab => (
+          {/* Discharged + Audit are facility-wide archives; hide them in per-patient overlay */}
+          {SUB_TABS.filter(tab => (tab.id !== 'discharged' && tab.id !== 'audit') || !patientId).map(tab => (
             // NO_TRACK
             <button
               key={tab.id}
@@ -438,14 +455,14 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       {/* Content */}
       <div class="cert__list">
         {/* Active / signed tabs */}
-        {!isDischarged && loading && (
+        {!isDischarged && !isAudit &&loading && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__spinner" />
             <p class="mds-cc__state-text">Loading certifications...</p>
           </div>
         )}
 
-        {!isDischarged && !loading && activeError && (
+        {!isDischarged && !isAudit &&!loading && activeError && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__state-icon">{'\u26A0'}</div>
             <p class="mds-cc__state-text">{activeError}</p>
@@ -454,7 +471,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           </div>
         )}
 
-        {!isDischarged && !loading && !activeError && stayGroups.length === 0 && (
+        {!isDischarged && !isAudit &&!loading && !activeError && stayGroups.length === 0 && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__state-icon">{activeSubTab === 'overdue' ? '\u2705' : '\u{1F4CB}'}</div>
             <p class="mds-cc__state-text">
@@ -467,7 +484,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           </div>
         )}
 
-        {!isDischarged && !loading && !activeError && stayGroups.map(group => (
+        {!isDischarged && !isAudit &&!loading && !activeError && stayGroups.map(group => (
           <StayGroupCard
             key={group.stayId}
             stayId={group.stayId}
@@ -536,6 +553,11 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           >
             {dischargedLoadingMore ? 'Loading\u2026' : 'Load more'}
           </button>
+        )}
+
+        {/* Audit tab \u2014 full facility-wide list of every cert, filterable + CSV export */}
+        {isAudit && (
+          <CertAuditView facilityName={facilityName} orgSlug={orgSlug} />
         )}
       </div>
 

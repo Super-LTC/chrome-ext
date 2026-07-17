@@ -46,6 +46,8 @@ export const EVENT_SCHEMA = {
   cert_view_opened: ['source'],
   cert_discharged_tab_opened: ['source'],
   cert_discharged_load_more: ['page'],
+  cert_audit_tab_opened: ['source'],
+  cert_audit_exported: ['count'],
   cert_settings_opened: ['source'],
   cert_setting_toggled: ['setting', 'enabled'],
   cert_digest_banner_shown: [],

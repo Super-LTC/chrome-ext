@@ -82,6 +82,53 @@ const CertAPI = {
   },
 
   /**
+   * Fetch a page of the facility-wide certification AUDIT list — EVERY cert for
+   * the facility regardless of status or how long ago it was signed. This is the
+   * un-capped counterpart to the dashboard's 7-day "signed" window and the
+   * discharged archive: a currently-admitted resident whose cert was signed
+   * weeks ago shows up in neither of those, which is exactly the gap for a 100%
+   * compliance audit. Flat (not stay-grouped) + paginated, with a total.
+   *
+   * Note: signedAfter/signedBefore filter on signed_at, so a date range narrows
+   * to signed certs only. Omit them (and status) to pull the complete list.
+   *
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @param {Object} [opts]
+   * @param {string} [opts.status]        - status filter (pending|sent|signed|delayed|skipped|revoked); omit for ALL
+   * @param {string} [opts.signedAfter]   - ISO date (YYYY-MM-DD), inclusive lower bound on signed_at
+   * @param {string} [opts.signedBefore]  - ISO date (YYYY-MM-DD), inclusive upper bound on signed_at
+   * @param {number} [opts.limit=100]     - page size (max 500 server-side)
+   * @param {number} [opts.offset=0]      - for "load more", pass offset += limit
+   * @returns {Promise<{certs: Array, total: number, hasMore: boolean, limit: number, offset: number}>}
+   */
+  async fetchAuditCerts(facilityName, orgSlug, { status, signedAfter, signedBefore, limit = 100, offset = 0 } = {}) {
+    const params = new URLSearchParams({ facilityName, orgSlug, limit, offset });
+    if (status) params.set('status', status);
+    if (signedAfter) params.set('signedAfter', signedAfter);
+    if (signedBefore) params.set('signedBefore', signedBefore);
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/audit?${params}`,
+      options: { method: 'GET' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch certification audit list');
+    }
+
+    const data = response.data || {};
+    return {
+      certs: data.certs || [],
+      total: data.total ?? 0,
+      hasMore: !!data.hasMore,
+      limit: data.limit ?? limit,
+      offset: data.offset ?? offset,
+    };
+  },
+
+  /**
    * Fetch cert chain for a specific patient
    * @param {string} facilityName
    * @param {string} orgSlug
