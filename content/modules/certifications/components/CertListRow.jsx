@@ -30,12 +30,12 @@ function getPrimaryAction(cert) {
     return null;
   }
   if (isOverdueUrgency(urgency)) {
-    return { label: hasSends ? 'Resend' : 'Send', variant: 'destructive', action: 'send' };
+    return { label: 'View', variant: 'destructive', action: 'send' };
   }
   if (hasSends) {
-    return { label: 'Resend', variant: 'outline', action: 'send' };
+    return { label: 'View', variant: 'outline', action: 'send' };
   }
-  return { label: 'Send', variant: 'primary', action: 'send' };
+  return { label: 'View', variant: 'primary', action: 'send' };
 }
 
 function SendHistorySummary({ sends }) {

@@ -83,7 +83,44 @@ function matchesStayType(cert, filter) {
   return cert.payerType !== 'managed_care'; // 'medicare' = everything that's not managed
 }
 
-export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
+// Mirrors the backend CERT_DUE_SOON_THRESHOLD_DAYS — the single "close to due"
+// window shared by due-soon and "signature almost due" so the two can't drift.
+const CERT_DUE_SOON_THRESHOLD_DAYS = 3;
+
+/**
+ * A cert is "action needed" when it's time-pressured but not yet resolved:
+ * close to being due to send, or sent-but-signature-almost-due-and-unsigned.
+ * The backend owns this (cert.actionNeeded); we recompute locally only as a
+ * fallback for older backends that predate the field.
+ */
+function isActionNeeded(cert) {
+  if (typeof cert.actionNeeded === 'boolean') return cert.actionNeeded;
+  const { urgency, daysUntilDue } = resolveCertUrgency(cert);
+  if (urgency === 'overdue' || urgency === 'due_soon' || urgency === 'delayed' || urgency === 'awaiting_signature_overdue') {
+    return true;
+  }
+  if (urgency === 'awaiting_signature') return (daysUntilDue ?? Infinity) <= CERT_DUE_SOON_THRESHOLD_DAYS;
+  return false;
+}
+
+function _withinDays(iso, days) {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return false;
+  return Date.now() - t <= days * 86400000;
+}
+
+/**
+ * A signed cert the current user hasn't looked at yet — drives the Signed-tab
+ * "new" nudge. Backend ships isNewlySigned; fall back to the same seenByMe +
+ * 7-day basis the FAB "S" badge uses so the two can't disagree.
+ */
+function isNewlySigned(cert) {
+  if (typeof cert.isNewlySigned === 'boolean') return cert.isNewlySigned;
+  return cert.seenByMe === false && _withinDays(cert.signedAt, 7);
+}
+
+export function CertsView({ facilityName, orgSlug, patientId, patientName, onSignedSeen }) {
   const [activeSubTab, setActiveSubTab] = useState('action');
   const [stayTypeFilter, setStayTypeFilter] = useState('all');
 
@@ -136,6 +173,25 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
     () => updateNotificationPref('morningDigest', true),
     [updateNotificationPref]
   );
+
+  // Opening the Signed sub-tab = the coordinator has now actually looked at the
+  // signatures. Mark those cert_signed notifications seen (clears the "new"
+  // nudge here + the FAB "S" badge via onSignedSeen), then refetch so the badge
+  // clears. Uses the unfiltered signed list so every stay type clears at once.
+  // Idempotent server-side, and self-terminating: once seen, isNewlySigned goes
+  // false → keys empty → no re-fire.
+  useEffect(() => {
+    if (activeSubTab !== 'signed') return;
+    const keys = signedCerts
+      .filter(isNewlySigned)
+      .map(c => window.NOTIFICATION_KEYS?.certSigned(c.id))
+      .filter(Boolean);
+    if (keys.length === 0) return;
+    window.NotificationsAPI?.markSeen(keys).then(() => {
+      refetchSigned();
+      onSignedSeen?.();
+    });
+  }, [activeSubTab, signedCerts]);
 
   // Fire-once when the Discharged tab is first opened.
   const [dischargedOpened, setDischargedOpened] = useState(false);
@@ -192,11 +248,16 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       if (urgency === 'awaiting_signature' || urgency === 'awaiting_signature_overdue') awaiting++;
     }
     return {
-      action: filteredActive.length,
+      // Badge counts only the time-pressured certs (backend `actionNeeded`),
+      // not every active cert. The tab still LISTS the full worklist below —
+      // only the number narrows, so nothing hides.
+      action: filteredActive.filter(isActionNeeded).length,
       awaiting,
       overdue,
       dueSoon,
-      signed: filteredSigned.length
+      // Signed badge = a "newly signed, not yet seen" nudge (clears once the
+      // Signed sub-tab is opened), not the total signed count.
+      signed: filteredSigned.filter(isNewlySigned).length
     };
   }, [filteredActive, filteredSigned]);
 

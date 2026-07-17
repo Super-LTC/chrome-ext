@@ -580,15 +580,14 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
       }
       return next;
     });
-    // Per-tab clear: entering Certs/Queries marks all unseen recently-signed
-    // items seen, then refreshes the FAB badge + refetches so the dots clear.
+    // Per-tab clear for Queries: entering marks unseen recently-signed queries
+    // seen, then refreshes the FAB badge + refetches so the dots clear.
+    // Certs clear moved into CertsView — it fires when the *Signed* sub-tab is
+    // opened (where signatures are actually viewed), not on merely entering the
+    // Certs area (which lands on Action Needed). CertsView calls back via
+    // onSignedSeen to refresh this badge + the Certs-tab unseen dot.
     const fyi = fyiRef.current;
-    if (next === 'certs' && fyi.certKeys.length) {
-      window.NotificationsAPI?.markSeen(fyi.certKeys).then(() => {
-        window.updateMDSBadge?.();
-        fyi.refetchCerts?.();
-      });
-    } else if (next === 'queries' && fyi.queryKeys.length) {
+    if (next === 'queries' && fyi.queryKeys.length) {
       window.NotificationsAPI?.markSeen(fyi.queryKeys).then(() => {
         window.updateMDSBadge?.();
         fyi.refetchData?.();
@@ -880,6 +879,7 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
             <CertsView
               facilityName={facilityName}
               orgSlug={orgSlug}
+              onSignedSeen={() => { window.updateMDSBadge?.(); refetchSignedCerts(); }}
             />
           )}
 

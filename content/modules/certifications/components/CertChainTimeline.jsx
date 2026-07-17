@@ -79,7 +79,7 @@ function SlotCard({ type, cert, onAction }) {
           class={`cert-chain__slot-btn cert-chain__slot-btn--${state.variant === 'overdue' ? 'destructive' : 'primary'}`}
           onClick={(e) => { e.stopPropagation(); onAction(cert, 'send'); }}
         >
-          Send
+          View
         </button>
       )}
       {state.showUnskip && cert && (
