@@ -2,6 +2,18 @@
 // Shows query details and actions (resend, view PDF)
 
 import { track, toErrorCode } from '../utils/analytics.js';
+import {
+  formatArdBadge,
+  resolveEffectiveDate,
+  isDateInWindow,
+  windowGuidanceText,
+  outsideWindowWarning,
+  formatIsoShort,
+} from './lib/query-timing.js';
+
+// A query is editable (note + effective date) until the physician signs it.
+// Backend enforces the same rule (400 on signed); this just gates the UI.
+const EDITABLE_STATUSES = new Set(['pending', 'sent', 'rejected', 'revoked']);
 
 const QueryDetailModal = {
   /**
@@ -11,21 +23,26 @@ const QueryDetailModal = {
    * @param {Object} options - Additional options (showPdfButton, pdfUrl, showCodingStatus, mdsItemCoded)
    */
   show(query, result = null, options = {}) {
-    const statusDisplay = QueryState.getStatusDisplay(query.status);
-    const content = this._buildContent(query, options);
-    const actions = this._buildActions(query, result, options);
+    // Keep a mutable working copy so an in-place edit (PATCH) can refresh the
+    // view without reopening the modal.
+    this._query = query;
+    this._result = result;
+    this._options = options;
+    this._editing = false;
 
     // Track open + dismiss-via-X/ESC/backdrop. Other close paths fire their own
     // close events with appropriate reasons.
     track('query_modal_opened');
     this._closeFired = false;
 
+    const statusDisplay = QueryState.getStatusDisplay(query.status);
+
     SuperModal.show({
       title: 'Diagnosis Query',
       icon: statusDisplay.icon,
       badge: query.mdsItem,
-      content,
-      actions,
+      content: this._buildContent(query, options),
+      actions: this._buildActions(query, result, options),
       size: 'medium',
       className: 'super-query-detail-modal',
       onClose: () => {
@@ -35,6 +52,139 @@ const QueryDetailModal = {
         }
       }
     });
+  },
+
+  /**
+   * Re-render the modal body + actions from current state (used when toggling
+   * in/out of edit mode or after a successful save). Re-wires edit listeners.
+   */
+  _rerender() {
+    SuperModal.updateContent(this._buildContent(this._query, this._options));
+    SuperModal.updateActions(this._buildActions(this._query, this._result, this._options));
+    if (this._editing) setTimeout(() => this._wireEditListeners(), 50);
+  },
+
+  /**
+   * Whether the note + effective date can be edited (until signed).
+   */
+  _isEditable(query) {
+    return EDITABLE_STATUSES.has(query?.status);
+  },
+
+  /**
+   * Enter edit mode — snapshot the current note + effective date into a draft.
+   */
+  _enterEdit() {
+    const q = this._query;
+    this._editing = true;
+    this._draftNote = q.nurseEditedNote || q.aiGeneratedNote || '';
+    this._draftDate = resolveEffectiveDate(q);
+    this._initialDate = this._draftDate;
+    track('query_edit_started', { item_code: String(q.mdsItem || '') });
+    this._rerender();
+  },
+
+  /**
+   * Cancel edit mode — discard the draft and return to the read view.
+   */
+  _cancelEdit() {
+    this._editing = false;
+    this._rerender();
+  },
+
+  /**
+   * Wire the edit-mode inputs (note textarea + date input) to the draft, and
+   * toggle the outside-window soft warning live as the date changes.
+   */
+  _wireEditListeners() {
+    const noteEl = document.querySelector('#super-query-edit-note');
+    if (noteEl) {
+      noteEl.addEventListener('input', (e) => { this._draftNote = e.target.value; });
+    }
+    const dateEl = document.querySelector('#super-query-edit-date');
+    if (dateEl) {
+      dateEl.addEventListener('change', (e) => {
+        this._draftDate = e.target.value || '';
+        this._updateEditWarning();
+      });
+      this._updateEditWarning();
+    }
+  },
+
+  /**
+   * Recompute + toggle the outside-window warning in edit mode against the
+   * query's backend timing window. Advisory only.
+   */
+  _updateEditWarning() {
+    const warnEl = document.querySelector('#super-query-edit-warning');
+    if (!warnEl) return;
+    const lookbackWindow = this._query.timing?.lookbackWindow;
+    if (isDateInWindow(this._draftDate, lookbackWindow) === false) {
+      warnEl.textContent = outsideWindowWarning(this._query.timing?.lookbackDays, lookbackWindow);
+      warnEl.hidden = false;
+    } else {
+      warnEl.hidden = true;
+    }
+  },
+
+  /**
+   * Save the edited note + effective date via PATCH. Only sends fields that
+   * actually changed. Handles the signed-guard 400 defensively.
+   */
+  async _saveEdit(btn) {
+    const q = this._query;
+    const changes = {};
+    const newNote = this._draftNote ?? '';
+    const origNote = q.nurseEditedNote || q.aiGeneratedNote || '';
+    if (newNote !== origNote) changes.nurseEditedNote = newNote;
+    // Effective date: '' back to default clears (null); a set value sends it.
+    if (this._draftDate !== this._initialDate) {
+      changes.effectiveDate = this._draftDate || null;
+    }
+
+    if (Object.keys(changes).length === 0) {
+      // Nothing changed — just leave edit mode.
+      this._editing = false;
+      this._rerender();
+      return;
+    }
+
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+      const updated = await QueryAPI.patchQuery(q.id, changes);
+      // Merge the server's fresh copy (includes recomputed timing) into state.
+      this._query = { ...q, ...updated };
+      if (window.QueryState) QueryState.updateQuery(q.id, this._query);
+      this._editing = false;
+      track('query_edit_saved', { item_code: String(q.mdsItem || '') });
+      this._rerender();
+      // Keep the panel/badges in sync with the edited copy.
+      window.QueryPanel?.updatePanel?.();
+      window.QueryBadges?.updateAllBadges?.();
+      SuperToast.success('Query updated');
+    } catch (error) {
+      console.error('Super LTC: Failed to save query edit', error);
+      track('query_edit_failed', { error_code: toErrorCode(error) });
+      // If the backend now considers it signed (raced a signature), the query is
+      // read-only. Flip our local status to 'signed' so the read view stops
+      // offering Edit, and keep the panel/badges in sync.
+      const msg = error?.message || '';
+      if (/signed/i.test(msg)) {
+        this._query = { ...q, status: 'signed' };
+        if (window.QueryState) QueryState.updateQuery(q.id, this._query);
+        this._editing = false;
+        this._rerender();
+        window.QueryPanel?.updatePanel?.();
+        window.QueryBadges?.updateAllBadges?.();
+      } else {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+      SuperToast.error(`Couldn't save: ${error.message}`);
+    }
   },
 
   /**
@@ -87,6 +237,12 @@ const QueryDetailModal = {
           ` : ''}
         </div>
 
+        <!-- Note for physician (view / edit) -->
+        ${this._buildNoteSectionHTML(query)}
+
+        <!-- Effective (onset) date + ARD timing -->
+        ${this._buildEffectiveDateSectionHTML(query)}
+
         <!-- Signed Info -->
         ${query.status === 'signed' && query.signedByName ? `
           <div class="super-query-detail__signed-card">
@@ -137,6 +293,101 @@ const QueryDetailModal = {
   },
 
   /**
+   * Build the "Note for Physician" section — read text, or a textarea in edit
+   * mode. Shows the nurse's edited note, falling back to the AI-generated one.
+   * @param {Object} query
+   * @returns {string}
+   */
+  _buildNoteSectionHTML(query) {
+    if (this._editing) {
+      return `
+        <div class="super-query-detail__section">
+          <div class="super-query-detail__label">Note for Physician</div>
+          <textarea
+            class="super-query-detail__note-edit"
+            id="super-query-edit-note"
+            rows="4"
+            placeholder="Note for physician..."
+          >${this._escapeHTML(this._draftNote || '')}</textarea>
+        </div>
+      `;
+    }
+
+    const note = query.nurseEditedNote || query.aiGeneratedNote || '';
+    return `
+      <div class="super-query-detail__section">
+        <div class="super-query-detail__label">Note for Physician</div>
+        ${note
+          ? `<div class="super-query-detail__note">${this._escapeHTML(note)}</div>`
+          : `<div class="super-query-detail__note super-query-detail__note--empty">No note written yet.</div>`}
+      </div>
+    `;
+  },
+
+  /**
+   * Build the effective-date + ARD-timing section. Read mode shows the resolved
+   * onset date, the ARD status badge, and window guidance; edit mode swaps in a
+   * date input + live outside-window warning. Backwards compatible: with no
+   * `timing` (old queries), the badge/guidance simply don't render.
+   * @param {Object} query
+   * @returns {string}
+   */
+  _buildEffectiveDateSectionHTML(query) {
+    const badge = formatArdBadge(query.timing);
+    const badgeHTML = badge
+      ? `<span class="super-ard-badge super-ard-badge--${badge.tone}">${this._escapeHTML(badge.text)}</span>`
+      : '';
+    const guidance = windowGuidanceText(query.timing?.lookbackWindow);
+    const guidanceHTML = guidance
+      ? `<div class="super-query-detail__hint">${this._escapeHTML(guidance)}</div>`
+      : '';
+
+    const labelRow = `
+      <div class="super-query-detail__label-row">
+        <span class="super-query-detail__label">Effective date</span>
+        ${badgeHTML}
+      </div>
+    `;
+
+    if (this._editing) {
+      return `
+        <div class="super-query-detail__section">
+          ${labelRow}
+          <input
+            type="date"
+            class="super-query-detail__date-input"
+            id="super-query-edit-date"
+            value="${this._escapeHTML(this._draftDate || '')}"
+          />
+          ${guidanceHTML}
+          <div class="super-query-detail__date-warning" id="super-query-edit-warning" hidden></div>
+        </div>
+      `;
+    }
+
+    const resolved = resolveEffectiveDate(query);
+    const display = resolved ? this._formatIso(resolved) : '—';
+    return `
+      <div class="super-query-detail__section">
+        ${labelRow}
+        <div class="super-query-detail__value">${this._escapeHTML(display)}</div>
+        ${guidanceHTML}
+      </div>
+    `;
+  },
+
+  /**
+   * TZ-safe display of a YYYY-MM-DD string as "Mon D, YYYY". Avoids new Date()
+   * so an ISO date never shifts a day in a negative-offset timezone.
+   * @param {string} iso
+   * @returns {string}
+   */
+  _formatIso(iso) {
+    if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+    return `${formatIsoShort(iso)}, ${iso.slice(0, 4)}`;
+  },
+
+  /**
    * Build action buttons based on query status
    * @param {Object} query - Query object
    * @param {Object} result - MDS result (optional)
@@ -144,6 +395,22 @@ const QueryDetailModal = {
    * @returns {Array}
    */
   _buildActions(query, result, options = {}) {
+    // Edit mode: only Cancel + Save.
+    if (this._editing) {
+      return [
+        {
+          label: 'Cancel',
+          variant: 'secondary',
+          action: () => this._cancelEdit()
+        },
+        {
+          label: 'Save',
+          variant: 'primary',
+          action: (btn) => this._saveEdit(btn)
+        }
+      ];
+    }
+
     const actions = [];
 
     switch (query.status) {
@@ -227,6 +494,15 @@ const QueryDetailModal = {
           action: (btn) => this._handlePrintPreview(query, btn)
         });
         break;
+    }
+
+    // Edit note + effective date — available until the query is signed.
+    if (this._isEditable(query)) {
+      actions.push({
+        label: 'Edit',
+        variant: 'secondary',
+        action: () => this._enterEdit()
+      });
     }
 
     // Always have a close button

@@ -15,9 +15,11 @@ import { toRecommendedIcd10 } from '../../../queries/lib/icd10-picker-util.js';
  * @param {string} params.facilityName
  * @param {string} params.orgSlug
  * @param {string} params.assessmentId
+ * @param {string} [params.ardDate] - Assessment ARD (YYYY-MM-DD) for effective-date
+ *   window guidance. Optional: absent → no window nudge, picker still works.
  * @param {Function} params.onComplete - Called after all queries sent successfully
  */
-export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, onComplete }) {
+export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, ardDate, onComplete }) {
   const [state, setState] = useState('idle'); // idle, generating, reviewing, sending, complete
   const [generatedQueries, setGeneratedQueries] = useState([]);
   const [practitioners, setPractitioners] = useState([]);
@@ -53,17 +55,33 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
         setProgress({ current: i, total: selectedItems.length, currentItemName: itemName });
 
         try {
+          // Kick off the ARD/lookback preview concurrently with note generation
+          // — it's independent and advisory-only (previewTiming swallows its own
+          // errors and resolves to null), so it needs no try/catch and adds no
+          // extra serial round-trip.
+          const timingPromise = window.QueryAPI.previewTiming({ mdsItem: item.mdsItem, ardDate });
+
           // Generate AI note only — no query creation yet
           const noteData = await window.QueryAPI.generateNote(
             item.mdsItem,
             item
           );
 
+          const timing = await timingPromise;
+
+          // Prefill the picker with the resolved default (createdAt/today for a
+          // fresh query); `initialEffectiveDate` records it so we only POST the
+          // date when the nurse changes it — otherwise behavior is unchanged.
+          const initialEffectiveDate = timing?.effectiveDate || '';
+
           results.push({
             item,
             noteText: noteData.note,
             preferredIcd10: noteData.preferredIcd10,
-            icd10Options: noteData.icd10Options
+            icd10Options: noteData.icd10Options,
+            timing,
+            effectiveDate: initialEffectiveDate,
+            initialEffectiveDate
           });
         } catch (err) {
           console.error(`[BatchQuery] Failed to generate note for ${item.mdsItem}:`, err);
@@ -106,7 +124,7 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
       setError(err.message);
       setState('idle');
     }
-  }, [patientId, facilityName, orgSlug, assessmentId]);
+  }, [patientId, facilityName, orgSlug, assessmentId, ardDate]);
 
   /**
    * Update the note text for a specific item (by mdsItem code)
@@ -133,6 +151,18 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
   }, []);
 
   /**
+   * Update the nurse-picked effective (onset) date for a specific item.
+   * `dateStr` is a YYYY-MM-DD string (or '' to fall back to the default).
+   */
+  const updateEffectiveDate = useCallback((mdsItem, dateStr) => {
+    setGeneratedQueries(prev =>
+      prev.map(gq =>
+        gq.item.mdsItem === mdsItem ? { ...gq, effectiveDate: dateStr || '' } : gq
+      )
+    );
+  }, []);
+
+  /**
    * Create and send all queries to the selected practitioner
    */
   const sendAll = useCallback(async () => {
@@ -149,7 +179,7 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
       for (let i = 0; i < generatedQueries.length; i++) {
         if (abortRef.current) break;
 
-        const { item, noteText, selectedIcd10 } = generatedQueries[i];
+        const { item, noteText, selectedIcd10, effectiveDate, initialEffectiveDate } = generatedQueries[i];
         setProgress({ current: i, total: generatedQueries.length });
 
         // Only the code the nurse deliberately attached via the picker.
@@ -157,7 +187,13 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
         const recommendedIcd10 = toRecommendedIcd10(selectedIcd10);
 
         try {
-          // Step 1: Create the query
+          // Step 1: Create the query. Send the effective date only when the nurse
+          // moved it off the default — otherwise omit it and the backend keeps
+          // its createdAt default (unchanged behavior).
+          const effectiveDatePayload =
+            effectiveDate && effectiveDate !== initialEffectiveDate
+              ? { effectiveDate }
+              : {};
           const { query } = await window.QueryAPI.createQuery({
             patientId,
             facilityName,
@@ -169,7 +205,8 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
             keyFindings: item.keyFindings || [],
             queryEvidence: item.queryEvidence || item.evidence || [],
             recommendedIcd10,
-            aiGeneratedNote: noteText
+            aiGeneratedNote: noteText,
+            ...effectiveDatePayload
           });
 
           // Step 2: Send to practitioner
@@ -234,7 +271,7 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
       for (let i = 0; i < generatedQueries.length; i++) {
         if (abortRef.current) break;
 
-        const { item, noteText, selectedIcd10 } = generatedQueries[i];
+        const { item, noteText, selectedIcd10, effectiveDate, initialEffectiveDate } = generatedQueries[i];
         setProgress({ current: i, total: generatedQueries.length, label: 'printing' });
 
         // Codeless print is allowed — the physician fills the ICD-10 in on paper.
@@ -243,7 +280,12 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
         const icd10Description = recommendedIcd10[0]?.description || '';
 
         try {
-          // Step 1: create the query so we have an id
+          // Step 1: create the query so we have an id. Same effective-date rule
+          // as sendAll — only POST it when the nurse changed it off the default.
+          const effectiveDatePayload =
+            effectiveDate && effectiveDate !== initialEffectiveDate
+              ? { effectiveDate }
+              : {};
           const { query } = await window.QueryAPI.createQuery({
             patientId,
             facilityName,
@@ -255,7 +297,8 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
             keyFindings: item.keyFindings || [],
             queryEvidence: item.queryEvidence || item.evidence || [],
             recommendedIcd10,
-            aiGeneratedNote: noteText
+            aiGeneratedNote: noteText,
+            ...effectiveDatePayload
           });
 
           // Step 2: trigger the print-preview PDF download
@@ -344,6 +387,7 @@ export function useBatchQuery({ patientId, facilityName, orgSlug, assessmentId, 
     generate,
     updateNote,
     updateIcd10,
+    updateEffectiveDate,
     sendAll,
     printAll,
     backToSelection,

@@ -3,6 +3,13 @@
 
 import { track, toErrorCode } from '../utils/analytics.js';
 import { toRecommendedIcd10 } from './lib/icd10-picker-util.js';
+import {
+  formatArdBadge,
+  resolveEffectiveDate,
+  isDateInWindow,
+  windowGuidanceText,
+  outsideWindowWarning,
+} from './lib/query-timing.js';
 
 // Map a free-text practitioner title/specialty to a categorical role.
 // Keep the bucket list small so PostHog values stay clean.
@@ -30,7 +37,13 @@ const QuerySendModal = {
     selectedPractitionerId: null,
     noteText: '',
     urgent: false,
-    selectedIcd10: null
+    selectedIcd10: null,
+    // Effective (onset) date the diagnosis is posted to PCC with. '' = leave the
+    // backend default (createdAt). `_timing` is the backend preview used only to
+    // nudge the nurse toward an in-window date; it never gates anything.
+    effectiveDate: '',
+    initialEffectiveDate: '',
+    timing: null
   },
 
   /**
@@ -59,7 +72,10 @@ const QuerySendModal = {
       selectedPractitionerId: null,
       noteText: '',
       urgent: false,
-      selectedIcd10: null
+      selectedIcd10: null,
+      effectiveDate: '',
+      initialEffectiveDate: '',
+      timing: null
     };
 
     // Track open + track dismissed-via-X/ESC/backdrop close path. _suppressClose
@@ -129,6 +145,12 @@ const QuerySendModal = {
       // Seed selected ICD-10 from noteData (or existing query's recommended set)
       this._state.selectedIcd10 = this._resolveInitialIcd10();
 
+      // Seed the effective-date picker + fetch the ARD/lookback window so we can
+      // nudge the nurse toward an in-window onset date. Best-effort: if there's
+      // no ARD (unlinked query) or preview fails, the field still works and we
+      // just show no window guidance.
+      await this._loadTiming();
+
       // Render step 1
       this._renderStep1();
 
@@ -179,6 +201,17 @@ const QuerySendModal = {
         textarea.addEventListener('input', (e) => {
           this._state.noteText = e.target.value;
         });
+      }
+
+      // Effective-date input: track value + toggle the outside-window warning.
+      const dateInput = document.querySelector('#super-query-effective-date');
+      if (dateInput) {
+        dateInput.addEventListener('change', (e) => {
+          this._state.effectiveDate = e.target.value || '';
+          this._updateDateWarning();
+        });
+        // Reflect any prefilled out-of-window date immediately.
+        this._updateDateWarning();
       }
 
       // Mount the deliberate-attach code picker. Nothing is pre-selected; the
@@ -325,7 +358,11 @@ const QuerySendModal = {
           queryEvidence: ai.evidence || ai.queryEvidence || [],
           // Only the code the nurse deliberately attached (empty = doctor picks).
           recommendedIcd10: toRecommendedIcd10(this._state.selectedIcd10),
-          aiGeneratedNote: this._state.noteText
+          aiGeneratedNote: this._state.noteText,
+          // Onset date the diagnosis posts to PCC with. Only send when the nurse
+          // moved it off the default — omitted keeps the backend createdAt
+          // default (byte-identical behavior for every existing caller).
+          ...this._effectiveDateCreatePayload()
         };
 
         const { query } = await QueryAPI.createQuery(createData);
@@ -333,6 +370,11 @@ const QuerySendModal = {
 
         // Add to local state
         QueryState.addQuery(query);
+      } else {
+        // Sending an existing draft: if the nurse changed the effective date in
+        // this modal, persist it before send (the send endpoint doesn't carry
+        // it). Non-fatal — the query is still sendable if this fails.
+        await this._patchEffectiveDateIfChanged(queryId);
       }
 
       // Send the query (queues into physician's normal digest)
@@ -409,6 +451,96 @@ const QuerySendModal = {
   },
 
   /**
+   * Resolve the ARD date for this query's assessment from the richest source
+   * available. Returns null when there's no linked assessment (unlinked query),
+   * in which case the picker still works with no window guidance.
+   */
+  _resolveArdDate() {
+    const eq = this._state.existingQuery;
+    // A draft/sent query carries its own ARD in `timing`; a fresh query gets it
+    // from the assessment loaded into QueryState (by-assessment response). No
+    // ARD → previewTiming returns `no_ard` and the picker shows no window nudge.
+    return eq?.timing?.ardDate ||
+           eq?.ardDate ||
+           window.QueryState?.mdsAssessment?.ardDate ||
+           null;
+  },
+
+  /**
+   * Prefill the effective-date field and fetch the backend lookback window.
+   * For an existing query we already have `timing`; for a fresh one we call
+   * preview-timing with the assessment ARD. Never throws — the send flow must
+   * not depend on timing.
+   */
+  async _loadTiming() {
+    const mdsItem = this._state.result?.mdsItem || this._state.existingQuery?.mdsItem || '';
+    const ardDate = this._resolveArdDate();
+
+    // Resolve timing: prefer an existing query's own timing, else preview a
+    // hypothetical pending query so we have a window + a default onset date.
+    if (this._state.existingQuery?.timing) {
+      this._state.timing = this._state.existingQuery.timing;
+    } else if (mdsItem) {
+      this._state.timing = await QueryAPI.previewTiming({ mdsItem, ardDate });
+    }
+
+    // Prefill from the resolved effective date (handoff: prefill from
+    // timing.effectiveDate). Falls back to an existing query's stored date, then
+    // blank. `initial` records the default so create/edit only sends the date
+    // when the nurse actually changes it — keeping old behavior byte-identical.
+    const prefill = this._state.timing?.effectiveDate ||
+                    resolveEffectiveDate(this._state.existingQuery) ||
+                    '';
+    this._state.effectiveDate = prefill;
+    this._state.initialEffectiveDate = prefill;
+  },
+
+  /**
+   * Build the effective-date field HTML (label, native date input, window
+   * guidance, and a hidden soft-warning slot filled in by _updateDateWarning).
+   */
+  _buildEffectiveDateHTML() {
+    const guidance = windowGuidanceText(this._state.timing?.lookbackWindow);
+    const badge = formatArdBadge(this._state.timing);
+    const badgeHTML = badge
+      ? `<span class="super-ard-badge super-ard-badge--${badge.tone}">${this._escapeHTML(badge.text)}</span>`
+      : '';
+    return `
+      <div class="super-query-send__field">
+        <div class="super-query-send__label-row">
+          <label class="super-query-send__label" for="super-query-effective-date">Diagnosis effective date</label>
+          ${badgeHTML}
+        </div>
+        <input
+          type="date"
+          class="super-query-send__date-input"
+          id="super-query-effective-date"
+          value="${this._escapeHTML(this._state.effectiveDate)}"
+        />
+        ${guidance ? `<div class="super-query-send__hint" id="super-query-date-guidance">${this._escapeHTML(guidance)}</div>` : ''}
+        <div class="super-query-send__date-warning" id="super-query-date-warning" hidden></div>
+      </div>
+    `;
+  },
+
+  /**
+   * Recompute + toggle the outside-window soft warning from the current date
+   * value against the backend window. Advisory only — never disables anything.
+   */
+  _updateDateWarning() {
+    const warnEl = document.querySelector('#super-query-date-warning');
+    if (!warnEl) return;
+    const lookbackWindow = this._state.timing?.lookbackWindow;
+    const inWindow = isDateInWindow(this._state.effectiveDate, lookbackWindow);
+    if (inWindow === false) {
+      warnEl.textContent = outsideWindowWarning(this._state.timing?.lookbackDays, lookbackWindow);
+      warnEl.hidden = false;
+    } else {
+      warnEl.hidden = true;
+    }
+  },
+
+  /**
    * Ensure a persisted query exists so we have an ID to print against.
    * Mirrors the create branch of _handleSend, but never sends to a practitioner.
    * Returns the query ID.
@@ -431,7 +563,8 @@ const QuerySendModal = {
       keyFindings: ai.keyFindings || [],
       queryEvidence: ai.evidence || ai.queryEvidence || [],
       recommendedIcd10: toRecommendedIcd10(selected),
-      aiGeneratedNote: this._state.noteText
+      aiGeneratedNote: this._state.noteText,
+      ...this._effectiveDateCreatePayload()
     };
 
     const { query } = await QueryAPI.createQuery(createData);
@@ -439,6 +572,39 @@ const QuerySendModal = {
     // Cache so a subsequent Send/Print in this same modal session reuses it.
     this._state.existingQuery = query;
     return query.id;
+  },
+
+  /**
+   * The `{ effectiveDate }` slice for a create payload — present only when the
+   * nurse moved the date off the resolved default. Omitting it means the backend
+   * keeps its createdAt default, exactly as before this feature existed.
+   */
+  _effectiveDateCreatePayload() {
+    const { effectiveDate, initialEffectiveDate } = this._state;
+    if (effectiveDate && effectiveDate !== initialEffectiveDate) {
+      return { effectiveDate };
+    }
+    return {};
+  },
+
+  /**
+   * PATCH the effective date onto an existing (draft/sent) query when the nurse
+   * changed it in this modal. Best-effort: a failure is surfaced as a warning
+   * toast but does not abort the send — the query itself is unaffected.
+   */
+  async _patchEffectiveDateIfChanged(queryId) {
+    if (!queryId) return;
+    if (this._state.effectiveDate === this._state.initialEffectiveDate) return;
+    try {
+      // '' back to the default posts null (clear); a set date posts YYYY-MM-DD.
+      const effectiveDate = this._state.effectiveDate || null;
+      const updated = await QueryAPI.patchQuery(queryId, { effectiveDate });
+      QueryState.updateQuery(queryId, updated);
+      this._state.initialEffectiveDate = this._state.effectiveDate;
+    } catch (err) {
+      console.error('Super LTC: Failed to update effective date', err);
+      SuperToast.warning("Couldn't update the effective date — sending with the existing onset date.");
+    }
   },
 
   /**
@@ -563,6 +729,9 @@ const QuerySendModal = {
 
         <!-- ICD-10 -->
         ${icd10HTML}
+
+        <!-- Effective (onset) date + ARD lookback guidance -->
+        ${this._buildEffectiveDateHTML()}
       </div>
     `;
   },
