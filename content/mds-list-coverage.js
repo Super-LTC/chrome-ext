@@ -199,10 +199,14 @@ function renderRow(rowEl, result, rowMeta) {
 function buildRowData(r) {
   const res = ILC.resultsByKey[r.externalAssessmentId];
   const cb = res ? completeByModel(res) : null;
-  const hasNeeded = !!(res?.coverage?.interviews || []).some((iv) => iv.status === 'needed');
+  // Which interview UDAs this row is still missing (status 'needed'), normalized to
+  // the picker's keys (phq9 → phq). Powers the "Missing ▾" per-interview filter.
+  const neededInterviewTypes = (res?.coverage?.interviews || [])
+    .filter((iv) => iv.status === 'needed')
+    .map((iv) => (iv.type === 'phq9' ? 'phq' : iv.type));
   return {
     name: r.patientName, mrn: r.mrn, unsignedSections: r.unsignedSections,
-    type: r.type, tone: cb?.tone, hasNeededInterview: hasNeeded,
+    type: r.type, tone: cb?.tone, neededInterviewTypes,
   };
 }
 
@@ -291,7 +295,7 @@ function trackFilterChange(filters, count) {
     window.SuperAnalytics?.track?.('mds_list_filter_changed', {
       discipline: disciplineForSections(filters.sections) || 'none',
       due: filters.due || 'all',
-      missing_only: !!filters.missingOnly,
+      missing_count: (filters.missingInterviews || []).length,
       type_selected: (filters.type || 'all') !== 'all',
       has_search: !!(filters.search || '').trim(),
       sections_count: (filters.sections || []).length,

@@ -17,7 +17,7 @@ export const DISCIPLINE_SECTIONS = {
   admin: ['A', 'V', 'X', 'Z'], // MDS Coordinator / admin (+ anything unmapped)
 };
 
-// Display order + labels for the discipline chips.
+// Display order + labels for the discipline presets (shown in the Discipline menu).
 export const DISCIPLINES = [
   { key: 'ssd', label: 'SSD' },
   { key: 'nursing', label: 'Nursing' },
@@ -32,13 +32,41 @@ export const ALL_SECTIONS = [
   'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'V', 'X', 'Z',
 ];
 
+// Interview UDAs, in the display order used everywhere else (BIMS · PHQ-9 · GG ·
+// Pain). Keys are the normalized coverage-result types (phq9 collapses to phq).
+export const INTERVIEW_OPTIONS = [
+  { key: 'bims', label: 'BIMS' },
+  { key: 'phq', label: 'PHQ-9' },
+  { key: 'gg', label: 'GG' },
+  { key: 'pain', label: 'Pain' },
+];
+
 export function sectionsForDiscipline(key) {
   return DISCIPLINE_SECTIONS[key] ? [...DISCIPLINE_SECTIONS[key]] : [];
 }
 
+// A discipline preset is "on" when every section it owns is in the selection —
+// this is what lets SSD + Dietary both read as checked at once.
+export function disciplineActive(sections, key) {
+  const owned = DISCIPLINE_SECTIONS[key];
+  if (!owned || !owned.length) return false;
+  const set = new Set(sections || []);
+  return owned.every((s) => set.has(s));
+}
+
+// Toggle a discipline's whole section set into/out of the selection (union / diff).
+export function toggleDiscipline(sections, key) {
+  const owned = DISCIPLINE_SECTIONS[key] || [];
+  const set = new Set(sections || []);
+  if (disciplineActive(sections, key)) owned.forEach((s) => set.delete(s));
+  else owned.forEach((s) => set.add(s));
+  // Preserve canonical section order.
+  return ALL_SECTIONS.filter((s) => set.has(s));
+}
+
 // If the selected-sections set is exactly one discipline's set, return that key —
-// used to light up the matching discipline chip and to label analytics. Order-
-// insensitive. Returns 'custom' for a non-empty non-matching set, '' for empty.
+// used to label the trigger and to tag analytics. 'custom' for a non-empty
+// non-matching set, '' for empty.
 export function disciplineForSections(sections) {
   const sel = [...new Set(sections || [])].sort();
   if (!sel.length) return '';
@@ -49,23 +77,31 @@ export function disciplineForSections(sections) {
   return 'custom';
 }
 
+// Label for the Discipline trigger button given the current section selection.
+export function disciplineButtonLabel(sections) {
+  const sel = sections || [];
+  if (!sel.length) return 'Discipline';
+  const key = disciplineForSections(sel);
+  if (key && key !== 'custom') return DISCIPLINES.find((d) => d.key === key)?.label || 'Discipline';
+  return `${sel.length} section${sel.length === 1 ? '' : 's'}`;
+}
+
 // The empty (no-op) filter state.
 export function emptyFilters() {
-  return { search: '', sections: [], due: 'all', type: 'all', missingOnly: false };
+  return { search: '', sections: [], due: 'all', type: 'all', missingInterviews: [] };
 }
 
 export function isEmptyFilters(f) {
-  const e = emptyFilters();
   return !f ||
-    ((f.search || '') === e.search &&
+    ((f.search || '') === '' &&
      (f.sections || []).length === 0 &&
-     (f.due || 'all') === e.due &&
-     (f.type || 'all') === e.type &&
-     !f.missingOnly);
+     (f.due || 'all') === 'all' &&
+     (f.type || 'all') === 'all' &&
+     (f.missingInterviews || []).length === 0);
 }
 
 // Does one row pass ALL active filters (AND)? rowData:
-//   { name, mrn, unsignedSections[], type, tone, hasNeededInterview }
+//   { name, mrn, unsignedSections[], type, tone, neededInterviewTypes[] }
 export function rowMatchesFilters(rowData, filters) {
   const f = filters || {};
   const row = rowData || {};
@@ -95,8 +131,13 @@ export function rowMatchesFilters(rowData, filters) {
     if (f.due === 'soon' && row.tone !== 'urgent') return false;     // 0–3 days
   }
 
-  // Missing interview UDA (any interview with status 'needed').
-  if (f.missingOnly && !row.hasNeededInterview) return false;
+  // Missing interview UDA: row must be missing (status 'needed') at least one of
+  // the selected interview types.
+  const miss = f.missingInterviews || [];
+  if (miss.length) {
+    const needed = new Set(row.neededInterviewTypes || []);
+    if (!miss.some((t) => needed.has(t))) return false;
+  }
 
   return true;
 }

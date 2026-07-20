@@ -120,7 +120,7 @@ export const EVENT_SCHEMA = {
   mds_list_coverage_row_clicked: ['required', 'needed'],
   mds_list_coverage_uda_opened: ['status'],
   // Super filter bar on the MDS list. Categorical/booleans/counts only — no PHI.
-  mds_list_filter_changed: ['discipline', 'due', 'missing_only', 'type_selected', 'has_search', 'sections_count', 'shown', 'total'],
+  mds_list_filter_changed: ['discipline', 'due', 'missing_count', 'type_selected', 'has_search', 'sections_count', 'shown', 'total'],
 
   facility_dashboard_tab_switched: ['from_tab', 'to_tab'],
   facility_dashboard_resident_clicked: [],
