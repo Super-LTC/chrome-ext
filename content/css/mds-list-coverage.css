@@ -75,3 +75,97 @@
   font-weight: 600; font-size: 12px; color: #2563eb; text-decoration: none;
 }
 .super-ilc-pop__link:hover { text-decoration: underline; }
+
+/* ── Super filter bar (MDS In-Progress list) ─────────────────────────────────
+   Deliberately Super-branded (indigo) so it reads as ours, not PCC chrome.
+   Namespaced + reset-heavy because PCC's legacy CSS styles bare button/input. */
+.super-mlf-root { margin: 8px 0 10px; }
+.super-mlf-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  box-sizing: border-box; padding: 9px 12px;
+  background: #ffffff; border: 1px solid #e2e8f0;
+  border-left: 3px solid #4f46e5; border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+  font: 500 12px/1.2 -apple-system, system-ui, sans-serif; color: #334155;
+}
+.super-mlf-bar *, .super-mlf-pop * { box-sizing: border-box; }
+
+/* Brand lockup */
+.super-mlf-brand {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; user-select: none;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff; box-shadow: 0 1px 2px rgba(79, 70, 229, .35);
+}
+.super-mlf-brand__mark { font-size: 12px; line-height: 1; }
+.super-mlf-brand__word { font-weight: 700; font-size: 12px; letter-spacing: .2px; }
+.super-mlf-brand__sub { font-weight: 600; font-size: 11px; opacity: .82; }
+
+.super-mlf-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.super-mlf-group { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Search + select share a calm outlined look */
+.super-mlf-search, .super-mlf-select {
+  appearance: auto; font: 500 12px/1.2 -apple-system, system-ui, sans-serif;
+  color: #1e293b; background: #fff; border: 1px solid #cbd5e1; border-radius: 7px;
+  padding: 5px 9px; height: 28px; margin: 0; outline: none;
+}
+.super-mlf-search { width: 180px; }
+.super-mlf-search:focus, .super-mlf-select:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .18); }
+
+/* Chips (discipline / due / toggle) */
+.super-mlf-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 600 12px/1 -apple-system, system-ui, sans-serif; color: #475569;
+  background: #f1f5f9; border: 1px solid transparent; border-radius: 999px;
+  padding: 6px 11px; height: 28px; cursor: pointer; white-space: nowrap;
+  margin: 0; transition: background .12s, color .12s, border-color .12s;
+}
+.super-mlf-chip:hover { background: #e2e8f0; }
+.super-mlf-chip.is-active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff; border-color: transparent;
+}
+.super-mlf-chip--ghost { background: #fff; border: 1px dashed #cbd5e1; color: #475569; }
+.super-mlf-chip--ghost:hover { background: #f8fafc; border-color: #94a3b8; }
+.super-mlf-chip--ghost.is-active { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+/* Due chips carry their own alarm color when active */
+.super-mlf-chip--due-overdue.is-active { background: #dc2626; }
+.super-mlf-chip--due-soon.is-active { background: #d97706; }
+
+/* Sections popover */
+.super-mlf-pop-anchor { position: relative; display: inline-flex; }
+.super-mlf-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 2147483000;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .16); padding: 10px; width: 232px;
+}
+.super-mlf-pop__grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.super-mlf-sec {
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  font: 600 11px/1 -apple-system, system-ui, sans-serif; color: #475569;
+  border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 2px; cursor: pointer;
+}
+.super-mlf-sec input { margin: 0; width: 11px; height: 11px; accent-color: #4f46e5; }
+.super-mlf-sec.is-on { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+.super-mlf-pop__clear {
+  margin-top: 8px; width: 100%; font: 600 11px/1 sans-serif; color: #64748b;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; cursor: pointer;
+}
+.super-mlf-pop__clear:disabled { opacity: .5; cursor: default; }
+
+/* Meta: count + clear, pushed to the right */
+.super-mlf-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+.super-mlf-count { color: #64748b; font-weight: 500; white-space: nowrap; }
+.super-mlf-count strong { color: #1e293b; }
+.super-mlf-empty { color: #c2410c; font-weight: 600; white-space: nowrap; }
+.super-mlf-clear {
+  font: 600 12px/1 sans-serif; color: #4f46e5; background: none; border: none;
+  cursor: pointer; padding: 4px 6px; text-decoration: underline;
+}
+
+/* Highlighted section letters in the native Unsigned Sections cell */
+.super-mlf-hit {
+  font-weight: 800; color: #4338ca; background: #eef2ff;
+  border-radius: 3px; padding: 0 2px;
+}
