@@ -1425,3 +1425,54 @@ textarea.qr__note-textarea {
 
 @keyframes query-items-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes query-items-scale-in { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Effective (onset) date field on the review card. */
+.qr__date-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid var(--super-gray-200);
+  border-radius: var(--super-radius);
+  font-size: 13px;
+  font-family: var(--super-font);
+  color: var(--super-gray-700);
+  background: #fff;
+  transition: border-color 0.15s;
+}
+.qr__date-input:focus {
+  outline: none;
+  border-color: var(--super-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.qr__date-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.qr__date-guidance {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--super-gray-500);
+}
+
+.qr__date-warning {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: var(--super-radius);
+  font-size: 12px;
+  line-height: 1.4;
+  color: #92400e;
+}
+
+/* Effective-date label row: text on the left, ARD badge pushed right. */
+.qr__field-label--spread {
+  display: flex !important;
+  justify-content: space-between;
+  width: 100%;
+  white-space: normal;
+}
+.qr__field-label-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}

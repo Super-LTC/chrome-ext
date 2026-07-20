@@ -63,6 +63,7 @@ export const QueryItemsPage = ({
     facilityName,
     orgSlug,
     assessmentId,
+    ardDate: assessment?.ardDate,
     onComplete: (sentQueries, practitionerName) => {
       const sentMdsItems = new Set(sentQueries.map(q => q.mdsItem));
       setItems(prev => prev.map(item => {
@@ -169,6 +170,7 @@ export const QueryItemsPage = ({
           onSelectPractitioner={batch.setSelectedPractitionerId}
           onUpdateNote={batch.updateNote}
           onUpdateIcd10={batch.updateIcd10}
+          onUpdateEffectiveDate={batch.updateEffectiveDate}
           onSend={batch.sendAll}
           onPrint={batch.printAll}
           onBack={batch.backToSelection}

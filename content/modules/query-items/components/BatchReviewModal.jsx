@@ -1,4 +1,10 @@
 import { Icd10CodePicker } from './Icd10CodePicker.jsx';
+import {
+  formatArdBadge,
+  isDateInWindow,
+  windowGuidanceText,
+  outsideWindowWarning,
+} from '../../../queries/lib/query-timing.js';
 
 /**
  * Inline review page shown after queries are generated.
@@ -12,6 +18,7 @@ export const BatchReviewPage = ({
   onSelectPractitioner,
   onUpdateNote,
   onUpdateIcd10,
+  onUpdateEffectiveDate,
   onSend,
   onPrint,
   onBack,
@@ -114,6 +121,7 @@ export const BatchReviewPage = ({
             total={generatedQueries.length}
             onUpdateNote={onUpdateNote}
             onUpdateIcd10={onUpdateIcd10}
+            onUpdateEffectiveDate={onUpdateEffectiveDate}
             disabled={isSending}
           />
         ))}
@@ -125,13 +133,21 @@ export const BatchReviewPage = ({
 /**
  * Single review card — form block for one query item
  */
-const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled }) => {
+const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, onUpdateEffectiveDate, disabled }) => {
   const itemName = gq.item.pdpmCategoryName || gq.item.mdsItemName || gq.item.mdsItem;
 
   // Seed the picker with the source code (the row the nurse clicked) when we
   // have one, else the diagnosis name — so the top relevant codes surface
   // immediately. Nothing is pre-selected; every code shown is a deliberate pick.
   const seedQuery = gq.item.icd10Code || itemName || '';
+
+  // Effective-date guidance from the backend timing preview (may be null for
+  // unlinked / no-ARD items — then we just render the bare picker).
+  const lookbackWindow = gq.timing?.lookbackWindow || null;
+  const guidance = windowGuidanceText(lookbackWindow);
+  const outsideWindow = isDateInWindow(gq.effectiveDate, lookbackWindow) === false;
+  const warning = outsideWindow ? outsideWindowWarning(gq.timing?.lookbackDays, lookbackWindow) : null;
+  const ardBadge = formatArdBadge(gq.timing);
 
   return (
     <div className="qr__card">
@@ -172,6 +188,33 @@ const ReviewCard = ({ gq, index, total, onUpdateNote, onUpdateIcd10, disabled })
             onChange={(selected) => onUpdateIcd10(gq.item.mdsItem, selected)}
             disabled={disabled}
           />
+        </div>
+
+        {/* Effective (onset) date + ARD lookback guidance */}
+        <div className="qr__field">
+          <div className="qr__field-label qr__field-label--spread">
+            <span className="qr__field-label-text">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              Effective date
+            </span>
+            {ardBadge && (
+              <span className={`super-ard-badge super-ard-badge--${ardBadge.tone}`}>{ardBadge.text}</span>
+            )}
+          </div>
+          <input
+            type="date"
+            className="qr__date-input"
+            value={gq.effectiveDate || ''}
+            onInput={(e) => onUpdateEffectiveDate?.(gq.item.mdsItem, e.target.value)}
+            disabled={disabled}
+          />
+          {guidance && <div className="qr__date-guidance">{guidance}</div>}
+          {warning && <div className="qr__date-warning">{warning}</div>}
         </div>
       </div>
 

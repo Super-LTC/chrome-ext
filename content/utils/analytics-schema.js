@@ -203,6 +203,11 @@ export const EVENT_SCHEMA = {
   query_send_succeeded: ['duration_ms'],
   query_send_failed: ['error_code'],
 
+  // Edit an already-sent query (note + effective date), until signed.
+  query_edit_started: ['item_code'],
+  query_edit_saved: ['item_code'],
+  query_edit_failed: ['error_code'],
+
   chat_stream_started: [],
   chat_stream_completed: ['duration_ms'],
   chat_stream_failed: ['error_code'],
