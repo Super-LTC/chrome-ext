@@ -26,6 +26,7 @@ import { RoundingReports } from '../rounding-reports/RoundingReports.jsx';
 import { IpaView } from './IpaView.jsx';
 import { useIpaOpportunities } from './hooks/useIpaOpportunities.js';
 import { RevokeQueryModal } from './RevokeQueryModal.jsx';
+import { EditQueryModal } from './EditQueryModal.jsx';
 import { track } from '../../utils/analytics.js';
 import { TrackedButton } from '../../components/TrackedButton.jsx';
 
@@ -204,7 +205,7 @@ function PccPostBadge({ status, signedAt }) {
   return null;
 }
 
-function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, onRevoke, assessmentCtx, isPending }) {
+function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf, onRevoke, onEdit, assessmentCtx, isPending }) {
   const delta = formatPaymentDelta(q.assessmentPayment);
   // SECTION-I diagnostic-only items don't move case-mix. Backend nulls
   // assessmentPayment for these (so `delta` is already null), but gate
@@ -252,6 +253,16 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf
             >
               Open in PDPM Analyzer
             </TrackedButton>
+            {onEdit && (
+              <TrackedButton
+                track="mds_cc_item_actioned"
+                trackProps={{ item_code: (q.mdsItem || '').includes(':') ? q.mdsItem.split(':')[0] : (q.mdsItem || ''), action: 'edit_query' }}
+                class="mds-cc__qcard-btn mds-cc__qcard-btn--secondary"
+                onClick={(e) => { e.stopPropagation(); onEdit(q); }}
+              >
+                Edit
+              </TrackedButton>
+            )}
             {!isPending && (
               <TrackedButton
                 track="mds_cc_item_actioned"
@@ -307,6 +318,7 @@ function QueryCard({ q, expanded, onToggle, onOpenAssessment, onPrint, onViewPdf
 function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAssessment, onRefetch }) {
   const [expandedId, setExpandedId] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const pending = sortByArd((outstandingQueries || []).filter(q => q.status === 'pending'));
   const sent = sortByArd((outstandingQueries || []).filter(q => q.status === 'sent' || q.status === 'awaiting_response'));
 
@@ -343,6 +355,21 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
         }
       },
     });
+  }
+
+  // Save a note / effective-date edit on an outstanding or pending query, then
+  // refetch so the list (and any ARD badge) reflects the change. Re-throws on
+  // failure so EditQueryModal keeps its Save button live.
+  async function handleSaveEdit(queryId, changes) {
+    try {
+      await window.QueryAPI.patchQuery(queryId, changes);
+    } catch (err) {
+      console.error('[Super] Failed to edit query:', err);
+      window.SuperToast?.error?.(err?.message || 'Failed to save changes');
+      throw err;
+    }
+    onRefetch?.();
+    window.SuperToast?.success?.('Query updated');
   }
 
   function findAssessmentId(q) {
@@ -406,6 +433,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
               onOpenAssessment={() => onOpenAssessment?.(findAssessmentId(q))}
               onViewPdf={handleViewPdf}
               onRevoke={(query) => setRevokeTarget(query)}
+              onEdit={(query) => setEditTarget(query)}
               assessmentCtx={findAssessmentContext(q)}
               isPending={false}
             />
@@ -428,6 +456,7 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
               onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
               onOpenAssessment={() => onOpenAssessment?.(findAssessmentId(q))}
               onViewPdf={handleViewPdf}
+              onEdit={(query) => setEditTarget(query)}
               assessmentCtx={findAssessmentContext(q)}
               isPending={true}
             />
@@ -543,6 +572,13 @@ function QueriesView({ outstandingQueries, recentlySigned, assessments, onOpenAs
         query={revokeTarget}
         onClose={() => setRevokeTarget(null)}
         onRevoked={handleRevokeQuery}
+      />
+
+      <EditQueryModal
+        isOpen={!!editTarget}
+        query={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={handleSaveEdit}
       />
     </div>
   );

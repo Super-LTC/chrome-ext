@@ -2463,6 +2463,86 @@
   box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
 }
 
+/* ── Edit query modal (note + effective date) ── */
+.mds-cc__edit-loading {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--super-gray-500, #6b7280);
+}
+.mds-cc__edit-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--super-gray-600, #4b5563);
+}
+.mds-cc__edit-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--super-gray-700, #374151);
+}
+.mds-cc__edit-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--super-font, sans-serif);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  border: 1px solid var(--super-gray-300, #d1d5db);
+  border-radius: 6px;
+  resize: vertical;
+}
+.mds-cc__edit-textarea:focus,
+.mds-cc__edit-date-input:focus {
+  outline: none;
+  border-color: var(--super-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+.mds-cc__edit-loaderr {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #92400e;
+}
+.mds-cc__edit-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+}
+.mds-cc__edit-date-row .mds-cc__edit-label {
+  margin-bottom: 0;
+}
+.mds-cc__edit-date-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--super-font, sans-serif);
+  font-size: 13px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  border: 1px solid var(--super-gray-300, #d1d5db);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--super-gray-800, #1f2937);
+}
+.mds-cc__edit-guidance {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--super-gray-500, #6b7280);
+}
+.mds-cc__edit-warning {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #92400e;
+}
+
 /* ── Estimated badge (compact for preview cards) ── */
 .mds-cc__est-badge {
   display: inline-block;
