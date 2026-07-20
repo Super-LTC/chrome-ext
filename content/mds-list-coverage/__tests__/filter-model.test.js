@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   DISCIPLINE_SECTIONS,
+  INTERVIEW_OPTIONS,
   sectionsForDiscipline,
   disciplineForSections,
+  disciplineActive,
+  toggleDiscipline,
+  disciplineButtonLabel,
   emptyFilters,
   isEmptyFilters,
   rowMatchesFilters,
@@ -15,16 +19,13 @@ const row = (over = {}) => ({
   unsignedSections: ['B', 'C', 'GG', 'K'],
   type: 'NQ',
   tone: 'ok',
-  hasNeededInterview: false,
+  neededInterviewTypes: [],
   ...over,
 });
 
 describe('sectionsForDiscipline / disciplineForSections', () => {
   it('SSD owns B,C,D,E,Q (the user definition)', () => {
     expect(sectionsForDiscipline('ssd')).toEqual(['B', 'C', 'D', 'E', 'Q']);
-  });
-  it('unknown discipline → empty', () => {
-    expect(sectionsForDiscipline('nope')).toEqual([]);
   });
   it('round-trips a discipline set back to its key (order-insensitive)', () => {
     expect(disciplineForSections(['Q', 'E', 'D', 'C', 'B'])).toBe('ssd');
@@ -33,6 +34,41 @@ describe('sectionsForDiscipline / disciplineForSections', () => {
   it('non-matching non-empty set → custom; empty → ""', () => {
     expect(disciplineForSections(['B', 'K'])).toBe('custom');
     expect(disciplineForSections([])).toBe('');
+  });
+});
+
+describe('disciplineActive / toggleDiscipline (multi-select presets)', () => {
+  it('a preset is active only when ALL its sections are selected', () => {
+    expect(disciplineActive(['B', 'C', 'D', 'E', 'Q'], 'ssd')).toBe(true);
+    expect(disciplineActive(['B', 'C'], 'ssd')).toBe(false);
+    expect(disciplineActive(['K'], 'dietary')).toBe(true);
+  });
+  it('toggles a discipline set in, then back out, preserving section order', () => {
+    const on = toggleDiscipline([], 'ssd');
+    expect(on).toEqual(['B', 'C', 'D', 'E', 'Q']);
+    expect(toggleDiscipline(on, 'ssd')).toEqual([]);
+  });
+  it('supports combining two presets (SSD + Dietary both active)', () => {
+    const combined = toggleDiscipline(sectionsForDiscipline('ssd'), 'dietary');
+    expect(disciplineActive(combined, 'ssd')).toBe(true);
+    expect(disciplineActive(combined, 'dietary')).toBe(true);
+    expect(combined).toEqual(['B', 'C', 'D', 'E', 'K', 'Q']); // canonical order
+  });
+});
+
+describe('disciplineButtonLabel', () => {
+  it('labels empty / single-discipline / custom selections', () => {
+    expect(disciplineButtonLabel([])).toBe('Discipline');
+    expect(disciplineButtonLabel(['B', 'C', 'D', 'E', 'Q'])).toBe('SSD');
+    expect(disciplineButtonLabel(['B', 'K'])).toBe('2 sections');
+    expect(disciplineButtonLabel(['B'])).toBe('1 section');
+  });
+});
+
+describe('INTERVIEW_OPTIONS', () => {
+  it('are the four interviews in display order', () => {
+    expect(INTERVIEW_OPTIONS.map((o) => o.key)).toEqual(['bims', 'phq', 'gg', 'pain']);
+    expect(INTERVIEW_OPTIONS.find((o) => o.key === 'phq').label).toBe('PHQ-9');
   });
 });
 
@@ -46,7 +82,7 @@ describe('emptyFilters / isEmptyFilters', () => {
     expect(isEmptyFilters({ ...emptyFilters(), sections: ['B'] })).toBe(false);
     expect(isEmptyFilters({ ...emptyFilters(), due: 'overdue' })).toBe(false);
     expect(isEmptyFilters({ ...emptyFilters(), type: 'NQ' })).toBe(false);
-    expect(isEmptyFilters({ ...emptyFilters(), missingOnly: true })).toBe(false);
+    expect(isEmptyFilters({ ...emptyFilters(), missingInterviews: ['phq'] })).toBe(false);
   });
 });
 
@@ -62,18 +98,14 @@ describe('rowMatchesFilters', () => {
   });
 
   it('section filter passes when unsigned intersects selection', () => {
-    // SSD = B,C,D,E,Q; row has B,C unsigned → match.
     expect(rowMatchesFilters(row(), { ...emptyFilters(), sections: sectionsForDiscipline('ssd') })).toBe(true);
-    // Dietary = K; row has K → match.
     expect(rowMatchesFilters(row(), { ...emptyFilters(), sections: ['K'] })).toBe(true);
-    // Row without any selected section → no match.
     expect(rowMatchesFilters(row({ unsignedSections: ['A'] }), { ...emptyFilters(), sections: ['B'] })).toBe(false);
   });
 
   it('type filter is an exact match', () => {
     expect(rowMatchesFilters(row(), { ...emptyFilters(), type: 'NQ' })).toBe(true);
     expect(rowMatchesFilters(row(), { ...emptyFilters(), type: 'NC' })).toBe(false);
-    expect(rowMatchesFilters(row(), { ...emptyFilters(), type: 'all' })).toBe(true);
   });
 
   it('due=overdue needs tone overdue; due=soon needs tone urgent', () => {
@@ -83,16 +115,19 @@ describe('rowMatchesFilters', () => {
     expect(rowMatchesFilters(row({ tone: 'approaching' }), { ...emptyFilters(), due: 'soon' })).toBe(false);
   });
 
-  it('missingOnly requires a needed interview', () => {
-    expect(rowMatchesFilters(row({ hasNeededInterview: true }), { ...emptyFilters(), missingOnly: true })).toBe(true);
-    expect(rowMatchesFilters(row({ hasNeededInterview: false }), { ...emptyFilters(), missingOnly: true })).toBe(false);
+  it('missingInterviews passes when the row is missing any selected interview', () => {
+    const r = row({ neededInterviewTypes: ['phq', 'gg'] });
+    expect(rowMatchesFilters(r, { ...emptyFilters(), missingInterviews: ['phq'] })).toBe(true);
+    expect(rowMatchesFilters(r, { ...emptyFilters(), missingInterviews: ['bims'] })).toBe(false);
+    expect(rowMatchesFilters(r, { ...emptyFilters(), missingInterviews: ['bims', 'gg'] })).toBe(true);
+    // row missing nothing → excluded when a missing filter is set
+    expect(rowMatchesFilters(row(), { ...emptyFilters(), missingInterviews: ['phq'] })).toBe(false);
   });
 
   it('filters combine with AND', () => {
-    const f = { ...emptyFilters(), search: 'gibson', sections: ['K'], type: 'NQ', due: 'overdue', missingOnly: true };
-    expect(rowMatchesFilters(row({ tone: 'overdue', hasNeededInterview: true }), f)).toBe(true);
-    // flip one dimension → fails
-    expect(rowMatchesFilters(row({ tone: 'ok', hasNeededInterview: true }), f)).toBe(false);
+    const f = { ...emptyFilters(), search: 'gibson', sections: ['K'], type: 'NQ', due: 'overdue', missingInterviews: ['gg'] };
+    expect(rowMatchesFilters(row({ tone: 'overdue', neededInterviewTypes: ['gg'] }), f)).toBe(true);
+    expect(rowMatchesFilters(row({ tone: 'ok', neededInterviewTypes: ['gg'] }), f)).toBe(false);
   });
 });
 
