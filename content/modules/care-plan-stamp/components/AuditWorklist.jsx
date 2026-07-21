@@ -124,9 +124,8 @@ export const AuditWorklist = ({
               ✨ Polished {polishedInfo.count} focus{polishedInfo.count === 1 ? '' : 'es'}
             </span>
           )}
-          <span className={touchesLeft > 0 ? 'cpas-wl__warn' : 'cpas-wl__ok'}>
-            {touchesLeft > 0 ? `${touchesLeft} to fill` : '✓ all filled'}
-          </span>
+          {/* One number only. "N to fill" duplicated per-card blank chips and made
+              the strip read as two competing scores (Jul 21 dev pass). */}
         </div>
         <div className="cpas-wl__pbar"><i style={{ width: `${pct}%` }} /></div>
         {genAuthoring && (

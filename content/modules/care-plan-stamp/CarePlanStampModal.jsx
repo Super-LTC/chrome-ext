@@ -1082,9 +1082,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           )}
           <div>
             <h1 className="cpas-modal__title">{mode === 'comprehensive' ? 'Care Plan Audit' : 'Auto-Populate Care Plan'}</h1>
-            <p className="cpas-modal__subtitle">
-              {patientName || 'Resident'} · {mode === 'comprehensive' ? 'Comprehensive review' : 'Initial care plan'}
-            </p>
+            {/* Mode lives in the toggle on the right — repeating it here read as a
+                third control ("top bar is confusing", Jul 21 dev pass). */}
+            <p className="cpas-modal__subtitle">{patientName || 'Resident'}</p>
           </div>
           <div className="cpas-modal__header-actions">
             {mode === 'comprehensive' && stage === 'ready' && audit && isV2(audit) && !mapHome && (
