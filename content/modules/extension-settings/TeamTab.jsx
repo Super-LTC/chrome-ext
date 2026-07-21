@@ -61,6 +61,7 @@ export function TeamTab({ facilityName, orgSlug }) {
   const [grantable, setGrantable] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [canManage, setCanManage] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgSlug) {
@@ -74,6 +75,7 @@ export function TeamTab({ facilityName, orgSlug }) {
       const [m, g] = await Promise.all([getTeamMembers(orgSlug), getTeamGrantable(orgSlug)]);
       setTeam(m.team);
       setGrantable(g);
+      setCanManage(m.canManage ?? (m.scope && m.scope !== 'user'));
     } catch (e) {
       setError(e.message || 'Could not load your team.');
     } finally {
@@ -122,14 +124,14 @@ export function TeamTab({ facilityName, orgSlug }) {
     );
   }
 
-  return <RosterView team={team} orgSlug={orgSlug} onInvite={() => setView('invite')} onChanged={load} />;
+  return <RosterView team={team} canManage={canManage} orgSlug={orgSlug} onInvite={() => setView('invite')} onChanged={load} />;
 }
 
 /* ------------------------------------------------------------------ */
 /* Roster                                                              */
 /* ------------------------------------------------------------------ */
 
-function RosterView({ team, orgSlug, onInvite, onChanged }) {
+function RosterView({ team, canManage, orgSlug, onInvite, onChanged }) {
   const people = team?.people ?? [];
   const pending = team?.pendingPeople ?? [];
 
@@ -139,22 +141,26 @@ function RosterView({ team, orgSlug, onInvite, onChanged }) {
         <div class="sset-team-head">
           <div class="sset-team-head__count">
             {people.length} {people.length === 1 ? 'person' : 'people'}
-            {pending.length ? ` · ${pending.length} invited` : ''}
+            {canManage && pending.length ? ` · ${pending.length} invited` : ''}
           </div>
-          <button type="button" class="sset-btn sset-btn--primary" data-track="team_invite_opened" onClick={onInvite}>
-            Invite someone
-          </button>
+          {canManage ? (
+            <button type="button" class="sset-btn sset-btn--primary" data-track="team_invite_opened" onClick={onInvite}>
+              Invite someone
+            </button>
+          ) : null}
         </div>
 
-        {people.length === 0 && pending.length === 0 ? (
-          <div class="sset-empty">No one here yet. Invite your first teammate.</div>
+        {people.length === 0 && (!canManage || pending.length === 0) ? (
+          <div class="sset-empty">
+            {canManage ? 'No one here yet. Invite your first teammate.' : 'No teammates in your building yet.'}
+          </div>
         ) : null}
 
         {people.map((p) => (
-          <PersonRow key={p.userId} person={p} orgSlug={orgSlug} onChanged={onChanged} />
+          <PersonRow key={p.userId} person={p} canManage={canManage} orgSlug={orgSlug} onChanged={onChanged} />
         ))}
 
-        {pending.length ? (
+        {canManage && pending.length ? (
           <Section label="Invited">
             {pending.map((p) => (
               <div key={p.invitationId} class="sset-person is-pending">
@@ -174,7 +180,7 @@ function RosterView({ team, orgSlug, onInvite, onChanged }) {
   );
 }
 
-function PersonRow({ person, orgSlug, onChanged }) {
+function PersonRow({ person, canManage, orgSlug, onChanged }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -208,21 +214,23 @@ function PersonRow({ person, orgSlug, onChanged }) {
         </div>
         {err ? <div class="sset-person__err">{err}</div> : null}
       </div>
-      {confirming ? (
-        <div class="sset-person__confirm">
-          {/* NO_TRACK — removal is tracked on success in the handler */}
-          <button type="button" class="sset-btn sset-btn--danger" disabled={busy} onClick={remove}>
-            {busy ? 'Removing…' : 'Remove'}
+      {canManage ? (
+        confirming ? (
+          <div class="sset-person__confirm">
+            {/* NO_TRACK — removal is tracked on success in the handler */}
+            <button type="button" class="sset-btn sset-btn--danger" disabled={busy} onClick={remove}>
+              {busy ? 'Removing…' : 'Remove'}
+            </button>
+            <button type="button" class="sset-btn sset-btn--ghost" data-track="team_remove_cancelled" disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button type="button" class="sset-person__remove" data-track="team_remove_opened" onClick={() => setConfirming(true)} aria-label="Remove person">
+            Remove
           </button>
-          <button type="button" class="sset-btn sset-btn--ghost" data-track="team_remove_cancelled" disabled={busy} onClick={() => setConfirming(false)}>
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <button type="button" class="sset-person__remove" data-track="team_remove_opened" onClick={() => setConfirming(true)} aria-label="Remove person">
-          Remove
-        </button>
-      )}
+        )
+      ) : null}
     </div>
   );
 }
