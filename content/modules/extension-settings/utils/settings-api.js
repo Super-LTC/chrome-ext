@@ -80,3 +80,13 @@ export function removeTeamMember(orgSlug, userId) {
 export function updateTeamMemberPermissions(userId, body) {
   return request(`/api/extension/team/members/${userId}/permissions`, 'PUT', body);
 }
+
+/** Add (or link) a doctor to a building: { orgSlug, firstName, lastName, phoneNumber, title?, email?, locationId }. */
+export function addTeamDoctor(body) {
+  return request('/api/extension/team/practitioners', 'POST', body);
+}
+
+/** Send a doctor's setup link (forward flow): { orgSlug, practitionerId, locationId }. */
+export function sendTeamDoctorLink(body) {
+  return request('/api/extension/team/practitioners/send', 'POST', body);
+}

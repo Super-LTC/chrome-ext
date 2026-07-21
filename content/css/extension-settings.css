@@ -452,3 +452,12 @@
 
 .sset-select--full { width: 100%; }
 .sset-bldg-list { max-height: 200px; overflow-y: auto; }
+
+.sset-adddoc { width: 100%; margin-bottom: 8px; padding: 8px 12px; font-size: 12.5px; }
+.sset-doc-names { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sset-doc-send {
+  flex-shrink: 0; background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--sset-indigo); padding: 4px 6px; border-radius: 6px;
+}
+.sset-doc-send:hover:not(:disabled) { background: rgba(99, 102, 241, 0.08); }
+.sset-doc-send:disabled { color: var(--sset-faint); cursor: default; }

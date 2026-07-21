@@ -14,6 +14,8 @@ import {
   getTeamGrantable,
   inviteTeamMember,
   removeTeamMember,
+  addTeamDoctor,
+  sendTeamDoctorLink,
 } from './utils/settings-api.js';
 import { Section } from './ui.jsx';
 import { track } from '../../utils/analytics.js';
@@ -124,14 +126,36 @@ export function TeamTab({ facilityName, orgSlug }) {
     );
   }
 
-  return <RosterView team={team} canManage={canManage} orgSlug={orgSlug} onInvite={() => setView('invite')} onChanged={load} />;
+  if (view === 'add-doctor') {
+    return (
+      <AddDoctorView
+        grantable={grantable}
+        facilityName={facilityName}
+        orgSlug={orgSlug}
+        onCancel={() => setView('list')}
+        onAdded={() => { setView('list'); load(); }}
+      />
+    );
+  }
+
+  return (
+    <RosterView
+      team={team}
+      grantable={grantable}
+      canManage={canManage}
+      orgSlug={orgSlug}
+      onInvite={() => setView('invite')}
+      onAddDoctor={() => setView('add-doctor')}
+      onChanged={load}
+    />
+  );
 }
 
 /* ------------------------------------------------------------------ */
 /* Roster                                                              */
 /* ------------------------------------------------------------------ */
 
-function RosterView({ team, canManage, orgSlug, onInvite, onChanged }) {
+function RosterView({ team, grantable, canManage, orgSlug, onInvite, onAddDoctor, onChanged }) {
   const people = team?.people ?? [];
   const pending = team?.pendingPeople ?? [];
   const doctors = team?.doctors ?? [];
@@ -177,20 +201,23 @@ function RosterView({ team, canManage, orgSlug, onInvite, onChanged }) {
           </Section>
         ) : null}
 
-        {doctors.length ? (
-          <Section label="Doctors" hint={`${doctors.length}`}>
+        {doctors.length || canManage ? (
+          <Section label="Doctors" hint={doctors.length ? `${doctors.length}` : undefined}>
+            {canManage ? (
+              <button type="button" class="sset-btn sset-btn--ghost sset-adddoc" data-track="team_add_doctor_opened" onClick={onAddDoctor}>
+                + Add doctor
+              </button>
+            ) : null}
+            {doctors.length === 0 ? <div class="sset-empty">No doctors yet.</div> : null}
             {doctors.map((d) => (
-              <div key={d.practitionerId} class="sset-person">
-                <div class="sset-person__main">
-                  <div class="sset-person__name">
-                    {d.name}{d.title ? `, ${d.title}` : ''}
-                  </div>
-                  <div class="sset-person__meta">
-                    <span class={docBadgeClass(d.status?.key)}>{d.status?.label || 'Not sent'}</span>
-                    {d.status?.stalled ? <span class="sset-person__bldgs">needs a nudge</span> : null}
-                  </div>
-                </div>
-              </div>
+              <DoctorRow
+                key={d.practitionerId}
+                doctor={d}
+                grantable={grantable}
+                canManage={canManage}
+                orgSlug={orgSlug}
+                onChanged={onChanged}
+              />
             ))}
           </Section>
         ) : null}
@@ -249,6 +276,57 @@ function PersonRow({ person, canManage, orgSlug, onChanged }) {
             Remove
           </button>
         )
+      ) : null}
+    </div>
+  );
+}
+
+function DoctorRow({ doctor, grantable, canManage, orgSlug, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const grantableIds = new Set((grantable?.buildings ?? []).map((b) => b.id));
+  const locationIds = doctor.locationIds || [];
+  const sendLocationId = locationIds.find((id) => grantableIds.has(id)) ?? locationIds[0];
+  const key = doctor.status?.key;
+  const alreadySent = !!key && key !== 'not_sent' && key !== 'not_started';
+
+  const send = async () => {
+    if (!sendLocationId) {
+      setMsg('No building in your scope for this doctor.');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      await sendTeamDoctorLink({ orgSlug, practitionerId: doctor.practitionerId, locationId: sendLocationId });
+      track('team_doctor_link_sent', { source: 'settings' });
+      onChanged();
+    } catch (e) {
+      setMsg(e.message || 'Could not send the link.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="sset-person">
+      <div class="sset-person__main">
+        <div class="sset-person__name">{doctor.name}{doctor.title ? `, ${doctor.title}` : ''}</div>
+        <div class="sset-person__meta">
+          <span class={docBadgeClass(key)}>{doctor.status?.label || 'Not sent'}</span>
+          {doctor.status?.stalled ? <span class="sset-person__bldgs">needs a nudge</span> : null}
+        </div>
+        {msg ? <div class="sset-person__err">{msg}</div> : null}
+      </div>
+      {canManage ? (
+        <button
+          type="button"
+          class="sset-doc-send"
+          disabled={busy}
+          onClick={send}
+        >
+          {busy ? 'Sending…' : alreadySent ? 'Resend' : 'Send link'}
+        </button>
       ) : null}
     </div>
   );
@@ -439,6 +517,109 @@ function InviteView({ grantable, facilityName, orgSlug, onCancel, onInvited }) {
           disabled={submitting || !email.trim() || buildingIds.size === 0}
         >
           {submitting ? 'Sending…' : 'Send invitation'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Add doctor                                                          */
+/* ------------------------------------------------------------------ */
+
+const DOCTOR_TITLES = ['MD', 'DO', 'NP', 'PA'];
+
+function AddDoctorView({ grantable, facilityName, orgSlug, onCancel, onAdded }) {
+  const allBuildings = grantable?.buildings ?? [];
+  const defaultBuildingId = () => {
+    const match = allBuildings.find(
+      (b) => facilityName && b.name?.toLowerCase() === facilityName.toLowerCase(),
+    );
+    return match?.id ?? allBuildings[0]?.id ?? '';
+  };
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [title, setTitle] = useState('MD');
+  const [locationId, setLocationId] = useState(defaultBuildingId);
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  const submit = async () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      setStatus({ kind: 'err', text: 'First and last name are required.' });
+      return;
+    }
+    if (!phone.trim()) {
+      setStatus({ kind: 'err', text: 'A cell phone is required to send their setup link.' });
+      return;
+    }
+    if (!locationId) {
+      setStatus({ kind: 'err', text: 'Pick a building.' });
+      return;
+    }
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      await addTeamDoctor({
+        orgSlug,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phoneNumber: phone.trim(),
+        title: title.trim() || undefined,
+        locationId,
+      });
+      track('team_doctor_added', { source: 'settings' });
+      onAdded();
+    } catch (e) {
+      setStatus({ kind: 'err', text: e.message || 'Could not add the doctor.' });
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <div class="sset-body">
+        <button type="button" class="sset-back" data-track="team_add_doctor_cancelled" onClick={onCancel}>← Back to team</button>
+
+        <Section label="Doctor">
+          <div class="sset-doc-names">
+            <input type="text" class="sset-input" value={firstName} onInput={(e) => setFirstName(e.target.value)} placeholder="First name" />
+            <input type="text" class="sset-input" value={lastName} onInput={(e) => setLastName(e.target.value)} placeholder="Last name" />
+          </div>
+        </Section>
+
+        <Section label="Cell phone" sub="Used to text them their setup link.">
+          <input type="tel" class="sset-input" value={phone} onInput={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" />
+        </Section>
+
+        <Section label="Title">
+          <select class="sset-select sset-select--full" value={title} onChange={(e) => setTitle(e.target.value)}>
+            {DOCTOR_TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </Section>
+
+        <Section label="Building">
+          {allBuildings.length === 0 ? (
+            <div class="sset-coverage">No buildings available to assign.</div>
+          ) : (
+            <select class="sset-select sset-select--full" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+              {allBuildings.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          )}
+        </Section>
+      </div>
+
+      <div class="sset-savebar">
+        <div class={`sset-status${status ? ` is-${status.kind}` : ''}`} role="status">{status?.text || ''}</div>
+        <button
+          type="button"
+          class="sset-btn sset-btn--primary"
+          onClick={submit}
+          disabled={submitting || !firstName.trim() || !lastName.trim() || !phone.trim() || !locationId}
+        >
+          {submitting ? 'Adding…' : 'Add doctor'}
         </button>
       </div>
     </>
