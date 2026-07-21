@@ -45,14 +45,31 @@ async function _renderBanner() {
   banner.id = BANNER_ID;
   banner.className = 'super-audit-banner is-loading';
   banner.innerHTML = `
-    <span class="super-audit-banner__icon">🔍</span>
-    <span class="super-audit-banner__text">Loading care plan audit…</span>
+    <span class="super-audit-banner__icon super-audit-banner__icon--pulse">🔍</span>
+    <span class="super-audit-banner__text">Checking this care plan against the chart…</span>
+    <span class="super-audit-banner__shimmer" aria-hidden="true"></span>
   `;
   anchor.parentNode.insertBefore(banner, anchor);
 
+  // Staged loading copy (same honesty treatment as the modal's LoadingState):
+  // a static "Loading…" for 10+ seconds reads as broken; tell them what's
+  // happening and that long = first-run, not stuck.
+  const loadStages = [
+    [4000, 'Cross-checking diagnoses, orders, and existing focuses…'],
+    [9000, 'Still working — the first check on a resident takes the longest…'],
+    [20000, 'Almost there. Big chart — thorough check.'],
+  ];
+  const stageTimers = loadStages.map(([at, text]) =>
+    setTimeout(() => {
+      const t = banner.querySelector('.super-audit-banner__text');
+      if (t && banner.classList.contains('is-loading')) t.textContent = text;
+    }, at),
+  );
+  const clearStages = () => stageTimers.forEach(clearTimeout);
+
   try {
     const auth = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
-    if (!auth?.authenticated) { banner.remove(); return; }
+    if (!auth?.authenticated) { clearStages(); banner.remove(); return; }
   } catch (_) { /* proceed */ }
 
   const facilityName = typeof getChatFacilityInfo === 'function' ? (getChatFacilityInfo() || '') : '';
@@ -70,8 +87,10 @@ async function _renderBanner() {
       patientId, facilityName, orgSlug, existingFocusTexts,
     });
     const audit = resp.audit || resp;
+    clearStages();
     _paint(banner, audit, { patientId, facilityName, orgSlug });
   } catch (e) {
+    clearStages();
     banner.className = 'super-audit-banner is-error';
     banner.innerHTML = `
       <span class="super-audit-banner__icon">⚠</span>

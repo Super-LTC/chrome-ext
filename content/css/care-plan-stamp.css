@@ -2883,7 +2883,31 @@
   background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
-.super-audit-banner.is-loading { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
+.super-audit-banner.is-loading {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+  position: relative;
+  overflow: hidden;
+}
+/* Indeterminate shimmer bar along the bottom edge while the audit computes. */
+.super-audit-banner__shimmer {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #6366f1 40%, #a5b4fc 60%, transparent);
+  background-size: 200% 100%;
+  animation: super-audit-shimmer 1.4s linear infinite;
+}
+@keyframes super-audit-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.super-audit-banner__icon--pulse { animation: super-audit-pulse 1.6s ease-in-out infinite; }
+@keyframes super-audit-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
 .super-audit-banner.is-clean { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
 .super-audit-banner.is-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 .super-audit-banner.is-actionable { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
