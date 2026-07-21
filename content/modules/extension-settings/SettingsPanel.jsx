@@ -75,7 +75,7 @@ export function SettingsPanel({ facilityName, orgSlug, initialTab = 'weekly', on
         </nav>
 
         {tab === 'weekly' && <WeeklyReportsTab facilityName={facilityName} orgSlug={orgSlug} />}
-        {tab === 'profile' && <ProfileTab />}
+        {tab === 'profile' && <ProfileTab facilityName={facilityName} />}
       </div>
     </div>
   );

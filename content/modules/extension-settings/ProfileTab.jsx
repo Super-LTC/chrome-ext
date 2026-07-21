@@ -1,6 +1,7 @@
 /**
  * Profile subtab — edit the signed-in user's display name + position/title.
- * These flow onto cover letters and signatures. Email is read-only here.
+ * These flow onto cover letters and signatures, so the tab leads with a live
+ * preview of exactly how the nurse will appear there. Email is read-only.
  * Reads/writes /api/extension/me through settings-api.
  */
 import { useState, useEffect, useCallback } from 'preact/hooks';
@@ -10,7 +11,14 @@ import { track } from '../../utils/analytics.js';
 
 const POSITION_SUGGESTIONS = ['MDS Coordinator', 'DON', 'Administrator', 'Nurse', 'Regional'];
 
-export function ProfileTab() {
+/** Up to two initials for the preview avatar; falls back to a dash. */
+function initialsOf(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '–';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+export function ProfileTab({ facilityName }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
@@ -76,13 +84,29 @@ export function ProfileTab() {
     );
   }
 
+  // Preview mirrors the signature block: name on top, "title · building" beneath.
+  const previewName = name.trim() || 'Your name';
+  const previewMeta = [position.trim(), facilityName].filter(Boolean).join(' · ');
+  const activePosition = position.trim().toLowerCase();
+
   return (
     <>
       <div class="sset-body">
-        <Section label="Your details" hint="Shown on cover letters & signatures">
+        <Section label="How you'll appear" sub="On cover letters and signatures you send.">
+          <div class="sset-identity">
+            <span class="sset-identity__avatar" aria-hidden="true">{initialsOf(name)}</span>
+            <span class="sset-identity__text">
+              <span class={`sset-identity__name${name.trim() ? '' : ' is-empty'}`}>{previewName}</span>
+              {previewMeta ? <span class="sset-identity__meta">{previewMeta}</span> : null}
+            </span>
+          </div>
+        </Section>
+
+        <Section label="Your details">
           <div class="sset-field">
-            <label class="sset-label">Full name</label>
+            <label class="sset-label" for="sset-name">Full name</label>
             <input
+              id="sset-name"
               class="sset-input"
               type="text"
               value={name}
@@ -93,8 +117,9 @@ export function ProfileTab() {
           </div>
 
           <div class="sset-field">
-            <label class="sset-label">Position / title</label>
+            <label class="sset-label" for="sset-position">Position / title</label>
             <input
+              id="sset-position"
               class="sset-input"
               type="text"
               value={position}
@@ -103,26 +128,30 @@ export function ProfileTab() {
               onInput={edit(setPosition)}
             />
             <div class="sset-chips">
-              {POSITION_SUGGESTIONS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  class="sset-chip"
-                  onClick={() => { setPosition(p); setDirty(true); setStatus(null); }}
-                >
-                  {p}
-                </button>
-              ))}
+              {POSITION_SUGGESTIONS.map((p) => {
+                const on = activePosition === p.toLowerCase();
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    class={`sset-chip${on ? ' is-active' : ''}`}
+                    aria-pressed={on ? 'true' : 'false'}
+                    onClick={() => { setPosition(p); setDirty(true); setStatus(null); }}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div class="sset-field">
-            <label class="sset-label">Email</label>
-            <input class="sset-input" type="email" value={email} disabled />
+          <div class="sset-readonly">
+            <span class="sset-readonly__label">Email</span>
+            <span class="sset-readonly__value" title={email}>{email || '—'}</span>
           </div>
         </Section>
       </div>
-      <SaveBar onSave={save} saving={saving} disabled={!dirty} status={status} />
+      <SaveBar onSave={save} saving={saving} disabled={!dirty} dirty={dirty} status={status} />
     </>
   );
 }

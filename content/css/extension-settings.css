@@ -182,6 +182,12 @@
   color: var(--sset-faint);
 }
 .sset-section__hint { font-size: 11.5px; color: var(--sset-faint); }
+.sset-section__sub {
+  margin: -4px 2px 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--sset-muted);
+}
 .sset-section__body {
   background: #fff;
   border: 1px solid var(--sset-line);
@@ -324,30 +330,75 @@
 .sset-coverage { padding: 13px 14px; font-size: 12.5px; color: var(--sset-muted); line-height: 1.4; }
 .sset-coverage strong { color: var(--sset-ink); font-weight: 650; }
 
-/* ---- Text inputs (profile) ------------------------------------------- */
-.sset-field { padding: 14px 14px 4px; }
-.sset-field + .sset-field { border-top: 1px solid var(--sset-hair); }
+/* ---- Identity preview (profile) --------------------------------------
+   Live mirror of the signature block, so the fields below have visible
+   purpose. Name + "title · building", exactly as it renders on a letter. */
+.sset-identity { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.sset-identity__avatar {
+  flex: none;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--sset-indigo-050);
+  color: var(--sset-indigo-600);
+  font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em;
+}
+.sset-identity__text { min-width: 0; display: block; }
+.sset-identity__name {
+  display: block;
+  font-size: 14px; font-weight: 650; color: var(--sset-ink);
+  line-height: 1.25;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sset-identity__name.is-empty { color: var(--sset-faint); font-weight: 500; }
+.sset-identity__meta {
+  display: block;
+  font-size: 12px; color: var(--sset-muted);
+  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- Text inputs (profile) -------------------------------------------
+   Name + position are one group, so no divider between them — the only
+   hairline separates the editable fields from the read-only email. */
+.sset-field { padding: 13px 14px 0; }
 .sset-field:last-child { padding-bottom: 14px; }
-.sset-label { display: block; font-size: 12px; font-weight: 600; color: var(--sset-ink); margin-bottom: 7px; }
+.sset-label { display: block; font-size: 12px; font-weight: 600; color: var(--sset-ink); margin-bottom: 6px; }
 .sset-input {
   width: 100%;
   font-family: inherit; font-size: 13.5px; color: var(--sset-ink);
-  padding: 10px 12px;
-  border: 1px solid var(--sset-line); border-radius: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--sset-line); border-radius: 8px;
   background: #fff;
   transition: border-color 0.14s, box-shadow 0.14s;
 }
 .sset-input::placeholder { color: var(--sset-faint); }
 .sset-input:focus { outline: none; border-color: var(--sset-indigo); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16); }
-.sset-input:disabled { background: var(--sset-surface-2); color: var(--sset-muted); cursor: not-allowed; }
-.sset-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+
+/* Suggestion chips: quiet fills, never outlined — an outlined pill directly
+   under an outlined input reads as another empty field. */
+.sset-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; padding-bottom: 13px; }
 .sset-chip {
-  border: 1px solid var(--sset-line); background: #fff;
-  padding: 5px 10px; border-radius: 999px; cursor: pointer;
-  font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--sset-muted);
-  transition: background 0.13s, color 0.13s, border-color 0.13s;
+  border: none; background: var(--sset-surface-2);
+  padding: 4px 9px; border-radius: 7px; cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 600; color: var(--sset-muted);
+  transition: background 0.13s, color 0.13s;
 }
-.sset-chip:hover { border-color: var(--sset-indigo); color: var(--sset-indigo-600); background: var(--sset-indigo-050); }
+.sset-chip:hover { background: var(--sset-indigo-050); color: var(--sset-indigo-600); }
+.sset-chip.is-active { background: var(--sset-indigo); color: #fff; }
+
+/* Read-only row: label left, value right — information, not a dead input. */
+.sset-readonly {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--sset-hair);
+  background: var(--sset-surface);
+}
+.sset-readonly__label { font-size: 12px; font-weight: 600; color: var(--sset-ink); flex: none; }
+.sset-readonly__value {
+  font-size: 12.5px; color: var(--sset-muted);
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ---- Save bar -------------------------------------------------------- */
 .sset-savebar {
@@ -359,6 +410,7 @@
 .sset-status { flex: 1; font-size: 12px; font-weight: 600; color: var(--sset-muted); min-width: 0; }
 .sset-status.is-ok { color: var(--sset-ok); }
 .sset-status.is-err { color: var(--sset-err); }
+.sset-status.is-dirty { color: var(--sset-faint); font-weight: 500; }
 .sset-btn {
   border: none; cursor: pointer; font-family: inherit; font-weight: 650; font-size: 13px;
   padding: 10px 18px; border-radius: 10px;
@@ -370,7 +422,13 @@
 }
 .sset-btn--primary:hover:not(:disabled) { background: var(--sset-indigo-600); }
 .sset-btn--primary:active:not(:disabled) { transform: translateY(1px); }
-.sset-btn:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+/* Resting (nothing to save) reads as a deliberate neutral, not a faded primary. */
+.sset-btn:disabled {
+  background: var(--sset-surface-2);
+  color: var(--sset-faint);
+  cursor: default;
+  box-shadow: none;
+}
 
 /* ---- States: loading / empty / notice -------------------------------- */
 .sset-loading, .sset-notice {
