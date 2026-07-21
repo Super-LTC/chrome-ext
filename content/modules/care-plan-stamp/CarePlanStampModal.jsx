@@ -1,6 +1,5 @@
 import { h } from 'preact';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
-import { ScopeToggle } from './components/ScopeToggle.jsx';
 import { FocusCard, FocusRationale } from './components/FocusCard.jsx';
 import { AuditRail } from './components/AuditRail.jsx';
 import { AuditDashboard } from './components/AuditDashboard.jsx';
@@ -50,7 +49,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [driftMissing, setDriftMissing] = useState([]);
   const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
   // Default from patient context (empty plan → initial, established → comprehensive).
-  // Nurse can override mid-session via ScopeToggle.
+  // Auto-picked from plan state (inject-button); the map's Initial-Wizard
+  // escape hatch is the only in-session switch.
   const [mode, setMode] = useState(() => (defaultMode === 'comprehensive' ? 'comprehensive' : 'initial'));
   const [audit, setAudit] = useState(null);
   const [proposal, setProposal] = useState(null);
@@ -1095,23 +1095,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 onClick={() => setMapHome(true)}
                 title="Back to the care-area map"
               >
-                ⊞ Map
+                ⊞ Coverage map
               </button>
             )}
-            <ScopeToggle
-              mode={mode}
-              onChange={(next) => {
-                if (next !== mode) {
-                  window.SuperAnalytics?.track?.('care_plan_audit_scope_toggled', {
-                    patient_id: patientId,
-                    from_mode: mode,
-                    to_mode: next,
-                  });
-                }
-                setMode(next);
-              }}
-              disabled={stage === 'stamping'}
-            />
+            {/* Mode toggle removed (Jul 21 dev pass — "they will be confused on the
+                navigation"): the mode is auto-picked from the plan state (empty →
+                Initial Admit, established → review) and switching it manually is
+                never the right move — a review of an empty plan and an initial
+                wizard on an established plan are both no-ops. */}
             {stage === 'ready' && mode === 'initial' && (
               // NO_TRACK: pure-UI open of library overlay
               <button
