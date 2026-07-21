@@ -48,3 +48,35 @@ export function getProfile() {
 export function saveProfile(body) {
   return request('/api/extension/me', 'PUT', body);
 }
+
+/* ------------------------------------------------------------------ */
+/* Team tab — /api/extension/team/*                                    */
+/* ------------------------------------------------------------------ */
+
+/** GET the org roster, scoped to the caller's admin scope. Returns { success, team, scope }. */
+export function getTeamMembers(orgSlug) {
+  return request(`/api/extension/team/members?orgSlug=${encodeURIComponent(orgSlug)}`, 'GET');
+}
+
+/** GET what the caller may hand out: scopes / buildings / features + bundle & role catalog. */
+export function getTeamGrantable(orgSlug) {
+  return request(`/api/extension/team/grantable?orgSlug=${encodeURIComponent(orgSlug)}`, 'GET');
+}
+
+/** POST an invitation: { orgSlug, email, role, snfRole?, modules?, locationIds }. */
+export function inviteTeamMember(body) {
+  return request('/api/extension/team/invite', 'POST', body);
+}
+
+/** DELETE a person from the org. */
+export function removeTeamMember(orgSlug, userId) {
+  return request(
+    `/api/extension/team/members/${userId}?orgSlug=${encodeURIComponent(orgSlug)}`,
+    'DELETE',
+  );
+}
+
+/** PUT a person's job title + features: { orgSlug, snfRole?, modules? }. */
+export function updateTeamMemberPermissions(userId, body) {
+  return request(`/api/extension/team/members/${userId}/permissions`, 'PUT', body);
+}

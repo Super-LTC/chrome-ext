@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { WeeklyReportsTab } from './WeeklyReportsTab.jsx';
 import { ProfileTab } from './ProfileTab.jsx';
+import { TeamTab } from './TeamTab.jsx';
 import { track } from '../../utils/analytics.js';
 
 const GEAR = (
@@ -24,7 +25,7 @@ const CLOSE = (
 const TABS = [
   { key: 'weekly', label: 'Weekly Reports' },
   { key: 'profile', label: 'Profile' },
-  { key: 'team', label: 'Team', disabled: true, soon: true },
+  { key: 'team', label: 'Team' },
 ];
 
 export function SettingsPanel({ facilityName, orgSlug, initialTab = 'weekly', onClose }) {
@@ -76,6 +77,7 @@ export function SettingsPanel({ facilityName, orgSlug, initialTab = 'weekly', on
 
         {tab === 'weekly' && <WeeklyReportsTab facilityName={facilityName} orgSlug={orgSlug} />}
         {tab === 'profile' && <ProfileTab />}
+        {tab === 'team' && <TeamTab facilityName={facilityName} orgSlug={orgSlug} />}
       </div>
     </div>
   );
