@@ -1,5 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { toRecommendedIcd10, normalizeSearchResults, buildSuggestedList } from '../icd10-picker-util.js';
+import { toRecommendedIcd10, normalizeSearchResults, buildSuggestedList, currentIcd10 } from '../icd10-picker-util.js';
+
+describe('currentIcd10', () => {
+  it('returns null for a codeless or missing query', () => {
+    expect(currentIcd10(null)).toBeNull();
+    expect(currentIcd10({})).toBeNull();
+    expect(currentIcd10({ recommendedIcd10: [] })).toBeNull();
+  });
+
+  it('reads the nurse-attached candidate before signing', () => {
+    const q = { recommendedIcd10: [{ code: 'E43', description: 'Severe malnutrition' }] };
+    expect(currentIcd10(q)).toEqual({ code: 'E43', description: 'Severe malnutrition' });
+  });
+
+  it("prefers the physician's signed pick over the candidate list", () => {
+    const q = {
+      recommendedIcd10: [{ code: 'E43', description: 'Severe malnutrition' }],
+      selectedIcd10Code: 'E44.0',
+      selectedIcd10Description: 'Moderate malnutrition',
+    };
+    expect(currentIcd10(q)).toEqual({ code: 'E44.0', description: 'Moderate malnutrition' });
+  });
+
+  it('takes the first candidate when several are offered', () => {
+    const q = { recommendedIcd10: [{ code: 'A41.9' }, { code: 'R65.20' }] };
+    expect(currentIcd10(q)).toEqual({ code: 'A41.9', description: '' });
+  });
+
+  it('ignores a malformed candidate list', () => {
+    expect(currentIcd10({ recommendedIcd10: 'nope' })).toBeNull();
+    expect(currentIcd10({ recommendedIcd10: [{ description: 'no code' }] })).toBeNull();
+  });
+});
 
 describe('toRecommendedIcd10', () => {
   it('returns [] when nothing is selected (codeless query)', () => {

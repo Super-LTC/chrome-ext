@@ -1208,6 +1208,22 @@
   color: var(--super-gray-500);
 }
 
+/* Detail modal: marks a pre-signature code as the nurse's suggestion, not the
+   physician's authoritative pick. */
+.super-query-detail__code-qualifier {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--super-gray-100, #f3f4f6);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--super-gray-500);
+  vertical-align: 1px;
+}
+
 /* Detail modal: empty-note placeholder. */
 .super-query-detail__note--empty {
   color: var(--super-gray-400);

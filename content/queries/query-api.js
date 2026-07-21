@@ -331,8 +331,15 @@ const QueryAPI = {
    *   - `effectiveDate`: `"YYYY-MM-DD"` to set, or `null` to CLEAR back to the
    *     createdAt default. `null` is meaningful, so it's forwarded as-is; a key
    *     left `undefined` is omitted entirely (leave unchanged).
+   *   - `recommendedIcd10`: replaces the candidate codes the doctor is offered.
+   *     Must be a NON-EMPTY `[{ code, description?, reason? }]` — the backend
+   *     400s on `[]`, so there is no "clear back to codeless" via PATCH. A
+   *     caller whose nurse cleared the selection must omit the key.
+   *     Note: on `I8000:<code>` queries the first code becomes the query's
+   *     identity and the server syncs `mdsItem`/`mdsItemName` to it, so the
+   *     returned query may have a different `mdsItem` than the one sent.
    * @param {string} queryId
-   * @param {{ nurseEditedNote?: string, effectiveDate?: string|null }} changes
+   * @param {{ nurseEditedNote?: string, effectiveDate?: string|null, recommendedIcd10?: Array<{code: string, description?: string, reason?: string}> }} changes
    * @returns {Promise<Object>} the updated query (with fresh `timing`)
    */
   async patchQuery(queryId, changes = {}) {
@@ -343,6 +350,11 @@ const QueryAPI = {
     const body = {};
     if (changes.nurseEditedNote !== undefined) body.nurseEditedNote = changes.nurseEditedNote;
     if (changes.effectiveDate !== undefined) body.effectiveDate = changes.effectiveDate;
+    // Guard the backend's non-empty rule here too, so a caller that slipped an
+    // empty array through gets "leave unchanged" instead of a 400.
+    if (Array.isArray(changes.recommendedIcd10) && changes.recommendedIcd10.length > 0) {
+      body.recommendedIcd10 = changes.recommendedIcd10;
+    }
 
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
