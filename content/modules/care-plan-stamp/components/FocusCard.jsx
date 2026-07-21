@@ -714,9 +714,17 @@ const EvidenceMenuGroup = ({ tokens, tokenValues, readOnly, onToggle }) => {
     if (!checked.length) return null;
     return <span>{checked.map((t) => t.seg.value).join('; ')}</span>;
   }
-  const summary = checked.length
-    ? `${checked.length} of ${tokens.length} apply`
-    : 'select what applies';
+  // Show WHAT will be said, not just a count — "1 of 1 apply" told the nurse
+  // nothing about the text her click commits (Mohmood dev pass, Jul 21).
+  const _clipLabel = (s, n) => {
+    const t = String(s || '').replace(/\s+/g, ' ').trim();
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  };
+  const summary = !checked.length
+    ? 'select what applies'
+    : checked.length === 1
+      ? _clipLabel(checked[0].seg.value, 48)
+      : `${_clipLabel(checked[0].seg.value, 34)} +${checked.length - 1} more`;
   return (
     <span className={`cpas-seg-msg ${checked.length ? 'has-checked' : ''}`} ref={wrapRef}>
       <button

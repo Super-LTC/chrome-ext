@@ -1,5 +1,5 @@
 import { h, Fragment } from 'preact';
-import { useState, useMemo } from 'preact/hooks';
+import { useState, useMemo, useEffect } from 'preact/hooks';
 import { FocusCard } from './FocusCard.jsx';
 import { AuditPartialCoveragePane } from './AuditPartialCoveragePane.jsx';
 import { buildWorklistModel, actionableChecks, addAllReady, totalTouches, coveredText } from '../worklistModel.js';
@@ -98,6 +98,17 @@ export const AuditWorklist = ({
     return null;
   }, [selected, audit]);
 
+  // "Polished N focuses" is a moment, not a status — show ~6s after the swap
+  // lands, then get out of the way (three simultaneous strip messages read as
+  // noise; the tooltip carries the explanation while visible).
+  const [polishNoteVisible, setPolishNoteVisible] = useState(false);
+  useEffect(() => {
+    if (!polishedInfo?.count) return undefined;
+    setPolishNoteVisible(true);
+    const t = setTimeout(() => setPolishNoteVisible(false), 6000);
+    return () => clearTimeout(t);
+  }, [polishedInfo]);
+
   return (
     <div className="cpas-wl">
       <div className="cpas-wl__progress">
@@ -108,7 +119,7 @@ export const AuditWorklist = ({
               ✨ Polishing plan{polishPct != null ? `… ${polishPct}%` : '…'}
             </span>
           )}
-          {!genAuthoring && polishedInfo?.count > 0 && (
+          {!genAuthoring && polishNoteVisible && polishedInfo?.count > 0 && (
             <span className="cpas-wl__polished" title="AI selected the most relevant goals/interventions and filled blanks from the chart — your edits are never overwritten.">
               ✨ Polished {polishedInfo.count} focus{polishedInfo.count === 1 ? '' : 'es'}
             </span>

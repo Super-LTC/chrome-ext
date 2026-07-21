@@ -18,8 +18,13 @@ function _score(i) { return typeof i?.score === 'number' ? i.score : 0; }
  * the nurse use this too.
  */
 export function actionableChecks(audit) {
+  // partial_coverage "check your judgment" cards are NOT surfaced (killed
+  // Jul 2026): the AI coverage-link pairing kept marrying a dx to the wrong
+  // focus (E83.51 → a hypothyroidism focus, E11.65 → a weight-loss focus) —
+  // asking the nurse to verify a wrong pairing is showing wrong things.
+  // area_covered still folds into covered chips elsewhere.
   return (Array.isArray(audit?.toCheck) ? audit.toCheck : []).filter(
-    (it) => it.kind !== 'area_covered',
+    (it) => it.kind !== 'area_covered' && it.kind !== 'partial_coverage',
   );
 }
 

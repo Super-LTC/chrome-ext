@@ -32,16 +32,15 @@ describe('buildMapCells', () => {
     const by = (s) => cells.filter((c) => c.state === s);
     expect(by('gap')).toHaveLength(2);
     expect(by('gap')[0].why).toContain('Braden 13');
-    // Reviewer-held-back proposals are NOT rendered (killed Jul 2026); '?'
-    // verify is reserved for actionable partial-coverage
-    // rows. area_covered ("already covered by X") is NOT its own glyph — it
-    // folds into a plain ✓ covered chip (assurance, not a task).
+    // Reviewer-held-back proposals AND partial_coverage verify cells are NOT
+    // rendered (killed Jul 2026 — the AI coverage-link pairing kept marrying
+    // a dx to the wrong focus). area_covered ("already covered by X") is NOT
+    // its own glyph — it folds into a plain ✓ covered chip.
     expect(by('remove')).toHaveLength(0);
     expect(by('held')).toHaveLength(0);
     // No '✓?' glance state survives — the whole concept is gone from the map.
     expect(by('glance')).toHaveLength(0);
-    expect(by('verify')).toHaveLength(1);
-    expect(by('verify')[0].target).toEqual({ kind: 'check', key: 'verify-1-z' });
+    expect(by('verify')).toHaveLength(0);
     // covered = the dup-collapsed pain focus (1) + the flattened `elimination`
     // area_covered (1). The flattened glance keeps its "covered by" why and stays
     // non-clickable (there is no worklist row behind it to open).

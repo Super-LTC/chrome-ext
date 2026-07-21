@@ -66,6 +66,7 @@ export function buildMapCells(audit, { stampedAddIds, skippedAddIds, acknowledge
       });
       continue;
     }
+    if (it.kind === 'partial_coverage') continue; // not surfaced (see worklistModel.actionableChecks)
     cells.push({
       state: 'verify', label: areaLabel(audit, it) || _clip(it.detail, 24),
       why: _clip(it.reason || it.matchedFocusText, 44), act: 'Verify →',
