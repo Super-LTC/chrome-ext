@@ -1113,6 +1113,24 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 + Add from PCC Library
               </button>
             )}
+            {mode === 'initial' && (
+              // Way back from the Initial wizard to the review grid — the wizard
+              // is reachable FROM the map, so it needs a return path (Jul 21).
+              <button
+                type="button"
+                className="cpas-modal__library-btn"
+                onClick={() => {
+                  window.SuperAnalytics?.track?.('care_plan_audit_scope_toggled', {
+                    patient_id: patientId, from_mode: 'initial', to_mode: 'comprehensive',
+                  });
+                  setMode('comprehensive');
+                  setMapHome(true);
+                }}
+                title="Back to the care-area coverage map"
+              >
+                ⊞ Coverage map
+              </button>
+            )}
             {stage !== 'stamping' && (
               // NO_TRACK: pure-UI dismiss of the modal
               <button className="cpas-modal__close" onClick={onClose} aria-label="Close">×</button>

@@ -299,6 +299,10 @@ const AddDetail = ({
 
   return (
     <Fragment>
+      {/* Why FIRST — the evidence is the pitch; the buttons act on it (Jul 21:
+          "i kinda want the why to be a bit more prevalent"). */}
+      <WhyReceipts rationale={rationale} focus={item.focus} />
+
       <div className="cpas-wl__d-actions">
         {isStamped ? (
           <span className="cpas-wl__done-tag">✓ added to plan</span>
@@ -343,8 +347,6 @@ const AddDetail = ({
           </Fragment>
         )}
       </div>
-
-      <WhyReceipts rationale={rationale} focus={item.focus} />
 
       <FocusCard
         variant="v2"

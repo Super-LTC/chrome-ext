@@ -4160,9 +4160,11 @@
 }
 .cpas-wl__row:hover { background: #fff; }
 .cpas-wl__row.is-sel {
-  background: #fff;
+  background: #eef2ff;
   border-left-color: #4338ca;
   color: #111827;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
 }
 .cpas-wl__st {
   width: 13px;
@@ -4221,7 +4223,7 @@
   border-left: 2px solid transparent;
 }
 .cpas-wl__crow:hover { background: #fff; }
-.cpas-wl__crow.is-sel { background: #fff; border-left-color: #cbd5e1; color: #111827; }
+.cpas-wl__crow.is-sel { background: #eef2ff; border-left-color: #4338ca; color: #111827; font-weight: 600; }
 .cpas-wl__ck { color: #059669; }
 
 /* ── Dropped fold — never silent ── */
@@ -4313,22 +4315,29 @@
 }
 .cpas-wl__reason b { color: #4b5563; }
 
-/* ── Why one-liner + "what we auto-filled" receipts ── */
+/* ── Why panel + "what we auto-filled" receipts ──
+   Promoted from a muted one-liner to the lead element of the detail pane
+   (Jul 21: the evidence IS the pitch — same amber treatment as the Initial
+   Admit wizard's "Why this is proposed" box). */
 .cpas-wl__why {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
-  margin: 0 0 16px;
-  font-size: 12.5px;
-  color: #5b6472;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #44403c;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
 }
 .cpas-wl__why-k {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .04em;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
   text-transform: uppercase;
-  color: #9aa3af;
+  color: #b45309;
 }
 .cpas-wl__why-tag {
   font-size: 10px;

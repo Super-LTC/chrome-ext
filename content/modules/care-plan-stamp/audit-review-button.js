@@ -103,10 +103,13 @@ function _paint(banner, audit, ctx) {
     return;
   }
 
+  // Banner shows only the ACTIONABLE counts (add/remove). "N to verify" made
+  // the banner read as three chores when verifies are soft FYI rows inside the
+  // audit (Jul 21 dev pass).
   const parts = [];
   if (a) parts.push(`<strong>${a}</strong> to add`);
   if (r) parts.push(`<strong>${r}</strong> to remove`);
-  if (c) parts.push(`<strong>${c}</strong> to verify`);
+  if (!a && !r && c) parts.push(`<strong>${c}</strong> to review`);
 
   banner.className = 'super-audit-banner is-actionable';
   banner.innerHTML = `
