@@ -47,4 +47,24 @@ async function fetchGenerate({ patientId, orgSlug, facilityName, orgDropdowns })
   return response.data || response;
 }
 
-window.CarePlanGenerateAPI = { fetchGenerate };
+/**
+ * Fire-and-forget cold-cost prewarm (SUP-116): the backend runs the audit
+ * (warming the existing-plan concept cache — the one-time ~15s AI pass) and
+ * queues generate authoring on a fingerprint miss, all while the nurse is
+ * still reading the PCC page. Callers must never await or surface errors —
+ * the modal works identically without it, just slower on a cold first open.
+ */
+function prewarm({ patientId, orgSlug, facilityName }) {
+  const qs = new URLSearchParams({
+    patientId: String(patientId),
+    orgSlug: orgSlug || '',
+    facilityName: facilityName || '',
+  });
+  try {
+    chrome.runtime
+      .sendMessage({ type: 'API_REQUEST', endpoint: `/api/extension/care-plan/prewarm?${qs.toString()}`, options: { method: 'GET' } })
+      .catch(() => {}); // silent by design
+  } catch (_) { /* extension context gone — never matters */ }
+}
+
+window.CarePlanGenerateAPI = { fetchGenerate, prewarm };

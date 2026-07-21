@@ -209,6 +209,26 @@ function injectCarePlanStampButton() {
     const btn = _makeButton(i);
     target.parentNode.insertBefore(btn, target.nextSibling);
   });
+
+  _firePrewarm();
+}
+
+// One prewarm per patient per page load — pays the cold-open AI costs
+// (existing-plan concept map + generate authoring) server-side while the nurse
+// is still reading the page, so the modal opens warm (~1-3s) when clicked.
+const _prewarmed = new Set();
+function _firePrewarm() {
+  try {
+    const patientId = _resolvePatientId();
+    if (!patientId || _prewarmed.has(patientId)) return;
+    const facilityName = typeof getChatFacilityInfo === 'function' ? (getChatFacilityInfo() || '') : '';
+    const orgSlug = typeof getOrg === 'function' ? (getOrg()?.org || '') : '';
+    if (!facilityName || !orgSlug) return;
+    _prewarmed.add(patientId);
+    window.CarePlanGenerateAPI?.prewarm?.({ patientId, orgSlug, facilityName });
+  } catch (_) {
+    // never let prewarm break button injection
+  }
 }
 
 // Run on load + on SPA-ish nav (PCC does full reloads, but content scripts
