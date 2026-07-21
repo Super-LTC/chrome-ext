@@ -158,7 +158,7 @@ export const CareAreaMap = ({
       <div className="cpam__strip">
         <div className="cpam__counts">
           <div className="cpam__count is-gap"><div className="cpam__n">{gaps}</div><div className="cpam__l">gaps to add</div></div>
-          <div className="cpam__count is-rem"><div className="cpam__n">{removals}</div><div className="cpam__l">to confirm</div></div>
+          <div className="cpam__count is-rem"><div className="cpam__n">{removals}</div><div className="cpam__l">to remove</div></div>
           <div className="cpam__count is-cov"><div className="cpam__n">{coveredCells.length}</div><div className="cpam__l">covered</div></div>
           {n('skipped') > 0 && (
             <div className="cpam__count is-skip"><div className="cpam__n">{n('skipped')}</div><div className="cpam__l">skipped</div></div>
