@@ -1058,10 +1058,27 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     });
   }, [patientId]);
 
+  // The batch "Add all → Done" footer already reloads the tab; this covers
+  // every OTHER close path (×, Cancel, backdrop) after the plan changed in
+  // PCC — single-adds, audit partial stamps, resolves. Without the reload the
+  // page under the modal still shows the pre-stamp care plan.
+  const closeModal = useCallback(() => {
+    const changedPcc =
+      stampedRuleIds.size > 0 ||
+      stampedAddIds.size > 0 ||
+      Object.values(resolveStatus).some((s) => s === 'done') ||
+      Object.values(partialStampStatus).some((s) => s === 'done');
+    onClose();
+    if (changedPcc) {
+      try { chrome.runtime.sendMessage({ type: 'RELOAD_CURRENT_TAB' }); }
+      catch (_) { window.location.reload(); }
+    }
+  }, [stampedRuleIds, stampedAddIds, resolveStatus, partialStampStatus, onClose]);
+
   // -------- Render --------
   return (
     <div className="cpas-modal" role="dialog" aria-modal="true">
-      <div className="cpas-modal__backdrop" onClick={stage === 'stamping' ? null : onClose} />
+      <div className="cpas-modal__backdrop" onClick={stage === 'stamping' ? null : closeModal} />
       <div className="cpas-modal__container">
         <header className="cpas-modal__header">
           {mode === 'comprehensive' && comprehensiveStep !== 'dashboard' && stage !== 'stamping' && (
@@ -1134,15 +1151,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             )}
             {stage !== 'stamping' && (
               // NO_TRACK: pure-UI dismiss of the modal
-              <button className="cpas-modal__close" onClick={onClose} aria-label="Close">×</button>
+              <button className="cpas-modal__close" onClick={closeModal} aria-label="Close">×</button>
             )}
           </div>
         </header>
 
         <div className="cpas-modal__body">
           {stage === 'loading' && <LoadingState />}
-          {stage === 'error' && <ErrorState message={errorMsg} onClose={onClose} />}
-          {stage === 'drift' && <DriftState missing={driftMissing} onClose={onClose} />}
+          {stage === 'error' && <ErrorState message={errorMsg} onClose={closeModal} />}
+          {stage === 'drift' && <DriftState missing={driftMissing} onClose={closeModal} />}
           {mode === 'initial' && (stage === 'ready' || stage === 'stamping' || stage === 'done') && proposal && (
             <div className="cpas-modal__columns">
               <FocusList
@@ -1458,7 +1475,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             {/* Primary commit lives in the sidebar (spatially bound to the
                 focus list). Footer keeps just a quiet cancel. */}
             {/* NO_TRACK: pure-UI cancel */}
-            <button className="cpas-btn cpas-btn--ghost" onClick={onClose}>Cancel</button>
+            <button className="cpas-btn cpas-btn--ghost" onClick={closeModal}>Cancel</button>
           </footer>
         )}
 

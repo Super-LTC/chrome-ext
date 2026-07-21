@@ -602,6 +602,31 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* "Needs input · Jump to field" — amber pill in the detail header. The empty
+   control it targets can be below the fold; this is the discoverability cue. */
+.cpas-detail__jump {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #92400e;
+  background: #fef9c3;
+  border: 1px solid #facc15;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.cpas-detail__jump:hover { background: #fef08a; }
+
+/* Transient highlight on the control the jump lands on. */
+.cpas-jump-flash {
+  animation: cpas-jump-flash-pulse 0.8s ease-in-out 2;
+}
+@keyframes cpas-jump-flash-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.65); }
+}
 .cpas-detail__rule {
   font-size: 11px;
   font-weight: 700;

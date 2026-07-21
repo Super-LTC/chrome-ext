@@ -20,6 +20,25 @@ import { tokenKeyOf, withStableTokenKeys, TOKEN_OMIT, groupEvidenceMenus, isMenu
  *   - readOnly: disable all editors (during stamping/done)
  *   - dropdowns: org dropdowns { kardexLabels, kardexOptions, positionLabels, positionOptions }
  */
+/**
+ * Scroll the first unfilled control in the detail pane into view and flash it.
+ * Unfilled = a yellow fill select with no value, an unfilled token picker chip
+ * (label still reads "Select …"), or an empty inline free-text input.
+ */
+function _jumpToFirstUnfilled(root) {
+  if (!root) return;
+  const target = [...root.querySelectorAll('select.cpas-fill__select, button.cpas-seg-chip, input.cpas-seg-input')]
+    .find((el) => {
+      if (el.tagName === 'SELECT') return !el.value;
+      if (el.tagName === 'INPUT') return !String(el.value || '').trim();
+      return /^Select\b/.test(el.textContent || '');
+    });
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.add('cpas-jump-flash');
+  setTimeout(() => target.classList.remove('cpas-jump-flash'), 1600);
+}
+
 export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns, isStamped, stampOneDisabled, onStampOne, variant = 'v1', areaBadge, positionLabel }) => {
   const isV2 = variant === 'v2';
   const sectionRef = useRef(null);
@@ -125,6 +144,19 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
             </span>
           ) : (
             <>
+              {/* The empty field can sit far below the fold (e.g. an unfilled
+                  intervention select) — without a pointer the nurse can't tell
+                  WHY the add button is disabled. Scrolls the first unfilled
+                  control into view and flashes it. */}
+              {!readOnly && !state.skipped && stampOneDisabled && (
+                <button
+                  className="cpas-detail__jump"
+                  onClick={() => _jumpToFirstUnfilled(sectionRef.current)}
+                  title="This focus needs input before it can be added — jump to the first empty field"
+                >
+                  ⚠ Needs input · Jump to field
+                </button>
+              )}
               {!readOnly && onToggleSkip && (
                 // Outlined toggle chip. Shows the current state clearly + the
                 // action verb. Outlined (not filled) so it reads as secondary
