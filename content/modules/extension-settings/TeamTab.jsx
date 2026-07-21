@@ -134,6 +134,7 @@ export function TeamTab({ facilityName, orgSlug }) {
 function RosterView({ team, canManage, orgSlug, onInvite, onChanged }) {
   const people = team?.people ?? [];
   const pending = team?.pendingPeople ?? [];
+  const doctors = team?.doctors ?? [];
 
   return (
     <>
@@ -169,6 +170,24 @@ function RosterView({ team, canManage, orgSlug, onInvite, onChanged }) {
                   <div class="sset-person__meta">
                     <span class="sset-badge">{SCOPE_LABELS[p.orgRole] || 'Staff'}</span>
                     <span>Invitation pending</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </Section>
+        ) : null}
+
+        {doctors.length ? (
+          <Section label="Doctors" hint={`${doctors.length}`}>
+            {doctors.map((d) => (
+              <div key={d.practitionerId} class="sset-person">
+                <div class="sset-person__main">
+                  <div class="sset-person__name">
+                    {d.name}{d.title ? `, ${d.title}` : ''}
+                  </div>
+                  <div class="sset-person__meta">
+                    <span class={docBadgeClass(d.status?.key)}>{d.status?.label || 'Not sent'}</span>
+                    {d.status?.stalled ? <span class="sset-person__bldgs">needs a nudge</span> : null}
                   </div>
                 </div>
               </div>
@@ -233,6 +252,12 @@ function PersonRow({ person, canManage, orgSlug, onChanged }) {
       ) : null}
     </div>
   );
+}
+
+function docBadgeClass(key) {
+  if (key === 'signed' || key === 'enrolled') return 'sset-badge sset-badge--ok';
+  if (key === 'forward_sent' || key === 'clicked') return 'sset-badge sset-badge--info';
+  return 'sset-badge';
 }
 
 function prettyRole(snfRole) {

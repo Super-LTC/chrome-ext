@@ -434,6 +434,12 @@
 .sset-badge--admin {
   background: rgba(99, 102, 241, 0.1); color: var(--sset-indigo); border-color: rgba(99, 102, 241, 0.25);
 }
+.sset-badge--ok {
+  background: rgba(5, 150, 105, 0.1); color: var(--sset-ok); border-color: rgba(5, 150, 105, 0.25);
+}
+.sset-badge--info {
+  background: rgba(99, 102, 241, 0.08); color: var(--sset-indigo); border-color: rgba(99, 102, 241, 0.2);
+}
 .sset-person__bldgs { color: var(--sset-faint); }
 .sset-person__err { margin-top: 4px; font-size: 11.5px; color: var(--sset-err); }
 .sset-person__remove {
