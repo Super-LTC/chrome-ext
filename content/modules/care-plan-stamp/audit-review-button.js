@@ -170,10 +170,13 @@ async function _openWizard({ patientId, facilityName, orgSlug }, isV2 = false) {
     }
   };
 
-  // The review page header shows "Client: Smith, John (6106)" — scrape if available.
+  // The review page header shows "Client: Smith, John (6106)" — but variants
+  // label it "Resident:"/"Patient:". Scrape whichever is present: an empty
+  // name makes the backend JIT-stub new admits as "Patient <id>" and every
+  // "(resident name)" fill stays a placeholder.
   let patientName = '';
   try {
-    const m = (document.body?.innerText || '').match(/Client:\s*([^\n(]+)/);
+    const m = (document.body?.innerText || '').match(/(?:Resident|Client|Patient):\s*([^\n(]+)/);
     if (m) patientName = m[1].replace(/DO NOT USE/i, '').trim();
   } catch (_) { /* */ }
 

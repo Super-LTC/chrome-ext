@@ -18,7 +18,7 @@
  * as "feature off", never as a modal error.
  */
 
-async function fetchGenerate({ patientId, orgSlug, facilityName, orgDropdowns }) {
+async function fetchGenerate({ patientId, patientName, orgSlug, facilityName, orgDropdowns }) {
   const qs = new URLSearchParams({
     patientId: String(patientId),
     orgSlug: orgSlug || '',
@@ -26,6 +26,9 @@ async function fetchGenerate({ patientId, orgSlug, facilityName, orgDropdowns })
     mode: 'comprehensive',
     cache: '1',
   });
+  // Real name lets the backend heal a JIT-stub row ("Patient <id>") so
+  // "(resident name)" fills personalize instead of staying placeholder.
+  if (patientName) qs.set('patientName', patientName);
   // Facility dropdown labels — backend resolves the payload's CANONICAL
   // kardex/position/reviewDept names to this facility's numeric IDs (without
   // this, swapped rows render raw '(rn)'/'(nurse_any)' chips and can't stamp).

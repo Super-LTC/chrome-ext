@@ -119,10 +119,12 @@ function _resolvePatientId() {
 }
 
 function _scrapePatientName() {
-  // PCC's careplandetail page shows: "Resident: lopez, paul (6306)" in the header.
-  // Best effort — fall back to nothing if we can't find it.
+  // PCC's careplandetail page shows: "Resident: lopez, paul (6306)" in the
+  // header — but page/facility variants label it "Client:" or "Patient:".
+  // An empty name here makes the backend JIT-stub new admits as "Patient <id>"
+  // and every "(resident name)" fill stays a placeholder, so match all variants.
   const txt = document.body?.innerText || '';
-  const m = txt.match(/Resident:\s*([^\n(]+)/);
+  const m = txt.match(/(?:Resident|Client|Patient):\s*([^\n(]+)/);
   return m ? m[1].replace(/DO NOT USE/i, '').trim() : '';
 }
 

@@ -224,7 +224,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           // the chart-quality banner. 409 (org not concept-mapped) or any
           // error = feature quietly off.
           setGen({ payload: null, error: null, startedAt: Date.now(), stopped: false });
-          window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, orgSlug, facilityName, orgDropdowns })
+          window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, patientName, orgSlug, facilityName, orgDropdowns })
             .then((p) => { if (!cancelled) setGen((g) => ({ ...g, payload: p })); })
             .catch((e) => {
               if (!cancelled) setGen((g) => ({ ...g, error: e }));
@@ -318,6 +318,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         // -------- Initial Admit path (unchanged below) --------
         const prop = await A.fetchProposal({
           patientId,
+          patientName,
           facilityName,
           orgSlug,
           scope: 'initial',
@@ -450,7 +451,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         const orgDropdowns = dropdowns
           ? { positions: dropdowns.positionLabels || {}, kardex: dropdowns.kardexLabels || {}, reviewDepts: dropdowns.reviewDeptLabels || {} }
           : undefined;
-        const p = await window.CarePlanGenerateAPI.fetchGenerate({ patientId, orgSlug, facilityName, orgDropdowns });
+        const p = await window.CarePlanGenerateAPI.fetchGenerate({ patientId, patientName, orgSlug, facilityName, orgDropdowns });
         setGen((g) => {
           // Chart moved mid-session (fingerprint changed): the polished result
           // describes a DIFFERENT chart. Keep the deterministic view, stop
