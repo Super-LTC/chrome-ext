@@ -88,11 +88,10 @@ async function _renderBanner() {
 
 function _paint(banner, audit, ctx) {
   const a = audit?.toAdd?.length || 0;
-  // area_covered rows are map-only states, not worklist actions — keep them out
-  // of the "N to review" count (mirrors worklistModel.actionableChecks).
-  const c = (audit?.toCheck || []).filter((it) => it.kind !== 'area_covered').length;
   const r = audit?.toRemove?.length || 0;
-  const total = a + c + r;
+  // toCheck deliberately excluded: verifies are soft FYI rows inside the audit,
+  // never a banner chore. Only adds/removes make the banner actionable.
+  const total = a + r;
 
   if (total === 0) {
     banner.className = 'super-audit-banner is-clean';
@@ -103,13 +102,11 @@ function _paint(banner, audit, ctx) {
     return;
   }
 
-  // Banner shows only the ACTIONABLE counts (add/remove). "N to verify" made
-  // the banner read as three chores when verifies are soft FYI rows inside the
-  // audit (Jul 21 dev pass).
+  // Banner shows only the ACTIONABLE counts (add/remove). Verifies are soft
+  // FYI rows inside the audit and never appear here (Jul 21 dev pass).
   const parts = [];
   if (a) parts.push(`<strong>${a}</strong> to add`);
   if (r) parts.push(`<strong>${r}</strong> to remove`);
-  if (!a && !r && c) parts.push(`<strong>${c}</strong> to review`);
 
   banner.className = 'super-audit-banner is-actionable';
   banner.innerHTML = `
