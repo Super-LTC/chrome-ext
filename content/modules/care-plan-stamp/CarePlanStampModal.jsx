@@ -1745,12 +1745,44 @@ function _focusUnfilledTokenKeys(rawFocus, tokenValues) {
 // derivedFrom values so the relevant signal pops in a quick hover.
 // -------- Subcomponents --------
 
-const LoadingState = () => (
-  <div className="cpas-empty">
-    <div className="cpas-spinner" />
-    <p>Reading patient context from PCC…</p>
-  </div>
-);
+// Staged loader: the FIRST open for a resident pays a one-time server-side
+// pass (mapping their existing care plan against the chart, ~15-20s; cached
+// after — see /care-plan/prewarm). A silent spinner past a few seconds reads
+// as broken, so escalate to an honest "first time takes longer" message with
+// elapsed feedback instead of letting the nurse conclude it hung.
+const LOADING_STAGES = [
+  { after: 0, text: 'Reading patient context from PCC…' },
+  { after: 4, text: 'Reviewing the care plan against the chart…' },
+  {
+    after: 8,
+    text: 'First review for this resident — reading their existing care plan closely. This takes ~15–20 seconds once; future opens are fast.',
+    slow: true,
+  },
+  {
+    after: 25,
+    text: 'Still working — large care plans can take up to ~30 seconds on the first review. Future opens are fast.',
+    slow: true,
+  },
+];
+
+const LoadingState = () => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t0 = Date.now();
+    const id = setInterval(() => setElapsed((Date.now() - t0) / 1000), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const stage = [...LOADING_STAGES].reverse().find((st) => elapsed >= st.after) || LOADING_STAGES[0];
+  return (
+    <div className="cpas-empty">
+      <div className="cpas-spinner" />
+      <p>{stage.text}</p>
+      {stage.slow && (
+        <p className="cpas-empty__hint">✨ One-time setup for this resident — it's saved after this.</p>
+      )}
+    </div>
+  );
+};
 
 const ErrorState = ({ message, onClose }) => (
   <div className="cpas-empty cpas-empty--error">
