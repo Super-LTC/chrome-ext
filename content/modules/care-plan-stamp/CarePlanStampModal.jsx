@@ -240,7 +240,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             const mod = await import('./__fixtures__/mock-audit-v2.js');
             auditResp = mod.default;
           } else {
-            auditResp = await window.CarePlanAuditAPI.fetchAudit({
+            // Retries ride the server-side cache the timed-out attempt kept
+            // warming (CloudFront ~20s cutoff; Lambda finishes regardless).
+            auditResp = await window.CarePlanAuditAPI.fetchAuditWithRetry({
               patientId,
               facilityName,
               orgSlug,
