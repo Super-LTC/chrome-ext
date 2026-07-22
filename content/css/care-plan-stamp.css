@@ -1447,6 +1447,24 @@
 }
 .cpas-iv-row__text:hover:not(:focus):not(:disabled) {
   background: #f9fafb;
+  outline: 1px dashed #d1d5db;
+  outline-offset: -1px;
+}
+/* Editability affordance: a pencil appears at the row's right edge on hover
+   (hidden while actually editing) — the rows READ as plain text otherwise. */
+.cpas-iv-row__text-wrap { position: relative; }
+.cpas-iv-row:hover .cpas-iv-row__text-wrap:not(:focus-within)::after {
+  content: '✎ edit';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #9ca3af;
+  background: #f9fafb;
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
 }
 .cpas-iv-row__text:focus {
   background: #fff;
@@ -1512,12 +1530,70 @@
   transition: all 0.12s ease;
 }
 .cpas-iv-row:hover .cpas-iv-row__delete {
-  color: #9ca3af;
+  color: #ef4444;
+  border-color: #fecaca;
+  background: #fff;
 }
 .cpas-iv-row__delete:hover {
   background: #fef2f2;
   color: #b91c1c;
+  border-color: #fca5a5;
 }
+
+/* "+ Add intervention" popover: remaining facility-library options + custom. */
+.cpas-add-menu { position: relative; }
+.cpas-add-menu__pop {
+  margin-top: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
+  padding: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.cpas-add-menu__head {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+  padding: 4px 8px 6px;
+}
+.cpas-add-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #111827;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.cpas-add-menu__item:hover { background: #eef2ff; }
+.cpas-add-menu__item--custom {
+  color: #4f46e5;
+  border-top: 1px solid #f3f4f6;
+  margin-top: 4px;
+  padding-top: 8px;
+}
+.cpas-add-menu__close {
+  display: block;
+  margin: 4px 8px 2px auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.cpas-add-menu__close:hover { background: #e5e7eb; }
 .cpas-iv-row__chip-add {
   background: transparent;
   border: 1px dashed #d1d5db;

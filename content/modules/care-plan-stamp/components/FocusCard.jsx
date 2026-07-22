@@ -90,6 +90,30 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
     const next = interventions.filter((_, j) => j !== i);
     onUpdate({ interventions: next });
   };
+  // "+ Add intervention" menu: the selector caps the auto-included list, so the
+  // library rows it left out ride the payload as optionalInterventions — offer
+  // them one click away (they keep libraryStdId → real library adds), plus a
+  // custom free-text escape hatch.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const _norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const availableOptional = (rawFocus.optionalInterventions || []).filter(
+    (opt) => !interventions.some(
+      (iv) =>
+        (opt.libraryStdId && iv.libraryStdId === opt.libraryStdId) ||
+        _norm(iv.description) === _norm(opt.description),
+    ),
+  );
+  const addOptionalIntervention = (opt) => {
+    // Same shape transform the modal applies at proposal load: engine kardex
+    // pick becomes the ✨ recommendation, value stays opt-in.
+    onUpdate({
+      interventions: [
+        ...interventions,
+        { ...opt, _recKardex: opt.kardexCategory ?? null, kardexCategory: null },
+      ],
+    });
+  };
+
   const addIntervention = () => {
     // Inherit positions from the first existing intervention if any (default
     // to RN). Kardex is left unset — nurses opt in deliberately rather than
@@ -483,8 +507,39 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
             })}
           </ul>
           {!readOnly && (
-            // NO_TRACK: per-row add, not analytics-worthy
-            <button className="cpas-iv-row__chip-add cpas-iv-row__chip-add--full" onClick={addIntervention}>+ Add intervention</button>
+            <div className="cpas-add-menu">
+              {/* NO_TRACK: per-row add, not analytics-worthy */}
+              <button
+                className="cpas-iv-row__chip-add cpas-iv-row__chip-add--full"
+                onClick={() => (availableOptional.length ? setAddMenuOpen((o) => !o) : addIntervention())}
+              >
+                + Add intervention{availableOptional.length ? ` (${availableOptional.length} more in library)` : ''}
+              </button>
+              {addMenuOpen && (
+                <div className="cpas-add-menu__pop">
+                  <div className="cpas-add-menu__head">More from your facility library</div>
+                  {availableOptional.map((opt) => (
+                    <button
+                      key={opt.libraryStdId || opt.description}
+                      className="cpas-add-menu__item"
+                      data-track="care_plan_optional_intervention_added"
+                      onClick={() => addOptionalIntervention(opt)}
+                      title="Add this library intervention"
+                    >
+                      + {opt.description}
+                    </button>
+                  ))}
+                  <button
+                    className="cpas-add-menu__item cpas-add-menu__item--custom"
+                    onClick={() => { setAddMenuOpen(false); addIntervention(); }}
+                  >
+                    ✎ Write a custom intervention…
+                  </button>
+                  {/* NO_TRACK: pure-UI menu dismiss */}
+                  <button className="cpas-add-menu__close" onClick={() => setAddMenuOpen(false)}>Done</button>
+                </div>
+              )}
+            </div>
           )}
           </>
           )}
