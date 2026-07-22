@@ -76,9 +76,8 @@ function _formFields(form) {
 }
 
 /**
- * Walk plan pages; return the DOM row (tr) holding the focus's editNeed link.
- * PCC lays each focus out as one row with goals/interventions nested inside,
- * so goal edit links for THIS focus live inside the same row.
+ * Walk plan pages; return { link, ids } for the focus's editNeed anchor.
+ * The caller climbs ancestors from the link to scope the focus's row-group.
  */
 async function _findFocusRow(patientId, focusId) {
   const MAX_PAGES = 60;
@@ -95,7 +94,7 @@ async function _findFocusRow(patientId, focusId) {
       const m = src.match(/editNeed\(\s*['"]?(\d+)['"]?(?:\s*,\s*['"]?(\d+))?/);
       if (!m) continue;
       if (m[1] === String(focusId) || (m[2] || '') === String(focusId)) {
-        return a.closest('tr') || a.parentElement;
+        return { link: a, ids: [m[1], m[2] || m[1]] };
       }
     }
     const firstSrc = links[0].getAttribute('href') || links[0].getAttribute('onclick') || '';
@@ -107,24 +106,48 @@ async function _findFocusRow(patientId, focusId) {
 }
 
 /**
- * Goal edit link args inside a focus row. PCC's goal links call a goal-edit JS
- * function (editGoal / editGoalCust / …) — accept any edit*(…) call whose name
- * mentions "goal", plus direct hrefs into goaledit. Returns [{ids:[..]}].
+ * Candidate goal/intervention edit calls inside a focus row-group. We don't
+ * assume PCC's function names beyond "not editNeed": every other edit-style
+ * call with numeric args is a candidate — the goal-edit form identification
+ * downstream (cp_description + placeholder + id echo) is what filters goals
+ * from interventions and garbage. Returns [{fn, ids}] deduped.
  */
 export function parseGoalLinkIds(rowHtml) {
   const out = [];
   const seen = new Set();
-  const re = /(?:edit\w*goal\w*|goal\w*edit\w*)\s*\(\s*([^)]*)\)/gi;
+  const re = /\b(\w*edit\w*)\s*\(\s*((?:['"]?\d[^)]*)?)\)/gi;
   let m;
   while ((m = re.exec(String(rowHtml || ''))) !== null) {
-    const ids = (m[1].match(/\d+/g) || []).filter((d) => d !== '-1' && d.length >= 2);
+    const fn = m[1];
+    if (/^editNeed$/i.test(fn)) continue;
+    const ids = (m[2].match(/\d+/g) || []).filter((d) => d !== '-1' && d.length >= 2);
     if (!ids.length) continue;
-    const key = ids.join(',');
+    const key = `${fn}:${ids.join(',')}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ ids });
+    out.push({ fn, ids });
   }
   return out;
+}
+
+/**
+ * PCC's detail page is nested tables — closest('tr') from the focus link is
+ * the INNERMOST row (focus cell only). Climb ancestors until the container
+ * gains edit-call candidates, stopping before it swallows a DIFFERENT focus's
+ * editNeed link (then we've climbed past our row-group into the whole table).
+ */
+export function findRowGroupHtml(focusLink, focusIds) {
+  let el = focusLink;
+  let lastOwn = null;
+  for (let depth = 0; depth < 8 && el; depth++, el = el.parentElement) {
+    const html = el.innerHTML || '';
+    const otherFocus = [...html.matchAll(/editNeed\(\s*['"]?(\d+)/gi)]
+      .some((mm) => !focusIds.includes(mm[1]));
+    if (otherFocus) break;
+    lastOwn = html;
+    if (parseGoalLinkIds(html).length) return html;
+  }
+  return lastOwn;
 }
 
 /**
@@ -188,8 +211,10 @@ export async function fillGoalNamePlaceholders({ patientId, careplanId, focusId,
     _dlog('stamped focus not found on active plan — skipping goal fill', focusId);
     return out;
   }
-  const goalLinks = parseGoalLinkIds(row.innerHTML);
-  _dlog(`focus ${focusId}: ${goalLinks.length} goal edit link(s) in row`);
+  const groupHtml = findRowGroupHtml(row.link, row.ids);
+  const goalLinks = parseGoalLinkIds(groupHtml);
+  _dlog(`focus ${focusId}: ${goalLinks.length} candidate edit call(s) in row-group:`,
+    [...new Set(goalLinks.map((g) => g.fn))].join(', ') || '(none — dump a goal row\'s edit-link HTML if this persists)');
   for (const { ids } of goalLinks) {
     let hit;
     try {
