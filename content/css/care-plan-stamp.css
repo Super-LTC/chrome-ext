@@ -1445,10 +1445,14 @@
   min-height: 22px;
   field-sizing: content; /* progressive enhancement — modern browsers auto-grow */
 }
+.cpas-iv-row__text {
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
 .cpas-iv-row__text:hover:not(:focus):not(:disabled) {
   background: #f9fafb;
-  outline: 1px dashed #d1d5db;
-  outline-offset: -1px;
+  /* soft ring instead of a dashed outline — outlines pop in with no
+     transition and read as a flash */
+  box-shadow: inset 0 0 0 1px #e5e7eb;
 }
 /* Editability affordance: a pencil appears at the row's right edge on hover
    (hidden while actually editing) — the rows READ as plain text otherwise. */
