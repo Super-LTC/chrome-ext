@@ -360,6 +360,13 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
           )}
 
           <h3 className="cpas-detail__section">Interventions ({goals.length === 0 ? 0 : interventions.length})</h3>
+          {/* One section-level note instead of a per-row tag — library items get
+              their positions/Kardex from the facility library's own config. */}
+          {goals.length > 0 && interventions.some((iv) => iv.libraryStdId && String(iv.libraryStdId) !== '-1') && (
+            <p className="cpas-detail__lib-note">
+              Positions &amp; Kardex are applied automatically from your facility library.
+            </p>
+          )}
           {goals.length === 0 && (
             <p className="cpas-detail__interventions-locked">
               Add at least one goal first — interventions support reaching a goal.
@@ -438,14 +445,6 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                       {/* Positions are editable in BOTH v1 and v2. In v2 the engine's
                           auto-assigned position seeds the first chip, but the nurse can
                           change it, remove it, or add more (CNA + RN, …) — matching v1. */}
-                      {willLibraryAdd && (
-                        <span
-                          className="cpas-iv-row__libpos"
-                          title="This intervention is added straight from your facility library, which applies its own position and Kardex configuration automatically."
-                        >
-                          positions & kardex: facility library
-                        </span>
-                      )}
                       {!willLibraryAdd && posList.map((p, j) => (
                         <PositionChip
                           key={j}
