@@ -4,10 +4,38 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.64** was zipped for Chrome Web Store submission on
-> 2026-07-20 (`super-ltc-store.zip`). Before that, v1.0.63 was uploaded on
-> 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62 were
-> dev/internal only. Update this note when you `zip:store` and upload.
+> **Store note:** **v1.0.65** was zipped for Chrome Web Store submission on
+> 2026-07-22 (`super-ltc-store.zip`). Before that, v1.0.64 was uploaded on
+> 2026-07-20, v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that —
+> v1.0.58–1.0.62 were dev/internal only. Update this note when you `zip:store`
+> and upload.
+
+## [1.0.65] — 2026-07-22
+
+Care Plan Comprehensive mode wired to the backend's V3 cached-generate flow, and
+the extension Team tab. Four merged PRs (#37, #50–#52) on top of 1.0.64.
+
+### Added
+- **Care Plan — V3 cached generate** (#37, SUP-116). Comprehensive mode now wires
+  to the backend's cached-generate flow (superltc SUP-66 / PR #875). The audit
+  stays the membership source (toAdd/toRemove/toCheck via the concept layer); the
+  cached endpoint only adds on top, never blocks:
+  - **Real authoring progress** — while the background AI polish runs, the sticky
+    header shows "✨ Polishing plan… N%" with a live bar fed by the server's
+    `authoringProgress {done,total}` (polls the same URL ~4s, cheap cache reads;
+    stops on modal close, fingerprint change, or 90s).
+  - **Polished-content swap** — when `authored=true`, AI-selected
+    goals/interventions swap into **untouched** toAdd rows only, matched by
+    `libraryStdId`; anything the nurse edited, stamped, or skipped is never
+    overwritten. Kardex stays opt-in via `_recKardex`.
+  - **Chart-quality banner** — junk/under-synced charts (`no_active_dx`,
+    `placeholder_dx_codes`, `no_orders_synced`, `no_coded_mds`) render a
+    dismissible amber warning in nurse language instead of a silently sparse plan.
+  - **Failure floor** — 409 (org not concept-mapped), any error, or authoring
+    never landing → the worklist is pixel-identical to the prior build.
+- **Extension Team tab** (#50–#52). A Team tab in the Settings overlay with full
+  parity to the web app plus regions: sub-tabs, a wider modal, and inline pickers
+  (#51); inline feature chips with expandable sub-features and a people grid (#52).
 
 ## [1.0.64] — 2026-07-20
 
