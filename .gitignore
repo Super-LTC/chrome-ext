@@ -28,3 +28,6 @@ store/
 
 # Marketing screenshots (update-email collateral)
 screenshots-update-email/
+
+# Local usage reports (not release artifacts)
+reports/

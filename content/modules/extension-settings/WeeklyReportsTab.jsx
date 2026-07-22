@@ -207,7 +207,7 @@ export function WeeklyReportsTab({ facilityName }) {
           </Section>
         </div>
       </div>
-      <SaveBar onSave={save} saving={saving} disabled={!dirty} status={status} />
+      <SaveBar onSave={save} saving={saving} disabled={!dirty} dirty={dirty} status={status} />
     </>
   );
 }

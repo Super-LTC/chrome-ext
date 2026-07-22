@@ -207,7 +207,7 @@ export const EVENT_SCHEMA = {
 
   // Edit an already-sent query (note + effective date), until signed.
   query_edit_started: ['item_code'],
-  query_edit_saved: ['item_code'],
+  query_edit_saved: ['item_code', 'icd10_changed'],
   query_edit_failed: ['error_code'],
 
   chat_stream_started: [],

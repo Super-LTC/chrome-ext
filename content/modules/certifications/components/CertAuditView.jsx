@@ -1,20 +1,30 @@
-import { useState } from 'preact/hooks';
+import { useState, useMemo } from 'preact/hooks';
 import { useAuditCerts } from '../hooks/useAuditCerts.js';
 import { CertTypeBadge } from './CertTypeBadge.jsx';
+import { groupCertsByStay, filterCertsBySearch } from '../cert-grouping.js';
+import { parseDateOnly } from '../cert-urgency.js';
 import { track } from '../../../utils/analytics.js';
 
 /**
- * CertAuditView — the "Audit" sub-tab of the Certs view.
+ * CertAuditView — the "All" sub-tab of the Certs view.
  *
- * A flat, facility-wide roster of EVERY certification (all statuses, all time),
- * for a 100% compliance audit. Unlike the other tabs it is NOT stay-grouped and
- * ignores the discharge-grace / 7-day-signed windows — it lists the complete set
- * so an MDS coordinator can reconcile against their own records and export a CSV.
+ * A facility-wide roster of EVERY certification (all statuses, all time), for a
+ * 100% compliance audit. It ignores the discharge-grace / 7-day-signed windows
+ * the other tabs apply, so an MDS coordinator can reconcile against their own
+ * records and export a CSV.
  *
- * Filters (status + signed-date range) are handled here and drive the backend
- * query directly; the on-screen list is paginated ("Load more"), while "Export
- * CSV" always pulls the entire filtered set regardless of what's on screen.
+ * Rendered patient → stay → certs (a patient can have several Part A stays), so
+ * a resident's whole cert chain reads as one block instead of scattered rows.
+ *
+ * Two scopes are deliberately different here, and the UI says so:
+ *   - status + signed-date filters are SERVER-side and drive the query;
+ *   - the search box is CLIENT-side and only covers rows already loaded.
+ * "Export CSV" always pulls the entire server-filtered set regardless of what's
+ * on screen or typed in the search box.
  */
+
+/** Patients are expanded by default until the loaded set gets unwieldy. */
+const AUTO_COLLAPSE_OVER = 12;
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -41,20 +51,27 @@ const STATUS_LABELS = {
   revoked: 'Revoked',
 };
 
-/** YYYY-MM-DD (date-only column, no timezone shift). */
+/**
+ * Display date. Goes through `parseDateOnly` so a 'YYYY-MM-DD' value is read at
+ * LOCAL midnight — `new Date('2026-03-17')` parses as UTC midnight and then
+ * renders as Mar 16 in any US timezone.
+ */
 function fmtDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return String(dateStr).slice(0, 10);
+  const d = parseDateOnly(dateStr);
+  if (!d) return dateStr ? String(dateStr).slice(0, 10) : '';
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-/** For the CSV — ISO date so it sorts/opens cleanly in a spreadsheet. */
+/**
+ * For the CSV — ISO date so it sorts/opens cleanly in a spreadsheet. Built from
+ * local date parts rather than `toISOString()`, which would re-introduce the
+ * same UTC shift for timestamped values.
+ */
 function isoDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return String(dateStr).slice(0, 10);
-  return d.toISOString().slice(0, 10);
+  const d = parseDateOnly(dateStr);
+  if (!d) return dateStr ? String(dateStr).slice(0, 10) : '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function payerLabel(payerType) {
@@ -116,11 +133,31 @@ export function CertAuditView({ facilityName, orgSlug }) {
   const [status, setStatus] = useState('');
   const [signedAfter, setSignedAfter] = useState('');
   const [signedBefore, setSignedBefore] = useState('');
+  const [search, setSearch] = useState('');
   const [exporting, setExporting] = useState(false);
+  // Patients the nurse explicitly toggled, keyed by patientKey → bool. Anything
+  // absent falls back to the size-based default so the list stays readable.
+  const [overrides, setOverrides] = useState({});
 
   const {
     certs, total, hasMore, loading, loadingMore, error, loadMore, fetchAll, refetch,
   } = useAuditCerts({ facilityName, orgSlug, enabled: true, status, signedAfter, signedBefore });
+
+  // Search + grouping are both client-side over the loaded pages.
+  const groups = useMemo(
+    () => groupCertsByStay(filterCertsBySearch(certs, search)),
+    [certs, search]
+  );
+
+  const defaultOpen = groups.length <= AUTO_COLLAPSE_OVER;
+  const isOpen = (key) => overrides[key] ?? defaultOpen;
+  const toggle = (key) => setOverrides((o) => ({ ...o, [key]: !(o[key] ?? defaultOpen) }));
+  const setAll = (open) => {
+    setOverrides(Object.fromEntries(groups.map((g) => [g.patientKey, open])));
+  };
+
+  const shownCerts = groups.reduce((n, g) => n + g.certCount, 0);
+  const searching = !!search.trim();
 
   async function handleExport() {
     if (exporting) return;
@@ -147,6 +184,17 @@ export function CertAuditView({ facilityName, orgSlug }) {
 
   return (
     <div class="cert-audit">
+      {/* Client-side lookup over loaded rows — server filters live below it. */}
+      {/* NO_TRACK — typing is not a business event */}
+      <input
+        type="search"
+        class="cert-audit__search"
+        value={search}
+        onInput={(e) => setSearch(e.currentTarget.value)}
+        placeholder="Search loaded residents by name or MRN…"
+        aria-label="Search loaded certifications by patient name or MRN"
+      />
+
       {/* Filter + export toolbar */}
       <div class="cert-audit__toolbar">
         <div class="cert-audit__filter-group">
@@ -209,6 +257,12 @@ export function CertAuditView({ facilityName, orgSlug }) {
         </p>
       )}
 
+      {searching && hasMore && (
+        <p class="cert-audit__hint">
+          Searching the <strong>{certs.length}</strong> rows loaded so far — load more below to widen it.
+        </p>
+      )}
+
       {/* States */}
       {loading && (
         <div class="mds-cc__state-container">
@@ -235,43 +289,102 @@ export function CertAuditView({ facilityName, orgSlug }) {
         </div>
       )}
 
-      {/* Table */}
-      {!loading && !error && certs.length > 0 && (
+      {/* Search found nothing in the loaded pages — distinct from "no rows at all". */}
+      {!loading && !error && certs.length > 0 && groups.length === 0 && (
+        <div class="mds-cc__state-container">
+          <div class="mds-cc__state-icon">{'\u{1F50D}'}</div>
+          <p class="mds-cc__state-text">No one matching “{search}” in the {certs.length} loaded</p>
+          {hasMore && (
+            <p class="cert-audit__hint">
+              Search only covers loaded rows — load more, or narrow with the filters above.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Grouped list: patient → stay → certs */}
+      {!loading && !error && groups.length > 0 && (
         <>
           <div class="cert-audit__count">
-            Showing {certs.length} of {total} certification{total === 1 ? '' : 's'}
+            <span>
+              {searching
+                ? `${groups.length} patient${groups.length === 1 ? '' : 's'} · ${shownCerts} of ${certs.length} loaded`
+                : `${groups.length} patient${groups.length === 1 ? '' : 's'} · ${certs.length} of ${total} certification${total === 1 ? '' : 's'}`}
+            </span>
+            {/* NO_TRACK — view affordance, not a business event */}
+            <button
+              class="cert-audit__expand-all"
+              onClick={() => setAll(!groups.every((g) => isOpen(g.patientKey)))}
+            >
+              {groups.every((g) => isOpen(g.patientKey)) ? 'Collapse all' : 'Expand all'}
+            </button>
           </div>
-          <div class="cert-audit__table-wrap">
-            <table class="cert-audit__table">
-              <thead>
-                <tr>
-                  <th>Patient</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Due</th>
-                  <th>Signed</th>
-                  <th>Signed By</th>
-                  <th>Payer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {certs.map(cert => (
-                  <tr key={cert.id}>
-                    <td class="cert-audit__cell-patient">{cert.patientName}</td>
-                    <td><CertTypeBadge type={cert.type} /></td>
-                    <td>
-                      <span class={`cert-audit__status cert-audit__status--${cert.status}`}>
-                        {STATUS_LABELS[cert.status] || cert.status}
-                      </span>
-                    </td>
-                    <td class="cert-audit__cell-date">{fmtDate(cert.dueDate)}</td>
-                    <td class="cert-audit__cell-date">{fmtDate(cert.signedAt)}</td>
-                    <td class="cert-audit__cell-signer">{signedBy(cert) || '—'}</td>
-                    <td>{payerLabel(cert.payerType) || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div class="cert-audit__groups">
+            {groups.map((group) => {
+              const open = isOpen(group.patientKey);
+              return (
+                <div class="cert-audit__patient" key={group.patientKey}>
+                  {/* NO_TRACK — expand/collapse is intra-view navigation */}
+                  <button
+                    class="cert-audit__patient-head"
+                    onClick={() => toggle(group.patientKey)}
+                    aria-expanded={open ? 'true' : 'false'}
+                  >
+                    <span class={`cert-audit__chevron${open ? ' is-open' : ''}`} aria-hidden="true">›</span>
+                    <span class="cert-audit__patient-name">{group.patientName}</span>
+                    {group.patientExternalId && (
+                      <span class="cert-audit__mrn">MRN {group.patientExternalId}</span>
+                    )}
+                    <span class="cert-audit__patient-spacer" />
+                    {group.actionNeededCount > 0 && (
+                      <span class="cert-audit__rollup">{group.actionNeededCount} need action</span>
+                    )}
+                    <span class="cert-audit__patient-count">
+                      {group.certCount} cert{group.certCount === 1 ? '' : 's'}
+                    </span>
+                  </button>
+
+                  {open && group.stays.map((stay) => (
+                    <div class="cert-audit__stay" key={stay.stayId}>
+                      <div class="cert-audit__stay-head">
+                        {payerLabel(stay.payerType) && (
+                          <span class="cert-audit__stay-payer">{payerLabel(stay.payerType)}</span>
+                        )}
+                        {stay.medicareDay != null && <span>Day {stay.medicareDay}</span>}
+                        {stay.partAStartDate && <span>Part A {fmtDate(stay.partAStartDate)}</span>}
+                        {stay.stayStatus && (
+                          <span class={`cert-audit__stay-status cert-audit__stay-status--${stay.stayStatus}`}>
+                            {stay.stayStatus}
+                          </span>
+                        )}
+                        {stay.nextDue && <span>Next due {fmtDate(stay.nextDue)}</span>}
+                      </div>
+
+                      <div class="cert-audit__certs">
+                        {stay.certs.map((cert) => (
+                          <div class="cert-audit__cert" key={cert.id}>
+                            <CertTypeBadge type={cert.type} />
+                            <span class={`cert-audit__status cert-audit__status--${cert.status}`}>
+                              {STATUS_LABELS[cert.status] || cert.status}
+                            </span>
+                            <span class="cert-audit__cert-due">Due {fmtDate(cert.dueDate) || '—'}</span>
+                            <span class="cert-audit__cert-signer">
+                              {cert.signedAt
+                                ? `Signed ${fmtDate(cert.signedAt)}${signedBy(cert) ? ` · ${signedBy(cert)}` : ''}`
+                                : ''}
+                            </span>
+                            {cert.isNewlySigned && (
+                              <span class="cert-audit__newly-signed">Just signed</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
 
           {hasMore && (

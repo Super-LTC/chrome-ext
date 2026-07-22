@@ -4,10 +4,113 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.63** was zipped for Chrome Web Store submission on
-> 2026-07-13 (`super-ltc-store.zip`). Before that, the last store upload was
-> v1.0.57 (`6cd25b6`) — v1.0.58–1.0.62 were dev/internal only. Update this note
-> when you `zip:store` and upload.
+> **Store note:** **v1.0.64** was zipped for Chrome Web Store submission on
+> 2026-07-20 (`super-ltc-store.zip`). Before that, v1.0.63 was uploaded on
+> 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62 were
+> dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.64] — 2026-07-20
+
+Certifications, diagnosis queries, settings, and the MDS In-Progress list. Ten
+merged PRs (#38–#48) that accumulated after the 1.0.63 bump, plus the cert audit
+redesign and the diagnosis-query ICD-10 edit.
+
+### Added
+- **Certifications — "All" tab** (#39). A facility-wide list of EVERY cert for a
+  facility regardless of status or how long ago it was signed — the gap between
+  the dashboard's 7-day signed window and the discharged archive, built for a
+  100% compliance audit. Consumes `GET /api/extension/certifications/audit`;
+  server-driven status + signed-date-range filters, paginated "Load more", and an
+  "Export CSV" that pulls the entire filtered set across all pages (UTF-8 BOM for
+  Excel). Facility-wide, so hidden in the per-patient overlay.
+- **Certifications — "All" tab grouped patient → stay → certs.** The flat table
+  is now a grouped list: patient header (name, MRN, rollup "N need action", cert
+  count) → stay block (payer, Medicare day, Part A start, stay status, next open
+  due) → cert rows (type, status, due, signer, "Just signed"). A patient can have
+  several Part A stays (readmits/interruptions), so the stay tier is real. Adds a
+  client-side search over patient name + MRN, and expand/collapse per patient.
+  Server-side filters vs client-side search are labelled as different scopes: the
+  search says when it only covers loaded rows. New shared pure
+  `certifications/cert-grouping.js` (`groupCertsByStay`, `filterCertsBySearch`,
+  `isCertActionNeeded`) with tolerant field resolution, so the same helper works
+  against both the full `CertificationWithDetails` shape and the leaner audit
+  projection. Unit + component tests.
+- **Certifications — AI "Generate clinical reason"** (#41, SUP-124). Generate /
+  Regenerate button beside the Clinical Reason field in the recert Send and Edit
+  modals. Calls `POST /api/extension/certifications/{id}/generate-clinical-reason`
+  and drops the draft into the editable field for the nurse to review — never
+  auto-saves. Shared `GenerateReasonButton` handles in-flight state and errors.
+- **Settings overlay** (#40). A gear action on the super-dial FAB opens a Preact
+  Settings panel (dynamic-import launcher, mirroring `QMBoardLauncher`) with
+  Weekly Reports and Profile tabs plus a "Team (soon)" placeholder.
+- **Diagnosis queries — view + edit a sent query** (#45, SUP-131). See and edit
+  the note on an already-sent query until the physician signs it; the signing
+  portal reads live, so no revoke/resend. Read-only once signed.
+- **Diagnosis queries — effective (onset) date + ARD timing** (#45, SUP-143).
+  Nurse-set effective date with an ARD countdown badge and a non-blocking
+  outside-lookback-window warning, on BOTH send surfaces (vanilla
+  `QuerySendModal` and the Preact batch review) and the detail modal's edit view.
+  New shared pure `queries/lib/query-timing.js`; `QueryAPI` gains `patchQuery` +
+  `previewTiming`. Fully backwards compatible — queries with no `timing` degrade
+  to no badge/guidance, and `effectiveDate` is only sent when moved off default.
+- **Diagnosis queries — edit from the Command Center Queries tab** (#47). The
+  same note + effective-date edit, reachable from the MDS Command Center list.
+- **Diagnosis queries — change the ICD-10 code on Edit** (SUP-147). The edit view
+  on both surfaces now carries the shared ICD-10 picker, prefilled with the code
+  currently attached and seeded with the diagnosis name. Saves as a non-empty
+  `recommendedIcd10` via PATCH, changing what the physician is offered at signing
+  (they can still search and pick any code). Requires backend #934.
+- **MDS In-Progress list — filter bar** (#46, SUP-145). Super-branded toolbar
+  above the PCC MDS List "In Progress" table: search (name + MRN), discipline
+  chips with a per-letter Sections popover, Type dropdown, Due (Overdue / ≤3d),
+  and a missing-interview toggle. AND-combined, "Showing X of Y", matched section
+  letters bolded in the native cell. Pure client-side — every dimension comes
+  from data already on the page or already fetched.
+
+### Changed
+- **Certifications — "Send" → "View"** (#44, SUP-130). The cert-row/timeline
+  button only opens the send-preview modal (the send happens inside it), so the
+  label was misleading — as was the old "Resend".
+- **Certifications — badges wired to the new backend fields** (#44, SUP-130,
+  backend PR #931, additive with local fallbacks). "Action Needed" counts only
+  time-pressured certs (`cert.actionNeeded`) instead of every active cert, fixing
+  the "shows 2, should be 1" over-count; the tab still lists the full worklist,
+  only the number narrows. The Signed sub-tab badge becomes a "newly signed, not
+  yet seen" nudge (`cert.isNewlySigned`) rather than a total. The `cert_signed`
+  seen-clear moved from entering the Certs view (which lands on Action Needed,
+  where signatures aren't shown) to opening the Signed sub-tab, where they're
+  actually viewed — keeping the list badge and FAB badge on one basis.
+- **Weekly report is user-global; scope → delivery mode** (#43, SUP-140). The
+  report always covers every building the user can access, so the building scope
+  toggle is replaced by a delivery choice that only appears with more than one
+  building: one combined roll-up vs one email per building
+  (`deliveryMode: rollup | per_building`). Single-building users get a read-only
+  line naming the covered building. `getWeeklyReport()` drops the
+  facilityName/orgSlug params; `saveWeeklyReport()` sends `deliveryMode`.
+- **Settings — Profile tab redesign.** Removed the nested-boxes treatment (a
+  bordered card wrapping divided rows wrapping bordered inputs). Position
+  suggestion chips are quiet fills rather than outlined pills — an outlined pill
+  under an outlined input read as five more empty fields — and now show an active
+  state for the current title. Email is a read-only row instead of a disabled
+  input. Adds a live "How you'll appear" preview (initials, name, title ·
+  building) so the fields' purpose is visible, and a proper resting state for the
+  Save button instead of a faded primary.
+- **Super Verify GA'd to all users** — carried over from 1.0.63; the interview
+  scheduler is now the only surface behind `mds-beta-gate.js`.
+
+### Fixed
+- **Super Verify "View" opened the Care Plan, not the MDS section** (#38,
+  SUP-129). The deep link used the legacy `/care/chart/mds/mdssection.jsp`
+  endpoint, which redirects to the Care Plan. Switched to
+  `/clinical/mds3/section.xhtml`, already used by the section scraper and query
+  modal — same assessId, same `[A-Z]+` sectioncode format.
+- **Certification dates rendered a day early in the "All" tab.** `fmtDate` parsed
+  `'YYYY-MM-DD'` with `new Date()`, which reads it as UTC midnight and then
+  formats in local time — every due / signed / Part A start date displayed one
+  day earlier in any US timezone. **The CSV export was affected too**, so audits
+  exported before this build carry shifted dates. Both display and CSV now go
+  through the module's existing `parseDateOnly`; a component test locks the exact
+  dates in.
 
 ## [1.0.63] — 2026-07-05
 

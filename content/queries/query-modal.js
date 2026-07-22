@@ -10,6 +10,7 @@ import {
   outsideWindowWarning,
   formatIsoShort,
 } from './lib/query-timing.js';
+import { currentIcd10, toRecommendedIcd10 } from './lib/icd10-picker-util.js';
 
 // A query is editable (note + effective date) until the physician signs it.
 // Backend enforces the same rule (400 on signed); this just gates the UI.
@@ -46,6 +47,9 @@ const QueryDetailModal = {
       size: 'medium',
       className: 'super-query-detail-modal',
       onClose: () => {
+        // Closing mid-edit still needs the picker torn down.
+        this._editing = false;
+        this._destroyPicker();
         if (!this._closeFired) {
           this._closeFired = true;
           track('query_modal_closed', { reason: 'dismiss' });
@@ -72,7 +76,8 @@ const QueryDetailModal = {
   },
 
   /**
-   * Enter edit mode — snapshot the current note + effective date into a draft.
+   * Enter edit mode — snapshot the current note, effective date, and ICD-10
+   * code into a draft.
    */
   _enterEdit() {
     const q = this._query;
@@ -80,6 +85,8 @@ const QueryDetailModal = {
     this._draftNote = q.nurseEditedNote || q.aiGeneratedNote || '';
     this._draftDate = resolveEffectiveDate(q);
     this._initialDate = this._draftDate;
+    this._draftIcd10 = currentIcd10(q);
+    this._initialIcd10 = this._draftIcd10;
     track('query_edit_started', { item_code: String(q.mdsItem || '') });
     this._rerender();
   },
@@ -89,7 +96,17 @@ const QueryDetailModal = {
    */
   _cancelEdit() {
     this._editing = false;
+    this._destroyPicker();
     this._rerender();
+  },
+
+  /**
+   * Tear down the ICD-10 picker instance. The modal body is rebuilt from HTML on
+   * every rerender, so a stale picker would keep listeners on detached nodes.
+   */
+  _destroyPicker() {
+    this._picker?.destroy?.();
+    this._picker = null;
   },
 
   /**
@@ -109,6 +126,35 @@ const QueryDetailModal = {
       });
       this._updateEditWarning();
     }
+
+    // Mount the ICD-10 picker seeded with the diagnosis name, prefilled with the
+    // code currently attached. Changing it changes what the doctor is offered at
+    // signing (they can still search and pick any code themselves).
+    const pickerContainer = document.querySelector('#super-query-edit-icd10');
+    if (pickerContainer && window.Icd10CodePicker) {
+      this._destroyPicker();
+      const q = this._query;
+      this._picker = window.Icd10CodePicker.create(pickerContainer, {
+        seedQuery: q.mdsItemName || q.mdsItem || '',
+        initialSelected: this._draftIcd10,
+        onChange: (selected) => {
+          this._draftIcd10 = selected;
+          this._updateIcd10Hint();
+        }
+      });
+      this._updateIcd10Hint();
+    }
+  },
+
+  /**
+   * Toggle the "can't remove an attached code" hint. The backend rejects an
+   * empty `recommendedIcd10`, so once a code is attached the nurse can swap it
+   * but not go back to codeless — say so rather than failing on save.
+   */
+  _updateIcd10Hint() {
+    const hintEl = document.querySelector('#super-query-edit-icd10-hint');
+    if (!hintEl) return;
+    hintEl.hidden = !(this._initialIcd10?.code && !this._draftIcd10?.code);
   },
 
   /**
@@ -141,10 +187,26 @@ const QueryDetailModal = {
     if (this._draftDate !== this._initialDate) {
       changes.effectiveDate = this._draftDate || null;
     }
+    // ICD-10: only a real, non-empty new selection is sent. Clearing an attached
+    // code is not expressible (backend requires a non-empty array), so we leave
+    // the codes untouched and tell the nurse rather than 400.
+    const newCode = this._draftIcd10?.code || null;
+    const origCode = this._initialIcd10?.code || null;
+    const icd10Cleared = !!origCode && !newCode;
+    if (newCode && newCode !== origCode) {
+      changes.recommendedIcd10 = toRecommendedIcd10(this._draftIcd10);
+    }
 
     if (Object.keys(changes).length === 0) {
       // Nothing changed — just leave edit mode.
       this._editing = false;
+      this._destroyPicker();
+      if (icd10Cleared) {
+        SuperToast.show?.({
+          type: 'info',
+          message: "Suggested code kept — it can't be removed once sent. The doctor can still pick a different code."
+        });
+      }
       this._rerender();
       return;
     }
@@ -155,12 +217,23 @@ const QueryDetailModal = {
 
     try {
       const updated = await QueryAPI.patchQuery(q.id, changes);
-      // Merge the server's fresh copy (includes recomputed timing) into state.
+      // Merge the server's fresh copy (includes recomputed timing, and on I8000
+      // queries a `mdsItem` resynced to the new code) into state.
       this._query = { ...q, ...updated };
       if (window.QueryState) QueryState.updateQuery(q.id, this._query);
       this._editing = false;
-      track('query_edit_saved', { item_code: String(q.mdsItem || '') });
+      this._destroyPicker();
+      track('query_edit_saved', {
+        item_code: String(q.mdsItem || ''),
+        icd10_changed: changes.recommendedIcd10 !== undefined
+      });
       this._rerender();
+      if (icd10Cleared) {
+        SuperToast.show?.({
+          type: 'info',
+          message: "Suggested code kept — it can't be removed once sent. The doctor can still pick a different code."
+        });
+      }
       // Keep the panel/badges in sync with the edited copy.
       window.QueryPanel?.updatePanel?.();
       window.QueryBadges?.updateAllBadges?.();
@@ -176,6 +249,7 @@ const QueryDetailModal = {
         this._query = { ...q, status: 'signed' };
         if (window.QueryState) QueryState.updateQuery(q.id, this._query);
         this._editing = false;
+        this._destroyPicker();
         this._rerender();
         window.QueryPanel?.updatePanel?.();
         window.QueryBadges?.updateAllBadges?.();
@@ -200,10 +274,13 @@ const QueryDetailModal = {
     const sentAt = query.sentAt ? this._formatDate(query.sentAt) : null;
     const signedAt = query.signedAt ? this._formatDate(query.signedAt) : null;
 
-    // Build ICD-10 display
-    const icd10Display = query.selectedIcd10Code
-      ? `${query.selectedIcd10Code}${query.selectedIcd10Description ? ` - ${query.selectedIcd10Description}` : ''}`
+    // Build ICD-10 display. Before signing this is the nurse's suggested code
+    // (labelled as such); after signing it's the physician's authoritative pick.
+    const icd10 = currentIcd10(query);
+    const icd10Display = icd10
+      ? `${icd10.code}${icd10.description ? ` - ${icd10.description}` : ''}`
       : null;
+    const icd10IsSuggestion = !!icd10 && !query.selectedIcd10Code;
 
     // Check coding status from options or query
     const showCodingStatus = options.showCodingStatus || query.mdsItemCoded !== undefined;
@@ -233,12 +310,17 @@ const QueryDetailModal = {
             ${this._escapeHTML(query.mdsItemName || query.mdsItem)}
           </div>
           ${icd10Display ? `
-            <div class="super-query-detail__diagnosis-code">${this._escapeHTML(icd10Display)}</div>
+            <div class="super-query-detail__diagnosis-code">
+              ${this._escapeHTML(icd10Display)}${icd10IsSuggestion ? ' <span class="super-query-detail__code-qualifier">suggested</span>' : ''}
+            </div>
           ` : ''}
         </div>
 
         <!-- Note for physician (view / edit) -->
         ${this._buildNoteSectionHTML(query)}
+
+        <!-- Suggested ICD-10 code (edit mode only) -->
+        ${this._buildIcd10SectionHTML(query)}
 
         <!-- Effective (onset) date + ARD timing -->
         ${this._buildEffectiveDateSectionHTML(query)}
@@ -320,6 +402,31 @@ const QueryDetailModal = {
         ${note
           ? `<div class="super-query-detail__note">${this._escapeHTML(note)}</div>`
           : `<div class="super-query-detail__note super-query-detail__note--empty">No note written yet.</div>`}
+      </div>
+    `;
+  },
+
+  /**
+   * Build the ICD-10 section. Edit mode only — the read view already shows the
+   * code on the diagnosis card. The picker itself is mounted by
+   * `_wireEditListeners` into the container rendered here.
+   * @param {Object} query
+   * @returns {string}
+   */
+  _buildIcd10SectionHTML(query) {
+    if (!this._editing) return '';
+    // I8000 direct-code queries take their identity from the first code, so a
+    // swap here renames the query itself. Warn before, not after.
+    const isDirectCode = String(query.mdsItem || '').startsWith('I8000');
+    return `
+      <div class="super-query-detail__section">
+        <div id="super-query-edit-icd10"></div>
+        ${isDirectCode ? `
+          <div class="super-query-detail__hint">Changing the code renames this query to the new diagnosis.</div>
+        ` : ''}
+        <div class="super-query-detail__date-warning" id="super-query-edit-icd10-hint" hidden>
+          A suggested code can't be removed once sent — the doctor can still pick a different one.
+        </div>
       </div>
     `;
   },

@@ -575,11 +575,194 @@
   line-height: 1.4;
 }
 
+.cert-audit__search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 8px 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #111827;
+  background: #fff;
+}
+.cert-audit__search::placeholder { color: #9ca3af; }
+.cert-audit__search:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
 .cert-audit__count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 6px;
   font-size: 11px;
   font-weight: 500;
   color: #6b7280;
+}
+
+.cert-audit__expand-all {
+  flex: none;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f46e5;
+}
+.cert-audit__expand-all:hover { text-decoration: underline; }
+
+/* ── Grouped audit list: patient → stay → certs ── */
+.cert-audit__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cert-audit__patient {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.cert-audit__patient-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cert-audit__patient-head:hover { background: #f9fafb; }
+
+.cert-audit__chevron {
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+  color: #9ca3af;
+  transition: transform 0.15s ease;
+}
+.cert-audit__chevron.is-open { transform: rotate(90deg); }
+
+.cert-audit__patient-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cert-audit__mrn {
+  flex: none;
+  font-size: 11px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.cert-audit__patient-spacer { flex: 1; }
+
+.cert-audit__rollup {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cert-audit__patient-count {
+  flex: none;
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.cert-audit__stay {
+  border-top: 1px solid #f3f4f6;
+  padding: 8px 12px 10px;
+  background: #fcfcfd;
+}
+
+.cert-audit__stay-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 7px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.cert-audit__stay-payer {
+  font-weight: 650;
+  color: #374151;
+}
+
+.cert-audit__stay-status {
+  text-transform: capitalize;
+  font-weight: 600;
+}
+.cert-audit__stay-status--active      { color: #15803d; }
+.cert-audit__stay-status--interrupted { color: #c2410c; }
+.cert-audit__stay-status--ended       { color: #6b7280; }
+
+.cert-audit__certs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cert-audit__cert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: #fff;
+  border: 1px solid #f1f2f4;
+  font-size: 12px;
+}
+
+.cert-audit__cert-due {
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.cert-audit__cert-signer {
+  flex: 1;
+  min-width: 0;
+  color: #6b7280;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cert-audit__newly-signed {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .cert-audit__table-wrap {

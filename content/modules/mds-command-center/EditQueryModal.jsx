@@ -7,6 +7,8 @@ import {
   windowGuidanceText,
   outsideWindowWarning,
 } from '../../queries/lib/query-timing.js';
+import { currentIcd10, toRecommendedIcd10 } from '../../queries/lib/icd10-picker-util.js';
+import { Icd10CodePicker } from '../query-items/components/Icd10CodePicker.jsx';
 
 /**
  * EditQueryModal — edit an already-sent (or pending) diagnosis query's note and
@@ -25,8 +27,10 @@ export function EditQueryModal({ isOpen, query, onClose, onSaved }) {
   const [timing, setTiming] = useState(null);
   const [note, setNote] = useState('');
   const [date, setDate] = useState('');
+  const [icd10, setIcd10] = useState(null);
   const [initialNote, setInitialNote] = useState('');
   const [initialDate, setInitialDate] = useState('');
+  const [initialIcd10, setInitialIcd10] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   // On open, hydrate from the full query (note + timing live there, not on the
@@ -39,8 +43,10 @@ export function EditQueryModal({ isOpen, query, onClose, onSaved }) {
     const seed = (fq) => {
       const n = fq.nurseEditedNote || fq.aiGeneratedNote || '';
       const d = resolveEffectiveDate(fq);
+      const c = currentIcd10(fq);
       setNote(n); setInitialNote(n);
       setDate(d); setInitialDate(d);
+      setIcd10(c); setInitialIcd10(c);
       setTiming(fq.timing || null);
     };
 
@@ -66,7 +72,11 @@ export function EditQueryModal({ isOpen, query, onClose, onSaved }) {
   const outside = isDateInWindow(date, timing?.lookbackWindow) === false;
   const warning = outside ? outsideWindowWarning(timing?.lookbackDays, timing?.lookbackWindow) : null;
 
-  const dirty = note !== initialNote || date !== initialDate;
+  // Clearing an attached code isn't expressible — the backend requires a
+  // non-empty `recommendedIcd10` — so surface that instead of failing on save.
+  const codeCleared = !!initialIcd10?.code && !icd10?.code;
+  const codeChanged = !!icd10?.code && icd10.code !== (initialIcd10?.code || null);
+  const dirty = note !== initialNote || date !== initialDate || codeChanged;
 
   function handleSave() {
     if (submitting) return;
@@ -75,6 +85,7 @@ export function EditQueryModal({ isOpen, query, onClose, onSaved }) {
     if (note !== initialNote) changes.nurseEditedNote = note;
     // '' clears the effective date back to the createdAt default (null).
     if (date !== initialDate) changes.effectiveDate = date || null;
+    if (codeChanged) changes.recommendedIcd10 = toRecommendedIcd10(icd10);
 
     setSubmitting(true);
     onSaved(query.id, changes)
@@ -83,6 +94,9 @@ export function EditQueryModal({ isOpen, query, onClose, onSaved }) {
   }
 
   const patient = query?.patientName || 'this patient';
+  // I8000 direct-code queries take their identity from the first code, so a swap
+  // renames the query itself (the server resyncs mdsItem/mdsItemName).
+  const isDirectCode = String(query?.mdsItem || '').startsWith('I8000');
 
   return (
     <Modal
@@ -136,6 +150,25 @@ export function EditQueryModal({ isOpen, query, onClose, onSaved }) {
           />
           {guidance && <div class="mds-cc__edit-guidance">{guidance}</div>}
           {warning && <div class="mds-cc__edit-warning">{warning}</div>}
+
+          <div class="mds-cc__edit-icd10">
+            <Icd10CodePicker
+              seedQuery={query?.mdsItemName || query?.mdsItem || ''}
+              selected={icd10}
+              onChange={setIcd10}
+              disabled={submitting}
+            />
+            {isDirectCode && (
+              <div class="mds-cc__edit-guidance">
+                Changing the code renames this query to the new diagnosis.
+              </div>
+            )}
+            {codeCleared && (
+              <div class="mds-cc__edit-warning">
+                A suggested code can't be removed once sent — the doctor can still pick a different one.
+              </div>
+            )}
+          </div>
         </>
       )}
     </Modal>
