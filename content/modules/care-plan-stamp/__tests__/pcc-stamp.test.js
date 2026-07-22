@@ -95,27 +95,36 @@ describe('orchestrateStamp — library focus via the PCC wizard', () => {
     expect(result.interventionsStamped).toBe(2);
   });
 
-  it('diff-routing: fill-changed / ext-edited / kardex-opted items custom-stamp on the SAME library focus', async () => {
+  it('personalized items STILL chkbox-add (library linkage kept) and owe a post-add edit', async () => {
     const calls = installFetchSpy();
     const proposal = libraryProposal();
     const f = proposal.focuses[0];
-    // Server fill changed this goal's text → must NOT chkbox (library text would stamp).
+    // Server fill changed this goal's text — library add stays, edit pass owes the swap.
     f.goals[0].textDiffersFromLibrary = true;
-    // Nurse/token changed this intervention after payload → custom.
+    f.goals[0].libraryText = '(resident name) will be free from falls over 90 days';
+    f.goals[0].description = 'SMITH, JOHN will be free from falls over 90 days';
+    // Ext-side token fill changed this intervention vs the payload text.
     f.interventions[0]._payloadDescription = 'ensure call light in reach (specify)';
-    // Kardex opt-in flips an otherwise-unchanged intervention to custom (chkbox can't carry kardex).
-    f.interventions[1].kardexCategory = 123;
     const result = await orchestrateStamp({ proposal, careplanId: '27133', miniToken: 'tok', deptNames: {} });
+    // ALL std-id items ride the wizard chkbox — personalization never unlinks them.
     const goalPost = calls.find((c) => c.url.includes('goalwizard_rev.jsp') && c.method === 'POST');
-    // Only the unchanged goal rides the wizard chkbox; the changed one goes custom.
-    expect(new URLSearchParams(goalPost.body).getAll('chkbox')).toEqual(['4648']);
-    expect(calls.some((c) => c.url.includes('goaledit_rev.jsp'))).toBe(true);
-    // Both interventions diverge → no interwizard POST chkboxes, both custom.
-    expect(calls.some((c) => c.url.includes('intereditcust_rev.jsp'))).toBe(true);
-    expect(calls.filter((c) => c.url.includes('interwizard_rev.jsp')).length).toBe(0);
+    expect(new URLSearchParams(goalPost.body).getAll('chkbox')).toEqual(['4647', '4648']);
+    const interPost = calls.find((c) => c.url.includes('interwizard_rev.jsp') && c.method === 'POST');
+    expect(new URLSearchParams(interPost.body).getAll('chkbox')).toEqual(['17570', '17672']);
+    // The edit pass ran (walked the plan detail); mock plan has no editNeed rows,
+    // so the owed edits surface as a personalize warning — never a stamp failure.
+    expect(calls.some((c) => c.url.includes('careplandetail_rev.jsp'))).toBe(true);
+    expect(result.errors.some((e) => e.phase === 'personalize')).toBe(true);
     expect(result.focusesStamped).toBe(1);
     expect(result.goalsStamped).toBe(2);
     expect(result.interventionsStamped).toBe(2);
+  });
+
+  it('untouched items owe NO personalization edits (no detail walk)', async () => {
+    const calls = installFetchSpy();
+    const result = await orchestrateStamp({ proposal: libraryProposal(), careplanId: '27133', miniToken: 'tok', deptNames: {} });
+    expect(calls.some((c) => c.url.includes('careplandetail_rev.jsp'))).toBe(false);
+    expect(result.errors).toEqual([]);
   });
 
   it('a NON-library focus still custom-stamps focus + goals + interventions', async () => {
