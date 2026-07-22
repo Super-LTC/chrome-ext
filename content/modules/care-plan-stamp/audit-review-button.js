@@ -45,14 +45,31 @@ async function _renderBanner() {
   banner.id = BANNER_ID;
   banner.className = 'super-audit-banner is-loading';
   banner.innerHTML = `
-    <span class="super-audit-banner__icon">🔍</span>
-    <span class="super-audit-banner__text">Loading care plan audit…</span>
+    <span class="super-audit-banner__icon super-audit-banner__icon--pulse">🔍</span>
+    <span class="super-audit-banner__text">Checking this care plan against the chart…</span>
+    <span class="super-audit-banner__shimmer" aria-hidden="true"></span>
   `;
   anchor.parentNode.insertBefore(banner, anchor);
 
+  // Staged loading copy (same honesty treatment as the modal's LoadingState):
+  // a static "Loading…" for 10+ seconds reads as broken; tell them what's
+  // happening and that long = first-run, not stuck.
+  const loadStages = [
+    [4000, 'Cross-checking diagnoses, orders, and existing focuses…'],
+    [9000, 'Still working — the first check on a resident takes the longest…'],
+    [20000, 'Almost there. Big chart — thorough check.'],
+  ];
+  const stageTimers = loadStages.map(([at, text]) =>
+    setTimeout(() => {
+      const t = banner.querySelector('.super-audit-banner__text');
+      if (t && banner.classList.contains('is-loading')) t.textContent = text;
+    }, at),
+  );
+  const clearStages = () => stageTimers.forEach(clearTimeout);
+
   try {
     const auth = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
-    if (!auth?.authenticated) { banner.remove(); return; }
+    if (!auth?.authenticated) { clearStages(); banner.remove(); return; }
   } catch (_) { /* proceed */ }
 
   const facilityName = typeof getChatFacilityInfo === 'function' ? (getChatFacilityInfo() || '') : '';
@@ -70,8 +87,10 @@ async function _renderBanner() {
       patientId, facilityName, orgSlug, existingFocusTexts,
     });
     const audit = resp.audit || resp;
+    clearStages();
     _paint(banner, audit, { patientId, facilityName, orgSlug });
   } catch (e) {
+    clearStages();
     banner.className = 'super-audit-banner is-error';
     banner.innerHTML = `
       <span class="super-audit-banner__icon">⚠</span>
@@ -88,11 +107,10 @@ async function _renderBanner() {
 
 function _paint(banner, audit, ctx) {
   const a = audit?.toAdd?.length || 0;
-  // area_covered rows are map-only states, not worklist actions — keep them out
-  // of the "N to review" count (mirrors worklistModel.actionableChecks).
-  const c = (audit?.toCheck || []).filter((it) => it.kind !== 'area_covered').length;
   const r = audit?.toRemove?.length || 0;
-  const total = a + c + r;
+  // toCheck deliberately excluded: verifies are soft FYI rows inside the audit,
+  // never a banner chore. Only adds/removes make the banner actionable.
+  const total = a + r;
 
   if (total === 0) {
     banner.className = 'super-audit-banner is-clean';
@@ -103,10 +121,11 @@ function _paint(banner, audit, ctx) {
     return;
   }
 
+  // Banner shows only the ACTIONABLE counts (add/remove). Verifies are soft
+  // FYI rows inside the audit and never appear here (Jul 21 dev pass).
   const parts = [];
   if (a) parts.push(`<strong>${a}</strong> to add`);
   if (r) parts.push(`<strong>${r}</strong> to remove`);
-  if (c) parts.push(`<strong>${c}</strong> to verify`);
 
   banner.className = 'super-audit-banner is-actionable';
   banner.innerHTML = `
@@ -151,10 +170,13 @@ async function _openWizard({ patientId, facilityName, orgSlug }, isV2 = false) {
     }
   };
 
-  // The review page header shows "Client: Smith, John (6106)" — scrape if available.
+  // The review page header shows "Client: Smith, John (6106)" — but variants
+  // label it "Resident:"/"Patient:". Scrape whichever is present: an empty
+  // name makes the backend JIT-stub new admits as "Patient <id>" and every
+  // "(resident name)" fill stays a placeholder.
   let patientName = '';
   try {
-    const m = (document.body?.innerText || '').match(/Client:\s*([^\n(]+)/);
+    const m = (document.body?.innerText || '').match(/(?:Resident|Client|Patient):\s*([^\n(]+)/);
     if (m) patientName = m[1].replace(/DO NOT USE/i, '').trim();
   } catch (_) { /* */ }
 

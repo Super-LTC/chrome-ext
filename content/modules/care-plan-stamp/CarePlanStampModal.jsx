@@ -1,6 +1,5 @@
 import { h } from 'preact';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
-import { ScopeToggle } from './components/ScopeToggle.jsx';
 import { FocusCard, FocusRationale } from './components/FocusCard.jsx';
 import { AuditRail } from './components/AuditRail.jsx';
 import { AuditDashboard } from './components/AuditDashboard.jsx';
@@ -14,6 +13,7 @@ import { isV2, devForceMock } from './v2-flag.js';
 import { AuditWorklist } from './components/AuditWorklist.jsx';
 import { CareAreaMap } from './components/CareAreaMap.jsx';
 import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector } from './segmentTokens.js';
+import { shouldPoll, polishByStdId, applyPolish, POLL_INTERVAL_MS } from './generateModel.js';
 import { actionableChecks } from './worklistModel.js';
 
 /**
@@ -49,7 +49,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const [driftMissing, setDriftMissing] = useState([]);
   const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
   // Default from patient context (empty plan → initial, established → comprehensive).
-  // Nurse can override mid-session via ScopeToggle.
+  // Auto-picked from plan state (inject-button); the map's Initial-Wizard
+  // escape hatch is the only in-session switch.
   const [mode, setMode] = useState(() => (defaultMode === 'comprehensive' ? 'comprehensive' : 'initial'));
   const [audit, setAudit] = useState(null);
   const [proposal, setProposal] = useState(null);
@@ -112,6 +113,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // removal"). Acknowledged rows dim but STAY visible — never silently dropped.
   const [acknowledgedDropped, setAcknowledgedDropped] = useState(new Set());
 
+  // -------- V3 cached generate (SUP-116) --------
+  // Fired in PARALLEL with the audit; can only ADD (progress bar, polished
+  // content, chart-quality banner) — a 409/unmapped org or any error leaves
+  // the worklist exactly as today. `stopped` = fingerprint moved mid-session.
+  const [gen, setGen] = useState({ payload: null, error: null, startedAt: 0, stopped: false });
+  // { count, at } after the polished content swapped in — drives the header note.
+  const [polishedInfo, setPolishedInfo] = useState(null);
+  const polishAppliedRef = useRef(false);
+
   // -------- Assessment cross-check header count --------
   // audit.assessmentLinkages cross-checks each UDA/MDS assessment against the
   // plan. The per-focus detail now lives in each focus's `rationale.evidence`
@@ -157,6 +167,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setCaaFilter(null);
     setKeptIds(new Set());
     setAcknowledgedDropped(new Set());
+    setGen({ payload: null, error: null, startedAt: 0, stopped: false });
+    setPolishedInfo(null);
+    polishAppliedRef.current = false;
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -205,6 +218,19 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         });
 
         if (mode === 'comprehensive') {
+          // V3 cached generate (SUP-116) — fired in PARALLEL with the audit,
+          // never awaited: the worklist paints from the audit; this call only
+          // adds the authoring progress bar, the polished-content swap, and
+          // the chart-quality banner. 409 (org not concept-mapped) or any
+          // error = feature quietly off.
+          setGen({ payload: null, error: null, startedAt: Date.now(), stopped: false });
+          window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, patientName, orgSlug, facilityName, orgDropdowns })
+            .then((p) => { if (!cancelled) setGen((g) => ({ ...g, payload: p })); })
+            .catch((e) => {
+              if (!cancelled) setGen((g) => ({ ...g, error: e }));
+              if (e?.status !== 409) console.warn('[care-plan-generate] fetch failed (feature off)', e?.message);
+            });
+
           // Comprehensive Review path — full audit of the existing plan.
           // Under the dev mock override, swap the network call for the bundled
           // fixture. Dynamic import keeps the (large) fixture out of the main
@@ -214,7 +240,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             const mod = await import('./__fixtures__/mock-audit-v2.js');
             auditResp = mod.default;
           } else {
-            auditResp = await window.CarePlanAuditAPI.fetchAudit({
+            // Retries ride the server-side cache the timed-out attempt kept
+            // warming (CloudFront ~20s cutoff; Lambda finishes regardless).
+            auditResp = await window.CarePlanAuditAPI.fetchAuditWithRetry({
               patientId,
               facilityName,
               orgSlug,
@@ -290,6 +318,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         // -------- Initial Admit path (unchanged below) --------
         const prop = await A.fetchProposal({
           patientId,
+          patientName,
           facilityName,
           orgSlug,
           scope: 'initial',
@@ -407,6 +436,76 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     })();
     return () => { cancelled = true; };
   }, [patientId, facilityName, orgSlug, mode]);
+
+  // -------- V3 cached generate: poll while authoring (SUP-116) --------
+  // Each poll is a cheap server-side cache read of the SAME url. Stops when the
+  // polished payload lands, the modal closes/mode flips (cleanup), the chart
+  // fingerprint moves mid-session, or the 90s cap passes (polish p50 ~13s).
+  useEffect(() => {
+    if (mode !== 'comprehensive') return undefined;
+    if (!shouldPoll({ ...gen, now: Date.now() })) return undefined;
+    const t = setTimeout(async () => {
+      try {
+        // Same dropdowns wire shape as the initial call — the backend resolves
+        // the payload's canonical kardex/position names to facility IDs.
+        const orgDropdowns = dropdowns
+          ? { positions: dropdowns.positionLabels || {}, kardex: dropdowns.kardexLabels || {}, reviewDepts: dropdowns.reviewDeptLabels || {} }
+          : undefined;
+        const p = await window.CarePlanGenerateAPI.fetchGenerate({ patientId, patientName, orgSlug, facilityName, orgDropdowns });
+        setGen((g) => {
+          // Chart moved mid-session (fingerprint changed): the polished result
+          // describes a DIFFERENT chart. Keep the deterministic view, stop
+          // polling — the next modal open regenerates against the new chart.
+          if (g.payload?.fingerprint && p.fingerprint !== g.payload.fingerprint) {
+            return { ...g, stopped: true };
+          }
+          return { ...g, payload: p };
+        });
+      } catch (e) {
+        setGen((g) => ({ ...g, error: e }));
+      }
+    }, POLL_INTERVAL_MS);
+    return () => clearTimeout(t);
+  }, [mode, gen, patientId, orgSlug, facilityName, dropdowns]);
+
+  // -------- V3 cached generate: swap polished content into untouched rows --------
+  useEffect(() => {
+    if (mode !== 'comprehensive' || !audit || polishAppliedRef.current) return;
+    const p = gen.payload;
+    if (!p?.authored || gen.stopped) return;
+    polishAppliedRef.current = true; // one shot per modal-load, even if nothing matches
+    const touched = new Set([
+      ...Object.keys(auditFocusStates).filter((k) => auditFocusStates[k]),
+      ...stampedAddIds,
+      ...skippedAddIds,
+    ]);
+    const { items, swappedCount } = applyPolish(audit.toAdd, polishByStdId(p), touched);
+    if (!swappedCount) return;
+    // Swapped rows re-enter through the same conventions as the initial load:
+    // Kardex stays opt-in (engine pick → _recKardex, live field None).
+    const rekardexed = items.map((it) =>
+      it._polished
+        ? {
+            ...it,
+            focus: {
+              ...it.focus,
+              interventions: (it.focus.interventions || []).map((iv) => ({
+                ...iv,
+                _recKardex: iv.kardexCategory ?? null,
+                kardexCategory: null,
+              })),
+            },
+          }
+        : it,
+    );
+    setAudit((a) => (a ? { ...a, toAdd: rekardexed } : a));
+    setPolishedInfo({ count: swappedCount, at: Date.now() });
+    window.SuperAnalytics?.track?.('care_plan_polish_swapped', {
+      patient_id: patientId,
+      n_swapped: swappedCount,
+      n_to_add: items.length,
+    });
+  }, [gen, audit, mode, auditFocusStates, stampedAddIds, skippedAddIds, patientId]);
 
   // -------- Combined raw focuses: auto-picks + library picks --------
   const allRawFocuses = useMemo(() => {
@@ -959,10 +1058,27 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     });
   }, [patientId]);
 
+  // The batch "Add all → Done" footer already reloads the tab; this covers
+  // every OTHER close path (×, Cancel, backdrop) after the plan changed in
+  // PCC — single-adds, audit partial stamps, resolves. Without the reload the
+  // page under the modal still shows the pre-stamp care plan.
+  const closeModal = useCallback(() => {
+    const changedPcc =
+      stampedRuleIds.size > 0 ||
+      stampedAddIds.size > 0 ||
+      Object.values(resolveStatus).some((s) => s === 'done') ||
+      Object.values(partialStampStatus).some((s) => s === 'done');
+    onClose();
+    if (changedPcc) {
+      try { chrome.runtime.sendMessage({ type: 'RELOAD_CURRENT_TAB' }); }
+      catch (_) { window.location.reload(); }
+    }
+  }, [stampedRuleIds, stampedAddIds, resolveStatus, partialStampStatus, onClose]);
+
   // -------- Render --------
   return (
     <div className="cpas-modal" role="dialog" aria-modal="true">
-      <div className="cpas-modal__backdrop" onClick={stage === 'stamping' ? null : onClose} />
+      <div className="cpas-modal__backdrop" onClick={stage === 'stamping' ? null : closeModal} />
       <div className="cpas-modal__container">
         <header className="cpas-modal__header">
           {mode === 'comprehensive' && comprehensiveStep !== 'dashboard' && stage !== 'stamping' && (
@@ -984,9 +1100,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           )}
           <div>
             <h1 className="cpas-modal__title">{mode === 'comprehensive' ? 'Care Plan Audit' : 'Auto-Populate Care Plan'}</h1>
-            <p className="cpas-modal__subtitle">
-              {patientName || 'Resident'} · {mode === 'comprehensive' ? 'Comprehensive review' : 'Initial care plan'}
-            </p>
+            {/* Mode lives in the toggle on the right — repeating it here read as a
+                third control ("top bar is confusing", Jul 21 dev pass). */}
+            <p className="cpas-modal__subtitle">{patientName || 'Resident'}</p>
           </div>
           <div className="cpas-modal__header-actions">
             {mode === 'comprehensive' && stage === 'ready' && audit && isV2(audit) && !mapHome && (
@@ -997,23 +1113,14 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 onClick={() => setMapHome(true)}
                 title="Back to the care-area map"
               >
-                ⊞ Map
+                ⊞ Coverage map
               </button>
             )}
-            <ScopeToggle
-              mode={mode}
-              onChange={(next) => {
-                if (next !== mode) {
-                  window.SuperAnalytics?.track?.('care_plan_audit_scope_toggled', {
-                    patient_id: patientId,
-                    from_mode: mode,
-                    to_mode: next,
-                  });
-                }
-                setMode(next);
-              }}
-              disabled={stage === 'stamping'}
-            />
+            {/* Mode toggle removed (Jul 21 dev pass — "they will be confused on the
+                navigation"): the mode is auto-picked from the plan state (empty →
+                Initial Admit, established → review) and switching it manually is
+                never the right move — a review of an empty plan and an initial
+                wizard on an established plan are both no-ops. */}
             {stage === 'ready' && mode === 'initial' && (
               // NO_TRACK: pure-UI open of library overlay
               <button
@@ -1024,17 +1131,35 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 + Add from PCC Library
               </button>
             )}
+            {mode === 'initial' && (
+              // Way back from the Initial wizard to the review grid — the wizard
+              // is reachable FROM the map, so it needs a return path (Jul 21).
+              <button
+                type="button"
+                className="cpas-modal__library-btn"
+                onClick={() => {
+                  window.SuperAnalytics?.track?.('care_plan_audit_scope_toggled', {
+                    patient_id: patientId, from_mode: 'initial', to_mode: 'comprehensive',
+                  });
+                  setMode('comprehensive');
+                  setMapHome(true);
+                }}
+                title="Back to the care-area coverage map"
+              >
+                ⊞ Coverage map
+              </button>
+            )}
             {stage !== 'stamping' && (
               // NO_TRACK: pure-UI dismiss of the modal
-              <button className="cpas-modal__close" onClick={onClose} aria-label="Close">×</button>
+              <button className="cpas-modal__close" onClick={closeModal} aria-label="Close">×</button>
             )}
           </div>
         </header>
 
         <div className="cpas-modal__body">
           {stage === 'loading' && <LoadingState />}
-          {stage === 'error' && <ErrorState message={errorMsg} onClose={onClose} />}
-          {stage === 'drift' && <DriftState missing={driftMissing} onClose={onClose} />}
+          {stage === 'error' && <ErrorState message={errorMsg} onClose={closeModal} />}
+          {stage === 'drift' && <DriftState missing={driftMissing} onClose={closeModal} />}
           {mode === 'initial' && (stage === 'ready' || stage === 'stamping' || stage === 'done') && proposal && (
             <div className="cpas-modal__columns">
               <FocusList
@@ -1132,6 +1257,9 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
               onDismissVerify={_dismissVerifyItem}
               partialStampStatus={partialStampStatus}
               partialStampError={partialStampError}
+              genAuthoring={gen.payload && !gen.payload.authored && !gen.stopped && !gen.error ? (gen.payload.authoringProgress || {}) : null}
+              polishedInfo={polishedInfo}
+              chartQualityFlags={gen.payload?.chartQuality?.flags || null}
             />
           )}
           {mode === 'comprehensive' && (stage === 'ready' || stage === 'stamping') && audit && !isV2(audit) && comprehensiveStep === 'dashboard' && (
@@ -1347,7 +1475,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
             {/* Primary commit lives in the sidebar (spatially bound to the
                 focus list). Footer keeps just a quiet cancel. */}
             {/* NO_TRACK: pure-UI cancel */}
-            <button className="cpas-btn cpas-btn--ghost" onClick={onClose}>Cancel</button>
+            <button className="cpas-btn cpas-btn--ghost" onClick={closeModal}>Cancel</button>
           </footer>
         )}
 
@@ -1533,11 +1661,17 @@ function _composeFocus(rawOriginal, state) {
   // manual free-text edit drops the item's segments (see editGoal/editIntervention),
   // so it correctly stops re-substituting and honors the nurse's wording.
   const substituteTokens = (list) =>
-    (list || []).map((item) =>
-      _segmentsHaveAnyToken(item.descriptionSegments)
+    (list || []).map((raw) => {
+      // Remember the backend's text as sent — the stamp router compares the
+      // final composed text against it to catch ext-side changes (token fills,
+      // nurse edits) that must force a CUSTOM stamp instead of a library
+      // chkbox add (which stamps library text verbatim). ?? keeps the first
+      // payload text across repeated composes/edits.
+      const item = { ...raw, _payloadDescription: raw._payloadDescription ?? raw.description };
+      return _segmentsHaveAnyToken(item.descriptionSegments)
         ? { ...item, description: _renderSegmentsWithTokens(item.descriptionSegments, tokenValues) }
-        : item
-    );
+        : item;
+    });
   const goals = substituteTokens(state.goals != null ? state.goals : original.goals);
   const interventions = substituteTokens(state.interventions != null ? state.interventions : original.interventions);
 
@@ -1646,12 +1780,44 @@ function _focusUnfilledTokenKeys(rawFocus, tokenValues) {
 // derivedFrom values so the relevant signal pops in a quick hover.
 // -------- Subcomponents --------
 
-const LoadingState = () => (
-  <div className="cpas-empty">
-    <div className="cpas-spinner" />
-    <p>Reading patient context from PCC…</p>
-  </div>
-);
+// Staged loader: the FIRST open for a resident pays a one-time server-side
+// pass (mapping their existing care plan against the chart, ~15-20s; cached
+// after — see /care-plan/prewarm). A silent spinner past a few seconds reads
+// as broken, so escalate to an honest "first time takes longer" message with
+// elapsed feedback instead of letting the nurse conclude it hung.
+const LOADING_STAGES = [
+  { after: 0, text: 'Reading patient context from PCC…' },
+  { after: 4, text: 'Reviewing the care plan against the chart…' },
+  {
+    after: 8,
+    text: 'First review for this resident — reading their existing care plan closely. This takes ~15–20 seconds once; future opens are fast.',
+    slow: true,
+  },
+  {
+    after: 25,
+    text: 'Still working — large care plans can take up to ~30 seconds on the first review. Future opens are fast.',
+    slow: true,
+  },
+];
+
+const LoadingState = () => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t0 = Date.now();
+    const id = setInterval(() => setElapsed((Date.now() - t0) / 1000), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const stage = [...LOADING_STAGES].reverse().find((st) => elapsed >= st.after) || LOADING_STAGES[0];
+  return (
+    <div className="cpas-empty">
+      <div className="cpas-spinner" />
+      <p>{stage.text}</p>
+      {stage.slow && (
+        <p className="cpas-empty__hint">✨ One-time setup for this resident — it's saved after this.</p>
+      )}
+    </div>
+  );
+};
 
 const ErrorState = ({ message, onClose }) => (
   <div className="cpas-empty cpas-empty--error">

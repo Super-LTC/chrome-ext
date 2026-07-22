@@ -21,6 +21,7 @@
  * the custom endpoints (neededitcust / goaledit / intereditcust).
  */
 import { stampLibraryFocus, isLibraryFocus } from './pcc-library-stamp.js';
+import { editStampedLibraryTexts } from './pcc-library-edit.js';
 
 // Verbose stamping trace — flip false once the library-add path is confirmed in real
 // PCC. Logs every PCC POST (url / status / response snippet) + per-item outcome as
@@ -338,14 +339,30 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
       'goals=' + goals.length, 'interv=' + inters.length);
 
     // SUP-54 library path: focus + its library goals/interventions go through PCC's own
-    // wizard in one shot (see stampLibraryFocus). Std-id-bearing items are library-checked;
-    // any without a std id (AI-authored / built-in mixed in) fall back to custom stamping
-    // on the SAME focus id.
+    // wizard in one shot (see stampLibraryFocus) — library linkage + the facility's own
+    // position/kardex auto-config are the point, so EVERY std-id item stays a chkbox add.
+    // The chkbox stamps LIBRARY text verbatim, so personalized items (name fills,
+    // completed (specify) blanks, nurse edits) get a POST-ADD EDIT of their stamped text
+    // (see pcc-library-edit.js) — same as a nurse adding from the library then editing.
     if (library) {
       const libGoalIds = goals.filter((g) => _hasStd(g.libraryStdId)).map((g) => String(g.libraryStdId));
       const libInterIds = inters.filter((v) => _hasStd(v.libraryStdId)).map((v) => String(v.libraryStdId));
       const customGoals = goals.filter((g) => !_hasStd(g.libraryStdId));
       const customInters = inters.filter((v) => !_hasStd(v.libraryStdId));
+      // Personalizations owed after the add: what PCC stamped (libraryText from the
+      // backend, or the payload text when only ext-side fills/edits changed it) → what
+      // the nurse approved (the composed text; desc+instruction re-joined — the split
+      // only exists for custom-field caps, the library item is one text).
+      const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+      const owedEdits = [...goals, ...inters]
+        .filter((item) => _hasStd(item.libraryStdId))
+        .map((item) => ({
+          libraryText: item.libraryText ?? item._payloadDescription ?? null,
+          targetText: [item.description, item.instruction].filter(Boolean).join(' '),
+        }))
+        .filter((e) => e.libraryText && norm(e.libraryText) !== norm(e.targetText));
+      _dlog(`focus[${i}] library adds: ${libGoalIds.length} goals + ${libInterIds.length} interventions · ` +
+        `${owedEdits.length} personalization edit(s) owed · ${customGoals.length}/${customInters.length} custom stragglers`);
 
       let focusId;
       try {
@@ -369,6 +386,30 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
           result.errors.push({ ruleId: focus.ruleId, phase: err.phase, error: err.error });
         }
         _dlog(`focus[${i}] library stamp → focusId=${focusId}`, r);
+        // Personalize the stamped library texts (the nurse's add-then-edit,
+        // automated). Best-effort: a miss leaves honest library text on the
+        // chart and a warning in errors — never fails the stamp.
+        if (owedEdits.length) {
+          try {
+            const pr = await editStampedLibraryTexts({
+              patientId: proposal.patientId,
+              careplanId,
+              focusId,
+              miniToken,
+              edits: owedEdits,
+            });
+            if (pr.failed || pr.unmatched) {
+              result.errors.push({
+                ruleId: focus.ruleId,
+                phase: 'personalize',
+                error: `${pr.failed} personalization edit(s) failed, ${pr.unmatched} unmatched — library text left as stamped`,
+              });
+            }
+          } catch (e) {
+            _dlog(`focus[${i}] personalization pass failed (library text left as stamped):`, e.message);
+            result.errors.push({ ruleId: focus.ruleId, phase: 'personalize', error: e.message });
+          }
+        }
       } catch (e) {
         result.ok = false;
         result.errors.push({ ruleId: focus.ruleId, phase: 'focus', error: e.message });

@@ -55,15 +55,7 @@ export function buildMapCells(audit, { stampedAddIds, skippedAddIds, acknowledge
       why: _clip(it.reason, 44), act: 'Review removal →', target: { kind: 'remove', key: it._rowId },
     });
   }
-  for (const it of audit?.dropped || []) {
-    if (acked.has(it._rowId)) continue;
-    // Reviewer-held-back PROPOSAL — never on the plan. Its own state (own icon/
-    // tint) so "?" keeps exactly one meaning: an actionable verify.
-    cells.push({
-      state: 'held', label: _clip(it.description, 26),
-      why: _clip(it.reason, 44), act: 'Your call →', target: { kind: 'dropped', key: it._rowId },
-    });
-  }
+  // Reviewer-held-back proposals are not surfaced (see worklistModel.js).
   for (const it of audit?.toCheck || []) {
     if (it.kind === 'area_covered') {
       // "Already covered by X" is assurance, not work — it renders as a badged
@@ -74,6 +66,7 @@ export function buildMapCells(audit, { stampedAddIds, skippedAddIds, acknowledge
       });
       continue;
     }
+    if (it.kind === 'partial_coverage') continue; // not surfaced (see worklistModel.actionableChecks)
     cells.push({
       state: 'verify', label: areaLabel(audit, it) || _clip(it.detail, 24),
       why: _clip(it.reason || it.matchedFocusText, 44), act: 'Verify →',
@@ -158,15 +151,14 @@ export const CareAreaMap = ({
   const gaps = n('gap');
   const removals = n('remove');
   const verifies = n('verify');
-  const held = n('held');
-  const todo = gaps + removals + verifies + held;
+  const todo = gaps + removals + verifies;
 
   return (
     <div className="cpam">
       <div className="cpam__strip">
         <div className="cpam__counts">
           <div className="cpam__count is-gap"><div className="cpam__n">{gaps}</div><div className="cpam__l">gaps to add</div></div>
-          <div className="cpam__count is-rem"><div className="cpam__n">{removals}</div><div className="cpam__l">to confirm</div></div>
+          <div className="cpam__count is-rem"><div className="cpam__n">{removals}</div><div className="cpam__l">to remove</div></div>
           <div className="cpam__count is-cov"><div className="cpam__n">{coveredCells.length}</div><div className="cpam__l">covered</div></div>
           {n('skipped') > 0 && (
             <div className="cpam__count is-skip"><div className="cpam__n">{n('skipped')}</div><div className="cpam__l">skipped</div></div>
@@ -250,7 +242,6 @@ export const CareAreaMap = ({
         <span><b className="is-gap">+</b> gap</span>
         <span><b className="is-rem">−</b> removal</span>
         <span><b className="is-ver">?</b> verify</span>
-        <span><b className="is-held">⊝</b> held back</span>
         <span><b className="is-cov">✓</b> covered</span>
         <span><b className="is-skip">⊘</b> skipped</span>
         <span><b className="is-dim">·</b> not indicated</span>

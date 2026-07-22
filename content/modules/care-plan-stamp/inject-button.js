@@ -119,10 +119,12 @@ function _resolvePatientId() {
 }
 
 function _scrapePatientName() {
-  // PCC's careplandetail page shows: "Resident: lopez, paul (6306)" in the header.
-  // Best effort — fall back to nothing if we can't find it.
+  // PCC's careplandetail page shows: "Resident: lopez, paul (6306)" in the
+  // header — but page/facility variants label it "Client:" or "Patient:".
+  // An empty name here makes the backend JIT-stub new admits as "Patient <id>"
+  // and every "(resident name)" fill stays a placeholder, so match all variants.
   const txt = document.body?.innerText || '';
-  const m = txt.match(/Resident:\s*([^\n(]+)/);
+  const m = txt.match(/(?:Resident|Client|Patient):\s*([^\n(]+)/);
   return m ? m[1].replace(/DO NOT USE/i, '').trim() : '';
 }
 
@@ -209,6 +211,26 @@ function injectCarePlanStampButton() {
     const btn = _makeButton(i);
     target.parentNode.insertBefore(btn, target.nextSibling);
   });
+
+  _firePrewarm();
+}
+
+// One prewarm per patient per page load — pays the cold-open AI costs
+// (existing-plan concept map + generate authoring) server-side while the nurse
+// is still reading the page, so the modal opens warm (~1-3s) when clicked.
+const _prewarmed = new Set();
+function _firePrewarm() {
+  try {
+    const patientId = _resolvePatientId();
+    if (!patientId || _prewarmed.has(patientId)) return;
+    const facilityName = typeof getChatFacilityInfo === 'function' ? (getChatFacilityInfo() || '') : '';
+    const orgSlug = typeof getOrg === 'function' ? (getOrg()?.org || '') : '';
+    if (!facilityName || !orgSlug) return;
+    _prewarmed.add(patientId);
+    window.CarePlanGenerateAPI?.prewarm?.({ patientId, orgSlug, facilityName });
+  } catch (_) {
+    // never let prewarm break button injection
+  }
 }
 
 // Run on load + on SPA-ish nav (PCC does full reloads, but content scripts

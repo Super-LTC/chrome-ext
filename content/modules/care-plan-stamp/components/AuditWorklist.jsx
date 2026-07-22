@@ -1,8 +1,9 @@
 import { h, Fragment } from 'preact';
-import { useState, useMemo } from 'preact/hooks';
+import { useState, useMemo, useEffect } from 'preact/hooks';
 import { FocusCard } from './FocusCard.jsx';
 import { AuditPartialCoveragePane } from './AuditPartialCoveragePane.jsx';
 import { buildWorklistModel, actionableChecks, addAllReady, totalTouches, coveredText } from '../worklistModel.js';
+import { authoringPct, chartQualityMessage } from '../generateModel.js';
 
 /**
  * AuditWorklist — V2 comprehensive-audit V8 sidebar-worklist.
@@ -14,12 +15,12 @@ import { buildWorklistModel, actionableChecks, addAllReady, totalTouches, covere
  *     dashboard's overview role,
  *   • a sidebar worklist — one row per focus, grouped Add → Remove → Check, each
  *     add row showing its remaining amber "touches"; then dimmed clickable
- *     "Covered" rows and a non-silent "we removed N — tap to confirm" dropped fold,
+ *     "Covered" rows,
  *   • an always-open detail pane (no modal/step gate) that delegates to FocusCard
  *     (variant="v2") for inline-editable goals/interventions, with a per-focus Add
  *     and a compact "why + what-we-auto-filled" receipts panel.
  *
- * PURE PRESENTATION. All stamping / skip / resolve / dropped logic lives in the
+ * PURE PRESENTATION. All stamping / skip / resolve logic lives in the
  * parent modal and is passed via callbacks. No API calls, no track(), no window.
  *
  * Gate: the parent renders this only when isV2(audit) — V1 orgs never see it.
@@ -35,7 +36,6 @@ export const AuditWorklist = ({
   touchesByRowId,             // Map<_rowId, number>
   resolveStatus,              // { [focusId]: 'pending'|'done'|'error' }
   keptIds,                    // Set<focusId|_rowId> — Remove/Check "keep on plan"
-  acknowledgedDropped,        // Set<ruleId>
   selected,
   stamping,
   onSelect,
@@ -46,23 +46,28 @@ export const AuditWorklist = ({
   onStampAll,
   onResolve,
   onKeep,
-  onReAddDropped,
-  onConfirmDropped,
   onStampPartial,        // (item, checkedInterventions) → stamp onto existing focus
   onDismissVerify,       // (item) → dismiss a partial-coverage row
   partialStampStatus,    // { [_rowId]: 'pending'|'done'|'error' }
   partialStampError,     // { [_rowId]: string }
+  genAuthoring,          // {done,total} | {} while the V3 polish authors | null (SUP-116)
+  polishedInfo,          // { count, at } after polished content swapped in | null
+  chartQualityFlags,     // string[] | null — junk/under-synced chart warning
 }) => {
   const model = useMemo(() => buildWorklistModel(audit), [audit]);
   const stampedSet = stampedAddIds || new Set();
   const skippedSet = skippedAddIds || new Set();
   const keptSet = keptIds || new Set();
-  const ackSet = acknowledgedDropped || new Set();
   const touches = touchesByRowId || new Map();
   const rStatus = resolveStatus || {};
 
   const [coveredOpen, setCoveredOpen] = useState(false);
-  const [droppedOpen, setDroppedOpen] = useState(true);
+  const [qualityDismissed, setQualityDismissed] = useState(false);
+
+  // V3 authoring strip state (SUP-116): live % while the background AI pass
+  // runs; a quiet "polished N" note once the swap lands.
+  const polishPct = genAuthoring ? authoringPct(genAuthoring) : null;
+  const qualityMsg = !qualityDismissed ? chartQualityMessage(chartQualityFlags) : '';
 
   // ── Progress: every actionable row (add + remove + check) counts toward the
   // tally. "done" = an add stamped/skipped, or a remove/check resolved/kept.
@@ -90,21 +95,53 @@ export const AuditWorklist = ({
     if (kind === 'remove') return (audit?.toRemove || []).find((it) => it._rowId === key) || null;
     if (kind === 'check') return (audit?.toCheck || []).find((it) => it._rowId === key) || null;
     if (kind === 'covered' || kind === 'on_plan') return (audit?.onPlan || []).find((it) => it._rowId === key) || null;
-    if (kind === 'dropped') return (audit?.dropped || []).find((it) => it._rowId === key) || null;
     return null;
   }, [selected, audit]);
+
+  // "Polished N focuses" is a moment, not a status — show ~6s after the swap
+  // lands, then get out of the way (three simultaneous strip messages read as
+  // noise; the tooltip carries the explanation while visible).
+  const [polishNoteVisible, setPolishNoteVisible] = useState(false);
+  useEffect(() => {
+    if (!polishedInfo?.count) return undefined;
+    setPolishNoteVisible(true);
+    const t = setTimeout(() => setPolishNoteVisible(false), 6000);
+    return () => clearTimeout(t);
+  }, [polishedInfo]);
 
   return (
     <div className="cpas-wl">
       <div className="cpas-wl__progress">
         <div className="cpas-wl__progress-t">
           <span><b>{done}</b> of {total} done</span>
-          <span className={touchesLeft > 0 ? 'cpas-wl__warn' : 'cpas-wl__ok'}>
-            {touchesLeft > 0 ? `${touchesLeft} to fill` : '✓ all filled'}
-          </span>
+          {genAuthoring && (
+            <span className="cpas-wl__polishing">
+              ✨ Polishing plan{polishPct != null ? `… ${polishPct}%` : '…'}
+            </span>
+          )}
+          {!genAuthoring && polishNoteVisible && polishedInfo?.count > 0 && (
+            <span className="cpas-wl__polished" title="AI selected the most relevant goals/interventions and filled blanks from the chart — your edits are never overwritten.">
+              ✨ Polished {polishedInfo.count} focus{polishedInfo.count === 1 ? '' : 'es'}
+            </span>
+          )}
+          {/* One number only. "N to fill" duplicated per-card blank chips and made
+              the strip read as two competing scores (Jul 21 dev pass). */}
         </div>
         <div className="cpas-wl__pbar"><i style={{ width: `${pct}%` }} /></div>
+        {genAuthoring && (
+          <div className="cpas-wl__polishbar">
+            <i style={polishPct != null ? { width: `${polishPct}%` } : {}} className={polishPct == null ? 'is-indeterminate' : ''} />
+          </div>
+        )}
       </div>
+
+      {qualityMsg && (
+        <div className="cpas-wl__quality" role="status">
+          <span className="cpas-wl__quality-ic" aria-hidden="true">⚠</span>
+          <span className="cpas-wl__quality-msg">{qualityMsg}</span>
+          <button type="button" data-track="care_plan_chart_quality_dismissed" className="cpas-wl__quality-x" aria-label="Dismiss" onClick={() => setQualityDismissed(true)}>×</button>
+        </div>
+      )}
 
       <div className="cpas-wl__body">
         <aside className="cpas-wl__side">
@@ -190,37 +227,6 @@ export const AuditWorklist = ({
               </div>
             )}
 
-            {/* Dropped — NEVER silent, but honest: these are PROPOSALS the AI
-                review held back, nothing was removed from the care plan. */}
-            {model.dropped.length > 0 && (
-              <div className="cpas-wl__grp cpas-wl__grp--dropped">
-                <button
-                  type="button"
-                  className="cpas-wl__grp-l cpas-wl__grp-l--btn"
-                  onClick={() => setDroppedOpen((o) => !o)}
-                  aria-expanded={droppedOpen}
-                >
-                  <span className="cpas-wl__gdot is-dropped" aria-hidden="true" />
-                  Held back {model.dropped.length} — not proposed, your call
-                  <span className="cpas-wl__caret" aria-hidden="true">{droppedOpen ? '▾' : '▸'}</span>
-                </button>
-                {droppedOpen && model.dropped.map((item) => {
-                  const rowSel = selected?.kind === 'dropped' && selected.key === item._rowId;
-                  const ack = ackSet.has(item.ruleId || item._rowId);
-                  return (
-                    <button
-                      key={item._rowId}
-                      type="button"
-                      className={`cpas-wl__drow ${rowSel ? 'is-sel' : ''} ${ack ? 'is-ack' : ''}`}
-                      onClick={() => onSelect?.({ kind: 'dropped', key: item._rowId })}
-                    >
-                      <span className="cpas-wl__dx" aria-hidden="true">{ack ? '✓' : '−'}</span>
-                      {_truncate(item.description, 44)}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </aside>
 
@@ -266,9 +272,6 @@ export const AuditWorklist = ({
                 status={rStatus[selItem.focusId]} kept={keptSet.has(selItem.focusId) || keptSet.has(selItem._rowId)}
                 stamping={stamping} onResolve={onResolve} onKeep={onKeep} />
             )
-          ) : selected.kind === 'dropped' ? (
-            <DroppedDetail item={selItem} acknowledged={ackSet.has(selItem.ruleId || selItem._rowId)}
-              onReAdd={onReAddDropped} onConfirm={onConfirmDropped} />
           ) : (
             <CoveredDetail item={selItem} areaLabel={model.areaOf(selItem)} />
           )}
@@ -296,6 +299,10 @@ const AddDetail = ({
 
   return (
     <Fragment>
+      {/* Why FIRST — the evidence is the pitch; the buttons act on it (Jul 21:
+          "i kinda want the why to be a bit more prevalent"). */}
+      <WhyReceipts rationale={rationale} focus={item.focus} />
+
       <div className="cpas-wl__d-actions">
         {isStamped ? (
           <span className="cpas-wl__done-tag">✓ added to plan</span>
@@ -340,8 +347,6 @@ const AddDetail = ({
           </Fragment>
         )}
       </div>
-
-      <WhyReceipts rationale={rationale} focus={item.focus} />
 
       <FocusCard
         variant="v2"
@@ -420,36 +425,6 @@ const ResolveDetail = ({ item, kind, areaLabel, status, kept, stamping, onResolv
         </div>
       )}
       {status === 'error' && <div className="cpas-wl__err">Couldn’t resolve — try again.</div>}
-    </section>
-  );
-};
-
-// ── Detail: a dropped focus (acknowledge-first, structured for re-add) ──
-const DroppedDetail = ({ item, acknowledged, onReAdd, onConfirm }) => {
-  const canReAdd = !!item.focus; // backend fast-follow: full focus enables true re-add
-  return (
-    <section className="cpas-detail">
-      <header className="cpas-detail__header cpas-detail__header--v2">
-        <span className="cpas-detail__badge-sec">Held back by review</span>
-        <span className="cpas-detail__pos">not proposed</span>
-      </header>
-      <p className="cpas-wl__ftext">{item.description || '—'}</p>
-      <div className="cpas-wl__reason"><b>Why we held it back.</b> {item.reason || 'Flagged as an over-fire.'} <i>Nothing was changed on the care plan — this focus was never added.</i></div>
-      {acknowledged ? (
-        <div className="cpas-wl__d-actions"><span className="cpas-wl__done-tag">✓ agreed — left off</span></div>
-      ) : (
-        <div className="cpas-wl__d-actions">
-          {canReAdd && (
-            // NO_TRACK: parent's onReAdd (_reAddDropped) owns telemetry.
-            <button type="button" className="cpas-wl__primary" onClick={() => onReAdd?.(item)} title="The review was wrong — propose this focus after all">
-              Propose it anyway
-            </button>
-          )}
-          {/* NO_TRACK: parent's onConfirm (_confirmDropped) owns telemetry. */}
-          <button type="button" className="cpas-btn cpas-btn--ghost" onClick={() => onConfirm?.(item)}>Agree — leave it off</button>
-          {!canReAdd && <span className="cpas-wl__hint">review only — nothing was added to the plan</span>}
-        </div>
-      )}
     </section>
   );
 };

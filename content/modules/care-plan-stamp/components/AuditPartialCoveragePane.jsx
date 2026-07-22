@@ -132,20 +132,13 @@ export const AuditPartialCoveragePane = ({
   errorMessage,
   dropdowns,             // org dropdowns for resolving kardex/position IDs to labels
 }) => {
-  // Backend kardex/position are RECOMMENDATIONS, not defaults. Stamping rows
-  // wholesale to the Kardex makes nurses very angry, so leave them as None
-  // until the nurse explicitly picks one.
-  const [rows, setRows] = useState(() =>
-    (item.suggestedInterventions || []).map((iv) => ({
-      description: iv.description || '',
-      kardexCategory: null,
-      positionOne: null,
-      _recKardex: iv.kardexCategory ?? null,
-      _recPosition: iv.positionOne ?? null,
-      checked: true,
-      _custom: false,
-    }))
-  );
+  // Backend suggestedInterventions are NOT surfaced here (killed Jul 2026):
+  // partial-coverage suggestions come from the TRIGGER dx, not the matched
+  // focus, so they read as cross-concept noise (insulin/podiatry dumped on a
+  // weight-loss focus) — default-checked, one tap from the chart. Precision
+  // rule: we can miss, we can't show wrong things. The nurse can still add
+  // interventions manually below.
+  const [rows, setRows] = useState([]);
 
   const patchRow = (idx, patch) =>
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -252,7 +245,7 @@ export const AuditPartialCoveragePane = ({
       )}
 
       <div className="cpas-audit-section">
-        <div className="cpas-audit-section__label">Suggested interventions ({rows.length})</div>
+        <div className="cpas-audit-section__label">{rows.length ? `Interventions to add (${rows.length})` : 'Add interventions (optional)'}</div>
         <ul className="cpas-partial-interventions">
           {rows.map((row, idx) => (
             <li key={idx} className={`cpas-partial-intervention ${row.checked ? 'is-checked' : ''} ${row._custom ? 'is-custom' : ''}`}>

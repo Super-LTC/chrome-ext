@@ -20,6 +20,25 @@ import { tokenKeyOf, withStableTokenKeys, TOKEN_OMIT, groupEvidenceMenus, isMenu
  *   - readOnly: disable all editors (during stamping/done)
  *   - dropdowns: org dropdowns { kardexLabels, kardexOptions, positionLabels, positionOptions }
  */
+/**
+ * Scroll the first unfilled control in the detail pane into view and flash it.
+ * Unfilled = a yellow fill select with no value, an unfilled token picker chip
+ * (label still reads "Select …"), or an empty inline free-text input.
+ */
+function _jumpToFirstUnfilled(root) {
+  if (!root) return;
+  const target = [...root.querySelectorAll('select.cpas-fill__select, button.cpas-seg-chip, input.cpas-seg-input')]
+    .find((el) => {
+      if (el.tagName === 'SELECT') return !el.value;
+      if (el.tagName === 'INPUT') return !String(el.value || '').trim();
+      return /^Select\b/.test(el.textContent || '');
+    });
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.add('cpas-jump-flash');
+  setTimeout(() => target.classList.remove('cpas-jump-flash'), 1600);
+}
+
 export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, readOnly, dropdowns, isStamped, stampOneDisabled, onStampOne, variant = 'v1', areaBadge, positionLabel }) => {
   const isV2 = variant === 'v2';
   const sectionRef = useRef(null);
@@ -71,6 +90,30 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
     const next = interventions.filter((_, j) => j !== i);
     onUpdate({ interventions: next });
   };
+  // "+ Add intervention" menu: the selector caps the auto-included list, so the
+  // library rows it left out ride the payload as optionalInterventions — offer
+  // them one click away (they keep libraryStdId → real library adds), plus a
+  // custom free-text escape hatch.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const _norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const availableOptional = (rawFocus.optionalInterventions || []).filter(
+    (opt) => !interventions.some(
+      (iv) =>
+        (opt.libraryStdId && iv.libraryStdId === opt.libraryStdId) ||
+        _norm(iv.description) === _norm(opt.description),
+    ),
+  );
+  const addOptionalIntervention = (opt) => {
+    // Same shape transform the modal applies at proposal load: engine kardex
+    // pick becomes the ✨ recommendation, value stays opt-in.
+    onUpdate({
+      interventions: [
+        ...interventions,
+        { ...opt, _recKardex: opt.kardexCategory ?? null, kardexCategory: null },
+      ],
+    });
+  };
+
   const addIntervention = () => {
     // Inherit positions from the first existing intervention if any (default
     // to RN). Kardex is left unset — nurses opt in deliberately rather than
@@ -125,6 +168,19 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
             </span>
           ) : (
             <>
+              {/* The empty field can sit far below the fold (e.g. an unfilled
+                  intervention select) — without a pointer the nurse can't tell
+                  WHY the add button is disabled. Scrolls the first unfilled
+                  control into view and flashes it. */}
+              {!readOnly && !state.skipped && stampOneDisabled && (
+                <button
+                  className="cpas-detail__jump"
+                  onClick={() => _jumpToFirstUnfilled(sectionRef.current)}
+                  title="This focus needs input before it can be added — jump to the first empty field"
+                >
+                  ⚠ Needs input · Jump to field
+                </button>
+              )}
               {!readOnly && onToggleSkip && (
                 // Outlined toggle chip. Shows the current state clearly + the
                 // action verb. Outlined (not filled) so it reads as secondary
@@ -328,6 +384,13 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
           )}
 
           <h3 className="cpas-detail__section">Interventions ({goals.length === 0 ? 0 : interventions.length})</h3>
+          {/* One section-level note instead of a per-row tag — library items get
+              their positions/Kardex from the facility library's own config. */}
+          {goals.length > 0 && interventions.some((iv) => iv.libraryStdId && String(iv.libraryStdId) !== '-1') && (
+            <p className="cpas-detail__lib-note">
+              Positions &amp; Kardex are applied automatically from your facility library.
+            </p>
+          )}
           {goals.length === 0 && (
             <p className="cpas-detail__interventions-locked">
               Add at least one goal first — interventions support reaching a goal.
@@ -353,6 +416,12 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
               // the nurse opts in) — we never auto-stamp the Kardex. Positions
               // stay auto-locked in v2 (handled below).
               const kardexRecommended = iv._recKardex;
+              // Library items stamp via PCC's chkbox wizard, which applies the
+              // FACILITY LIBRARY's own position/kardex config and ignores ours
+              // — editable pickers there would be a lie, so library rows show
+              // a quiet tag instead. Pickers stay on genuinely custom items
+              // (AI-authored / built-in), where our values are the only source.
+              const willLibraryAdd = iv.libraryStdId && String(iv.libraryStdId) !== '-1';
               return (
                 <li key={i} className="cpas-iv-row">
                   <div className="cpas-iv-row__body">
@@ -383,22 +452,24 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                       )}
                     </div>
                     <div className="cpas-iv-row__chips">
-                      <ChipSelect
-                        value={iv.kardexCategory}
-                        labels={kardexLabels}
-                        options={kardexOptions}
-                        onChange={(v) => editIntervention(i, { kardexCategory: v })}
-                        disabled={readOnly}
-                        variant="kardex"
-                        recommendedId={kardexRecommended}
-                        kindBadge="K"
-                        allowClear
-                        placeholder="Select Kardex (none)"
-                      />
+                      {!willLibraryAdd && (
+                        <ChipSelect
+                          value={iv.kardexCategory}
+                          labels={kardexLabels}
+                          options={kardexOptions}
+                          onChange={(v) => editIntervention(i, { kardexCategory: v })}
+                          disabled={readOnly}
+                          variant="kardex"
+                          recommendedId={kardexRecommended}
+                          kindBadge="K"
+                          allowClear
+                          placeholder="Select Kardex (none)"
+                        />
+                      )}
                       {/* Positions are editable in BOTH v1 and v2. In v2 the engine's
                           auto-assigned position seeds the first chip, but the nurse can
                           change it, remove it, or add more (CNA + RN, …) — matching v1. */}
-                      {posList.map((p, j) => (
+                      {!willLibraryAdd && posList.map((p, j) => (
                         <PositionChip
                           key={j}
                           value={p}
@@ -413,7 +484,7 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                           disabled={readOnly}
                         />
                       ))}
-                      {!readOnly && posList.length < 5 && (
+                      {!readOnly && !willLibraryAdd && posList.length < 5 && (
                         // NO_TRACK: pure-UI position add
                         <button
                           className="cpas-iv-row__chip-add"
@@ -436,8 +507,39 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
             })}
           </ul>
           {!readOnly && (
-            // NO_TRACK: per-row add, not analytics-worthy
-            <button className="cpas-iv-row__chip-add cpas-iv-row__chip-add--full" onClick={addIntervention}>+ Add intervention</button>
+            <div className="cpas-add-menu">
+              {/* NO_TRACK: per-row add, not analytics-worthy */}
+              <button
+                className="cpas-iv-row__chip-add cpas-iv-row__chip-add--full"
+                onClick={() => (availableOptional.length ? setAddMenuOpen((o) => !o) : addIntervention())}
+              >
+                + Add intervention{availableOptional.length ? ` (${availableOptional.length} more in library)` : ''}
+              </button>
+              {addMenuOpen && (
+                <div className="cpas-add-menu__pop">
+                  <div className="cpas-add-menu__head">More from your facility library</div>
+                  {availableOptional.map((opt) => (
+                    <button
+                      key={opt.libraryStdId || opt.description}
+                      className="cpas-add-menu__item"
+                      data-track="care_plan_optional_intervention_added"
+                      onClick={() => addOptionalIntervention(opt)}
+                      title="Add this library intervention"
+                    >
+                      + {opt.description}
+                    </button>
+                  ))}
+                  <button
+                    className="cpas-add-menu__item cpas-add-menu__item--custom"
+                    onClick={() => { setAddMenuOpen(false); addIntervention(); }}
+                  >
+                    ✎ Write a custom intervention…
+                  </button>
+                  {/* NO_TRACK: pure-UI menu dismiss */}
+                  <button className="cpas-add-menu__close" onClick={() => setAddMenuOpen(false)}>Done</button>
+                </div>
+              )}
+            </div>
           )}
           </>
           )}
@@ -625,7 +727,11 @@ const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCom
               segment={s}
               initialValue={isFilled ? currentValue : ''}
               autoFocus={reEditing}
-              onCommit={(v) => { onTokenCommit(s.tokenKey, v); stopEdit(i); }}
+              // tkey (the _ukey) — NOT s.tokenKey. Reads, the touches counter,
+              // and compose all look up tokenKeyOf(s); committing under the raw
+              // tokenKey made typed values vanish on unmount and kept "Add all"
+              // blocked (Wesley Woods spot test, Jul 21).
+              onCommit={(v) => { onTokenCommit(tkey, v); stopEdit(i); }}
               onDismiss={() => stopEdit(i)}
             />
           );
@@ -714,9 +820,17 @@ const EvidenceMenuGroup = ({ tokens, tokenValues, readOnly, onToggle }) => {
     if (!checked.length) return null;
     return <span>{checked.map((t) => t.seg.value).join('; ')}</span>;
   }
-  const summary = checked.length
-    ? `${checked.length} of ${tokens.length} apply`
-    : 'select what applies';
+  // Show WHAT will be said, not just a count — "1 of 1 apply" told the nurse
+  // nothing about the text her click commits (Mohmood dev pass, Jul 21).
+  const _clipLabel = (s, n) => {
+    const t = String(s || '').replace(/\s+/g, ' ').trim();
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  };
+  const summary = !checked.length
+    ? 'select what applies'
+    : checked.length === 1
+      ? _clipLabel(checked[0].seg.value, 48)
+      : `${_clipLabel(checked[0].seg.value, 34)} +${checked.length - 1} more`;
   return (
     <span className={`cpas-seg-msg ${checked.length ? 'has-checked' : ''}`} ref={wrapRef}>
       <button
