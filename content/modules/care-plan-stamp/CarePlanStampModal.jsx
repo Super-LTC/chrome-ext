@@ -697,6 +697,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: toStamp,
         careplanId,
         miniToken,
+        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       setStampResult(result);
@@ -747,6 +748,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: { patientId, focuses: [focus] },
         careplanId,
         miniToken,
+        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       // Mark added and return to the editing view (do NOT go to 'done').
@@ -809,6 +811,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: { patientId, focuses },
         careplanId,
         miniToken,
+        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       setStampedAddIds((prev) => {
@@ -849,6 +852,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: { patientId, focuses: [focus] },
         careplanId,
         miniToken,
+        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       const nextStamped = new Set([...stampedAddIds, item.ruleId]);

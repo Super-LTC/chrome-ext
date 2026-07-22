@@ -21,6 +21,7 @@
  * the custom endpoints (neededitcust / goaledit / intereditcust).
  */
 import { stampLibraryFocus, isLibraryFocus } from './pcc-library-stamp.js';
+import { fillGoalNamePlaceholders, isFillableName } from './pcc-goal-name-fill.js';
 
 // Verbose stamping trace — flip false once the library-add path is confirmed in real
 // PCC. Logs every PCC POST (url / status / response snippet) + per-item outcome as
@@ -313,7 +314,7 @@ async function _stampCustomItems({ proposal, focus, focusId, miniToken, goals, i
  * to it, and we don't parallelize across focuses to keep PCC happy and progress
  * UX simple. Errors are captured per-focus; no rollback (per backend agent's call).
  */
-export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, onProgress }) {
+export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, residentName, onProgress }) {
   const focuses = (proposal.focuses || []).filter((f) => !f._skipped);
   const result = {
     ok: true,
@@ -369,6 +370,23 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
           result.errors.push({ ruleId: focus.ruleId, phase: err.phase, error: err.error });
         }
         _dlog(`focus[${i}] library stamp → focusId=${focusId}`, r);
+        // Library goals carry PCC's verbatim library text — "(resident name)"
+        // placeholders survive the chkbox add. Fill them from the goal's own
+        // edit form. Best-effort polish: a failure leaves the placeholder
+        // visible (honest), never fails the stamp.
+        if (r.goalsStamped > 0 && isFillableName(residentName)) {
+          try {
+            await fillGoalNamePlaceholders({
+              patientId: proposal.patientId,
+              careplanId,
+              focusId,
+              miniToken,
+              residentName,
+            });
+          } catch (e) {
+            _dlog(`focus[${i}] goal name fill failed (placeholders left visible):`, e.message);
+          }
+        }
       } catch (e) {
         result.ok = false;
         result.errors.push({ ruleId: focus.ruleId, phase: 'focus', error: e.message });
