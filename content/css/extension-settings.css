@@ -45,7 +45,7 @@
 .sset-card {
   position: relative;
   width: 100%;
-  max-width: 460px;
+  max-width: 580px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -452,3 +452,109 @@
   .sset-card, .sset-backdrop, .sset-tabs__ink, .sset-switch, .sset-switch__knob,
   .sset-check svg, .sset-spinner { animation: none !important; transition: none !important; }
 }
+
+/* ---- Team tab -------------------------------------------------------- */
+.sset-btn--ghost { background: #fff; color: var(--sset-ink); border: 1px solid var(--sset-line); }
+.sset-btn--ghost:hover:not(:disabled) { background: var(--sset-surface); }
+.sset-btn--danger { background: var(--sset-err); color: #fff; }
+.sset-btn--danger:hover:not(:disabled) { filter: brightness(0.94); }
+
+.sset-back {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600; color: var(--sset-muted); padding: 0 0 12px;
+}
+.sset-back:hover { color: var(--sset-ink); }
+
+.sset-team-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 2px 0 10px;
+}
+.sset-team-head__count { font-size: 12.5px; font-weight: 550; color: var(--sset-muted); }
+.sset-empty { padding: 34px 20px; text-align: center; font-size: 12.5px; color: var(--sset-muted); }
+
+.sset-person {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 11px 0; border-top: 1px solid var(--sset-hair);
+}
+.sset-person:first-of-type { border-top: none; }
+.sset-person.is-pending { opacity: 0.9; }
+.sset-person__main { flex: 1; min-width: 0; }
+.sset-person__name { font-size: 13.5px; font-weight: 620; color: var(--sset-ink); }
+.sset-person__meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 3px; font-size: 12px; color: var(--sset-muted);
+}
+.sset-badge {
+  display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  background: var(--sset-surface); color: var(--sset-muted); border: 1px solid var(--sset-line);
+}
+.sset-badge--admin {
+  background: rgba(99, 102, 241, 0.1); color: var(--sset-indigo); border-color: rgba(99, 102, 241, 0.25);
+}
+.sset-badge--ok {
+  background: rgba(5, 150, 105, 0.1); color: var(--sset-ok); border-color: rgba(5, 150, 105, 0.25);
+}
+.sset-badge--info {
+  background: rgba(99, 102, 241, 0.08); color: var(--sset-indigo); border-color: rgba(99, 102, 241, 0.2);
+}
+.sset-person__bldgs { color: var(--sset-faint); }
+.sset-person__err { margin-top: 4px; font-size: 11.5px; color: var(--sset-err); }
+.sset-person__remove {
+  flex-shrink: 0; background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--sset-faint); padding: 4px 6px; border-radius: 6px;
+}
+.sset-person__remove:hover { color: var(--sset-err); background: rgba(220, 38, 38, 0.06); }
+.sset-person__confirm { display: flex; flex-shrink: 0; gap: 6px; }
+.sset-person__confirm .sset-btn { padding: 6px 12px; font-size: 12px; }
+
+.sset-select--full { width: 100%; }
+.sset-bldg-list { max-height: 200px; overflow-y: auto; }
+
+.sset-adddoc { width: 100%; margin-bottom: 8px; padding: 8px 12px; font-size: 12.5px; }
+.sset-doc-names { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sset-doc-send {
+  flex-shrink: 0; background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--sset-indigo); padding: 4px 6px; border-radius: 6px;
+}
+.sset-doc-send:hover:not(:disabled) { background: rgba(99, 102, 241, 0.08); }
+.sset-doc-send:disabled { color: var(--sset-faint); cursor: default; }
+
+/* ---- Team tab: navigation-heavy detail screens ---------------------- */
+/* Tappable roster row (drills into a person / pending detail). */
+.sset-person--nav { cursor: pointer; border-radius: 7px; transition: background 0.13s; outline: none; }
+.sset-person--nav:hover { background: var(--sset-surface); }
+.sset-person--nav:focus-visible { background: var(--sset-surface); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35); }
+.sset-person__chev { flex: none; align-self: center; color: var(--sset-faint); display: flex; }
+.sset-person__you { font-weight: 500; color: var(--sset-faint); }
+
+/* Settings-style drill-in row: label left, current value + chevron right. */
+.sset-navrow {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 13px 14px;
+  border: none; background: transparent; text-align: left; cursor: pointer; font-family: inherit;
+  border-top: 1px solid var(--sset-hair); transition: background 0.13s;
+}
+.sset-navrow:first-child { border-top: none; }
+.sset-navrow:hover { background: var(--sset-surface); }
+.sset-navrow__label { font-size: 13px; font-weight: 600; color: var(--sset-ink); flex: none; }
+.sset-navrow__value { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--sset-muted); }
+.sset-navrow__val { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sset-navrow__value svg { flex: none; color: var(--sset-faint); }
+
+/* Full-width action button (remove / delete inside a detail screen). */
+.sset-btn--block { display: block; width: 100%; }
+
+/* Detail header (person / pending). */
+.sset-detail-head { padding: 2px 0 14px; }
+.sset-detail-head__name { font-size: 16px; font-weight: 680; color: var(--sset-ink); line-height: 1.2; }
+.sset-detail-head__sub { margin-top: 3px; font-size: 12.5px; color: var(--sset-muted); }
+.sset-detail-head__badges { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; }
+.sset-removerow { padding: 12px 14px; }
+
+/* Regions. */
+.sset-region-entry { margin: 4px 0 12px; }
+.sset-region-create .sset-input { width: 100%; }
+.sset-region-name { display: flex; gap: 8px; align-items: center; }
+.sset-region-name .sset-input { flex: 1; }
+.sset-region-picker { margin-top: 10px; }
