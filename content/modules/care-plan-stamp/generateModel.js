@@ -62,7 +62,12 @@ export function polishByStdId(genPayload) {
 export function applyPolish(toAddItems, polishMap, touchedIds) {
   let swappedCount = 0;
   const items = (toAddItems || []).map((item) => {
-    const conceptId = item?.focus?.conceptId;
+    // Built-in fallback rows (no facility library match server-side) ship
+    // without focus.conceptId — but the catalog's concept ids ARE the built-in
+    // rule ids, so ruleId is the same join key. Lets the polish swap replace
+    // built-in template content with the facility's authored library row
+    // (std ids → library add, auto positions/kardex) when one exists.
+    const conceptId = item?.focus?.conceptId ?? item?.ruleId;
     const stdId = item?.focus?.libraryStdId;
     if (!conceptId && (stdId == null || stdId === '')) return item;
     if (touchedIds?.has?.(item._rowId) || touchedIds?.has?.(item.ruleId)) return item;

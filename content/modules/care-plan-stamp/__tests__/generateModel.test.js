@@ -70,6 +70,22 @@ describe('polishByStdId / applyPolish', () => {
     expect(out[0].focus.libraryStdId).toBe('100'); // stamps the V3 library row
   });
 
+  it('joins built-in fallback rows by ruleId (catalog concept ids ARE the built-in rule ids)', () => {
+    // Harmony Grissom: audit fell back to the built-in order.antiepileptic
+    // template (no facility CAA match server-side) → focus has NO conceptId
+    // and NO libraryStdId. The ruleId is the same catalog concept key, so the
+    // polished facility row for that concept must still swap in.
+    const items = [{
+      _rowId: 'a',
+      ruleId: 'universal.falls',
+      focus: { description: 'Built-in template', goals: [], interventions: [{ description: 'A' }] },
+    }];
+    const { items: out, swappedCount } = applyPolish(items, polishByStdId(gen), new Set());
+    expect(swappedCount).toBe(1);
+    expect(out[0].focus.description).toBe('Polished falls focus');
+    expect(out[0].focus.libraryStdId).toBe('100');
+  });
+
   it('swaps polished content into untouched matching rows', () => {
     const items = [row('a', '100'), row('b', '999')];
     const { items: out, swappedCount } = applyPolish(items, polishByStdId(gen), new Set());
