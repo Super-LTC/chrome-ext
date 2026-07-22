@@ -103,11 +103,11 @@ async function _renderBanner() {
 
 function _paint(banner, audit, ctx) {
   const a = audit?.toAdd?.length || 0;
-  // area_covered rows are map-only states, not worklist actions — keep them out
-  // of the "N to review" count (mirrors worklistModel.actionableChecks).
-  const c = (audit?.toCheck || []).filter((it) => it.kind !== 'area_covered').length;
   const r = audit?.toRemove?.length || 0;
-  const total = a + c + r;
+  // toCheck deliberately excluded (matches audit-review-button): verifies are
+  // soft FYI rows inside the audit, not outstanding work — advertising "4 to
+  // verify" on the banner read as failures (GS Nelson spot test, Jul 22).
+  const total = a + r;
 
   if (total === 0) {
     banner.className = 'super-audit-banner is-clean';
@@ -121,7 +121,6 @@ function _paint(banner, audit, ctx) {
   const parts = [];
   if (a) parts.push(`<strong>${a}</strong> to add`);
   if (r) parts.push(`<strong>${r}</strong> to remove`);
-  if (c) parts.push(`<strong>${c}</strong> to verify`);
 
   banner.className = 'super-audit-banner is-actionable';
   banner.innerHTML = `
