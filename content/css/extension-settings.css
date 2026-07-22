@@ -45,7 +45,7 @@
 .sset-card {
   position: relative;
   width: 100%;
-  max-width: 580px;
+  max-width: 720px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -558,3 +558,92 @@
 .sset-region-name { display: flex; gap: 8px; align-items: center; }
 .sset-region-name .sset-input { flex: 1; }
 .sset-region-picker { margin-top: 10px; }
+
+/* ---- Team tab v2: search, control blocks, inline picker, chips -------- */
+
+/* Roster search. */
+.sset-search { margin-bottom: 12px; }
+.sset-search .sset-input { width: 100%; }
+
+/* A labelled control block that does NOT clip (unlike a Section's inset card),
+   so an inline picker can expand freely. */
+.sset-ctl { margin-bottom: 16px; }
+.sset-ctl:last-child { margin-bottom: 0; }
+.sset-ctl__label {
+  display: block; margin: 0 2px 8px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--sset-faint);
+}
+.sset-ctl__sub { margin: -4px 2px 8px; font-size: 11.5px; line-height: 1.4; color: var(--sset-muted); }
+
+/* Inline picker — collapsed trigger looks like a select; expands to a radio
+   list of .sset-report rows (no floating menu → nothing to clip or mis-position). */
+.sset-picker__btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--sset-ink);
+  padding: 10px 12px;
+  border: 1px solid var(--sset-line); border-radius: 10px; background: #fff; cursor: pointer;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+.sset-picker__btn:hover:not(:disabled) { border-color: #cbd5e1; }
+.sset-picker__btn:disabled { color: var(--sset-faint); cursor: default; background: var(--sset-surface); }
+.sset-picker__btn svg { flex: none; color: var(--sset-faint); }
+.sset-picker__val { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sset-picker__list {
+  background: #fff; border: 1px solid var(--sset-line); border-radius: 12px; overflow: hidden;
+  max-height: 320px; overflow-y: auto;
+}
+
+/* Advanced disclosure. */
+.sset-adv {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: none; background: transparent; cursor: pointer; font-family: inherit;
+  padding: 10px 2px; margin-bottom: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: var(--sset-muted);
+}
+.sset-adv:hover { color: var(--sset-ink); }
+.sset-adv svg { transition: transform 0.18s; color: var(--sset-faint); }
+.sset-adv.is-open svg { transform: rotate(180deg); }
+
+/* Read-only chips (features a person holds / full-access note). */
+.sset-chiprow { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 0; }
+.sset-fullaccess {
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+  font-size: 12.5px; color: var(--sset-ink); line-height: 1.4;
+}
+.sset-fullaccess strong { font-weight: 650; }
+
+/* Compact building-count meta on a roster row. */
+.sset-person__count { color: var(--sset-faint); }
+
+/* ---- Team tab v3: bigger modal + sub-tabs + 2-column detail ----------- */
+
+/* The Team tab needs room (People/Doctors/Regions); Weekly/Profile stay compact. */
+.sset-card--wide { max-width: 940px; }
+
+/* Sub-tabs inside the Team tab. */
+.sset-subtabs {
+  display: flex; gap: 4px; padding: 4px; margin-bottom: 18px;
+  background: var(--sset-surface-2); border-radius: 12px;
+}
+.sset-subtab {
+  flex: 1; padding: 10px 12px; border: none; background: transparent; cursor: pointer;
+  border-radius: 9px; font-family: inherit; font-size: 13px; font-weight: 650;
+  color: var(--sset-muted); transition: background 0.16s, color 0.16s, box-shadow 0.16s;
+}
+.sset-subtab:hover:not(.is-active) { color: var(--sset-ink); }
+.sset-subtab.is-active {
+  background: #fff; color: var(--sset-indigo-600);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.03);
+}
+.sset-subtab__n { color: var(--sset-faint); font-weight: 600; margin-left: 3px; }
+.sset-subtab.is-active .sset-subtab__n { color: var(--sset-indigo); }
+
+/* Two-column detail (person: access | buildings). Collapses on a narrow viewport. */
+.sset-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+.sset-col { min-width: 0; }
+@media (max-width: 760px) { .sset-cols { grid-template-columns: 1fr; gap: 4px; } }
+
+/* Center a single-column form so it doesn't stretch across the wide modal. */
+.sset-form { max-width: 560px; margin: 0 auto; }

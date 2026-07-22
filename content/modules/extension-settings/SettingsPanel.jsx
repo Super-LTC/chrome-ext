@@ -45,7 +45,7 @@ export function SettingsPanel({ facilityName, orgSlug, initialTab = 'weekly', on
   return (
     <div class="sset-overlay" role="dialog" aria-modal="true" aria-label="Super LTC settings">
       <div class="sset-backdrop" onClick={onClose} />
-      <div class="sset-card">
+      <div class={`sset-card${tab === 'team' ? ' sset-card--wide' : ''}`}>
         <header class="sset-head">
           <div class="sset-head__title">
             <span class="sset-head__icon">{GEAR}</span>
