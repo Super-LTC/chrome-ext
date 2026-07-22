@@ -67,6 +67,11 @@ const CHEVRON_DOWN = (
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
+const BUILDING = (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4M10 10h4M10 14h4M10 18h4" />
+  </svg>
+);
 
 /** Seed a feature set from a job-title template, clamped to what the actor can grant. */
 function seedFromRole(roleModules, grantable) {
@@ -319,7 +324,7 @@ export function TeamTab({ facilityName, orgSlug }) {
     return <RegionsView subTabs={subTabs} orgSlug={orgSlug} grantable={grantable} team={team} onChanged={refresh} />;
   }
   return (
-    <PeopleView subTabs={subTabs} team={team} canManage={canManage} selfId={selfId}
+    <PeopleView subTabs={subTabs} team={team} grantable={grantable} canManage={canManage} selfId={selfId}
       onInvite={() => setNav({ view: 'invite' })}
       onOpenPerson={(id) => setNav({ view: 'person', id })}
       onOpenPending={(id) => setNav({ view: 'pending', id })} />
@@ -357,14 +362,22 @@ function GoneNotice({ text, onBack }) {
 /* Roster                                                              */
 /* ------------------------------------------------------------------ */
 
-function PeopleView({ subTabs, team, canManage, selfId, onInvite, onOpenPerson, onOpenPending }) {
+function PeopleView({ subTabs, team, grantable, canManage, selfId, onInvite, onOpenPerson, onOpenPending }) {
   const people = team?.people ?? [];
   const pending = team?.pendingPeople ?? [];
+  const buildings = grantable?.buildings ?? [];
   const [q, setQ] = useState('');
+  const [bldg, setBldg] = useState(''); // '' = all buildings
+
   const needle = q.trim().toLowerCase();
-  const shownPeople = needle
-    ? people.filter((p) => `${p.name || ''} ${p.email || ''}`.toLowerCase().includes(needle))
-    : people;
+  const shownPeople = people.filter((p) => {
+    if (needle && !`${p.name || ''} ${p.email || ''}`.toLowerCase().includes(needle)) return false;
+    if (bldg && !(p.locationIds || []).includes(bldg)) return false;
+    return true;
+  });
+
+  const bldgOptions = [{ value: '', label: 'All buildings' }, ...buildings.map((b) => ({ value: b.id, label: b.name }))];
+  const showFilters = people.length > 4 || buildings.length > 1;
 
   return (
     <div class="sset-body">
@@ -381,22 +394,29 @@ function PeopleView({ subTabs, team, canManage, selfId, onInvite, onOpenPerson, 
         ) : null}
       </div>
 
-      {people.length > 6 ? (
-        <div class="sset-search">
-          <input type="text" class="sset-input" value={q} onInput={(e) => setQ(e.target.value)} placeholder="Search people…" />
-        </div>
+      {showFilters ? (
+        <>
+          <div class="sset-search">
+            <input type="text" class="sset-input" value={q} onInput={(e) => setQ(e.target.value)} placeholder="Search people…" />
+          </div>
+          {buildings.length > 1 ? (
+            <div class="sset-ctl"><Picker value={bldg} options={bldgOptions} onChange={setBldg} placeholder="All buildings" /></div>
+          ) : null}
+        </>
       ) : null}
 
       {shownPeople.length === 0 ? (
         <div class="sset-empty">
-          {needle
-            ? 'No one matches that search.'
+          {needle || bldg
+            ? 'No one matches those filters.'
             : canManage ? 'No one here yet. Invite your first teammate.' : 'No teammates in your building yet.'}
         </div>
       ) : (
-        shownPeople.map((p) => (
-          <PersonRow key={p.userId} person={p} canManage={canManage} isSelf={p.userId === selfId} onOpen={onOpenPerson} />
-        ))
+        <div class="sset-pgrid">
+          {shownPeople.map((p) => (
+            <PersonCard key={p.userId} person={p} canManage={canManage} isSelf={p.userId === selfId} onOpen={onOpenPerson} />
+          ))}
+        </div>
       )}
 
       {canManage && pending.length ? (
@@ -408,6 +428,16 @@ function PeopleView({ subTabs, team, canManage, selfId, onInvite, onOpenPerson, 
       ) : null}
     </div>
   );
+}
+
+/** One name if they're in a few buildings, "First +N" when they span more. */
+function buildingLabel(person) {
+  const names = person.buildingNames || [];
+  if (names.length === 0) {
+    const n = (person.locationIds || []).length;
+    return n === 0 ? 'No building' : `${n} buildings`;
+  }
+  return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
 }
 
 function DoctorsView({ subTabs, team, grantable, canManage, orgSlug, onAddDoctor, onChanged }) {
@@ -449,34 +479,23 @@ function DoctorsView({ subTabs, team, grantable, canManage, orgSlug, onAddDoctor
   );
 }
 
-function PersonRow({ person, canManage, isSelf, onOpen }) {
+function PersonCard({ person, canManage, isSelf, onOpen }) {
   const isAdmin = person.orgRole && person.orgRole !== 'user';
   const roleLabel = isAdmin ? SCOPE_LABELS[person.orgRole] : null;
-  const nBldg = (person.buildingNames || person.locationIds || []).length;
   const clickable = canManage;
-
-  const open = () => clickable && onOpen(person.userId);
+  const open = () => { if (clickable) onOpen(person.userId); };
   return (
-    <div
-      class={`sset-person${clickable ? ' sset-person--nav' : ''}`}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? open : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } } : undefined}
-    >
-      <div class="sset-person__main">
-        <div class="sset-person__name">
-          {person.name || person.email}
-          {isSelf ? <span class="sset-person__you"> · You</span> : null}
-        </div>
-        <div class="sset-person__meta">
-          {roleLabel ? <span class="sset-badge sset-badge--admin">{roleLabel}</span> : null}
-          {person.snfRole ? <span class="sset-badge">{prettyRole(person.snfRole)}</span> : null}
-          <span class="sset-person__count">{nBldg} {nBldg === 1 ? 'building' : 'buildings'}</span>
-        </div>
+    <button type="button" class="sset-pcard" data-track="team_person_opened" style={clickable ? undefined : 'cursor:default;'} onClick={open}>
+      <div class="sset-pcard__name">
+        {person.name || person.email}
+        {isSelf ? <span class="sset-person__you"> · You</span> : null}
       </div>
-      {clickable ? <span class="sset-person__chev">{CHEVRON}</span> : null}
-    </div>
+      <div class="sset-pcard__meta">
+        {roleLabel ? <span class="sset-badge sset-badge--admin">{roleLabel}</span> : null}
+        {person.snfRole ? <span class="sset-badge">{prettyRole(person.snfRole)}</span> : null}
+      </div>
+      <div class="sset-pcard__bldg">{BUILDING}<span>{buildingLabel(person)}</span></div>
+    </button>
   );
 }
 
@@ -507,33 +526,11 @@ function PendingRow({ pending, onOpen }) {
 /* ------------------------------------------------------------------ */
 
 function PersonDetailView({ person, grantable, orgSlug, isSelf, onBack, onChanged, onRemoved }) {
-  const [screen, setScreen] = useState('menu'); // 'menu' | 'features' | 'buildings'
   const [orgRole, setOrgRole] = useState(person.orgRole); // optimistic — updates instantly
   const [savingRole, setSavingRole] = useState(false);
   const [confirmOrgAdmin, setConfirmOrgAdmin] = useState(false);
   const [roleErr, setRoleErr] = useState(null);
-  const [perm, setPerm] = useState(undefined); // undefined=loading · null=full access · {modules} = restricted
   const isOrgAdmin = orgRole === 'org_admin';
-
-  // Fetch effective features so the summary is honest: null modules = full access
-  // (grandfathered — everyone starts with everything), not "nothing set up".
-  useEffect(() => {
-    if (isSelf) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const cur = await getTeamMemberPermissions(person.userId, orgSlug);
-        if (!cancelled) setPerm(cur);
-      } catch {
-        if (!cancelled) setPerm(null);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [person.userId, orgSlug, isSelf, orgRole]);
-
-  if (screen === 'features') {
-    return <FeaturesEditor person={person} grantable={grantable} orgSlug={orgSlug} onBack={() => setScreen('menu')} onChanged={onChanged} />;
-  }
 
   const scopeOptions = SCOPE_ORDER
     .filter((s) => (grantable?.scopes ?? []).includes(s) || s === orgRole)
@@ -559,20 +556,6 @@ function PersonDetailView({ person, grantable, orgSlug, isSelf, onBack, onChange
       setSavingRole(false);
     }
   };
-
-  // Features summary line.
-  let featuresValue = '…';
-  if (perm !== undefined) {
-    const grantableModules = grantable?.modules ?? {};
-    if (!perm.modules || isAllOn(perm.modules, grantableModules)) {
-      featuresValue = 'Full access';
-    } else {
-      const bundles = grantableBundles(grantable?.bundles, grantableModules);
-      const onCount = bundles.filter((b) => bundleFullyOn(perm.modules, b)).length;
-      const jt = perm.snfRole ? prettyRole(perm.snfRole) : null;
-      featuresValue = `${jt ? jt + ' · ' : ''}${onCount} feature${onCount === 1 ? '' : 's'}`;
-    }
-  }
 
   const accessCtl = (
     <Ctl label="Access level">
@@ -625,9 +608,7 @@ function PersonDetailView({ person, grantable, orgSlug, isSelf, onBack, onChange
           <div class="sset-cols">
             <div class="sset-col">
               {accessCtl}
-              <Section label="Features">
-                <NavRow label="Features" value={featuresValue} onClick={() => setScreen('features')} />
-              </Section>
+              <PersonFeatures person={person} grantable={grantable} orgSlug={orgSlug} onChanged={onChanged} />
             </div>
             <PersonBuildings person={person} grantable={grantable} orgSlug={orgSlug} onChanged={onChanged} />
           </div>
@@ -755,13 +736,22 @@ function RemoveRow({ person, orgSlug, onRemoved }) {
   );
 }
 
-function FeaturesEditor({ person, grantable, orgSlug, onBack, onChanged }) {
+/**
+ * Inline features for the person detail: read = chips of what they hold (or "Full
+ * access"); Edit expands in place to a job-title picker + bundle editor where each
+ * bundle opens to its sub-features. No separate screen. Mirrors the web.
+ */
+function PersonFeatures({ person, grantable, orgSlug, onChanged }) {
   const grantableModules = grantable?.modules ?? {};
+  const moduleLabels = grantable?.moduleLabels ?? {};
   const roles = grantable?.roles ?? [];
   const bundles = useMemo(() => grantableBundles(grantable?.bundles, grantableModules), [grantable]);
 
   const [snfRole, setSnfRole] = useState(person.snfRole ?? roles[0]?.key ?? 'mds_coordinator');
-  const [modules, setModules] = useState(null); // null → loading current features
+  const [modules, setModules] = useState(null); // null = loading
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [expanded, setExpanded] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
 
@@ -775,162 +765,115 @@ function FeaturesEditor({ person, grantable, orgSlug, onBack, onChanged }) {
         // null modules = grandfathered full access → show everything on (mirrors the web).
         setModules(cur.modules ? clampModules(cur.modules, grantableModules) : allGrantableOn(grantableModules));
       } catch {
-        if (cancelled) return;
-        setModules(allGrantableOn(grantableModules));
+        if (!cancelled) setModules(allGrantableOn(grantableModules));
       }
     })();
     return () => { cancelled = true; };
   }, [person.userId, orgSlug]);
 
-  const pickRole = (key) => {
-    setSnfRole(key);
-    const role = roles.find((r) => r.key === key);
-    setModules(seedFromRole(role?.modules, grantableModules));
-  };
-  const toggleBundle = (b) => setModules((m) => applyBundle(m, b, !bundleFullyOn(m, b), grantableModules));
+  const startEdit = () => { setDraft(modules); setExpanded(new Set()); setStatus(null); setEditing(true); };
+  const cancel = () => { setEditing(false); setDraft(null); setExpanded(new Set()); setStatus(null); };
+  const pickRole = (key) => { setSnfRole(key); setDraft(seedFromRole(roles.find((r) => r.key === key)?.modules, grantableModules)); };
+  const setFeatures = (keys, on) => setDraft((d) => { const n = { ...d }; for (const k of keys) n[k] = on && !!grantableModules[k]; return n; });
+  const toggleExpand = (key) => setExpanded((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
 
   const save = async () => {
     setSaving(true);
     setStatus(null);
     try {
-      await updateTeamMemberPermissions(person.userId, { orgSlug, snfRole, modules });
+      await updateTeamMemberPermissions(person.userId, { orgSlug, snfRole, modules: draft });
       track('team_member_features_saved', { source: 'settings' });
-      await onChanged();
-      onBack();
+      setModules(draft);
+      setEditing(false);
+      setExpanded(new Set());
+      if (onChanged) onChanged();
     } catch (e) {
       setStatus({ kind: 'err', text: e.message || 'Could not save features.' });
+    } finally {
       setSaving(false);
     }
   };
 
   if (modules === null) {
+    return <div class="sset-ctl"><span class="sset-ctl__label">Features</span><div class="sset-coverage" style="padding:8px 2px;">Loading…</div></div>;
+  }
+
+  // Read view — chips.
+  if (!editing) {
+    const held = bundles.filter((b) => b.modules.some((m) => modules[m]));
     return (
-      <div class="sset-body">
-        <button type="button" class="sset-back" data-track="team_editor_back" onClick={onBack}>← {person.name || person.email}</button>
-        <div class="sset-loading"><div class="sset-spinner" /><span>Loading their access…</span></div>
+      <div class="sset-ctl">
+        <div class="sset-ctl__label-row">
+          <span class="sset-ctl__label" style="margin:0;">Features</span>
+          {/* NO_TRACK — opens the inline editor; the save is the tracked event */}
+          <button type="button" class="sset-editlink" onClick={startEdit}>Edit</button>
+        </div>
+        {isAllOn(modules, grantableModules) ? (
+          <div class="sset-featurechips"><span class="sset-badge sset-badge--admin">Full access</span></div>
+        ) : held.length === 0 ? (
+          <div class="sset-coverage" style="padding:6px 2px;">No features — click Edit to grant some.</div>
+        ) : (
+          <div class="sset-featurechips">
+            {held.map((b) => (
+              <span key={b.key} class="sset-badge">{b.label}{bundleFullyOn(modules, b) ? '' : ' · some'}</span>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
-  const allOn = isAllOn(modules, grantableModules);
-  const onCount = bundles.filter((b) => bundleFullyOn(modules, b)).length;
-
+  // Edit view — job title + expandable bundle / sub-feature editor.
+  const draftAllOn = isAllOn(draft, grantableModules);
+  const onCount = bundles.filter((b) => bundleFullyOn(draft, b)).length;
   return (
-    <>
-      <div class="sset-body">
-        <button type="button" class="sset-back" data-track="team_editor_back" onClick={onBack}>← {person.name || person.email}</button>
-        <Ctl label="Job title" sub="A starting point — flip individual features below to fine-tune.">
-          <Picker value={snfRole} options={roles.map((r) => ({ value: r.key, label: r.label }))} onChange={pickRole} />
-        </Ctl>
-        <Section
-          label="Features"
-          hint={allOn ? 'Full access' : `${onCount} on`}
-          sub={allOn ? 'Everything is on — the default. Uncheck to limit what they can see.' : undefined}
-        >
-          {bundles.map((b) => (
-            <button key={b.key} type="button" data-track="team_feature_toggled" class={`sset-report${bundleFullyOn(modules, b) ? ' is-on' : ''}`} onClick={() => toggleBundle(b)} aria-pressed={bundleFullyOn(modules, b) ? 'true' : 'false'}>
-              <span class="sset-check">{CHECK}</span>
-              <span class="sset-report__text">
-                <span class="sset-report__title">{b.label}</span>
-                <span class="sset-report__desc">{b.description}</span>
-              </span>
-            </button>
-          ))}
-        </Section>
-      </div>
-      <div class="sset-savebar">
-        <div class={`sset-status${status ? ` is-${status.kind}` : ''}`} role="status">{status?.text || ''}</div>
-        {/* NO_TRACK — features-saved event fired in save() on success */}
-        <button type="button" class="sset-btn sset-btn--primary" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save features'}
-        </button>
-      </div>
-    </>
-  );
-}
-
-function BuildingsEditor({ person, grantable, orgSlug, onBack, onChanged }) {
-  const allBuildings = grantable?.buildings ?? [];
-  const viaRegion = useMemo(() => new Set(person.viaRegionLocationIds ?? []), [person]);
-  const nameById = useMemo(() => new Map(allBuildings.map((b) => [b.id, b.name])), [allBuildings]);
-  const viaRegionNames = useMemo(
-    () => [...viaRegion].map((id) => nameById.get(id)).filter(Boolean),
-    [viaRegion, nameById],
-  );
-
-  const [ids, setIds] = useState(() => new Set((person.locationIds ?? []).filter((id) => !viaRegion.has(id))));
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState(null);
-  const [bFilter, setBFilter] = useState('');
-
-  const bNeedle = bFilter.trim().toLowerCase();
-  const shown = bNeedle ? allBuildings.filter((b) => b.name.toLowerCase().includes(bNeedle)) : allBuildings;
-
-  const toggle = (id) => setIds((prev) => {
-    const n = new Set(prev);
-    if (n.has(id)) n.delete(id); else n.add(id);
-    return n;
-  });
-
-  const save = async () => {
-    setSaving(true);
-    setStatus(null);
-    try {
-      await updateTeamMemberLocations(person.userId, { orgSlug, locationIds: Array.from(ids) });
-      track('team_member_buildings_saved', { source: 'settings' });
-      await onChanged();
-      onBack();
-    } catch (e) {
-      setStatus({ kind: 'err', text: e.message || 'Could not save buildings.' });
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div class="sset-body">
-        <button type="button" class="sset-back" data-track="team_editor_back" onClick={onBack}>← {person.name || person.email}</button>
-        <Section label="Buildings" hint={`${ids.size} selected`}>
-          {allBuildings.length === 0 ? (
-            <div class="sset-coverage">No buildings available to assign.</div>
-          ) : (
-            <>
-              {allBuildings.length > 8 ? (
-                <div style="padding:10px 12px 2px;">
-                  <input type="text" class="sset-input" value={bFilter} onInput={(e) => setBFilter(e.target.value)} placeholder="Search buildings…" />
+    <div class="sset-ctl">
+      <Ctl label="Job title" sub="A starting point — flip individual features below.">
+        <Picker value={snfRole} options={roles.map((r) => ({ value: r.key, label: r.label }))} onChange={pickRole} />
+      </Ctl>
+      <Section label="Features" hint={draftAllOn ? 'Full access' : `${onCount} on`}>
+        {bundles.map((b) => {
+          const feats = b.modules.filter((m) => grantableModules[m]);
+          const onN = feats.filter((m) => draft[m]).length;
+          const fully = feats.length > 0 && onN === feats.length;
+          const isOpen = expanded.has(b.key);
+          return (
+            <div key={b.key}>
+              <div class="sset-bundle">
+                {/* NO_TRACK — feature toggle is persisted on Save */}
+                <button type="button" class={`sset-report${fully ? ' is-on' : ''}`} onClick={() => setFeatures(feats, !fully)}>
+                  <span class="sset-check">{CHECK}</span>
+                  <span class="sset-report__text">
+                    <span class="sset-report__title">{b.label}</span>
+                    <span class="sset-report__desc">{onN}/{feats.length} on</span>
+                  </span>
+                </button>
+                <button type="button" class="sset-bundle-exp" data-track="team_bundle_expanded" aria-label={isOpen ? 'Collapse' : 'Expand'} onClick={() => toggleExpand(b.key)}>
+                  {isOpen ? CHEVRON_DOWN : CHEVRON}
+                </button>
+              </div>
+              {isOpen ? (
+                <div class="sset-subfeatures">
+                  {feats.map((m) => (
+                    // NO_TRACK — sub-feature toggle is persisted on Save
+                    <button type="button" key={m} class={`sset-report${draft[m] ? ' is-on' : ''}`} onClick={() => setFeatures([m], !draft[m])}>
+                      <span class="sset-check">{CHECK}</span>
+                      <span class="sset-report__text"><span class="sset-report__title">{moduleLabels[m] || m}</span></span>
+                    </button>
+                  ))}
                 </div>
               ) : null}
-              <div class="sset-bldg-list">
-                {shown.length === 0 ? (
-                  <div class="sset-coverage">No buildings match.</div>
-                ) : shown.map((b) => (
-                  <button key={b.id} type="button" data-track="team_building_toggled" class={`sset-report${ids.has(b.id) ? ' is-on' : ''}`} onClick={() => toggle(b.id)} aria-pressed={ids.has(b.id) ? 'true' : 'false'}>
-                    <span class="sset-check">{CHECK}</span>
-                    <span class="sset-report__text"><span class="sset-report__title">{b.name}</span></span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </Section>
-        {viaRegionNames.length ? (
-          <Section label="From a region" sub="Managed by region membership — change these on the web.">
-            {viaRegionNames.map((name) => (
-              <div key={name} class="sset-report" style="cursor:default;">
-                <span class="sset-report__text"><span class="sset-report__title">{name}</span></span>
-              </div>
-            ))}
-          </Section>
-        ) : null}
+            </div>
+          );
+        })}
+      </Section>
+      {status ? <div class="sset-status is-err" style="padding:0 2px 8px;">{status.text}</div> : null}
+      <div class="sset-person__confirm" style="padding:0 2px;">
+        {/* NO_TRACK — features-saved is tracked in save() */}
+        <button type="button" class="sset-btn sset-btn--primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="button" class="sset-btn sset-btn--ghost" data-track="team_features_cancelled" disabled={saving} onClick={cancel}>Cancel</button>
       </div>
-      <div class="sset-savebar">
-        <div class={`sset-status${status ? ` is-${status.kind}` : ''}`} role="status">{status?.text || ''}</div>
-        {/* NO_TRACK — buildings-saved event fired in save() on success */}
-        <button type="button" class="sset-btn sset-btn--primary" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save buildings'}
-        </button>
-      </div>
-    </>
+    </div>
   );
 }
 
