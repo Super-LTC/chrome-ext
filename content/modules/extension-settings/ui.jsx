@@ -19,8 +19,9 @@ export function Switch({ checked, onChange, disabled }) {
   );
 }
 
-/** Labelled section wrapper: an eyebrow label above an inset card. */
-export function Section({ label, hint, children }) {
+/** Labelled section wrapper: an eyebrow label above an inset card, with an
+ *  optional one-line `sub` description under the label. */
+export function Section({ label, hint, sub, children }) {
   return (
     <section class="sset-section">
       {label ? (
@@ -29,6 +30,7 @@ export function Section({ label, hint, children }) {
           {hint ? <span class="sset-section__hint">{hint}</span> : null}
         </div>
       ) : null}
+      {sub ? <div class="sset-section__sub">{sub}</div> : null}
       <div class="sset-section__body">{children}</div>
     </section>
   );
