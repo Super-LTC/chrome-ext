@@ -322,6 +322,94 @@ const QueryAPI = {
   },
 
   /**
+   * Edit an existing query's note and/or effective (onset) date. Allowed by the
+   * backend until the query is `signed` (it enforces this with a 400; callers
+   * should also gate the UI and handle the error defensively).
+   *
+   * Only the keys you pass are changed:
+   *   - `nurseEditedNote`: string to replace the note.
+   *   - `effectiveDate`: `"YYYY-MM-DD"` to set, or `null` to CLEAR back to the
+   *     createdAt default. `null` is meaningful, so it's forwarded as-is; a key
+   *     left `undefined` is omitted entirely (leave unchanged).
+   *   - `recommendedIcd10`: replaces the candidate codes the doctor is offered.
+   *     Must be a NON-EMPTY `[{ code, description?, reason? }]` — the backend
+   *     400s on `[]`, so there is no "clear back to codeless" via PATCH. A
+   *     caller whose nurse cleared the selection must omit the key.
+   *     Note: on `I8000:<code>` queries the first code becomes the query's
+   *     identity and the server syncs `mdsItem`/`mdsItemName` to it, so the
+   *     returned query may have a different `mdsItem` than the one sent.
+   * @param {string} queryId
+   * @param {{ nurseEditedNote?: string, effectiveDate?: string|null, recommendedIcd10?: Array<{code: string, description?: string, reason?: string}> }} changes
+   * @returns {Promise<Object>} the updated query (with fresh `timing`)
+   */
+  async patchQuery(queryId, changes = {}) {
+    const endpoint = `/api/extension/diagnosis-queries/${queryId}`;
+
+    // Build the body from only the keys the caller actually provided. `null` is
+    // a real value (clear effectiveDate); `undefined` means "don't touch".
+    const body = {};
+    if (changes.nurseEditedNote !== undefined) body.nurseEditedNote = changes.nurseEditedNote;
+    if (changes.effectiveDate !== undefined) body.effectiveDate = changes.effectiveDate;
+    // Guard the backend's non-empty rule here too, so a caller that slipped an
+    // empty array through gets "leave unchanged" instead of a 400.
+    if (Array.isArray(changes.recommendedIcd10) && changes.recommendedIcd10.length > 0) {
+      body.recommendedIcd10 = changes.recommendedIcd10;
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint,
+      options: {
+        method: 'PATCH',
+        body: JSON.stringify(body)
+      }
+    });
+
+    if (!response.success) {
+      _trackApiFail('/api/extension/diagnosis-queries/:id', response);
+      throw new Error(response.error || 'Failed to update query');
+    }
+
+    return response.data?.query || response.data;
+  },
+
+  /**
+   * Preview the ARD/effective-date `timing` for a query that doesn't exist yet
+   * (the create form). The backend owns the lookback window + 7-vs-30-day rule,
+   * so we ask it rather than deriving locally.
+   *
+   * Best-effort by design: a failed preview must NEVER block query creation, so
+   * this resolves to `null` (rather than throwing) on any error or missing
+   * `mdsItem`. Callers treat `null` as "no window guidance available".
+   * @param {{ mdsItem: string, ardDate?: string|null, effectiveDate?: string|null }} params
+   * @returns {Promise<Object|null>} the `timing` object, or null
+   */
+  async previewTiming({ mdsItem, ardDate, effectiveDate } = {}) {
+    if (!mdsItem) return null;
+
+    const params = new URLSearchParams({ mdsItem });
+    if (ardDate) params.set('ardDate', ardDate);
+    if (effectiveDate) params.set('effectiveDate', effectiveDate);
+
+    const endpoint = `/api/extension/diagnosis-queries/preview-timing?${params}`;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'API_REQUEST',
+        endpoint
+      });
+      if (!response?.success) {
+        _trackApiFail('/api/extension/diagnosis-queries/preview-timing', response || {});
+        return null;
+      }
+      return response.data?.timing || null;
+    } catch (err) {
+      console.warn('Super LTC: preview-timing failed (non-fatal)', err);
+      return null;
+    }
+  },
+
+  /**
    * Revoke an outstanding (sent) diagnosis query — invalidates the
    * practitioner's live signing link so the signature can no longer be
    * completed. Reversible via unrevokeQuery. `reason` is required (non-empty).

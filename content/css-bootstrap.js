@@ -67,6 +67,7 @@ import mdsListCoverage from './css/mds-list-coverage.css?inline';
 import superVerify from './css/super-verify.css?inline';
 import i8000Overlay from './css/i8000-overlay.css?inline';
 import ipaView from './css/ipa-view.css?inline';
+import extensionSettings from './css/extension-settings.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -112,6 +113,7 @@ const CSS_BUNDLE = [
   superVerify,
   i8000Overlay,
   ipaView,
+  extensionSettings,
 ].join('\n\n');
 
 function injectCss() {

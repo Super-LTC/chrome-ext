@@ -11,6 +11,7 @@ import { RevokeCertModal } from './components/RevokeCertModal.jsx';
 import { EditClinicalReasonModal } from './components/EditClinicalReasonModal.jsx';
 import { DelayCertModal } from './components/DelayCertModal.jsx';
 import { PractitionerWorkloadView } from './components/PractitionerWorkloadView.jsx';
+import { CertAuditView } from './components/CertAuditView.jsx';
 import { track } from '../../utils/analytics.js';
 import { getCertUrgency as resolveCertUrgency, isOverdueUrgency } from './cert-urgency.js';
 
@@ -28,6 +29,7 @@ const SUB_TABS = [
   { id: 'dueSoon', label: 'Due Soon' },
   { id: 'signed', label: 'Signed' },
   { id: 'discharged', label: 'Discharged' },
+  { id: 'audit', label: 'All' },
 ];
 
 /**
@@ -81,7 +83,44 @@ function matchesStayType(cert, filter) {
   return cert.payerType !== 'managed_care'; // 'medicare' = everything that's not managed
 }
 
-export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
+// Mirrors the backend CERT_DUE_SOON_THRESHOLD_DAYS — the single "close to due"
+// window shared by due-soon and "signature almost due" so the two can't drift.
+const CERT_DUE_SOON_THRESHOLD_DAYS = 3;
+
+/**
+ * A cert is "action needed" when it's time-pressured but not yet resolved:
+ * close to being due to send, or sent-but-signature-almost-due-and-unsigned.
+ * The backend owns this (cert.actionNeeded); we recompute locally only as a
+ * fallback for older backends that predate the field.
+ */
+function isActionNeeded(cert) {
+  if (typeof cert.actionNeeded === 'boolean') return cert.actionNeeded;
+  const { urgency, daysUntilDue } = resolveCertUrgency(cert);
+  if (urgency === 'overdue' || urgency === 'due_soon' || urgency === 'delayed' || urgency === 'awaiting_signature_overdue') {
+    return true;
+  }
+  if (urgency === 'awaiting_signature') return (daysUntilDue ?? Infinity) <= CERT_DUE_SOON_THRESHOLD_DAYS;
+  return false;
+}
+
+function _withinDays(iso, days) {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return false;
+  return Date.now() - t <= days * 86400000;
+}
+
+/**
+ * A signed cert the current user hasn't looked at yet — drives the Signed-tab
+ * "new" nudge. Backend ships isNewlySigned; fall back to the same seenByMe +
+ * 7-day basis the FAB "S" badge uses so the two can't disagree.
+ */
+function isNewlySigned(cert) {
+  if (typeof cert.isNewlySigned === 'boolean') return cert.isNewlySigned;
+  return cert.seenByMe === false && _withinDays(cert.signedAt, 7);
+}
+
+export function CertsView({ facilityName, orgSlug, patientId, patientName, onSignedSeen }) {
   const [activeSubTab, setActiveSubTab] = useState('action');
   const [stayTypeFilter, setStayTypeFilter] = useState('all');
 
@@ -135,6 +174,25 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
     [updateNotificationPref]
   );
 
+  // Opening the Signed sub-tab = the coordinator has now actually looked at the
+  // signatures. Mark those cert_signed notifications seen (clears the "new"
+  // nudge here + the FAB "S" badge via onSignedSeen), then refetch so the badge
+  // clears. Uses the unfiltered signed list so every stay type clears at once.
+  // Idempotent server-side, and self-terminating: once seen, isNewlySigned goes
+  // false → keys empty → no re-fire.
+  useEffect(() => {
+    if (activeSubTab !== 'signed') return;
+    const keys = signedCerts
+      .filter(isNewlySigned)
+      .map(c => window.NOTIFICATION_KEYS?.certSigned(c.id))
+      .filter(Boolean);
+    if (keys.length === 0) return;
+    window.NotificationsAPI?.markSeen(keys).then(() => {
+      refetchSigned();
+      onSignedSeen?.();
+    });
+  }, [activeSubTab, signedCerts]);
+
   // Fire-once when the Discharged tab is first opened.
   const [dischargedOpened, setDischargedOpened] = useState(false);
   useEffect(() => {
@@ -143,6 +201,15 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       track('cert_discharged_tab_opened', { source: 'mds_cc' });
     }
   }, [activeSubTab, dischargedOpened]);
+
+  // Fire-once when the Audit tab is first opened.
+  const [auditOpened, setAuditOpened] = useState(false);
+  useEffect(() => {
+    if (activeSubTab === 'audit' && !auditOpened) {
+      setAuditOpened(true);
+      track('cert_audit_tab_opened', { source: 'mds_cc' });
+    }
+  }, [activeSubTab, auditOpened]);
 
   const refetchAll = useCallback(() => {
     refetchActive();
@@ -181,11 +248,16 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       if (urgency === 'awaiting_signature' || urgency === 'awaiting_signature_overdue') awaiting++;
     }
     return {
-      action: filteredActive.length,
+      // Badge counts only the time-pressured certs (backend `actionNeeded`),
+      // not every active cert. The tab still LISTS the full worklist below —
+      // only the number narrows, so nothing hides.
+      action: filteredActive.filter(isActionNeeded).length,
       awaiting,
       overdue,
       dueSoon,
-      signed: filteredSigned.length
+      // Signed badge = a "newly signed, not yet seen" nudge (clears once the
+      // Signed sub-tab is opened), not the total signed count.
+      signed: filteredSigned.filter(isNewlySigned).length
     };
   }, [filteredActive, filteredSigned]);
 
@@ -357,6 +429,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
   }
 
   const isDischarged = activeSubTab === 'discharged';
+  const isAudit = activeSubTab === 'audit';
   const loading = activeSubTab === 'signed' ? signedLoading : activeLoading;
 
 
@@ -395,6 +468,10 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
 
       {/* Stay type filter + Sub-tabs */}
       <div class="cert__filters">
+        {/* Stay-type (payer) filter doesn't apply to the Audit tab — that list is
+            paginated server-side, so a client-only payer filter would be
+            misleading. The Audit tab has its own status/date filters instead. */}
+        {!isAudit && (
         <div class="cert__stay-type-filter">
           {STAY_TYPES.map(t => (
             // NO_TRACK
@@ -410,10 +487,11 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
             </button>
           ))}
         </div>
+        )}
         <div class="cert__sub-tabs-row">
         <div class="cert__sub-tabs">
-          {/* Discharged is a facility-wide archive; hide it in per-patient overlay */}
-          {SUB_TABS.filter(tab => tab.id !== 'discharged' || !patientId).map(tab => (
+          {/* Discharged + Audit are facility-wide archives; hide them in per-patient overlay */}
+          {SUB_TABS.filter(tab => (tab.id !== 'discharged' && tab.id !== 'audit') || !patientId).map(tab => (
             // NO_TRACK
             <button
               key={tab.id}
@@ -438,14 +516,14 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
       {/* Content */}
       <div class="cert__list">
         {/* Active / signed tabs */}
-        {!isDischarged && loading && (
+        {!isDischarged && !isAudit &&loading && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__spinner" />
             <p class="mds-cc__state-text">Loading certifications...</p>
           </div>
         )}
 
-        {!isDischarged && !loading && activeError && (
+        {!isDischarged && !isAudit &&!loading && activeError && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__state-icon">{'\u26A0'}</div>
             <p class="mds-cc__state-text">{activeError}</p>
@@ -454,7 +532,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           </div>
         )}
 
-        {!isDischarged && !loading && !activeError && stayGroups.length === 0 && (
+        {!isDischarged && !isAudit &&!loading && !activeError && stayGroups.length === 0 && (
           <div class="mds-cc__state-container">
             <div class="mds-cc__state-icon">{activeSubTab === 'overdue' ? '\u2705' : '\u{1F4CB}'}</div>
             <p class="mds-cc__state-text">
@@ -467,7 +545,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           </div>
         )}
 
-        {!isDischarged && !loading && !activeError && stayGroups.map(group => (
+        {!isDischarged && !isAudit &&!loading && !activeError && stayGroups.map(group => (
           <StayGroupCard
             key={group.stayId}
             stayId={group.stayId}
@@ -536,6 +614,11 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName }) {
           >
             {dischargedLoadingMore ? 'Loading\u2026' : 'Load more'}
           </button>
+        )}
+
+        {/* Audit tab \u2014 full facility-wide list of every cert, filterable + CSV export */}
+        {isAudit && (
+          <CertAuditView facilityName={facilityName} orgSlug={orgSlug} />
         )}
       </div>
 

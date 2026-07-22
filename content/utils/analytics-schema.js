@@ -46,11 +46,15 @@ export const EVENT_SCHEMA = {
   cert_view_opened: ['source'],
   cert_discharged_tab_opened: ['source'],
   cert_discharged_load_more: ['page'],
+  cert_audit_tab_opened: ['source'],
+  cert_audit_exported: ['count'],
   cert_settings_opened: ['source'],
   cert_setting_toggled: ['setting', 'enabled'],
   cert_digest_banner_shown: [],
   cert_digest_banner_enabled: [],
   cert_digest_banner_dismissed: [],
+  cert_reason_generate_clicked: ['cert_type', 'is_regenerate', 'surface'],
+  cert_reason_generated: ['cert_type', 'source', 'surface'],
   care_plan_coverage_opened: ['source'],
   care_plan_stamp_submitted: ['source'],
   rounding_reports_opened: ['source'],
@@ -115,6 +119,8 @@ export const EVENT_SCHEMA = {
   mds_list_coverage_shown: ['rows', 'ok', 'not_synced'],
   mds_list_coverage_row_clicked: ['required', 'needed'],
   mds_list_coverage_uda_opened: ['status'],
+  // Super filter bar on the MDS list. Categorical/booleans/counts only — no PHI.
+  mds_list_filter_changed: ['discipline', 'due', 'missing_count', 'type_selected', 'has_search', 'sections_count', 'shown', 'total'],
 
   facility_dashboard_tab_switched: ['from_tab', 'to_tab'],
   facility_dashboard_resident_clicked: [],
@@ -198,6 +204,11 @@ export const EVENT_SCHEMA = {
   query_send_started: ['item_code', 'recipient_role'],
   query_send_succeeded: ['duration_ms'],
   query_send_failed: ['error_code'],
+
+  // Edit an already-sent query (note + effective date), until signed.
+  query_edit_started: ['item_code'],
+  query_edit_saved: ['item_code', 'icd10_changed'],
+  query_edit_failed: ['error_code'],
 
   chat_stream_started: [],
   chat_stream_completed: ['duration_ms'],

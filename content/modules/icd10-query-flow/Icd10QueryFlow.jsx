@@ -105,6 +105,7 @@ export function Icd10QueryFlow({
   facilityName,
   orgSlug,
   assessmentId,
+  ardDate,
   onClose,
   onComplete,
 }) {
@@ -118,6 +119,9 @@ export function Icd10QueryFlow({
     facilityName,
     orgSlug,
     assessmentId,
+    // Best-effort: the evidence panel may pass an ARD via groupContext. Absent →
+    // no window nudge, picker still works.
+    ardDate: ardDate || groupContext?.ardDate,
     onComplete: (sentQueries, practitionerName) => {
       if (onComplete) onComplete(sentQueries, practitionerName);
       // Auto-close shortly after success so the toast/banner is the
@@ -173,6 +177,7 @@ export function Icd10QueryFlow({
               onSelectPractitioner={batch.setSelectedPractitionerId}
               onUpdateNote={batch.updateNote}
               onUpdateIcd10={batch.updateIcd10}
+              onUpdateEffectiveDate={batch.updateEffectiveDate}
               onSend={batch.sendAll}
               onPrint={batch.printAll}
               onBack={onClose}

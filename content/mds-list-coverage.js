@@ -1,10 +1,15 @@
 // content/mds-list-coverage.js
 // Overlays interview-coverage chips on the MDS List → In Progress screen.
 // Frame note: confirmed top-frame / TODO verify on live page (see plan Task 0).
+import { render, h } from 'preact';
 import { scrapeRows } from './mds-list-coverage/scrape.js';
 import { toChips, completeByModel } from './mds-list-coverage/render-model.js';
 import { fetchBatchCoverage } from './mds-list-coverage/api.js';
 import { attachInterviewPopover } from './mds-list-coverage/detail.js';
+import { FilterBar } from './mds-list-coverage/FilterBar.jsx';
+import {
+  emptyFilters, rowMatchesFilters, matchedSections, disciplineForSections,
+} from './mds-list-coverage/filter-model.js';
 
 // GA: the MDS-list interview/UDA coverage overlay is now on for ALL authenticated
 // users (no beta allowlist gate). NOTE: this requires the backend to (a) stop
@@ -12,7 +17,10 @@ import { attachInterviewPopover } from './mds-list-coverage/detail.js';
 // module-status allowlist — otherwise non-beta users get error chips. Coordinate
 // the rollout with the backend.
 
-const ILC = { lastIdSet: '', resultsByKey: {}, busy: false };
+const ILC = {
+  lastIdSet: '', resultsByKey: {}, busy: false,
+  filters: emptyFilters(), filterRoot: null, lastRows: [],
+};
 // Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
 const CHIP_ICONS = { covered: '✓ ', in_progress: '◐ ', needed: '⚠ ', upcoming: '· ' };
 
@@ -181,6 +189,134 @@ function renderRow(rowEl, result, rowMeta) {
   });
 }
 
+// ── Filter bar ───────────────────────────────────────────────────────────────
+// A Super-branded toolbar above the table (search / discipline / sections / type /
+// due / missing-interview). Pure client-side: every dimension comes from the native
+// columns already on the page + the coverage results we already fetched.
+
+// Combine one scraped row with its coverage result into the shape the filter model
+// expects. tone + hasNeededInterview only exist once the batch has resolved.
+function buildRowData(r) {
+  const res = ILC.resultsByKey[r.externalAssessmentId];
+  const cb = res ? completeByModel(res) : null;
+  // Which interview UDAs this row is still missing (status 'needed'), normalized to
+  // the picker's keys (phq9 → phq). Powers the "Missing ▾" per-interview filter.
+  const neededInterviewTypes = (res?.coverage?.interviews || [])
+    .filter((iv) => iv.status === 'needed')
+    .map((iv) => (iv.type === 'phq9' ? 'phq' : iv.type));
+  return {
+    name: r.patientName, mrn: r.mrn, unsignedSections: r.unsignedSections,
+    type: r.type, tone: cb?.tone, neededInterviewTypes,
+  };
+}
+
+// Pause our MutationObserver around DOM writes that touch NATIVE cells (row
+// hide/show + section-letter highlighting), so those writes can't retrigger the
+// render loop. disconnect() + takeRecords() drops any records we generated.
+function pauseObserver(fn) {
+  ilcObserver.disconnect();
+  try { fn(); } finally { ilcObserver.takeRecords(); startIlcObserver(); }
+}
+
+// Bold the matched section letters inside the native "Unsigned Sections" cell so the
+// user can see WHY a row matched. Dirty-checked + restores the original when no
+// section filter is active.
+function highlightSections(r, filters, match) {
+  const idx = r.unsignedColIndex;
+  if (idx == null || idx < 0) return;
+  const cell = r.rowEl.children[idx];
+  if (!cell) return;
+  const hits = match ? matchedSections(r, filters) : new Set();
+  const sig = hits.size ? [...hits].sort().join(',') : '';
+  if (cell.__mlfSig === sig) return;
+  if (cell.__mlfOrig == null) cell.__mlfOrig = cell.innerHTML;
+  if (!hits.size) {
+    cell.innerHTML = cell.__mlfOrig;
+    cell.classList.remove('super-mlf-hl');
+    cell.__mlfSig = '';
+    return;
+  }
+  const inner = (r.unsignedSections || [])
+    .map((t) => (hits.has(t) ? `<strong class="super-mlf-hit">${t}</strong>` : t))
+    .join(', ');
+  cell.innerHTML = `<span style="font-size:8pt;">${inner}</span>`;
+  cell.classList.add('super-mlf-hl');
+  cell.__mlfSig = sig;
+}
+
+// Apply the active filters to every row: set display, highlight matches, count.
+function applyFilters() {
+  const rows = ILC.lastRows || [];
+  const filters = ILC.filters;
+  let shown = 0;
+  pauseObserver(() => {
+    rows.forEach((r) => {
+      const match = rowMatchesFilters(buildRowData(r), filters);
+      r.rowEl.style.display = match ? '' : 'none';
+      if (match) shown += 1;
+      highlightSections(r, filters, match);
+    });
+  });
+  return { shown, total: rows.length };
+}
+
+// Insert (idempotently) the island container immediately above the table. PCC can
+// wipe it on an in-place table repaint; we re-insert on the next render pass.
+function ensureFilterBar(table) {
+  let root = ILC.filterRoot;
+  if (!root || !root.isConnected) root = document.querySelector('.super-mlf-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.className = 'super-mlf-root';
+  }
+  // Invariant: root sits immediately before the table. insertBefore moves it if
+  // it's mis-placed or detached; it's a no-op when already correctly positioned.
+  if (table?.parentNode && root.nextSibling !== table) {
+    table.parentNode.insertBefore(root, table);
+  }
+  ILC.filterRoot = root;
+  return root;
+}
+
+function renderFilterBar(count) {
+  const table = findListTable();
+  if (!table) return;
+  const root = ensureFilterBar(table);
+  const rows = ILC.lastRows || [];
+  const types = [...new Set(rows.map((r) => (r.type || '').trim()).filter(Boolean))].sort();
+  const c = count || { shown: rows.length, total: rows.length };
+  render(h(FilterBar, { filters: ILC.filters, types, count: c, onChange: onFiltersChange }), root);
+}
+
+let mlfTrackTimer = null;
+function trackFilterChange(filters, count) {
+  clearTimeout(mlfTrackTimer);
+  mlfTrackTimer = setTimeout(() => {
+    window.SuperAnalytics?.track?.('mds_list_filter_changed', {
+      discipline: disciplineForSections(filters.sections) || 'none',
+      due: filters.due || 'all',
+      missing_count: (filters.missingInterviews || []).length,
+      type_selected: (filters.type || 'all') !== 'all',
+      has_search: !!(filters.search || '').trim(),
+      sections_count: (filters.sections || []).length,
+      shown: count.shown,
+      total: count.total,
+    });
+  }, 600);
+}
+
+function onFiltersChange(next) {
+  ILC.filters = next;
+  const count = applyFilters();
+  renderFilterBar(count);
+  trackFilterChange(next, count);
+}
+
+function removeFilterBar() {
+  if (ILC.filterRoot) { try { render(null, ILC.filterRoot); } catch (e) { /* noop */ } ILC.filterRoot.remove(); ILC.filterRoot = null; }
+  document.querySelectorAll('.super-mlf-root').forEach((el) => el.remove());
+}
+
 async function runCoverage() {
   if (ILC.busy) return;
   const table = findListTable();
@@ -196,6 +332,8 @@ async function runCoverage() {
       renderCompleteBy(r.rowEl, res);
       renderRow(r.rowEl, res, r);
     });
+    ILC.lastRows = rows;
+    renderFilterBar(applyFilters());
     return;
   }
 
@@ -206,6 +344,8 @@ async function runCoverage() {
   ILC.lastIdSet = idSet;
   ensureHeaderColumn(table);
   rows.forEach((r) => { renderCompleteBy(r.rowEl, null); renderRow(r.rowEl, null, r); });
+  ILC.lastRows = rows;
+  renderFilterBar(applyFilters()); // show the bar immediately (loading state)
 
   try {
     const data = await fetchBatchCoverage({
@@ -235,13 +375,14 @@ async function runCoverage() {
     });
   } finally {
     ILC.busy = false;
+    renderFilterBar(applyFilters()); // re-apply now that coverage (tone / missing) is known
   }
 }
 
 async function initIlc() {
   const authState = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
   if (!authState?.authenticated) return;
-  if (!isInProgressList()) return;
+  if (!isInProgressList()) { removeFilterBar(); return; }
   runCoverage();
 }
 window.SuperListCoverage = { runCoverage, initIlc };
@@ -256,20 +397,23 @@ if (document.readyState === 'loading') {
 let ilcDebounce = null;
 const isOurNode = (n) => n && n.nodeType === 1 &&
   (n.classList?.contains('super-ilc-cell') || n.classList?.contains('super-ilc-cb') ||
-   n.classList?.contains('super-ilc-th') ||
-   n.closest?.('.super-ilc-cell') || n.closest?.('.super-ilc-cb'));
+   n.classList?.contains('super-ilc-th') || n.classList?.contains('super-mlf-root') ||
+   n.closest?.('.super-ilc-cell') || n.closest?.('.super-ilc-cb') || n.closest?.('.super-mlf-root'));
 const ilcObserver = new MutationObserver((muts) => {
-  // Ignore mutations we caused ourselves (chip writes into our cells, header th)
-  // so our own DOM writes don't re-trigger a render cycle.
+  // Ignore mutations we caused ourselves (chip writes into our cells, header th,
+  // the filter bar island, and highlighted section cells) so our own DOM writes
+  // don't re-trigger a render cycle.
   const external = muts.some((m) => {
     if (m.target?.closest?.('.super-ilc-cell') || m.target?.closest?.('.super-ilc-cb')) return false;
+    if (m.target?.closest?.('.super-mlf-root') || m.target?.closest?.('.super-mlf-hl') ||
+        m.target?.classList?.contains?.('super-mlf-hl')) return false;
     const added = [...m.addedNodes];
     if (added.length && added.every(isOurNode)) return false;
     return true;
   });
   if (!external) return;
   clearTimeout(ilcDebounce);
-  ilcDebounce = setTimeout(() => { if (isInProgressList()) runCoverage(); }, 350);
+  ilcDebounce = setTimeout(() => { if (isInProgressList()) runCoverage(); else removeFilterBar(); }, 350);
 });
 function startIlcObserver() {
   const target = document.getElementById('msg1') || document.querySelector('form[name="client"]') || document.body;
@@ -282,6 +426,8 @@ new MutationObserver(() => {
   if (location.href !== ilcLastUrl) {
     ilcLastUrl = location.href;
     ILC.lastIdSet = ''; ILC.resultsByKey = {};
+    ILC.filters = emptyFilters(); // filters reset on each visit
+    removeFilterBar();
     setTimeout(initIlc, 400);
   }
 }).observe(document.body, { childList: true, subtree: true });

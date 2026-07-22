@@ -23,6 +23,31 @@ export function toRecommendedIcd10(selected) {
 }
 
 /**
+ * Read the ICD-10 code currently attached to a query, for prefilling the edit
+ * picker or rendering the read view.
+ *
+ * After signing, the physician's pick (`selectedIcd10Code`) is authoritative and
+ * locked. Before that, the nurse's candidate list is what the doctor gets
+ * offered, so the first entry is "the" code.
+ * @param {Object} query
+ * @returns {{code: string, description: string}|null}
+ */
+export function currentIcd10(query) {
+  if (!query) return null;
+  if (query.selectedIcd10Code) {
+    return {
+      code: query.selectedIcd10Code,
+      description: query.selectedIcd10Description || ''
+    };
+  }
+  const first = Array.isArray(query.recommendedIcd10) ? query.recommendedIcd10[0] : null;
+  if (first && first.code) {
+    return { code: first.code, description: first.description || '' };
+  }
+  return null;
+}
+
+/**
  * Normalize the icd10-search endpoint response into a clean list. Tolerates
  * either the documented `{ results: [...] }` envelope or a bare array, and
  * drops entries without a code. Descriptions are coerced to strings.
