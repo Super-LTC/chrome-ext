@@ -30,13 +30,16 @@ const libraryProposal = () => ({
       description: 'FALLS: resident is at risk for falls',
       libraryStdId: '2072',
       reviewDepartments: [9042],
+      // textDiffersFromLibrary:false = the fill didn't change these texts →
+      // they stay library-linked chkbox adds. The diff-routing default when
+      // the flag is absent/true is CUSTOM (fidelity first).
       goals: [
-        { description: 'will be free from falls over 90 days', libraryStdId: '4647' },
-        { description: 'dignity maintained', libraryStdId: '4648' },
+        { description: 'will be free from falls over 90 days', libraryStdId: '4647', textDiffersFromLibrary: false },
+        { description: 'dignity maintained', libraryStdId: '4648', textDiffersFromLibrary: false },
       ],
       interventions: [
-        { description: 'ensure call light in reach', libraryStdId: '17570' },
-        { description: 'assure lighting adequate', libraryStdId: '17672' },
+        { description: 'ensure call light in reach', libraryStdId: '17570', textDiffersFromLibrary: false },
+        { description: 'assure lighting adequate', libraryStdId: '17672', textDiffersFromLibrary: false },
       ],
     },
   ],
@@ -89,6 +92,29 @@ describe('orchestrateStamp — library focus via the PCC wizard', () => {
     expect(result.errors.some((e) => /not be saved|has been deleted/i.test(e.error))).toBe(true);
     // The focus itself still stamped, and interventions still ran.
     expect(result.focusesStamped).toBe(1);
+    expect(result.interventionsStamped).toBe(2);
+  });
+
+  it('diff-routing: fill-changed / ext-edited / kardex-opted items custom-stamp on the SAME library focus', async () => {
+    const calls = installFetchSpy();
+    const proposal = libraryProposal();
+    const f = proposal.focuses[0];
+    // Server fill changed this goal's text → must NOT chkbox (library text would stamp).
+    f.goals[0].textDiffersFromLibrary = true;
+    // Nurse/token changed this intervention after payload → custom.
+    f.interventions[0]._payloadDescription = 'ensure call light in reach (specify)';
+    // Kardex opt-in flips an otherwise-unchanged intervention to custom (chkbox can't carry kardex).
+    f.interventions[1].kardexCategory = 123;
+    const result = await orchestrateStamp({ proposal, careplanId: '27133', miniToken: 'tok', deptNames: {} });
+    const goalPost = calls.find((c) => c.url.includes('goalwizard_rev.jsp') && c.method === 'POST');
+    // Only the unchanged goal rides the wizard chkbox; the changed one goes custom.
+    expect(new URLSearchParams(goalPost.body).getAll('chkbox')).toEqual(['4648']);
+    expect(calls.some((c) => c.url.includes('goaledit_rev.jsp'))).toBe(true);
+    // Both interventions diverge → no interwizard POST chkboxes, both custom.
+    expect(calls.some((c) => c.url.includes('intereditcust_rev.jsp'))).toBe(true);
+    expect(calls.filter((c) => c.url.includes('interwizard_rev.jsp')).length).toBe(0);
+    expect(result.focusesStamped).toBe(1);
+    expect(result.goalsStamped).toBe(2);
     expect(result.interventionsStamped).toBe(2);
   });
 

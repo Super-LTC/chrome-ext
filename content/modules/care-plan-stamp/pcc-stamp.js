@@ -21,7 +21,6 @@
  * the custom endpoints (neededitcust / goaledit / intereditcust).
  */
 import { stampLibraryFocus, isLibraryFocus } from './pcc-library-stamp.js';
-import { fillGoalNamePlaceholders, isFillableName } from './pcc-goal-name-fill.js';
 
 // Verbose stamping trace — flip false once the library-add path is confirmed in real
 // PCC. Logs every PCC POST (url / status / response snippet) + per-item outcome as
@@ -314,7 +313,7 @@ async function _stampCustomItems({ proposal, focus, focusId, miniToken, goals, i
  * to it, and we don't parallelize across focuses to keep PCC happy and progress
  * UX simple. Errors are captured per-focus; no rollback (per backend agent's call).
  */
-export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, residentName, onProgress }) {
+export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNames, onProgress }) {
   const focuses = (proposal.focuses || []).filter((f) => !f._skipped);
   const result = {
     ok: true,
@@ -339,14 +338,26 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
       'goals=' + goals.length, 'interv=' + inters.length);
 
     // SUP-54 library path: focus + its library goals/interventions go through PCC's own
-    // wizard in one shot (see stampLibraryFocus). Std-id-bearing items are library-checked;
-    // any without a std id (AI-authored / built-in mixed in) fall back to custom stamping
-    // on the SAME focus id.
+    // wizard in one shot (see stampLibraryFocus). DIFF-BASED ROUTING: the chkbox add
+    // stamps LIBRARY text verbatim (no text/position/kardex fields exist in the wizard
+    // POST), so only items whose text is UNCHANGED — server says the fill didn't touch
+    // it (textDiffersFromLibrary === false) AND the composed text still equals the
+    // payload text (no ext-side token fills / nurse edits) AND no kardex was chosen —
+    // keep the library-linked chkbox add. Everything else stamps custom on the SAME
+    // focus id, so the text the nurse approved is the text on the chart.
     if (library) {
-      const libGoalIds = goals.filter((g) => _hasStd(g.libraryStdId)).map((g) => String(g.libraryStdId));
-      const libInterIds = inters.filter((v) => _hasStd(v.libraryStdId)).map((v) => String(v.libraryStdId));
-      const customGoals = goals.filter((g) => !_hasStd(g.libraryStdId));
-      const customInters = inters.filter((v) => !_hasStd(v.libraryStdId));
+      const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+      const unchanged = (item) =>
+        _hasStd(item.libraryStdId) &&
+        item.textDiffersFromLibrary === false &&
+        (item._payloadDescription == null || norm(item.description) === norm(item._payloadDescription)) &&
+        item.kardexCategory == null;
+      const libGoalIds = goals.filter(unchanged).map((g) => String(g.libraryStdId));
+      const libInterIds = inters.filter(unchanged).map((v) => String(v.libraryStdId));
+      const customGoals = goals.filter((g) => !unchanged(g));
+      const customInters = inters.filter((v) => !unchanged(v));
+      _dlog(`focus[${i}] routing: goals ${libGoalIds.length} library / ${customGoals.length} custom · ` +
+        `interventions ${libInterIds.length} library / ${customInters.length} custom`);
 
       let focusId;
       try {
@@ -370,23 +381,6 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
           result.errors.push({ ruleId: focus.ruleId, phase: err.phase, error: err.error });
         }
         _dlog(`focus[${i}] library stamp → focusId=${focusId}`, r);
-        // Library goals carry PCC's verbatim library text — "(resident name)"
-        // placeholders survive the chkbox add. Fill them from the goal's own
-        // edit form. Best-effort polish: a failure leaves the placeholder
-        // visible (honest), never fails the stamp.
-        if (r.goalsStamped > 0 && isFillableName(residentName)) {
-          try {
-            await fillGoalNamePlaceholders({
-              patientId: proposal.patientId,
-              careplanId,
-              focusId,
-              miniToken,
-              residentName,
-            });
-          } catch (e) {
-            _dlog(`focus[${i}] goal name fill failed (placeholders left visible):`, e.message);
-          }
-        }
       } catch (e) {
         result.ok = false;
         result.errors.push({ ruleId: focus.ruleId, phase: 'focus', error: e.message });

@@ -619,6 +619,20 @@
 }
 .cpas-detail__jump:hover { background: #fef08a; }
 
+/* Unchanged library intervention — PCC applies the facility library's own
+   positions on the chkbox add; our pickers would be decorative. */
+.cpas-iv-row__libpos {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  cursor: default;
+}
+
 /* Transient highlight on the control the jump lands on. */
 .cpas-jump-flash {
   animation: cpas-jump-flash-pulse 0.8s ease-in-out 2;

@@ -697,7 +697,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: toStamp,
         careplanId,
         miniToken,
-        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       setStampResult(result);
@@ -748,7 +747,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: { patientId, focuses: [focus] },
         careplanId,
         miniToken,
-        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       // Mark added and return to the editing view (do NOT go to 'done').
@@ -811,7 +809,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: { patientId, focuses },
         careplanId,
         miniToken,
-        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       setStampedAddIds((prev) => {
@@ -852,7 +849,6 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         proposal: { patientId, focuses: [focus] },
         careplanId,
         miniToken,
-        residentName: patientName,
         onProgress: (p) => setProgress(p),
       });
       const nextStamped = new Set([...stampedAddIds, item.ruleId]);
@@ -1665,11 +1661,17 @@ function _composeFocus(rawOriginal, state) {
   // manual free-text edit drops the item's segments (see editGoal/editIntervention),
   // so it correctly stops re-substituting and honors the nurse's wording.
   const substituteTokens = (list) =>
-    (list || []).map((item) =>
-      _segmentsHaveAnyToken(item.descriptionSegments)
+    (list || []).map((raw) => {
+      // Remember the backend's text as sent — the stamp router compares the
+      // final composed text against it to catch ext-side changes (token fills,
+      // nurse edits) that must force a CUSTOM stamp instead of a library
+      // chkbox add (which stamps library text verbatim). ?? keeps the first
+      // payload text across repeated composes/edits.
+      const item = { ...raw, _payloadDescription: raw._payloadDescription ?? raw.description };
+      return _segmentsHaveAnyToken(item.descriptionSegments)
         ? { ...item, description: _renderSegmentsWithTokens(item.descriptionSegments, tokenValues) }
-        : item
-    );
+        : item;
+    });
   const goals = substituteTokens(state.goals != null ? state.goals : original.goals);
   const interventions = substituteTokens(state.interventions != null ? state.interventions : original.interventions);
 

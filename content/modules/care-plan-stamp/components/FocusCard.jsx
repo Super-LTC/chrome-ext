@@ -20,6 +20,11 @@ import { tokenKeyOf, withStableTokenKeys, TOKEN_OMIT, groupEvidenceMenus, isMenu
  *   - readOnly: disable all editors (during stamping/done)
  *   - dropdowns: org dropdowns { kardexLabels, kardexOptions, positionLabels, positionOptions }
  */
+/** Whitespace-insensitive compare basis — mirrors the routing rule in pcc-stamp.js. */
+function _normWsCmp(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Scroll the first unfilled control in the detail pane into view and flash it.
  * Unfilled = a yellow fill select with no value, an unfilled token picker chip
@@ -385,6 +390,17 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
               // the nurse opts in) — we never auto-stamp the Kardex. Positions
               // stay auto-locked in v2 (handled below).
               const kardexRecommended = iv._recKardex;
+              // Unchanged library items stamp via PCC's chkbox wizard, which
+              // applies the FACILITY LIBRARY's own positions and ignores ours —
+              // showing editable pickers there would be a lie. Any change
+              // (text, token fill, kardex opt-in) flips the row to a custom
+              // stamp where our positions really do apply, so the pickers
+              // reappear reactively. Mirrors the routing rule in pcc-stamp.js.
+              const willLibraryAdd =
+                iv.libraryStdId && String(iv.libraryStdId) !== '-1' &&
+                iv.textDiffersFromLibrary === false &&
+                iv.kardexCategory == null &&
+                (iv._payloadDescription == null || _normWsCmp(iv.description) === _normWsCmp(iv._payloadDescription));
               return (
                 <li key={i} className="cpas-iv-row">
                   <div className="cpas-iv-row__body">
@@ -430,7 +446,15 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                       {/* Positions are editable in BOTH v1 and v2. In v2 the engine's
                           auto-assigned position seeds the first chip, but the nurse can
                           change it, remove it, or add more (CNA + RN, …) — matching v1. */}
-                      {posList.map((p, j) => (
+                      {willLibraryAdd && (
+                        <span
+                          className="cpas-iv-row__libpos"
+                          title="This intervention is added straight from your facility library, which carries its own position assignments. Edit the text or pick a Kardex to customize it — position pickers appear then."
+                        >
+                          positions: facility library
+                        </span>
+                      )}
+                      {!willLibraryAdd && posList.map((p, j) => (
                         <PositionChip
                           key={j}
                           value={p}
@@ -445,7 +469,7 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
                           disabled={readOnly}
                         />
                       ))}
-                      {!readOnly && posList.length < 5 && (
+                      {!readOnly && !willLibraryAdd && posList.length < 5 && (
                         // NO_TRACK: pure-UI position add
                         <button
                           className="cpas-iv-row__chip-add"
