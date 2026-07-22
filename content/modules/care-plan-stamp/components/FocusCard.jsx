@@ -727,7 +727,11 @@ const DescriptionSegments = ({ segments, tokenValues, removedFactors, onTokenCom
               segment={s}
               initialValue={isFilled ? currentValue : ''}
               autoFocus={reEditing}
-              onCommit={(v) => { onTokenCommit(s.tokenKey, v); stopEdit(i); }}
+              // tkey (the _ukey) — NOT s.tokenKey. Reads, the touches counter,
+              // and compose all look up tokenKeyOf(s); committing under the raw
+              // tokenKey made typed values vanish on unmount and kept "Add all"
+              // blocked (Wesley Woods spot test, Jul 21).
+              onCommit={(v) => { onTokenCommit(tkey, v); stopEdit(i); }}
               onDismiss={() => stopEdit(i)}
             />
           );
