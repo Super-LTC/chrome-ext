@@ -93,6 +93,7 @@ import './modules/care-plan-stamp/generate-api.js';
 import './modules/care-plan-stamp/pcc-resolve.js';
 import './modules/care-plan-stamp/pcc-add-intervention.js';
 import './modules/care-plan-stamp/pcc-discover.js';
+import './modules/care-plan-stamp/library-crawler.js';
 import './modules/care-plan-stamp/pcc-stamp.js';
 import './modules/care-plan-stamp/inject-button.js';
 import './modules/care-plan-stamp/audit-banner.js';
