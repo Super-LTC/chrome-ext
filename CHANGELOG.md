@@ -4,11 +4,74 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.65** was zipped for Chrome Web Store submission on
-> 2026-07-22 (`super-ltc-store.zip`). Before that, v1.0.64 was uploaded on
-> 2026-07-20, v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that —
-> v1.0.58–1.0.62 were dev/internal only. Update this note when you `zip:store`
-> and upload.
+> **Store note:** **v1.0.67** was zipped for Chrome Web Store submission on
+> 2026-07-23 (`super-ltc-store.zip`) to hotfix the broken PDF viewer in the live
+> 1.0.66 build (see below). Before that, v1.0.66 was zipped on 2026-07-22,
+> v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20, v1.0.63 on
+> 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62 were
+> dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.67] — 2026-07-23
+
+Hotfix release: the ICD-10 / medical-diagnosis PDF viewer was dead in the live
+1.0.66 store build (`Failed to load PDF: Setting up fake worker failed… Cannot
+read properties of undefined (reading 'WorkerMessageHandler')`).
+
+### Fixed
+- **PDF viewer — pdf.js main/worker version mismatch.** The Dependabot bump in
+  #49 raised `pdfjs-dist` 3.11.174 → 4.10.38 in `package-lock.json` and updated
+  `lib/pdf.min.js` / `lib/pdf.worker.min.js` to 4.10.38 — but the bundle shipped
+  as 1.0.66 was built against a stale `node_modules` still holding 3.11.174. That
+  paired a **v3 main API** (bundled `window.pdfjsLib`) with a **v4 worker file**;
+  pdf.js rejects the mismatched worker, falls back to a main-thread "fake worker,"
+  and the v4 worker doesn't expose `WorkerMessageHandler` where the v3 loader
+  looks for it, so every PDF failed to open. No source change was needed —
+  reinstalling `pdfjs-dist@4.10.38` and rebuilding aligns the bundled API with the
+  worker (both 4.10.38). **Republish required:** 1.0.66 users stay broken until
+  this ships to the Web Store.
+
+## [1.0.66] — 2026-07-22
+
+Care Plan Initial Admit polish parity, IPA capture-window deadlines, and an
+org-admin job title in the Team tab. Five merged PRs (#53–#57) plus a copy
+tweak on top of 1.0.65.
+
+### Added
+- **IPA — capture-window deadlines** (#56, SUP-171). Backend v6 (superapp #961)
+  dedupes candidates per resident, drops triggers whose service ended beyond its
+  RAI capture window, and annotates the survivors with `serviceEndedAt` +
+  `captureWindowClosesAt`. Wired in:
+  - **Card chip** — recommended cards with a closing window show an amber
+    "⏳ Treatment ended — capture window closes <date>" chip (soonest across the
+    candidate's triggers).
+  - **Review modal** — per-trigger line: "Treatment ended <date> — an assessment
+    with an ARD by <date> can still capture this."
+  - Nurse-verify copy drops the "(no active order in our records)" parenthetical,
+    which the real ended-service data now contradicts.
+- **Care Plan — Initial Admit polish swap + authoring bar** (#55/#57, SUP-116).
+  The backend auto-pop route now skips its inline AI review for concept-mapped
+  orgs (Garden Springs Initial Admit 504 fix), so the wizard paints
+  deterministically in ~1s and the polish arrives via the V3 cached-generate
+  side-channel — exactly like Comprehensive Review. Authored content merges into
+  **untouched** proposal focuses in place (row identity preserved, Kardex stays
+  opt-in; nurse-edited/stamped rows never overwritten); the FocusList sidebar
+  shows the same "✨ Polishing plan… %" bar and "Polished N" note as the worklist.
+- **Team — org-admin job title** (#53/#54). The org-admin detail view in the ext
+  Team tab now has a "Job title" picker, matching the web person panel. Picking a
+  role saves its template as the person's baseline bundle — inert while they hold
+  full admin access, but their default if they're later moved to Staff.
+
+### Fixed
+- **Care Plan — "Needs input" cleared after removing goals/interventions**
+  (#55/#57). Deleting a not-applicable goal/intervention left "Needs input" stuck
+  on and blocked "Add to Careplan": the gate scanned the raw proposed focus, but
+  deletions live in per-focus edit state. Scan is now a pure, tested
+  `unfilledTokenKeys()` fed the edited lists at all 9 gate call sites (91/91
+  care-plan tests pass, 5 new).
+- **Care Plan — obvious un-skip** (#55/#57). Un-skip read as a status label, not a
+  button ("it didn't give me the option to bring it back in"). Skipped focuses now
+  show an in-card banner with an explicit "+ Include this focus" CTA. From
+  Brittany Burner's initial-admit feedback (2026-07-22).
 
 ## [1.0.65] — 2026-07-22
 
