@@ -1,8 +1,10 @@
 // content/mds-list-coverage/api.js
 /** POST the visible rows' per-row keys ({externalAssessmentId?, pccPublicId?,
- *  ardDate?, description?}); returns { success, rowMap } — an index-parallel
- *  array correlated to `assessments` by position (#967) — or throws. Legacy
- *  `results` is still tolerated by the caller. */
+ *  ardDate?, description?}); returns { success, rowMap, results } (#967), or throws.
+ *    rowMap  — index-parallel to `assessments`: the resolved externalAssessmentId
+ *              (string) per row, or null when unresolvable.
+ *    results — BatchCoverageResult[] keyed by `.key` (= externalAssessmentId).
+ *  Correlate a row to its coverage via results.find(x => x.key === rowMap[i]). */
 export async function fetchBatchCoverage({ orgSlug, facilityName, assessments }) {
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',

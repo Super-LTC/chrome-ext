@@ -376,16 +376,23 @@ async function runCoverage() {
       orgSlug, facilityName,
       assessments: rows.map(rowCoverageKey),
     });
-    // #967 returns an index-parallel rowMap (fall back to the legacy `results`
-    // array, also positional). Correlate by POSITION — flipped rows have no
-    // numeric id to key on. Attach the result to each row for the filter model.
-    const rowMap = data.rowMap || data.results || [];
-    ILC.lastRowMap = rows.map((_, i) => rowMap[i] || { status: 'not_synced' });
-    ILC.resultsByKey = {};
+    // #967 response is two aligned structures, NOT interchangeable:
+    //   rowMap[i] = the resolved externalAssessmentId (string) for request row i,
+    //              or null when the row was unresolvable (→ not-synced chip).
+    //   results   = BatchCoverageResult[] keyed by `.key` (= externalAssessmentId).
+    // Correlate: rowMap[i] → results.find(key === rowMap[i]). This is how flipped
+    // rows (no numeric id of their own) pick up the coverage the backend resolved
+    // for them by pccPublicId + ARD + description.
+    const rowMap = data.rowMap || [];
+    const byKey = new Map((data.results || []).map((x) => [String(x.key), x]));
+    ILC.resultsByKey = Object.fromEntries(byKey);
+    ILC.lastRowMap = rows.map((_, i) => {
+      const resolvedId = rowMap[i];
+      return (resolvedId != null && byKey.get(String(resolvedId))) || { status: 'not_synced' };
+    });
     rows.forEach((r, i) => {
       const res = ILC.lastRowMap[i];
       r.result = res;
-      if (r.externalAssessmentId) ILC.resultsByKey[String(r.externalAssessmentId)] = res;
       renderCompleteBy(r.rowEl, res);
       renderRow(r.rowEl, res, r);
     });
