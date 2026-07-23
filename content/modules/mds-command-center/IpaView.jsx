@@ -302,7 +302,7 @@ function Card({ candidate, onReview, onAction }) {
       <div class="ipa-card__gain"><b>New:</b> {gainSummary(candidate)}</div>
 
       {!isLoss && soonestDeadline(candidate) && (
-        <div class="ipa-card__deadline">⏳ Service ended — capture window closes {fmtDate(soonestDeadline(candidate))}</div>
+        <div class="ipa-card__deadline">⏳ Treatment ended — capture window closes {fmtDate(soonestDeadline(candidate))}</div>
       )}
 
       {topEv && (
