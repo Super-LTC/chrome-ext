@@ -91,6 +91,25 @@ describe('pccPublicId ride-along on the MDS context chokepoints', () => {
   });
 });
 
+describe('getMDSContext() scope detection on flipped pages', () => {
+  afterEach(() => { window.history.replaceState({}, '', '/'); });
+
+  it("reports scope 'mds' on a flipped section page even when no numeric id is recoverable", () => {
+    window.history.replaceState({}, '', '/mds3/section.xhtml?ESOLassessid=EID_0qdFxemS33H7GHe3&sectioncode=N');
+    const ctx = window.getMDSContext();
+    expect(ctx.scope).toBe('mds');           // gate on raw URL presence, not the numeric
+    expect(ctx.assessmentId).toBeNull();     // numeric not recoverable → null (never the EID)
+  });
+
+  it('recovers the numeric assessmentId from the DOM when present', () => {
+    window.history.replaceState({}, '', '/mds3/section.xhtml?ESOLassessid=EID_x&sectioncode=N');
+    document.body.innerHTML = `<a onclick="toggleToolsWindow(this, '3120458', 'N')">t</a>`;
+    const ctx = window.getMDSContext();
+    expect(ctx.scope).toBe('mds');
+    expect(ctx.assessmentId).toBe('3120458');
+  });
+});
+
 describe('getChatContext() externalPatientId on MDS pages', () => {
   beforeEach(() => {
     // MDS section page: ESOLassessid present, no ESOLclientid in the URL.

@@ -50,8 +50,12 @@ function getPatientNameFromPage() {
 }
 
 function getMDSContext() {
-  // Resolve the stable NUMERIC assessment id — the raw ESOLassessid URL param is
-  // now an ephemeral EID_ token on migrated facilities, which the backend rejects.
+  // Resolve the stable NUMERIC assessment id for backend use — the raw ESOLassessid
+  // URL param is an ephemeral EID_ token on migrated facilities, which the backend
+  // rejects. Keep the raw value ONLY to detect that we're on a section page: on a
+  // flipped page the numeric may be null, but we're still on MDS and must report
+  // scope 'mds' (else the side-panel silently downgrades to patient/global scope).
+  const rawAssessmentId = new URL(window.location.href).searchParams.get('ESOLassessid');
   const assessmentId = resolveStableAssessmentId();
   const patientId = resolveStableClientId();
 
@@ -73,10 +77,11 @@ function getMDSContext() {
     cachedPatientId = null;
   }
 
-  // Check if we're on an MDS section page
+  // Check if we're on an MDS section page — gate on raw URL presence (EID_ or
+  // numeric), NOT the resolved numeric, so flipped pages still report scope 'mds'.
   const isMDSSection = (
     (window.location.href.includes('/mds3/') || window.location.href.includes('section.xhtml')) &&
-    assessmentId
+    rawAssessmentId
   );
 
   if (isMDSSection) {
