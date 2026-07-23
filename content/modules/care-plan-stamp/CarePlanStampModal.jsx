@@ -12,7 +12,7 @@ import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.
 import { isV2, devForceMock } from './v2-flag.js';
 import { AuditWorklist } from './components/AuditWorklist.jsx';
 import { CareAreaMap } from './components/CareAreaMap.jsx';
-import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector } from './segmentTokens.js';
+import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector, unfilledTokenKeys } from './segmentTokens.js';
 import { shouldPoll, polishByStdId, applyPolish, POLL_INTERVAL_MS } from './generateModel.js';
 import { actionableChecks } from './worklistModel.js';
 
@@ -641,7 +641,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const needsInputCount = allRawFocuses.reduce((n, f, i) => {
     const st = focusStates[i];
     if (!st || st.skipped || _isStamped(f)) return n;
-    const hasUnfilledToken = _focusUnfilledTokenKeys(f, st.tokenValues).length > 0;
+    const hasUnfilledToken = _focusUnfilledTokenKeys(f, st.tokenValues, st).length > 0;
     const desc = composedFocuses?.[i]?.description || f.description || '';
     const flatHasBlank = _descNeedsInput(desc, f.descriptionSegments);
     return (hasUnfilledToken || flatHasBlank) ? n + 1 : n;
@@ -1195,7 +1195,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   ) ||
                   _focusUnfilledTokenKeys(
                     allRawFocuses[activeIdx],
-                    focusStates[activeIdx]?.tokenValues
+                    focusStates[activeIdx]?.tokenValues,
+                    focusStates[activeIdx]
                   ).length > 0
                 }
                 onStampOne={stage === 'ready' ? () => handleStampOne(activeIdx) : null}
@@ -1358,7 +1359,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                         readOnly={stage !== 'ready' || stampedAddIds.has(item.ruleId)}
                         stampOneDisabled={
                           _descNeedsInput(composed.description, item.focus.descriptionSegments) ||
-                          _focusUnfilledTokenKeys(item.focus, state.tokenValues).length > 0
+                          _focusUnfilledTokenKeys(item.focus, state.tokenValues, state).length > 0
                         }
                         onStampOne={stage === 'ready' ? () => _stampAuditAddOne(item) : null}
                       />
@@ -1565,7 +1566,7 @@ function _auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusSta
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state).length > 0;
     return flatBlank || tokenBlank;
   });
 }
@@ -1578,7 +1579,7 @@ function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusSt
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state).length > 0;
     return flatBlank || tokenBlank;
   });
   if (flagged.length > 0) {
@@ -1587,7 +1588,7 @@ function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusSt
       return {
         ruleId: it.ruleId,
         composedDescription: _composeFocus(it.focus, state).description,
-        unfilledTokenKeys: _focusUnfilledTokenKeys(it.focus, state.tokenValues),
+        unfilledTokenKeys: _focusUnfilledTokenKeys(it.focus, state.tokenValues, state),
         hasSegments: _hasSegments(it.focus.descriptionSegments),
       };
     }));
@@ -1603,7 +1604,7 @@ function _auditNeedsInputByRowId(audit, auditFocusStates) {
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state).length > 0;
     m.set(it._rowId, flatBlank || tokenBlank);
   });
   return m;
@@ -1617,7 +1618,7 @@ function _auditTouchesByRowId(audit, auditFocusStates) {
   (audit?.toAdd || []).forEach((it) => {
     if (!it.focus) { m.set(it._rowId, 0); return; }
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
-    const keys = _focusUnfilledTokenKeys(it.focus, state.tokenValues);
+    const keys = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state);
     if (keys.length > 0) { m.set(it._rowId, keys.length); return; }
     const composed = _composeFocus(it.focus, state);
     m.set(it._rowId, _descNeedsInput(composed.description, it.focus.descriptionSegments) ? 1 : 0);
@@ -1751,30 +1752,22 @@ function _renderSegmentsWithTokens(segments, tokenValues, removedFactors) {
   return droppedMenu ? trimComposedConnector(joined) : joined;
 }
 // Unique tokenKeys still needing input across focus/goals/interventions.
-function _focusUnfilledTokenKeys(rawFocus, tokenValues) {
+//
+// `state` is the per-focus edit state. When the nurse has removed a goal or
+// intervention (state.goals / state.interventions set), we scan the EDITED
+// list so a deleted item stops contributing its unfilled token — otherwise
+// "Needs input" stays stuck on after removing the offending row and the add is
+// blocked (Brittany Burner, 2026-07-22). The edit-state arrays already carry
+// the _ukey stamped at first compose; the raw fallback is stamped here. See
+// segmentTokens.unfilledTokenKeys for why we must NOT re-stamp a shortened list.
+function _focusUnfilledTokenKeys(rawFocus, tokenValues, state) {
   if (!rawFocus) return [];
   // Same unique-key stamping as compose, so a picked goal/intervention token
   // actually clears its amber "touch" (keyed by _ukey, not the shared tokenKey).
   const focus = withStableTokenKeys(rawFocus);
-  const tv = tokenValues || {};
-  const keys = new Set();
-  const walk = (segs) => {
-    for (const s of segs || []) {
-      if (s && s.kind === 'token' && s.needsFilling) {
-        // Multiselect menu bullets have a sensible default (evidence-backed
-        // clauses pre-checked, the rest omitted — zero checked composes cleanly
-        // via the connector trim), so they never block or count as a touch.
-        if (s.tokenKey === 'multiselect') continue;
-        const key = tokenKeyOf(s);
-        const v = tv[key];
-        if (!v || !String(v).trim()) keys.add(key);
-      }
-    }
-  };
-  walk(focus.descriptionSegments);
-  (focus.goals || []).forEach((g) => walk(g.descriptionSegments));
-  (focus.interventions || []).forEach((iv) => walk(iv.descriptionSegments));
-  return [...keys];
+  const goals = state && state.goals != null ? state.goals : focus.goals;
+  const interventions = state && state.interventions != null ? state.interventions : focus.interventions;
+  return unfilledTokenKeys(focus.descriptionSegments, goals, interventions, tokenValues);
 }
 // JSX tooltip content for a factor segment. Bolds the dxCode / orderPattern /
 // derivedFrom values so the relevant signal pops in a quick hover.
@@ -1879,7 +1872,7 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
     const composedDesc = composedFocuses?.[i]?.description || f.description || '';
     const preview = composedDesc.replace(/\s+/g, ' ').trim();
     const flatHasBlank = _descNeedsInput(composedDesc, f.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues, state).length > 0;
     const needsInput = !state.skipped && !isAdded && (flatHasBlank || tokenBlank);
 
     let cls = 'cpas-list__item';

@@ -6,6 +6,7 @@ import {
   groupEvidenceMenus,
   isMenuChecked,
   trimComposedConnector,
+  unfilledTokenKeys,
 } from '../segmentTokens.js';
 
 const tok = (opts = {}) => ({ kind: 'token', tokenKey: 'inline', needsFilling: true, value: '[select]', ...opts });
@@ -120,6 +121,70 @@ describe('isMenuChecked — evidence-backed pre-check, nurse override wins', () 
     const pick = ms('b', { _ukey: 'f_2' });
     expect(isMenuChecked(pre, { f_1: TOKEN_OMIT })).toBe(false); // unchecked a pre-check
     expect(isMenuChecked(pick, { f_2: 'b' })).toBe(true); // checked a nurse-pick
+  });
+});
+
+describe('unfilledTokenKeys — the "Needs input" gate honors goal/intervention deletion', () => {
+  // Regression: a nurse removes a goal/intervention that had an empty required
+  // field (not applicable to this resident). The gate kept reading the RAW
+  // proposal arrays, so the deleted item's unfilled token still counted and
+  // "Needs input" stayed stuck on, blocking "Add to Careplan" (Brittany Burner,
+  // 2026-07-22 — Skin focus, "Type a value here" goals).
+  const goal = (segs) => ({ descriptionSegments: segs });
+
+  it('reports an unfilled token in a goal', () => {
+    const focus = withStableTokenKeys({
+      description: 'r/t diabetes',
+      goals: [goal([txt('free from injury '), tok()])],
+      interventions: [],
+    });
+    const keys = unfilledTokenKeys(focus.descriptionSegments, focus.goals, focus.interventions, {});
+    expect(keys).toHaveLength(1);
+  });
+
+  it('drops the requirement once the offending goal is removed (effective list = [])', () => {
+    const focus = withStableTokenKeys({
+      description: 'r/t diabetes',
+      goals: [goal([txt('free from injury '), tok()])],
+      interventions: [],
+    });
+    // Nurse deleted the only goal — effective goals is now empty.
+    const keys = unfilledTokenKeys(focus.descriptionSegments, [], focus.interventions, {});
+    expect(keys).toHaveLength(0);
+  });
+
+  it('a filled token in a SURVIVING goal still reads filled after a sibling is deleted', () => {
+    // Two goals; nurse fills goal[1]'s token, then deletes goal[0]. The survivor
+    // keeps its original _ukey, so its value must still register (no key shift).
+    const focus = withStableTokenKeys({
+      goals: [
+        goal([txt('injury '), tok()]),
+        goal([txt('skin '), tok()]),
+      ],
+      interventions: [],
+    });
+    const survivorKey = tokenKeyOf(focus.goals[1].descriptionSegments[1]);
+    const tokenValues = { [survivorKey]: 'intact' };
+    // Effective goals after deleting goal[0]: only the survivor, keys untouched.
+    const keys = unfilledTokenKeys(focus.descriptionSegments, [focus.goals[1]], focus.interventions, tokenValues);
+    expect(keys).toHaveLength(0);
+  });
+
+  it('still counts an unfilled token in the focus statement itself', () => {
+    const focus = withStableTokenKeys({
+      descriptionSegments: [txt('advance directive: '), tok()],
+      goals: [],
+      interventions: [],
+    });
+    expect(unfilledTokenKeys(focus.descriptionSegments, [], [], {})).toHaveLength(1);
+  });
+
+  it('ignores multiselect evidence bullets (they carry their own default)', () => {
+    const focus = withStableTokenKeys({
+      goals: [goal([txt('AEB '), ms('Little interest in doing things')])],
+      interventions: [],
+    });
+    expect(unfilledTokenKeys(focus.descriptionSegments, focus.goals, focus.interventions, {})).toHaveLength(0);
   });
 });
 
