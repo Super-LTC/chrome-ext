@@ -174,6 +174,12 @@
   color: #111827;
   margin-top: 2px;
 }
+/* Initial Admit authoring strip — reuses the .cpas-wl__polish* visuals (SUP-116). */
+.cpas-list__polish {
+  padding: 6px 20px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+}
 .cpas-list__legend {
   padding: 8px 20px;
   background: #fff;
