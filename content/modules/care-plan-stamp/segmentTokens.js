@@ -92,6 +92,48 @@ export function trimComposedConnector(text) {
   );
 }
 
+/**
+ * Unique tokenKeys still needing a nurse value across a focus's statement +
+ * goals + interventions. This is the single source of truth for the wizard's
+ * "Needs input" gate.
+ *
+ * Pass the EFFECTIVE goals/interventions — the nurse's edited lists with
+ * deletions applied (`state.goals`/`state.interventions` when set) — NOT the
+ * raw backend arrays. A goal/intervention the nurse removed because it wasn't
+ * applicable must drop its unfilled-token requirement; scanning the raw arrays
+ * (the previous behavior) left "Needs input" stuck on and blocked the add.
+ *
+ * Keys come from `tokenKeyOf` (each token's stamped `_ukey`, else raw
+ * tokenKey). Callers MUST pass segments that already carry their stable `_ukey`
+ * (i.e. post-`withStableTokenKeys` for the raw fallback, or the edit-state
+ * arrays which retain the `_ukey` stamped at first compose) so the keys line up
+ * with how `tokenValues` was filled. This function deliberately NEVER re-stamps:
+ * re-deriving `_ukey` on a deletion-shortened array would shift surviving items'
+ * index-derived keys off their stored values, making filled slots read empty.
+ *
+ * Multiselect evidence bullets are skipped — they carry a sensible default
+ * (evidence-backed clauses pre-checked, the rest omitted, connector trimmed),
+ * so they never block or count as a required input.
+ */
+export function unfilledTokenKeys(descriptionSegments, goals, interventions, tokenValues) {
+  const tv = tokenValues || {};
+  const keys = new Set();
+  const walk = (segs) => {
+    for (const s of segs || []) {
+      if (s && s.kind === 'token' && s.needsFilling) {
+        if (s.tokenKey === 'multiselect') continue;
+        const key = tokenKeyOf(s);
+        const v = tv[key];
+        if (!v || !String(v).trim()) keys.add(key);
+      }
+    }
+  };
+  walk(descriptionSegments);
+  (goals || []).forEach((g) => walk(g && g.descriptionSegments));
+  (interventions || []).forEach((iv) => walk(iv && iv.descriptionSegments));
+  return [...keys];
+}
+
 function _tagArray(arr, prefix) {
   if (!Array.isArray(arr)) return arr;
   return arr.map((item, ii) => {

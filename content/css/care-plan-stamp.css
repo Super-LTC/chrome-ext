@@ -174,6 +174,12 @@
   color: #111827;
   margin-top: 2px;
 }
+/* Initial Admit authoring strip — reuses the .cpas-wl__polish* visuals (SUP-116). */
+.cpas-list__polish {
+  padding: 6px 20px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+}
 .cpas-list__legend {
   padding: 8px 20px;
   background: #fff;
@@ -2660,6 +2666,38 @@
   font-style: italic;
   color: #422006;
   font-size: 13px;
+}
+
+/* --- Skipped-focus banner: explicit "bring it back" CTA in the detail body --- */
+.cpas-detail__skipped-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 0 0 18px;
+}
+.cpas-detail__skipped-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cpas-detail__skipped-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4b5563;
+}
+.cpas-detail__skipped-sub {
+  font-size: 12px;
+  color: #6b7280;
+}
+.cpas-detail__skipped-include {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* --- Inline placeholder marker on goal/intervention preview rows --- */

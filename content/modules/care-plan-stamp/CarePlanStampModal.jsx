@@ -12,8 +12,8 @@ import { AuditPartialCoveragePane } from './components/AuditPartialCoveragePane.
 import { isV2, devForceMock } from './v2-flag.js';
 import { AuditWorklist } from './components/AuditWorklist.jsx';
 import { CareAreaMap } from './components/CareAreaMap.jsx';
-import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector } from './segmentTokens.js';
-import { shouldPoll, polishByStdId, applyPolish, POLL_INTERVAL_MS } from './generateModel.js';
+import { withStableTokenKeys, tokenKeyOf, TOKEN_OMIT, isMenuChecked, trimComposedConnector, unfilledTokenKeys } from './segmentTokens.js';
+import { shouldPoll, polishByStdId, applyPolish, authoringPct, POLL_INTERVAL_MS } from './generateModel.js';
 import { actionableChecks } from './worklistModel.js';
 
 /**
@@ -121,6 +121,10 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // { count, at } after the polished content swapped in — drives the header note.
   const [polishedInfo, setPolishedInfo] = useState(null);
   const polishAppliedRef = useRef(false);
+  // Initial Admit gets its own one-shot: the modes swap different state trees
+  // (audit.toAdd items vs proposal.focuses) and a mode flip mid-session must
+  // not consume the other mode's shot.
+  const polishAppliedInitRef = useRef(false);
 
   // -------- Assessment cross-check header count --------
   // audit.assessmentLinkages cross-checks each UDA/MDS assessment against the
@@ -170,6 +174,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
     setGen({ payload: null, error: null, startedAt: 0, stopped: false });
     setPolishedInfo(null);
     polishAppliedRef.current = false;
+    polishAppliedInitRef.current = false;
     (async () => {
       try {
         const D = window.CarePlanStampDiscover;
@@ -315,7 +320,22 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
           return;
         }
 
-        // -------- Initial Admit path (unchanged below) --------
+        // -------- Initial Admit path --------
+        // Same V3 cached-generate side-channel as Comprehensive (SUP-116):
+        // fired in parallel, never awaited. The wizard paints from the
+        // deterministic proposal; this only adds the "Polishing plan" bar and
+        // the authored-content swap once the background AI pass lands. Since
+        // the auto-pop route skips its inline AI review for concept-mapped
+        // orgs (the Garden Springs 504 fix), this is where Initial Admit's
+        // polish now comes from. 409 (org unmapped) or any error = quietly off.
+        setGen({ payload: null, error: null, startedAt: Date.now(), stopped: false });
+        window.CarePlanGenerateAPI?.fetchGenerate?.({ patientId, patientName, orgSlug, facilityName, orgDropdowns })
+          .then((p) => { if (!cancelled) setGen((g) => ({ ...g, payload: p })); })
+          .catch((e) => {
+            if (!cancelled) setGen((g) => ({ ...g, error: e }));
+            if (e?.status !== 409) console.warn('[care-plan-generate] fetch failed (feature off)', e?.message);
+          });
+
         const prop = await A.fetchProposal({
           patientId,
           patientName,
@@ -441,8 +461,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   // Each poll is a cheap server-side cache read of the SAME url. Stops when the
   // polished payload lands, the modal closes/mode flips (cleanup), the chart
   // fingerprint moves mid-session, or the 90s cap passes (polish p50 ~13s).
+  // Runs for BOTH modes — Initial Admit fires the same generate side-channel.
   useEffect(() => {
-    if (mode !== 'comprehensive') return undefined;
     if (!shouldPoll({ ...gen, now: Date.now() })) return undefined;
     const t = setTimeout(async () => {
       try {
@@ -506,6 +526,67 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
       n_to_add: items.length,
     });
   }, [gen, audit, mode, auditFocusStates, stampedAddIds, skippedAddIds, patientId]);
+
+  // -------- V3 cached generate: Initial Admit swap (same contract, wizard state) --------
+  // Initial rows are bare focuses in proposal.focuses (indexed by focusStates[i]),
+  // not {focus} wrapper items — so the swap merges content IN PLACE, preserving
+  // each row's wizard identity (ruleId/alreadyOnPlan/autoSelect/rationale/score
+  // drive skip-state, sorting, and the "on plan" tags) while taking the authored
+  // description/goals/interventions. Indices never move, so focusStates keeps
+  // addressing the right rows. A row is skipped by the swap when the nurse has
+  // touched it (edits, token picks, removed factors) or already stamped it.
+  useEffect(() => {
+    if (mode !== 'initial' || !proposal || polishAppliedInitRef.current) return;
+    const p = gen.payload;
+    if (!p?.authored || gen.stopped) return;
+    polishAppliedInitRef.current = true; // one shot per modal-load, even if nothing matches
+    const polishMap = polishByStdId(p);
+    const isTouched = (s) =>
+      !!s && (
+        s.focusText != null || s.goals != null || s.interventions != null ||
+        Object.keys(s.tokenValues || {}).length > 0 ||
+        (s.removedFactors?.size ?? 0) > 0
+      );
+    let swappedCount = 0;
+    const swapped = (proposal.focuses || []).map((f, i) => {
+      if (isTouched(focusStates[i]) || stampedRuleIds.has(f?.ruleId)) return f;
+      // Built-in fallback rows ship without conceptId, but catalog concept ids
+      // ARE the built-in rule ids — same join convention as applyPolish.
+      const conceptId = f?.conceptId ?? f?.ruleId;
+      const stdId = f?.libraryStdId;
+      const polished =
+        (conceptId ? polishMap.get(`concept:${conceptId}`) : null) ||
+        (stdId != null && stdId !== '' ? polishMap.get(`std:${stdId}`) : null);
+      if (!polished) return f;
+      swappedCount++;
+      return {
+        ...f,
+        ...polished,
+        ruleId: f.ruleId,
+        alreadyOnPlan: f.alreadyOnPlan,
+        matchedExistingText: f.matchedExistingText,
+        autoSelect: f.autoSelect,
+        rationale: f.rationale,
+        score: f.score,
+        _polished: true,
+        // Kardex stays opt-in, same convention as the proposal load.
+        interventions: (polished.interventions || []).map((iv) => ({
+          ...iv,
+          _recKardex: iv.kardexCategory ?? null,
+          kardexCategory: null,
+        })),
+      };
+    });
+    if (!swappedCount) return;
+    setProposal((prev) => (prev ? { ...prev, focuses: swapped } : prev));
+    setPolishedInfo({ count: swappedCount, at: Date.now() });
+    window.SuperAnalytics?.track?.('care_plan_polish_swapped', {
+      patient_id: patientId,
+      n_swapped: swappedCount,
+      n_to_add: swapped.length,
+      mode: 'initial',
+    });
+  }, [gen, proposal, mode, focusStates, stampedRuleIds, patientId]);
 
   // -------- Combined raw focuses: auto-picks + library picks --------
   const allRawFocuses = useMemo(() => {
@@ -641,7 +722,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
   const needsInputCount = allRawFocuses.reduce((n, f, i) => {
     const st = focusStates[i];
     if (!st || st.skipped || _isStamped(f)) return n;
-    const hasUnfilledToken = _focusUnfilledTokenKeys(f, st.tokenValues).length > 0;
+    const hasUnfilledToken = _focusUnfilledTokenKeys(f, st.tokenValues, st).length > 0;
     const desc = composedFocuses?.[i]?.description || f.description || '';
     const flatHasBlank = _descNeedsInput(desc, f.descriptionSegments);
     return (hasUnfilledToken || flatHasBlank) ? n + 1 : n;
@@ -1178,6 +1259,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                 onToggleSkip={stage === 'ready' ? toggleFocusSkip : null}
                 stampedRuleIds={stampedRuleIds}
                 singleAddIdx={singleAddIdx}
+                genAuthoring={gen.payload && !gen.payload.authored && !gen.stopped && !gen.error ? (gen.payload.authoringProgress || {}) : null}
+                polishedInfo={polishedInfo}
               />
               <FocusCard
                 composed={composedFocuses[activeIdx]}
@@ -1195,7 +1278,8 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                   ) ||
                   _focusUnfilledTokenKeys(
                     allRawFocuses[activeIdx],
-                    focusStates[activeIdx]?.tokenValues
+                    focusStates[activeIdx]?.tokenValues,
+                    focusStates[activeIdx]
                   ).length > 0
                 }
                 onStampOne={stage === 'ready' ? () => handleStampOne(activeIdx) : null}
@@ -1358,7 +1442,7 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
                         readOnly={stage !== 'ready' || stampedAddIds.has(item.ruleId)}
                         stampOneDisabled={
                           _descNeedsInput(composed.description, item.focus.descriptionSegments) ||
-                          _focusUnfilledTokenKeys(item.focus, state.tokenValues).length > 0
+                          _focusUnfilledTokenKeys(item.focus, state.tokenValues, state).length > 0
                         }
                         onStampOne={stage === 'ready' ? () => _stampAuditAddOne(item) : null}
                       />
@@ -1565,7 +1649,7 @@ function _auditCommitDisabled(audit, stampedAddIds, skippedAddIds, auditFocusSta
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state).length > 0;
     return flatBlank || tokenBlank;
   });
 }
@@ -1578,7 +1662,7 @@ function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusSt
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state).length > 0;
     return flatBlank || tokenBlank;
   });
   if (flagged.length > 0) {
@@ -1587,7 +1671,7 @@ function _auditNeedsInputCount(audit, stampedAddIds, skippedAddIds, auditFocusSt
       return {
         ruleId: it.ruleId,
         composedDescription: _composeFocus(it.focus, state).description,
-        unfilledTokenKeys: _focusUnfilledTokenKeys(it.focus, state.tokenValues),
+        unfilledTokenKeys: _focusUnfilledTokenKeys(it.focus, state.tokenValues, state),
         hasSegments: _hasSegments(it.focus.descriptionSegments),
       };
     }));
@@ -1603,7 +1687,7 @@ function _auditNeedsInputByRowId(audit, auditFocusStates) {
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
     const composed = _composeFocus(it.focus, state);
     const flatBlank = _descNeedsInput(composed.description, it.focus.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state).length > 0;
     m.set(it._rowId, flatBlank || tokenBlank);
   });
   return m;
@@ -1617,7 +1701,7 @@ function _auditTouchesByRowId(audit, auditFocusStates) {
   (audit?.toAdd || []).forEach((it) => {
     if (!it.focus) { m.set(it._rowId, 0); return; }
     const state = auditFocusStates[it.ruleId] || _emptyFocusState();
-    const keys = _focusUnfilledTokenKeys(it.focus, state.tokenValues);
+    const keys = _focusUnfilledTokenKeys(it.focus, state.tokenValues, state);
     if (keys.length > 0) { m.set(it._rowId, keys.length); return; }
     const composed = _composeFocus(it.focus, state);
     m.set(it._rowId, _descNeedsInput(composed.description, it.focus.descriptionSegments) ? 1 : 0);
@@ -1751,30 +1835,22 @@ function _renderSegmentsWithTokens(segments, tokenValues, removedFactors) {
   return droppedMenu ? trimComposedConnector(joined) : joined;
 }
 // Unique tokenKeys still needing input across focus/goals/interventions.
-function _focusUnfilledTokenKeys(rawFocus, tokenValues) {
+//
+// `state` is the per-focus edit state. When the nurse has removed a goal or
+// intervention (state.goals / state.interventions set), we scan the EDITED
+// list so a deleted item stops contributing its unfilled token — otherwise
+// "Needs input" stays stuck on after removing the offending row and the add is
+// blocked (Brittany Burner, 2026-07-22). The edit-state arrays already carry
+// the _ukey stamped at first compose; the raw fallback is stamped here. See
+// segmentTokens.unfilledTokenKeys for why we must NOT re-stamp a shortened list.
+function _focusUnfilledTokenKeys(rawFocus, tokenValues, state) {
   if (!rawFocus) return [];
   // Same unique-key stamping as compose, so a picked goal/intervention token
   // actually clears its amber "touch" (keyed by _ukey, not the shared tokenKey).
   const focus = withStableTokenKeys(rawFocus);
-  const tv = tokenValues || {};
-  const keys = new Set();
-  const walk = (segs) => {
-    for (const s of segs || []) {
-      if (s && s.kind === 'token' && s.needsFilling) {
-        // Multiselect menu bullets have a sensible default (evidence-backed
-        // clauses pre-checked, the rest omitted — zero checked composes cleanly
-        // via the connector trim), so they never block or count as a touch.
-        if (s.tokenKey === 'multiselect') continue;
-        const key = tokenKeyOf(s);
-        const v = tv[key];
-        if (!v || !String(v).trim()) keys.add(key);
-      }
-    }
-  };
-  walk(focus.descriptionSegments);
-  (focus.goals || []).forEach((g) => walk(g.descriptionSegments));
-  (focus.interventions || []).forEach((iv) => walk(iv.descriptionSegments));
-  return [...keys];
+  const goals = state && state.goals != null ? state.goals : focus.goals;
+  const interventions = state && state.interventions != null ? state.interventions : focus.interventions;
+  return unfilledTokenKeys(focus.descriptionSegments, goals, interventions, tokenValues);
 }
 // JSX tooltip content for a factor segment. Bolds the dxCode / orderPattern /
 // derivedFrom values so the relevant signal pops in a quick hover.
@@ -1852,8 +1928,18 @@ const DriftState = ({ missing, onClose }) => (
   </div>
 );
 
-const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip, onToggleSkip, stampedRuleIds, singleAddIdx }) => {
+const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSelect, progress, onRemoveLibraryPick, onStamp, stampDisabled, needsInputCount, skippedFocuses, onUnSkip, onToggleSkip, stampedRuleIds, singleAddIdx, genAuthoring, polishedInfo }) => {
   const _stamped = stampedRuleIds instanceof Set ? stampedRuleIds : new Set();
+  // V3 authoring strip (SUP-116, same convention as AuditWorklist): live % while
+  // the background AI pass runs; a quiet 6s "polished N" note once the swap lands.
+  const polishPct = genAuthoring ? authoringPct(genAuthoring) : null;
+  const [polishNoteVisible, setPolishNoteVisible] = useState(false);
+  useEffect(() => {
+    if (!polishedInfo?.count) return undefined;
+    setPolishNoteVisible(true);
+    const t = setTimeout(() => setPolishNoteVisible(false), 6000);
+    return () => clearTimeout(t);
+  }, [polishedInfo]);
   // "To add" excludes both skipped and already single-added focuses.
   const stampCount = focusStates.filter((s, i) => !s.skipped && !_stamped.has(rawFocuses[i]?.ruleId)).length;
   const addedCount = rawFocuses.filter((f) => _stamped.has(f?.ruleId)).length;
@@ -1879,7 +1965,7 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
     const composedDesc = composedFocuses?.[i]?.description || f.description || '';
     const preview = composedDesc.replace(/\s+/g, ' ').trim();
     const flatHasBlank = _descNeedsInput(composedDesc, f.descriptionSegments);
-    const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues).length > 0;
+    const tokenBlank = _focusUnfilledTokenKeys(f, state.tokenValues, state).length > 0;
     const needsInput = !state.skipped && !isAdded && (flatHasBlank || tokenBlank);
 
     let cls = 'cpas-list__item';
@@ -1960,6 +2046,23 @@ const FocusList = ({ rawFocuses, composedFocuses, focusStates, activeIdx, onSele
           {stampCount} of {focusStates.length} {stampCount === 1 ? 'focus' : 'focuses'}
         </div>
       </div>
+      {genAuthoring && (
+        <div className="cpas-list__polish">
+          <span className="cpas-wl__polishing">
+            ✨ Polishing plan{polishPct != null ? `… ${polishPct}%` : '…'}
+          </span>
+          <div className="cpas-wl__polishbar">
+            <i style={polishPct != null ? { width: `${polishPct}%` } : {}} className={polishPct == null ? 'is-indeterminate' : ''} />
+          </div>
+        </div>
+      )}
+      {!genAuthoring && polishNoteVisible && polishedInfo?.count > 0 && (
+        <div className="cpas-list__polish">
+          <span className="cpas-wl__polished" title="AI selected the most relevant goals/interventions and filled blanks from the chart — your edits are never overwritten.">
+            ✨ Polished {polishedInfo.count} focus{polishedInfo.count === 1 ? '' : 'es'}
+          </span>
+        </div>
+      )}
       {(onPlanCount > 0 || libCount > 0 || addedCount > 0) && (
         <div className="cpas-list__legend">
           {addedCount > 0 && <span><b>{addedCount}</b> added</span>}

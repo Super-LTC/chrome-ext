@@ -232,6 +232,31 @@ export const FocusCard = ({ composed, state, rawFocus, onUpdate, onToggleSkip, r
       </header>
       )}
 
+      {/* Skipped-state banner — a clear, unmissable way to bring an
+          accidentally skipped focus back. The header chip toggles skip too, but
+          nurses read "− Skipped · Include" as a status label, not a button
+          (Brittany Burner, 2026-07-22 — "it didn't give me the option to bring
+          it back in"), so surface an explicit CTA in the body where the eye
+          lands. On-plan focuses keep their own banner below (it explains the
+          pre-skip and points to Include). */}
+      {!readOnly && state.skipped && onToggleSkip && !rawFocus.alreadyOnPlan && (
+        <div className="cpas-detail__skipped-banner">
+          <div className="cpas-detail__skipped-text">
+            <span className="cpas-detail__skipped-title">− This focus is skipped</span>
+            <span className="cpas-detail__skipped-sub">It won't be added to the care plan.</span>
+          </div>
+          {/* NO_TRACK: mirrors the header skip chip, which is also untracked. */}
+          <button
+            type="button"
+            className="cpas-btn cpas-btn--primary cpas-detail__skipped-include"
+            onClick={() => onToggleSkip()}
+            title="Add this focus back to the care plan"
+          >
+            + Include this focus
+          </button>
+        </div>
+      )}
+
       {/* Library trim callout — explains we imported a subset of PCC's full library */}
       {rawFocus._isLibrary && rawFocus._meta && (
         (rawFocus._meta.goalsAvailable > rawFocus._meta.goalsIncluded ||
