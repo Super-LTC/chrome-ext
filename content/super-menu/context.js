@@ -178,15 +178,25 @@ function scrapeClientIdFromDOM() {
   return scrapeNumericClientIdFromDOM();
 }
 
-// Resolve externalPatientId from current PCC page state (URL first, fall back
-// to SuperOverlay's resolved id, then to a DOM scrape on MDS section pages where
-// the URL lacks ESOLclientid and section data hasn't loaded yet).
+// Resolve the externalPatientId for /api/extension/mds/* calls. This MUST be the
+// NUMERIC PCC id — the backend rejects our internal SuperLTC id here, which
+// collapses assessment resolution to ASSESSMENT_NOT_FOUND ("not synced" overlay).
+//   1. The current page's numeric id: a numeric ESOLclientid in the URL, or one
+//      recovered from the DOM (hidden input / anchors / resident header) on
+//      migrated pages whose URL carries only an EID_ token or — on MDS section
+//      pages — no client id at all. Always the current patient, so it wins.
+//   2. Fallback: the numeric EXTERNAL id captured from a prior section response
+//      for this resident (SuperOverlay.externalPatientId).
+// It deliberately NEVER falls back to SuperOverlay.patientId: that is our
+// INTERNAL id (valid only in diagnosis-query POST bodies / patient-scoped
+// routes). Sending it as externalPatientId is the root cause of the overlay
+// inconsistency — some sections got the internal id, some got none.
 function getMDSResolverPatientId() {
-  const fromUrl = getChatPatientId();
-  if (fromUrl) return fromUrl;
-  const fromOverlay = window.SuperOverlay?.patientId;
-  if (fromOverlay) return String(fromOverlay);
-  return scrapeClientIdFromDOM();
+  const fromPage = getChatPatientId() || scrapeClientIdFromDOM();
+  if (fromPage) return fromPage;
+  const cachedExternal = window.SuperOverlay?.externalPatientId;
+  if (cachedExternal) return String(cachedExternal);
+  return null;
 }
 
 // Append the three MDS-resolver context fields to a URLSearchParams.
@@ -240,11 +250,13 @@ function getChatContext() {
   const url = new URL(window.location.href);
   const assessmentId = url.searchParams.get('ESOLassessid');
   if (assessmentId) {
-    // SuperOverlay stores the internal patientId once the section data loads.
-    // We pass it as externalPatientId since the backend resolves it the same way.
-    if (window.SuperOverlay?.patientId) {
-      context.externalPatientId = String(window.SuperOverlay.patientId);
-    }
+    // MDS section page: resolve the NUMERIC PCC id (page scrape, or the external
+    // id cached from a prior section response). Never send SuperOverlay.patientId
+    // here — that internal SuperLTC id is not a valid externalPatientId. The
+    // /api/chat route resolves externalPatientId as an external id (step 2b), the
+    // same as /mds/*, so the internal id would fail to bind the patient.
+    const externalPatientId = getMDSResolverPatientId();
+    if (externalPatientId) context.externalPatientId = externalPatientId;
     // Also pass assessmentId so backend has full MDS context
     context.externalAssessmentId = assessmentId;
     return context;

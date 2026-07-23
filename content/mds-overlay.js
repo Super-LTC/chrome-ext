@@ -24,7 +24,8 @@ const SuperOverlay = {
   serverDecisions: {},  // Keyed by mdsItem+mdsColumn (e.g. "O0250B", "I2000")
   panelExpanded: false,
   initialized: false,
-  patientId: null  // Stored from API response for diagnosis queries
+  patientId: null,          // INTERNAL SuperLTC id (assessment.patientId) — diagnosis queries / patient-scoped routes ONLY
+  externalPatientId: null   // NUMERIC PCC id (assessment.externalPatientId) — externalPatientId for /mds/* section calls
 };
 
 // ============================================
@@ -296,6 +297,7 @@ async function revealSection(section) {
     if (!params.assessmentId || params.section !== section) return; // only the open section
     const apiResponse = await fetchSectionData(params);
     if (apiResponse.assessment?.patientId) SuperOverlay.patientId = apiResponse.assessment.patientId;
+    if (apiResponse.assessment?.externalPatientId) SuperOverlay.externalPatientId = apiResponse.assessment.externalPatientId;
     SuperOverlay.assessmentId = apiResponse.assessment?.externalAssessmentId || params.assessmentId;
     SuperOverlay.facilityName = params.facilityName;
     SuperOverlay.orgSlug = params.orgSlug;
@@ -546,10 +548,16 @@ async function initSuperOverlay() {
     console.log('Super LTC: API response:', apiResponse);
     console.log('Super LTC: Decisions:', decisions);
 
-    // Store patientId from assessment for diagnosis queries
+    // Store patientId from assessment for diagnosis queries (INTERNAL id), and
+    // the NUMERIC PCC externalPatientId so later section/i8000/evidence requests
+    // for this resident resolve even when their page DOM scrape misses. Never
+    // send the internal id as externalPatientId — the backend rejects it.
     if (apiResponse.assessment?.patientId) {
       SuperOverlay.patientId = apiResponse.assessment.patientId;
       console.log('Super LTC: Stored patientId:', SuperOverlay.patientId);
+    }
+    if (apiResponse.assessment?.externalPatientId) {
+      SuperOverlay.externalPatientId = apiResponse.assessment.externalPatientId;
     }
 
     // Transform response to overlay format
