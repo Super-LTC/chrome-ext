@@ -107,6 +107,16 @@ function keepsLine(c) {
   return stays.map((l) => l.label).join(', ');
 }
 
+/**
+ * Soonest capture deadline across the candidate's triggers (v6 backend fields):
+ * a trigger whose service has ENDED carries captureWindowClosesAt — the last day a
+ * new assessment's lookback can still capture it. Null when everything is active.
+ */
+function soonestDeadline(c) {
+  const dates = (c.triggers || []).map((t) => t.captureWindowClosesAt).filter(Boolean).sort();
+  return dates[0] || null;
+}
+
 // ── Review modal ──
 
 function ReviewModal({ candidate, onClose, onActed }) {
@@ -170,6 +180,11 @@ function ReviewModal({ candidate, onClose, onActed }) {
                       {t.firstSeen && <span class="ipa-trigger__seen">new since {fmtDate(t.firstSeen)}</span>}
                     </div>
                   </div>
+                  {t.captureWindowClosesAt && (
+                    <div class="ipa-trigger__ended">
+                      ⏳ {t.serviceEndedAt ? `Service ended ${fmtDate(t.serviceEndedAt)} — ` : ''}an assessment with an ARD by <b>{fmtDate(t.captureWindowClosesAt)}</b> can still capture this
+                    </div>
+                  )}
                   {(t.evidence || []).length > 0 && (
                     <div class="ipa-ev-list">
                       {(t.evidence || []).map((e, i) => {
@@ -232,7 +247,7 @@ function ReviewModal({ candidate, onClose, onActed }) {
           )}
 
           {needsVerify && (
-            <div class="ipa-modal__verify">⚠ Nurse-verify: confirm the service is actually being delivered before coding (no active order in our records).</div>
+            <div class="ipa-modal__verify">⚠ Nurse-verify: confirm the service is actually being delivered and documented before coding.</div>
           )}
           {isLoss && (
             <div class="ipa-modal__verify ipa-modal__verify--loss">Opening now would lower the rate — the value that drops off outweighs the gain. Wait until it resolves.</div>
@@ -285,6 +300,10 @@ function Card({ candidate, onReview, onAction }) {
       </div>
 
       <div class="ipa-card__gain"><b>New:</b> {gainSummary(candidate)}</div>
+
+      {!isLoss && soonestDeadline(candidate) && (
+        <div class="ipa-card__deadline">⏳ Service ended — capture window closes {fmtDate(soonestDeadline(candidate))}</div>
+      )}
 
       {topEv && (
         <div class="ipa-card__evidence">

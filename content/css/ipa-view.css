@@ -45,6 +45,7 @@
 .ipa-card__ev-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--super-gray-600, #4b5563); }
 .ipa-card__ev-more { flex: none; font-weight: 600; color: var(--super-gray-400, #9ca3af); }
 .ipa-card__keeps { font-size: 11px; color: #059669; margin-top: 4px; }
+.ipa-card__deadline { font-size: 11px; font-weight: 600; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 4px 8px; margin-top: 6px; }
 .ipa-card__reason { font-size: 11px; color: #7c2d12; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
 
 .ipa-card__actions { display: flex; gap: 6px; margin-top: 10px; align-items: stretch; position: relative; }
@@ -110,6 +111,7 @@
 .ipa-trigger__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 4px; }
 .ipa-trigger__code { font-family: var(--super-font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 600; color: var(--super-gray-600, #4b5563); background: var(--super-gray-100, #f3f4f6); border-radius: 5px; padding: 2px 7px; }
 .ipa-trigger__seen { font-size: 11px; color: var(--super-gray-400, #9ca3af); white-space: nowrap; }
+.ipa-trigger__ended { font-size: 11px; color: #b45309; background: #fffbeb; border-radius: 5px; padding: 3px 7px; margin-top: 5px; }
 
 /* Evidence rows — plain, dated proof lines nested under the item.
    Note: border is explicitly transparent so <button> rows don't pick up the
