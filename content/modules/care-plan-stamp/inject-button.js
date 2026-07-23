@@ -93,29 +93,15 @@ async function _handleClick() {
  * attributes for `ESOLclientid=<digits>`.
  */
 function _resolvePatientId() {
-  // PCC URLs may now carry an ephemeral EID_ token instead of the numeric id.
-  // Prefer the stable numeric id recovered from the page (hidden input, anchors,
-  // inline scripts); only the URL value, when numeric, is trusted directly.
-  const stable = window.resolveStableClientId?.();
-  if (stable) return stable;
-
-  // Fallbacks (shared resolver unavailable): a numeric URL param, then the
-  // page's hidden ESOLclientid input / inline strings, then the raw URL value.
-  const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
-  if (/^\d+$/.test(fromUrl || '')) return fromUrl;
-
-  try {
-    const v = document?.needs?.ESOLclientid?.value;
-    if (/^\d+$/.test(v || '')) return v;
-  } catch (_) { /* document.needs may not exist */ }
-
-  const hidden = document.querySelector('input[name="ESOLclientid"]');
-  if (/^\d+$/.test(hidden?.value || '')) return hidden.value;
-
-  const m = (document.body?.innerHTML || '').match(/ESOLclientid=(\d+)/);
-  if (m) return m[1];
-
-  return fromUrl || null;
+  // PCC URLs may carry an ephemeral EID_ token, or (when nav lands via a form
+  // submit) no id at all. resolveStableClientId() handles the URL cases (numeric
+  // fast-path, EID→DOM recovery); scrapeNumericClientIdFromDOM() recovers the
+  // numeric id from the page (hidden input, anchors, inline scripts, header) when
+  // the URL has no id. Both are the shared client-id.js resolvers — this used to
+  // duplicate their logic inline.
+  return window.resolveStableClientId?.()
+      || window.scrapeNumericClientIdFromDOM?.()
+      || null;
 }
 
 function _scrapePatientName() {

@@ -35,7 +35,9 @@ const RUNNABLE_CODES = new Set(['ASSESSMENT_NOT_FOUND', 'NO_RUN_YET']);
 const inflight = new Map();
 
 function runKey(p) {
-  return `${p.externalPatientId}|${p.ardDate}`;
+  // Patient anchor: numeric external id, or the MRN (pccPublicId) on flipped
+  // pages where no numeric id is scrapeable (#967 resolves the run by MRN).
+  return `${p.externalPatientId || p.pccPublicId}|${p.ardDate}`;
 }
 
 function apiSend(endpoint, options) {
@@ -122,6 +124,7 @@ function gatherParams() {
   const facilityName = window.getChatFacilityInfo?.() || '';
   return {
     externalPatientId: fields.externalPatientId || null,
+    pccPublicId: fields.pccPublicId || null,
     ardDate: fields.ardDate || null,
     assessmentType: fields.assessmentType || null,
     facilityName,
@@ -129,18 +132,23 @@ function gatherParams() {
   };
 }
 
-// The five fields POST /run can't run without. All scraped live from the PCC
-// DOM (or merged from a caller-supplied seed), so any can be transiently blank.
-const REQUIRED_PARAMS = ['externalPatientId', 'ardDate', 'assessmentType', 'facilityName', 'orgSlug'];
+// The fields POST /run can't run without, besides a patient anchor (checked
+// separately below). All scraped live from the PCC DOM (or merged from a
+// caller-supplied seed), so any can be transiently blank.
+const REQUIRED_PARAMS = ['ardDate', 'assessmentType', 'facilityName', 'orgSlug'];
 
 function hasRequiredParams(p) {
   return missingParams(p).length === 0;
 }
 
-/** Which required fields are blank. Empty array = good to run. */
+/** Which required fields are blank. Empty array = good to run. The patient
+ *  anchor is satisfied by EITHER a numeric externalPatientId OR the MRN
+ *  (pccPublicId) — #967 resolves the run by MRN on flipped pages. */
 function missingParams(p) {
-  if (!p) return REQUIRED_PARAMS.slice();
-  return REQUIRED_PARAMS.filter((k) => !p[k]);
+  if (!p) return ['patient', ...REQUIRED_PARAMS];
+  const missing = REQUIRED_PARAMS.filter((k) => !p[k]);
+  if (!p.externalPatientId && !p.pccPublicId) missing.unshift('patient');
+  return missing;
 }
 
 // Copy only the truthy entries of `seed` — lets a caller (e.g. PDPM patient
@@ -259,7 +267,10 @@ function start(params, cb = {}, surface = 'unknown', code = null) {
       const res = await apiSend('/api/extension/mds/run', {
         method: 'POST',
         body: JSON.stringify({
-          externalPatientId: params.externalPatientId,
+          // Send whichever patient anchor(s) we have — backend prefers numeric,
+          // resolves by MRN when the numeric id is EID-dead (#967).
+          ...(params.externalPatientId ? { externalPatientId: params.externalPatientId } : {}),
+          ...(params.pccPublicId ? { pccPublicId: params.pccPublicId } : {}),
           ardDate: params.ardDate,
           assessmentType: params.assessmentType,
           facilityName: params.facilityName,
@@ -280,11 +291,14 @@ function start(params, cb = {}, surface = 'unknown', code = null) {
     let state = null;
     try {
       const qs = new URLSearchParams({
-        externalPatientId: params.externalPatientId,
         ardDate: params.ardDate,
         facilityName: params.facilityName,
         orgSlug: params.orgSlug,
       });
+      // Guard: never stringify a null id into the query ("null"). Send the MRN
+      // as the patient anchor when the numeric id is EID-dead (#967).
+      if (params.externalPatientId) qs.set('externalPatientId', params.externalPatientId);
+      if (params.pccPublicId) qs.set('pccPublicId', params.pccPublicId);
       const res = await apiSend(`/api/extension/mds/run/status?${qs}`, { method: 'GET' });
       if (cancelled) return;
       if (res && res.success) state = res.data || {};

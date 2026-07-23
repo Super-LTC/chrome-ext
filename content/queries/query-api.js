@@ -22,11 +22,12 @@ const QueryAPI = {
    * @returns {Promise<{queries: Array, mdsAssessment: Object|null}>}
    */
   async fetchAssessmentQueries(mdsAssessmentId, facilityName, orgSlug) {
-    const params = new URLSearchParams({
-      mdsAssessmentId,
-      facilityName,
-      orgSlug
-    });
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    // NUMERIC assessment id only — never an EID_ token. When it's EID-dead the
+    // resolver context appended below (pccPublicId + ARD + assessmentType) binds
+    // the assessment instead (#967 — this panel silently emptied on flipped pages).
+    if (/^\d+$/.test(String(mdsAssessmentId || ''))) params.set('mdsAssessmentId', mdsAssessmentId);
+    window.appendMDSContextParams?.(params);
 
     const endpoint = `/api/extension/diagnosis-queries/by-assessment?${params}`;
 

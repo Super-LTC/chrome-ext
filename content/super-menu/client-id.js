@@ -86,8 +86,110 @@ export function resolveStableClientId(href) {
   return scrapeNumericClientIdFromDOM() || fromUrl;
 }
 
+// PCC also migrated ESOLassessid (the MDS assessment id) to ephemeral EID_
+// tokens in URLs/links. Unlike the client id, the numeric assessment id survives
+// on flipped section pages in the per-item `toggleToolsWindow(this, '<digits>',
+// …)` onclick handlers (≈29 copies of the same id on a Section page). Scrape a
+// NUMERIC assessment id from those. Returns null if none is found; never returns
+// an EID_ token (every source is matched against digits).
+const _TOGGLE_TOOLS_ASSESS = /toggleToolsWindow\(\s*this\s*,\s*'(\d+)'/;
+
+export function scrapeNumericAssessmentIdFromDOM(doc = document) {
+  // 1. Per-item onclick handlers — the canonical source on a section page.
+  for (const el of doc.querySelectorAll('[onclick*="toggleToolsWindow"]')) {
+    const m = _TOGGLE_TOOLS_ASSESS.exec(el.getAttribute('onclick') || '');
+    if (m && _isNumericId(m[1])) return m[1];
+  }
+
+  // 2. Inline scripts — some page variants build the handler in a <script>.
+  for (const s of doc.querySelectorAll('script:not([src])')) {
+    const m = _TOGGLE_TOOLS_ASSESS.exec(s.textContent || '');
+    if (m && _isNumericId(m[1])) return m[1];
+  }
+
+  // 3. Last resort: anywhere in the page HTML.
+  const m = _TOGGLE_TOOLS_ASSESS.exec(doc.body?.innerHTML || '');
+  if (m && _isNumericId(m[1])) return m[1];
+
+  return null;
+}
+
+// Resolve the stable NUMERIC assessment id for the current MDS page.
+//   - URL ESOLassessid is numeric → use it (fast path, un-migrated facilities).
+//   - URL is an EID_ (or absent)   → recover the numeric id from the DOM.
+//   - nothing numeric on the page  → null. Callers then rely on the context
+//                                    params (pccPublicId + ardDate + type) and
+//                                    surface `resolvedVia` from the response.
+// NEVER returns an EID_ token: sending one as externalAssessmentId trips the
+// backend's non-numeric shell guard (#966) and grows phantom assessment rows.
+export function resolveStableAssessmentId(href) {
+  let fromUrl = null;
+  try {
+    fromUrl = new URL(href || window.location.href).searchParams.get('ESOLassessid');
+  } catch (_) { /* malformed href */ }
+
+  if (_isNumericId(fromUrl)) return fromUrl;
+
+  return scrapeNumericAssessmentIdFromDOM();
+}
+
+// Combined patient-ref for backend calls. Returns whichever stable anchors are
+// on the page — BOTH when both scrape (the backend prefers numeric and ignores
+// the rest, so sending both is free redundancy + makes the 404 `received:{…}`
+// echo readable). The MRN rides in the page title on nearly every PCC page, so
+// pccPublicId is the durable floor when the numeric client id is EID-dead.
+//   { externalPatientId, pccPublicId } | { pccPublicId } | { externalPatientId } | {}
+// GUARD: only a NUMERIC client id lands in externalPatientId — never the raw
+// EID_ last-resort resolveStableClientId() can return (the backend would ignore
+// it, but clean requests keep the diagnostics echo legible).
+export function resolveStablePatientRef(href) {
+  const ref = {};
+  const numeric = resolveStableClientId(href);
+  if (_isNumericId(numeric)) ref.externalPatientId = numeric;
+  const pccPublicId = scrapePccPublicIdFromDOM();
+  if (pccPublicId) ref.pccPublicId = pccPublicId;
+  return ref;
+}
+
+// Scrape the MRN / pccPublicId — the parenthetical id PCC prints in the resident
+// header and the page <title>, e.g. "Doe, Jane (AC72452125)". Present on
+// virtually every PCC page (nurses need it), so it survives the EID migration.
+// Real ids are 4+ alphanumerics AND always contain a digit (AC72452125,
+// 000953026, 6306); the digit requirement rejects all-caps decorations an MDS
+// title can carry, e.g. "(OBRA)".
+const _PCC_PUBLIC_ID = /\(([A-Z0-9]{4,})\)/g;
+
+function _firstPublicIdIn(text) {
+  if (!text) return null;
+  _PCC_PUBLIC_ID.lastIndex = 0;
+  let m;
+  while ((m = _PCC_PUBLIC_ID.exec(text)) !== null) {
+    if (/\d/.test(m[1])) return m[1];
+  }
+  return null;
+}
+
+export function scrapePccPublicIdFromDOM(doc = document) {
+  // <title> is the most stable source and is set on section pages too.
+  const fromTitle = _firstPublicIdIn(doc.title || '');
+  if (fromTitle) return fromTitle;
+
+  // Resident header — PCC labels the parenthetical id in a name/header element.
+  const header = doc.querySelector(
+    '.residentName, .resident-name, #residentName, .patientBanner, .patient-header-name'
+  );
+  const fromHeader = _firstPublicIdIn(header?.textContent || '');
+  if (fromHeader) return fromHeader;
+
+  return null;
+}
+
 // Expose on window for the global-style content scripts that don't use imports.
 if (typeof window !== 'undefined') {
   window.resolveStableClientId = resolveStableClientId;
   window.scrapeNumericClientIdFromDOM = scrapeNumericClientIdFromDOM;
+  window.resolveStableAssessmentId = resolveStableAssessmentId;
+  window.scrapeNumericAssessmentIdFromDOM = scrapeNumericAssessmentIdFromDOM;
+  window.resolveStablePatientRef = resolveStablePatientRef;
+  window.scrapePccPublicIdFromDOM = scrapePccPublicIdFromDOM;
 }

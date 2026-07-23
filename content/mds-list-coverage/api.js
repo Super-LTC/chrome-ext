@@ -1,5 +1,8 @@
 // content/mds-list-coverage/api.js
-/** POST the visible rows' ids; returns { success, results } or throws. */
+/** POST the visible rows' per-row keys ({externalAssessmentId?, pccPublicId?,
+ *  ardDate?, description?}); returns { success, rowMap } — an index-parallel
+ *  array correlated to `assessments` by position (#967) — or throws. Legacy
+ *  `results` is still tolerated by the caller. */
 export async function fetchBatchCoverage({ orgSlug, facilityName, assessments }) {
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',

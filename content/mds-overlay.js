@@ -294,7 +294,10 @@ window.SuperRunItCard = SuperRunItCard;
 async function revealSection(section) {
   try {
     const params = await getAPIParams();
-    if (!params.assessmentId || params.section !== section) return; // only the open section
+    // Gate on page presence (rawAssessmentId), not the resolved numeric — a
+    // flipped page with no recoverable numeric still resolves server-side via
+    // pccPublicId + ARD + type, so we must not skip it.
+    if (!params.rawAssessmentId || params.section !== section) return; // only the open section
     const apiResponse = await fetchSectionData(params);
     if (apiResponse.assessment?.patientId) SuperOverlay.patientId = apiResponse.assessment.patientId;
     if (apiResponse.assessment?.externalPatientId) SuperOverlay.externalPatientId = apiResponse.assessment.externalPatientId;
@@ -324,10 +327,12 @@ async function fetchItemEvidence(section, itemCode) {
   if (EvidenceCache.has(cacheKey)) return EvidenceCache.get(cacheKey);
 
   const params = new URLSearchParams({
-    externalAssessmentId: SuperOverlay.assessmentId,
     facilityName: SuperOverlay.facilityName,
     orgSlug: SuperOverlay.orgSlug,
   });
+  // Only send a NUMERIC assessment id; omit when unresolved so the backend
+  // resolves via the pccPublicId + ARD + type context params below.
+  if (SuperOverlay.assessmentId) params.set('externalAssessmentId', SuperOverlay.assessmentId);
   window.appendMDSContextParams?.(params);
   const endpoint = `/api/extension/mds/sections/${section}/items/${encodeURIComponent(itemCode)}/evidence?${params}`;
 
@@ -419,8 +424,17 @@ function getFacilityInfo() {
  */
 function getMDSPageParams() {
   const url = new URL(window.location.href);
+  // Presence of ANY ESOLassessid (EID_ or numeric) means we're on a section
+  // page — use it only for that gate, NEVER as a backend id.
+  const rawAssessmentId = url.searchParams.get('ESOLassessid');
   return {
-    assessmentId: url.searchParams.get('ESOLassessid'),
+    // NUMERIC assessment id: the URL value if numeric, else recovered from the
+    // page's toggleToolsWindow handlers. null when unresolvable — callers then
+    // omit externalAssessmentId and let the backend resolve via
+    // pccPublicId + ARD + assessmentType. NEVER the raw EID_ token: the backend
+    // shell guard (#966) rejects non-numeric ids and grows phantom rows.
+    assessmentId: window.resolveStableAssessmentId?.() ?? null,
+    rawAssessmentId,
     section: url.searchParams.get('sectioncode')
   };
 }
@@ -429,7 +443,7 @@ function getMDSPageParams() {
  * Gather all parameters needed for API call
  */
 async function getAPIParams() {
-  const { assessmentId, section } = getMDSPageParams();
+  const { assessmentId, rawAssessmentId, section } = getMDSPageParams();
 
   // Get org from background (cookie)
   const orgResponse = getOrg();
@@ -440,7 +454,7 @@ async function getAPIParams() {
   const chatFacility = typeof getChatFacilityInfo === 'function' ? getChatFacilityInfo() : null;
   const facilityName = facilityInfo?.facility || chatFacility || '';
 
-  return { assessmentId, section, orgSlug, facilityName };
+  return { assessmentId, rawAssessmentId, section, orgSlug, facilityName };
 }
 
 // Expose getAPIParams globally for evidence-viewers.js
@@ -452,11 +466,11 @@ window.getCurrentParams = getAPIParams;
 async function fetchSectionData(params) {
   const { assessmentId, section, orgSlug, facilityName } = params;
 
-  const sectionParams = new URLSearchParams({
-    externalAssessmentId: assessmentId,
-    facilityName,
-    orgSlug,
-  });
+  const sectionParams = new URLSearchParams({ facilityName, orgSlug });
+  // Only send a NUMERIC assessment id; omit when unresolved (flipped page with
+  // no recoverable numeric) and let the chokepoint's pccPublicId + ARD + type
+  // resolve the assessment server-side.
+  if (assessmentId) sectionParams.set('externalAssessmentId', assessmentId);
   window.appendMDSContextParams?.(sectionParams);
   const endpoint = `/api/extension/mds/sections/${section}?${sectionParams}`;
 
@@ -477,6 +491,49 @@ async function fetchSectionData(params) {
   return response.data;
 }
 
+// EID-migration diagnosability (#966). The backend now echoes, on its 404s,
+// exactly what it received and which identity it resolved. Surface that so a
+// mis-wired id call is instantly visible in the console, cache the resolved
+// numeric assessment id (subsequent calls then tier-1 direct-match), and flag
+// when the card bound to a SIBLING assessment (different ARD/type than on
+// screen). Pure logging + caching — never throws, never blocks the overlay.
+function logMdsResolutionDiagnostics(error, params) {
+  try {
+    const body = error?.body || {};
+    // ASSESSMENT_NOT_FOUND: `received: { externalAssessmentId, externalPatientId,
+    // pccPublicId, assessmentType, ardDate }` — a missing field pinpoints the bug.
+    if (body.code === 'ASSESSMENT_NOT_FOUND' && body.received) {
+      console.warn(`Super LTC [${params?.section}]: ASSESSMENT_NOT_FOUND — backend received:`, body.received);
+    }
+    // NO_RUN_YET (and some 404s) echo `assessment: { externalAssessmentId,
+    // ardDate, description, resolvedVia }`.
+    const a = body.assessment;
+    if (a) {
+      if (a.externalAssessmentId && /^\d+$/.test(String(a.externalAssessmentId))) {
+        SuperOverlay.assessmentId = String(a.externalAssessmentId); // cache → later calls tier-1 match
+      }
+      const onScreenArd = window.getPCCAssessmentMetaFromDOM?.().ardDate || null;
+      const boundToSibling =
+        (a.resolvedVia && a.resolvedVia !== 'none') ||
+        (a.ardDate && onScreenArd && a.ardDate !== onScreenArd);
+      if (boundToSibling) {
+        console.warn(
+          'Super LTC: analysis bound to a SIBLING assessment — showing',
+          a.description || '(unknown type)', 'ARD', a.ardDate, '(on screen:', onScreenArd + ')'
+        );
+        // Recorded for a follow-up "showing analysis for <type>, ARD <date>"
+        // banner on SuperRunItCard (SUP-177 fast-follow).
+        SuperOverlay.boundSibling = { description: a.description || null, ardDate: a.ardDate || null, resolvedVia: a.resolvedVia };
+      } else {
+        SuperOverlay.boundSibling = null;
+      }
+    }
+    if (body.syncing) {
+      console.info('Super LTC: assessment syncing — retry shortly');
+    }
+  } catch (_) { /* diagnostics must never break the overlay */ }
+}
+
 /**
  * Fetch all decisions for this assessment from the server.
  * Returns a map keyed by mdsItem+mdsColumn (e.g. "O0250B", "I2000").
@@ -484,11 +541,9 @@ async function fetchSectionData(params) {
 async function fetchDecisions(params) {
   const { assessmentId, orgSlug, facilityName } = params;
 
-  const decisionParams = new URLSearchParams({
-    externalAssessmentId: assessmentId,
-    facilityName,
-    orgSlug,
-  });
+  const decisionParams = new URLSearchParams({ facilityName, orgSlug });
+  // Numeric-only; omit when unresolved and resolve via the context params.
+  if (assessmentId) decisionParams.set('externalAssessmentId', assessmentId);
   window.appendMDSContextParams?.(decisionParams);
   const endpoint = `/api/extension/mds/decisions?${decisionParams}`;
 
@@ -526,8 +581,10 @@ async function initSuperOverlay() {
     const params = await getAPIParams();
     console.log('Super LTC: API params:', params);
 
-    // Validate required params
-    if (!params.assessmentId || !params.section) {
+    // Validate required params. Gate on rawAssessmentId (URL presence): a
+    // flipped page may have no recoverable numeric id yet still be a valid
+    // section page the backend resolves via pccPublicId + ARD + type.
+    if (!params.rawAssessmentId || !params.section) {
       console.log('Super LTC: Missing URL params (assessmentId or section)');
       return;
     }
@@ -619,6 +676,9 @@ async function initSuperOverlay() {
 
   } catch (error) {
     console.error('Super LTC: Failed to fetch section data:', error);
+    // EID-migration diagnosability: log what the backend received / resolved and
+    // cache the numeric id before we branch into Run-it / notice handling.
+    logMdsResolutionDiagnostics(error, params);
     // A solve is already in flight for this assessment → show live progress and
     // poll to completion, instead of offering "Run it" (which would re-trigger
     // the running solve). See MdsRunNow.runningState / superapp PR #767.
@@ -4043,8 +4103,10 @@ function renderAdminModalError(modal, message) {
 
 // Get context needed for query modal
 async function getQueryContext() {
-  const url = new URL(window.location.href);
-  const assessmentId = url.searchParams.get('ESOLassessid');
+  // Prefer the backend-confirmed numeric id the overlay already resolved, then
+  // the page resolver. NEVER the raw ESOLassessid URL param — it's an EID_ token
+  // on migrated facilities, which the backend rejects.
+  const assessmentId = SuperOverlay.assessmentId || window.resolveStableAssessmentId?.() || null;
 
   // Use stored patientId from API response (preferred), fallback to the stable
   // numeric id from the page (handles EID_ tokens in the URL).
@@ -4788,7 +4850,6 @@ function navigateToItem(elementId) {
 async function postItemDecision(result, decision, note) {
   const mdsColumn = result.column || '';
   const body = {
-    externalAssessmentId: SuperOverlay.assessmentId,
     facilityName: SuperOverlay.facilityName,
     orgSlug: SuperOverlay.orgSlug,
     decision,
@@ -4796,6 +4857,9 @@ async function postItemDecision(result, decision, note) {
     mdsColumn,
     ...(window.getMDSContextBodyFields?.() || {}),
   };
+  // Numeric-only; omit when unresolved so the body's pccPublicId + ARD + type
+  // resolve the assessment (never send a null/EID externalAssessmentId).
+  if (SuperOverlay.assessmentId) body.externalAssessmentId = SuperOverlay.assessmentId;
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',
     endpoint: `/api/extension/mds/items/${encodeURIComponent(result.mdsItem)}/decision`,
@@ -5159,11 +5223,12 @@ async function fetchI8000Data(params) {
 
   const { assessmentId, orgSlug, facilityName } = params;
   const qp = new URLSearchParams({
-    externalAssessmentId: assessmentId,
     facilityName,
     orgSlug,
     include: 'evidence', // each result arrives with its evidence inline (no lazy 2nd fetch)
   });
+  // Numeric-only; omit when unresolved and resolve via the context params.
+  if (assessmentId) qp.set('externalAssessmentId', assessmentId);
   // Live DOM I8000 values → audit reflects the screen, not the synced snapshot.
   const liveCodes = readLiveI8000Values();
   if (Object.keys(liveCodes).length > 0) qp.set('enteredCodes', JSON.stringify(liveCodes));

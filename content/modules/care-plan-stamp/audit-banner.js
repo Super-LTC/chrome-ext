@@ -19,20 +19,14 @@ function _isCarePlanDetailPage() {
 }
 
 function _resolvePatientId() {
-  // Prefer the stable numeric id (the URL may carry an ephemeral EID_ token).
-  const stable = window.resolveStableClientId?.();
-  if (stable) return stable;
-  const fromUrl = new URLSearchParams(window.location.search).get('ESOLclientid');
-  if (/^\d+$/.test(fromUrl || '')) return fromUrl;
-  try {
-    const v = document?.needs?.ESOLclientid?.value;
-    if (/^\d+$/.test(v || '')) return v;
-  } catch (_) { /* */ }
-  const hidden = document.querySelector('input[name="ESOLclientid"]');
-  if (/^\d+$/.test(hidden?.value || '')) return hidden.value;
-  const html = document.body?.innerHTML || '';
-  const m = html.match(/ESOLclientid=(\d+)/);
-  return m ? m[1] : (fromUrl || null);
+  // The URL may carry an ephemeral EID_ token, or (on form-submit nav) no id at
+  // all. resolveStableClientId() handles the URL cases; scrapeNumericClientIdFromDOM()
+  // recovers the numeric id from the page (hidden input, anchors, header) when the
+  // URL has no id. Both are the shared client-id.js resolvers — this used to
+  // duplicate their logic inline.
+  return window.resolveStableClientId?.()
+      || window.scrapeNumericClientIdFromDOM?.()
+      || null;
 }
 
 function _dismissKeyFor(patientId) {

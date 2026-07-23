@@ -24,13 +24,17 @@ function _isSectionListingPage() {
 }
 
 // assessId + clientId: the #verifyBtnForm hidden inputs are the most reliable
-// source on this page; fall back to the URL param / DOM scrape.
+// source on this page — but only when NUMERIC. PCC's EID migration can populate
+// them (and the URL) with ephemeral EID_ tokens, and the backend's day-0 shell
+// guard (#966) rejects non-numeric external ids. Trust a form value only if it's
+// numeric, else recover the numeric id from the URL / toggleToolsWindow handlers
+// (assessment) or the DOM client-id scrape.
 function _readIds() {
   const form = document.getElementById('verifyBtnForm');
-  let assessId = form?.querySelector('input[name="assessId"]')?.value || '';
-  let clientId = form?.querySelector('input[name="clientId"]')?.value || '';
-  if (!assessId) assessId = new URLSearchParams(window.location.search).get('ESOLassessid') || '';
-  if (!clientId) clientId = (window.scrapeClientIdFromDOM?.() || '');
+  const formAssess = form?.querySelector('input[name="assessId"]')?.value || '';
+  const formClient = form?.querySelector('input[name="clientId"]')?.value || '';
+  const assessId = /^\d+$/.test(formAssess) ? formAssess : (window.resolveStableAssessmentId?.() || '');
+  const clientId = /^\d+$/.test(formClient) ? formClient : (window.scrapeClientIdFromDOM?.() || '');
   return { assessId, clientId };
 }
 
