@@ -601,6 +601,7 @@ function PersonDetailView({ person, grantable, orgSlug, isSelf, onBack, onChange
             <span class="sset-badge sset-badge--admin">Org admin</span>
             <span><strong>Full access</strong> — every building and feature.</span>
           </div>
+          <OrgAdminPosition person={person} grantable={grantable} orgSlug={orgSlug} onChanged={onChanged} />
           {danger}
         </div>
       ) : (
@@ -616,6 +617,56 @@ function PersonDetailView({ person, grantable, orgSlug, isSelf, onBack, onChange
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Job title for an org admin. Org admins keep full access regardless (features are
+ * bypassed), but recording a position gives them a sensible default bundle if
+ * they're ever moved to Staff. Mirrors the web person panel. Picking a role saves
+ * its template as the (inert-for-now) baseline.
+ */
+function OrgAdminPosition({ person, grantable, orgSlug, onChanged }) {
+  const roles = grantable?.roles ?? [];
+  const grantableModules = grantable?.modules ?? {};
+  const [snfRole, setSnfRole] = useState(person.snfRole ?? null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const pick = async (key) => {
+    if (key === snfRole) return;
+    const prev = snfRole;
+    setSnfRole(key); // optimistic
+    setSaving(true);
+    setErr(null);
+    try {
+      const role = roles.find((r) => r.key === key);
+      await updateTeamMemberPermissions(person.userId, {
+        orgSlug,
+        snfRole: key,
+        modules: seedFromRole(role?.modules, grantableModules),
+      });
+      track('team_member_position_changed', { source: 'settings', orgAdmin: true });
+      onChanged();
+    } catch (e) {
+      setSnfRole(prev); // revert on failure
+      setErr(e.message || 'Could not set position.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Ctl label="Job title" sub="Applies as their default if you later move them to Staff.">
+      <Picker
+        value={snfRole}
+        options={roles.map((r) => ({ value: r.key, label: r.label }))}
+        placeholder="Select a position…"
+        disabled={saving}
+        onChange={pick}
+      />
+      {err ? <div class="sset-status is-err" style="padding:6px 2px 0;">{err}</div> : null}
+    </Ctl>
   );
 }
 
