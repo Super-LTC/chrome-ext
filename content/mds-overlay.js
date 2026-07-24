@@ -576,9 +576,14 @@ async function initSuperOverlay() {
     return;
   }
 
+  // Declared outside the try so the catch can reach it — the EID diagnostics
+  // (logMdsResolutionDiagnostics) and the "Run it" card both need the params.
+  // A block-scoped `const params` inside try threw ReferenceError in catch,
+  // aborting the handler before it could hide the spinner → infinite spin.
+  let params;
   try {
     // Gather API parameters
-    const params = await getAPIParams();
+    params = await getAPIParams();
     console.log('Super LTC: API params:', params);
 
     // Validate required params. Gate on rawAssessmentId (URL presence): a
