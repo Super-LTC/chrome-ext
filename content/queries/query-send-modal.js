@@ -873,11 +873,13 @@ const QuerySendModal = {
    */
   async _getQueryContext() {
     // Use the same approach as content.js getQueryContext() for consistency
-    const url = new URL(window.location.href);
     const mdsState = window.MDSViewState || {};
-    const assessmentId = url.searchParams.get('ESOLassessid') ||
-                         mdsState.manualContext?.assessmentId || mdsState.context?.assessmentId ||
-                         window.SuperOverlay?.assessmentId || '';
+    // NUMERIC assessment id only — never the raw ESOLassessid URL param (an EID_
+    // token on migrated facilities). Prefer the backend-confirmed ids the overlay
+    // / MDS view already resolved, then recover from the page.
+    const assessmentId = window.SuperOverlay?.assessmentId ||
+                         mdsState.context?.assessmentId || mdsState.manualContext?.assessmentId ||
+                         window.resolveStableAssessmentId?.() || '';
 
     // Use stored patientId from API response (preferred), fallback to the stable
     // numeric id from the page (handles EID_ tokens in the URL).

@@ -4,6 +4,13 @@
  * Runs in the content script context — fetch() includes session cookies automatically.
  */
 
+// Verbose per-submit response dump (includes an 800-char HTML preview that can
+// contain patient/diagnosis text). Default OFF so it never ships as noise/PHI;
+// flip to true (or set window.__PCC_DIAG_DEBUG = true at runtime) to diagnose a
+// "reported failure but PCC added it anyway" case. Real errors always surface
+// via the concise console.warn below regardless of this flag.
+const PCC_DIAG_DEBUG = false;
+
 const PCCDiagnosisClient = {
   /**
    * Look up PCC internal diagnosis ID for an ICD-10 code
@@ -220,10 +227,52 @@ const PCCDiagnosisClient = {
         return { success: false, error: 'SESSION_EXPIRED' };
       }
 
-      // Check for PCC error messages in response
-      if (html.includes('class="errormsg"') || html.includes('Error:')) {
-        const errorMatch = html.match(/class="errormsg"[^>]*>([^<]+)/);
-        return { success: false, error: errorMatch ? errorMatch[1].trim() : 'PCC returned an error' };
+      // Parse the response and read the ACTUAL text of any `.errormsg` element.
+      // PCC ships an EMPTY `<div class="errormsg"></div>` container on SUCCESS,
+      // and its pages contain stray "Error:" substrings (JS handlers, templates).
+      // The old check (`includes('class="errormsg"') || includes('Error:')`)
+      // matched both of those on a successful add, so PCC-accepted diagnoses were
+      // reported as "PCC returned an error" (the generic branch fired because the
+      // container had no text to extract). We now fail ONLY when an errormsg
+      // element actually contains text.
+      let errText = '';
+      let errormsgCount = 0;
+      try {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const errEls = [...doc.querySelectorAll('.errormsg')];
+        errormsgCount = errEls.length;
+        errText = errEls.map((el) => el.textContent.trim()).filter(Boolean).join('; ');
+      } catch (_) {
+        // DOMParser failed — fall back to a text-only extraction.
+        const m = html.match(/class="errormsg"[^>]*>([\s\S]*?)<\//i);
+        errText = m ? m[1].replace(/<[^>]+>/g, '').trim() : '';
+      }
+
+      // Verbose diagnostics — gated so it never ships as noise/PHI. Enable via
+      // PCC_DIAG_DEBUG or window.__PCC_DIAG_DEBUG to inspect the raw PCC response.
+      if (PCC_DIAG_DEBUG || (typeof window !== 'undefined' && window.__PCC_DIAG_DEBUG)) {
+        const errorColonIdx = html.indexOf('Error:');
+        console.log('[PCCClient] submitDiagnosis response', {
+          icd10Code,
+          rankId: rankId || '-1',
+          status: response.status,
+          redirected: response.redirected,
+          url: response.url,
+          length: html.length,
+          errormsgCount,
+          errText: errText || '(none / empty container)',
+          hasErrorColon: errorColonIdx !== -1,
+          errorColonContext: errorColonIdx !== -1
+            ? html.slice(Math.max(0, errorColonIdx - 80), errorColonIdx + 120)
+            : null,
+          preview: html.slice(0, 800),
+        });
+      }
+
+      if (errText) {
+        // Concise, PHI-free signal that always surfaces a genuine PCC rejection.
+        console.warn('[PCCClient] submitDiagnosis rejected by PCC:', icd10Code, '—', errText);
+        return { success: false, error: errText };
       }
 
       return { success: true };

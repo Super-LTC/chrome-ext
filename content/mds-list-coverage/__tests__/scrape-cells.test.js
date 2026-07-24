@@ -4,7 +4,46 @@ import {
   nativeColumnIndexes,
   cellTextAt,
   scrapeRows,
+  assessmentIdFromHtml,
+  normalizeArdDate,
 } from '../scrape.js';
+
+describe('normalizeArdDate', () => {
+  it('converts PCC M/D/YYYY to ISO', () => {
+    expect(normalizeArdDate('8/14/2026')).toBe('2026-08-14');
+    expect(normalizeArdDate('8/4/2026')).toBe('2026-08-04');
+    expect(normalizeArdDate(' 12/31/2025 ')).toBe('2025-12-31');
+  });
+  it('returns null for empty/unparseable input', () => {
+    expect(normalizeArdDate('')).toBeNull();
+    expect(normalizeArdDate(null)).toBeNull();
+    expect(normalizeArdDate('2026-08-14')).toBeNull(); // already-ISO isn't the PCC cell shape
+  });
+});
+
+describe('assessmentIdFromHtml (EID migration)', () => {
+  it('reads a numeric id from the edit link', () => {
+    const html = '<a href="/clinical/mds3/sectionlisting.xhtml?ESOLassessid=1560725&x=1">edit</a>';
+    expect(assessmentIdFromHtml(html)).toBe('1560725');
+  });
+
+  it('recovers the numeric id from a pdpmAnalyzer (HIPPS) call when edit/strike/copy links are EID', () => {
+    const eidRow = `<tr>
+      <a href="/clinical/mds3/sectionlisting.xhtml?ESOLassessid=EID_0qp9Dt46t1IKFj6k">edit</a>
+      <a href="javascript:launchStrikeOut('?ESOLassessid=EID_x','EID_x','EID_c');">strike-out</a>
+      <a href="javascript:pdpmAnalyzer('/mds3/analyzer.jsp?ESOLassessid=3120458&x=1')">HIPPS</a>
+    </tr>`;
+    expect(assessmentIdFromHtml(eidRow)).toBe('3120458');
+  });
+
+  it('returns null on a fully EID-flipped row (never an EID_ token)', () => {
+    const eidRow = `<tr>
+      <a href="/clinical/mds3/sectionlisting.xhtml?ESOLassessid=EID_0qp9Dt46t1IKFj6k">edit</a>
+      <a href="javascript:launchStrikeOut('?ESOLassessid=EID_x','EID_x','EID_c');">strike-out</a>
+    </tr>`;
+    expect(assessmentIdFromHtml(eidRow)).toBeNull();
+  });
+});
 
 describe('parseSectionList', () => {
   it('splits a comma + nbsp separated list into upper-case tokens', () => {
@@ -51,13 +90,13 @@ function buildTable(inner) {
 }
 
 describe('nativeColumnIndexes', () => {
-  it('locates Type and Unsigned Sections by header text, skipping our columns', () => {
+  it('locates Date (ARD), Type and Unsigned Sections by header text, skipping our columns', () => {
     const table = buildTable(HEADER + DATA_ROW);
-    expect(nativeColumnIndexes(table)).toEqual({ unsigned: 5, type: 3 });
+    expect(nativeColumnIndexes(table)).toEqual({ unsigned: 5, type: 3, ard: 1 });
   });
-  it('returns -1 for missing headers', () => {
+  it('returns -1 for missing type/unsigned headers (Date still located)', () => {
     const table = buildTable('<tr><th>Date</th><th>Name</th></tr>');
-    expect(nativeColumnIndexes(table)).toEqual({ unsigned: -1, type: -1 });
+    expect(nativeColumnIndexes(table)).toEqual({ unsigned: -1, type: -1, ard: 0 });
   });
 });
 
@@ -71,7 +110,7 @@ describe('cellTextAt', () => {
 });
 
 describe('scrapeRows (with native cells)', () => {
-  it('captures unsignedSections + type alongside id/name/mrn', () => {
+  it('captures unsignedSections + type + normalized ardDate alongside id/name/mrn', () => {
     const table = buildTable(HEADER + DATA_ROW);
     const rows = scrapeRows(table);
     expect(rows).toHaveLength(1);
@@ -80,8 +119,35 @@ describe('scrapeRows (with native cells)', () => {
       mrn: '178122',
       patientName: 'Gibson, Larry',
       type: 'NQ',
+      ardDate: '2026-08-14',
       unsignedSections: ['A', 'B', 'C', 'Q'],
       unsignedColIndex: 5,
     });
+  });
+
+  it('KEEPS a flipped (EID) row that has an MRN but no numeric id — the coverage fallback needs it', () => {
+    const flippedRow = `<tr bgcolor="#efefef">
+      <td><a class="listbutton" href="/clinical/mds3/sectionlisting.xhtml?ESOLassessid=EID_0qp9Dt46t1IKFj6k">edit</a></td>
+      <td>9/1/2026</td>
+      <td><a href="/admin/client/cp_mds.jsp?ESOLclientid=EID_x">Doe, Jane (AC72452125)</a></td>
+      <td>5-Day</td>
+      <td></td>
+      <td><span>A,  GG</span></td>
+    </tr>`;
+    const rows = scrapeRows(buildTable(HEADER + flippedRow));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      externalAssessmentId: null,
+      mrn: 'AC72452125',
+      patientName: 'Doe, Jane',
+      type: '5-Day',
+      ardDate: '2026-09-01',
+      unsignedSections: ['A', 'GG'],
+    });
+  });
+
+  it('drops header/spacer rows with neither a numeric id nor an MRN', () => {
+    const rows = scrapeRows(buildTable(HEADER + '<tr><td colspan="6">No assessments</td></tr>'));
+    expect(rows).toHaveLength(0);
   });
 });

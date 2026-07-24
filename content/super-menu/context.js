@@ -1,6 +1,11 @@
 // Super Menu Context Detection
 
-import { resolveStableClientId, scrapeNumericClientIdFromDOM } from './client-id.js';
+import {
+  resolveStableClientId,
+  scrapeNumericClientIdFromDOM,
+  resolveStableAssessmentId,
+  scrapePccPublicIdFromDOM,
+} from './client-id.js';
 
 // Cache for patient name to avoid repeated DOM queries
 let cachedPatientName = null;
@@ -45,8 +50,13 @@ function getPatientNameFromPage() {
 }
 
 function getMDSContext() {
-  const url = new URL(window.location.href);
-  const assessmentId = url.searchParams.get('ESOLassessid');
+  // Resolve the stable NUMERIC assessment id for backend use — the raw ESOLassessid
+  // URL param is an ephemeral EID_ token on migrated facilities, which the backend
+  // rejects. Keep the raw value ONLY to detect that we're on a section page: on a
+  // flipped page the numeric may be null, but we're still on MDS and must report
+  // scope 'mds' (else the side-panel silently downgrades to patient/global scope).
+  const rawAssessmentId = new URL(window.location.href).searchParams.get('ESOLassessid');
+  const assessmentId = resolveStableAssessmentId();
   const patientId = resolveStableClientId();
 
   // Get patient name, using cache if same patient
@@ -67,10 +77,11 @@ function getMDSContext() {
     cachedPatientId = null;
   }
 
-  // Check if we're on an MDS section page
+  // Check if we're on an MDS section page — gate on raw URL presence (EID_ or
+  // numeric), NOT the resolved numeric, so flipped pages still report scope 'mds'.
   const isMDSSection = (
     (window.location.href.includes('/mds3/') || window.location.href.includes('section.xhtml')) &&
-    assessmentId
+    rawAssessmentId
   );
 
   if (isMDSSection) {
@@ -199,12 +210,22 @@ function getMDSResolverPatientId() {
   return null;
 }
 
-// Append the three MDS-resolver context fields to a URLSearchParams.
+// Append the MDS-resolver context fields to a URLSearchParams.
 // Safe to call when fields are missing — only sets what it can read.
+//   externalPatientId — numeric PCC client id (never our internal id, never EID)
+//   pccPublicId       — MRN; the durable patient anchor #966 accepts as a
+//                       separate key when the numeric client id is EID-dead
+//                       (the norm on flipped MDS pages). Ride-along redundancy:
+//                       backend prefers numeric and ignores the rest.
+//   assessmentType    — REQUIRED to split same-ARD pairs (5-Day + Admission);
+//                       without it the backend's never-guess resolver 404s.
+//   ardDate           — final resolver tier.
 function appendMDSContextParams(params) {
   const meta = getPCCAssessmentMetaFromDOM();
   const externalPatientId = getMDSResolverPatientId();
+  const pccPublicId = scrapePccPublicIdFromDOM();
   if (externalPatientId) params.set('externalPatientId', externalPatientId);
+  if (pccPublicId) params.set('pccPublicId', pccPublicId);
   if (meta.assessmentType) params.set('assessmentType', meta.assessmentType);
   if (meta.ardDate) params.set('ardDate', meta.ardDate);
   return params;
@@ -215,8 +236,10 @@ function appendMDSContextParams(params) {
 function getMDSContextBodyFields() {
   const meta = getPCCAssessmentMetaFromDOM();
   const externalPatientId = getMDSResolverPatientId();
+  const pccPublicId = scrapePccPublicIdFromDOM();
   const out = {};
   if (externalPatientId) out.externalPatientId = externalPatientId;
+  if (pccPublicId) out.pccPublicId = pccPublicId;
   if (meta.assessmentType) out.assessmentType = meta.assessmentType;
   if (meta.ardDate) out.ardDate = meta.ardDate;
   return out;
@@ -248,8 +271,10 @@ function getChatContext() {
   // 2. MDS pages — no ESOLclientid in URL, but SuperOverlay may have resolved
   //    the patientId from the assessment API response
   const url = new URL(window.location.href);
-  const assessmentId = url.searchParams.get('ESOLassessid');
-  if (assessmentId) {
+  // Presence of any ESOLassessid (EID_ or numeric) means we're on a section
+  // page — detection only; never forward the raw value to the backend.
+  const rawAssessmentId = url.searchParams.get('ESOLassessid');
+  if (rawAssessmentId) {
     // MDS section page: resolve the NUMERIC PCC id (page scrape, or the external
     // id cached from a prior section response). Never send SuperOverlay.patientId
     // here — that internal SuperLTC id is not a valid externalPatientId. The
@@ -257,8 +282,14 @@ function getChatContext() {
     // same as /mds/*, so the internal id would fail to bind the patient.
     const externalPatientId = getMDSResolverPatientId();
     if (externalPatientId) context.externalPatientId = externalPatientId;
-    // Also pass assessmentId so backend has full MDS context
-    context.externalAssessmentId = assessmentId;
+    // pccPublicId (MRN) is the durable patient anchor when the numeric id is
+    // EID-dead (the norm on flipped pages); harmless if the route ignores it.
+    const pccPublicId = scrapePccPublicIdFromDOM();
+    if (pccPublicId) context.pccPublicId = pccPublicId;
+    // Send only the NUMERIC assessment id — omit the ephemeral EID_ token, which
+    // the backend rejects. null when unresolvable → resolve via patient + type.
+    const externalAssessmentId = resolveStableAssessmentId();
+    if (externalAssessmentId) context.externalAssessmentId = externalAssessmentId;
     return context;
   }
 

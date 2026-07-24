@@ -23,14 +23,31 @@ function _isSectionListingPage() {
   return window.location.pathname.includes('/clinical/mds3/sectionlisting.xhtml');
 }
 
-// assessId + clientId: the #verifyBtnForm hidden inputs are the most reliable
-// source on this page; fall back to the URL param / DOM scrape.
+// assessId + clientId from the #verifyBtnForm hidden inputs (most reliable on
+// this page), the URL, or the DOM.
+//
+// assessId is used TWO ways: (1) to drive same-session PCC navigation — the
+// scraper fetches /section.xhtml?ESOLassessid=<id> for every section, and a
+// same-session EID_ token works there — and (2) when NUMERIC, as the backend /
+// day-0-shell id (which rejects non-numeric ids, #966). So PREFER a numeric id
+// (form value if numeric, else the toggleToolsWindow/URL resolver — which also
+// unblocks day-0 shell creation), but FALL BACK to the raw form/URL token so the
+// modal still opens and can scrape on flipped pages. verify-api independently
+// guards the backend: it omits a non-numeric externalAssessmentId and resolves
+// via pccPublicId + ARD + type.
 function _readIds() {
   const form = document.getElementById('verifyBtnForm');
-  let assessId = form?.querySelector('input[name="assessId"]')?.value || '';
-  let clientId = form?.querySelector('input[name="clientId"]')?.value || '';
-  if (!assessId) assessId = new URLSearchParams(window.location.search).get('ESOLassessid') || '';
-  if (!clientId) clientId = (window.scrapeClientIdFromDOM?.() || '');
+  const formAssess = form?.querySelector('input[name="assessId"]')?.value?.trim() || '';
+  const formClient = form?.querySelector('input[name="clientId"]')?.value?.trim() || '';
+  const urlAssess = new URLSearchParams(window.location.search).get('ESOLassessid') || '';
+  const assessId =
+    (/^\d+$/.test(formAssess) && formAssess) ||
+    window.resolveStableAssessmentId?.() ||
+    formAssess || urlAssess || '';
+  const clientId =
+    (/^\d+$/.test(formClient) && formClient) ||
+    window.scrapeClientIdFromDOM?.() ||
+    formClient || '';
   return { assessId, clientId };
 }
 

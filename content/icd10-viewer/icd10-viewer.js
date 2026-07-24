@@ -154,10 +154,12 @@ const ICD10Viewer = {
                     patientLink.textContent?.match(/\d+/)?.[0];
       }
 
-      // Try to get from SuperOverlay if available
-      if (!patientId && window.SuperOverlay?.patientId) {
-        patientId = window.SuperOverlay.patientId;
-      }
+      // NOTE: deliberately NO fallback to SuperOverlay.patientId — that is our
+      // INTERNAL SuperLTC id, which the backend rejects as an externalPatientId
+      // (the leak that caused ASSESSMENT_NOT_FOUND). On fully EID-flipped pages
+      // where no numeric client id is scrapeable, patientId stays null; the
+      // icd10 patients/* routes are path-keyed on patientId and don't yet accept
+      // pccPublicId, so that fallback is a separate backend follow-up.
     }
 
     // Get patient name from page - PCC uses various selectors
@@ -207,8 +209,11 @@ const ICD10Viewer = {
       console.warn('ICD10Viewer: Could not get org slug:', e);
     }
 
-    // Get assessment ID from URL if available
-    const assessmentId = urlParams.get('ESOLassessid') ||
+    // Get the NUMERIC assessment ID — the raw ESOLassessid URL param is an EID_
+    // token on migrated facilities, which the backend rejects. resolveStableAssessmentId
+    // recovers the numeric id (URL if numeric, else the DOM toggleToolsWindow handlers);
+    // SuperOverlay.assessmentId (also numeric) is the backend-confirmed fallback.
+    const assessmentId = window.resolveStableAssessmentId?.() ||
                          window.SuperOverlay?.assessmentId || null;
 
     return {
@@ -1435,10 +1440,9 @@ const ICD10Viewer = {
     body.innerHTML = '<div class="query-items-mount"></div>';
     const mountEl = body.querySelector('.query-items-mount');
 
-    // Try to get assessment ID from URL (PCC pattern)
+    // Resolve the NUMERIC assessment ID (never the raw EID_ URL token).
     if (!this._assessmentId) {
-      const urlParams = new URLSearchParams(window.location.search);
-      this._assessmentId = urlParams.get('ESOLassessid') ||
+      this._assessmentId = window.resolveStableAssessmentId?.() ||
                            window.SuperOverlay?.assessmentId || null;
     }
 
@@ -1514,10 +1518,9 @@ const ICD10Viewer = {
     body.innerHTML = '<div class="ard-estimator-mount"></div>';
     const mountEl = body.querySelector('.ard-estimator-mount');
 
-    // Try to get assessment ID from URL (PCC pattern)
+    // Resolve the NUMERIC assessment ID (never the raw EID_ URL token).
     if (!this._assessmentId) {
-      const urlParams = new URLSearchParams(window.location.search);
-      this._assessmentId = urlParams.get('ESOLassessid') ||
+      this._assessmentId = window.resolveStableAssessmentId?.() ||
                            window.SuperOverlay?.assessmentId || null;
     }
 

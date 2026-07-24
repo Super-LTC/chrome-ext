@@ -18,9 +18,28 @@ import {
 // the rollout with the backend.
 
 const ILC = {
-  lastIdSet: '', resultsByKey: {}, busy: false,
+  lastIdSet: '', resultsByKey: {}, lastRowMap: [], busy: false,
   filters: emptyFilters(), filterRoot: null, lastRows: [],
 };
+
+// Row signature for cache-equality + payload identity. Prefer the numeric
+// assessment id; fall back to the (mrn, ardDate, type) triple that identifies a
+// flipped (EID) row — two flipped patients must never collide on a bare null id.
+function rowSig(r) {
+  return r.externalAssessmentId || `mrn:${r.mrn || ''}|ard:${r.ardDate || ''}|t:${r.type || ''}`;
+}
+
+// The per-row key the backend resolver needs. Sends whichever anchors the row
+// exposes: numeric id (tier-1) and/or MRN + ARD + description (flipped-row
+// fallback, #967). Backend prefers numeric and ignores the rest.
+function rowCoverageKey(r) {
+  const a = {};
+  if (r.externalAssessmentId) a.externalAssessmentId = r.externalAssessmentId;
+  if (r.mrn) a.pccPublicId = r.mrn;
+  if (r.ardDate) a.ardDate = r.ardDate;
+  if (r.type) a.description = r.type;
+  return a;
+}
 // Per-state chip glyph (upcoming is intentionally faint/subtle, never an ✗).
 const CHIP_ICONS = { covered: '✓ ', in_progress: '◐ ', needed: '⚠ ', upcoming: '· ' };
 
@@ -197,7 +216,9 @@ function renderRow(rowEl, result, rowMeta) {
 // Combine one scraped row with its coverage result into the shape the filter model
 // expects. tone + hasNeededInterview only exist once the batch has resolved.
 function buildRowData(r) {
-  const res = ILC.resultsByKey[r.externalAssessmentId];
+  // Result is attached to the row by index-parallel correlation in runCoverage
+  // (works for flipped rows that have no numeric id to key on).
+  const res = r.result || null;
   const cb = res ? completeByModel(res) : null;
   // Which interview UDAs this row is still missing (status 'needed'), normalized to
   // the picker's keys (phq9 → phq). Powers the "Missing ▾" per-interview filter.
@@ -324,11 +345,14 @@ async function runCoverage() {
   const rows = scrapeRows(table.querySelector('tbody') || table);
   if (!rows.length) return;
 
-  const idSet = rows.map((r) => r.externalAssessmentId).sort().join(',');
-  if (idSet === ILC.lastIdSet && Object.keys(ILC.resultsByKey).length) {
+  // Order-sensitive signature: results correlate to rows by POSITION (#967's
+  // index-parallel rowMap), so cache-equality must respect order too.
+  const idSet = rows.map(rowSig).join(',');
+  if (idSet === ILC.lastIdSet && ILC.lastRowMap.length === rows.length) {
     ensureHeaderColumn(table);
-    rows.forEach((r) => {
-      const res = ILC.resultsByKey[r.externalAssessmentId] || null;
+    rows.forEach((r, i) => {
+      const res = ILC.lastRowMap[i] || null;
+      r.result = res;
       renderCompleteBy(r.rowEl, res);
       renderRow(r.rowEl, res, r);
     });
@@ -350,24 +374,37 @@ async function runCoverage() {
   try {
     const data = await fetchBatchCoverage({
       orgSlug, facilityName,
-      assessments: rows.map((r) => ({ externalAssessmentId: r.externalAssessmentId })),
+      assessments: rows.map(rowCoverageKey),
     });
-    ILC.resultsByKey = {};
-    (data.results || []).forEach((res) => { ILC.resultsByKey[String(res.key)] = res; });
-    rows.forEach((r) => {
-      const res = ILC.resultsByKey[r.externalAssessmentId] || { status: 'not_synced' };
+    // #967 response is two aligned structures, NOT interchangeable:
+    //   rowMap[i] = the resolved externalAssessmentId (string) for request row i,
+    //              or null when the row was unresolvable (→ not-synced chip).
+    //   results   = BatchCoverageResult[] keyed by `.key` (= externalAssessmentId).
+    // Correlate: rowMap[i] → results.find(key === rowMap[i]). This is how flipped
+    // rows (no numeric id of their own) pick up the coverage the backend resolved
+    // for them by pccPublicId + ARD + description.
+    const rowMap = data.rowMap || [];
+    const byKey = new Map((data.results || []).map((x) => [String(x.key), x]));
+    ILC.resultsByKey = Object.fromEntries(byKey);
+    ILC.lastRowMap = rows.map((_, i) => {
+      const resolvedId = rowMap[i];
+      return (resolvedId != null && byKey.get(String(resolvedId))) || { status: 'not_synced' };
+    });
+    rows.forEach((r, i) => {
+      const res = ILC.lastRowMap[i];
+      r.result = res;
       renderCompleteBy(r.rowEl, res);
       renderRow(r.rowEl, res, r);
     });
     window.SuperAnalytics?.track?.('mds_list_coverage_shown', {
       rows: rows.length,
-      ok: (data.results || []).filter((x) => x.status === 'ok').length,
-      not_synced: (data.results || []).filter((x) => x.status === 'not_synced').length,
+      ok: ILC.lastRowMap.filter((x) => x.status === 'ok').length,
+      not_synced: ILC.lastRowMap.filter((x) => x.status === 'not_synced').length,
     });
   } catch (err) {
     console.error('[ILC] batch coverage failed:', err);
-    ILC.lastIdSet = '';
-    rows.forEach((r) => { renderCompleteBy(r.rowEl, { status: 'error' }); renderRow(r.rowEl, { status: 'error' }, r); });
+    ILC.lastIdSet = ''; ILC.lastRowMap = [];
+    rows.forEach((r) => { r.result = { status: 'error' }; renderCompleteBy(r.rowEl, { status: 'error' }); renderRow(r.rowEl, { status: 'error' }, r); });
     window.SuperAnalytics?.track?.('error_shown', {
       surface: 'mds_list_coverage',
       error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
@@ -425,7 +462,7 @@ let ilcLastUrl = location.href;
 new MutationObserver(() => {
   if (location.href !== ilcLastUrl) {
     ilcLastUrl = location.href;
-    ILC.lastIdSet = ''; ILC.resultsByKey = {};
+    ILC.lastIdSet = ''; ILC.resultsByKey = {}; ILC.lastRowMap = [];
     ILC.filters = emptyFilters(); // filters reset on each visit
     removeFilterBar();
     setTimeout(initIlc, 400);

@@ -27,6 +27,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  document.title = '';
   delete window.SuperOverlay;
 });
 
@@ -62,6 +63,53 @@ describe('appendMDSContextParams() externalPatientId (GET section/i8000/evidence
   });
 });
 
+describe('pccPublicId ride-along on the MDS context chokepoints', () => {
+  const MRN = 'AC72452125';
+
+  it('sends pccPublicId (from the title) on POST bodies — the durable anchor on flipped pages', () => {
+    document.title = `Section N - Doe, Jane (${MRN})`;
+    expect(window.getMDSContextBodyFields().pccPublicId).toBe(MRN);
+  });
+
+  it('sends pccPublicId on GET params', () => {
+    document.title = `Section N - Doe, Jane (${MRN})`;
+    const params = window.appendMDSContextParams(new URLSearchParams());
+    expect(params.get('pccPublicId')).toBe(MRN);
+  });
+
+  it('rides along WITH the numeric external id when both are known (free redundancy)', () => {
+    document.title = `Doe, Jane (${MRN})`;
+    window.SuperOverlay = { patientId: INTERNAL_ID, externalPatientId: EXTERNAL_ID };
+    const out = window.getMDSContextBodyFields();
+    expect(out.externalPatientId).toBe(EXTERNAL_ID);
+    expect(out.pccPublicId).toBe(MRN);
+  });
+
+  it('omits pccPublicId when no MRN is on the page', () => {
+    document.title = 'PointClickCare';
+    expect(window.getMDSContextBodyFields()).not.toHaveProperty('pccPublicId');
+  });
+});
+
+describe('getMDSContext() scope detection on flipped pages', () => {
+  afterEach(() => { window.history.replaceState({}, '', '/'); });
+
+  it("reports scope 'mds' on a flipped section page even when no numeric id is recoverable", () => {
+    window.history.replaceState({}, '', '/mds3/section.xhtml?ESOLassessid=EID_0qdFxemS33H7GHe3&sectioncode=N');
+    const ctx = window.getMDSContext();
+    expect(ctx.scope).toBe('mds');           // gate on raw URL presence, not the numeric
+    expect(ctx.assessmentId).toBeNull();     // numeric not recoverable → null (never the EID)
+  });
+
+  it('recovers the numeric assessmentId from the DOM when present', () => {
+    window.history.replaceState({}, '', '/mds3/section.xhtml?ESOLassessid=EID_x&sectioncode=N');
+    document.body.innerHTML = `<a onclick="toggleToolsWindow(this, '3120458', 'N')">t</a>`;
+    const ctx = window.getMDSContext();
+    expect(ctx.scope).toBe('mds');
+    expect(ctx.assessmentId).toBe('3120458');
+  });
+});
+
 describe('getChatContext() externalPatientId on MDS pages', () => {
   beforeEach(() => {
     // MDS section page: ESOLassessid present, no ESOLclientid in the URL.
@@ -71,16 +119,29 @@ describe('getChatContext() externalPatientId on MDS pages', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('never sends the internal SuperOverlay.patientId as externalPatientId', () => {
+  it('never sends the internal SuperOverlay.patientId as externalPatientId, and never forwards the EID', () => {
     window.SuperOverlay = { patientId: INTERNAL_ID };
     const ctx = window.getChatContext();
     expect(ctx.externalPatientId).not.toBe(INTERNAL_ID);
     expect(ctx).not.toHaveProperty('externalPatientId'); // nothing resolvable → omit, don't leak internal id
-    expect(ctx.externalAssessmentId).toBe('EID_0qdFxemS33H7GHe3');
+    // The URL's ESOLassessid is an EID_ token with no numeric recoverable from
+    // the DOM → omit externalAssessmentId entirely (never forward the EID).
+    expect(ctx).not.toHaveProperty('externalAssessmentId');
   });
 
   it('sends the numeric external id when it is known', () => {
     window.SuperOverlay = { patientId: INTERNAL_ID, externalPatientId: EXTERNAL_ID };
     expect(window.getChatContext().externalPatientId).toBe(EXTERNAL_ID);
+  });
+
+  it('recovers and sends the numeric externalAssessmentId from the DOM on a flipped page', () => {
+    document.body.innerHTML = `<a onclick="toggleToolsWindow(this, '3120458', 'N')">t</a>`;
+    const ctx = window.getChatContext();
+    expect(ctx.externalAssessmentId).toBe('3120458');
+  });
+
+  it('sends pccPublicId (MRN) as the durable patient anchor on a flipped page', () => {
+    document.title = 'Section I - Doe, Jane (AC72452125)';
+    expect(window.getChatContext().pccPublicId).toBe('AC72452125');
   });
 });

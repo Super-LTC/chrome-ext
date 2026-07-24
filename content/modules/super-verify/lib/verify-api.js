@@ -78,12 +78,17 @@ export async function postVerify({ assessId, patientId, answersBlob }) {
   const { facilityName, orgSlug } = window.getCurrentParams?.() || {};
   const { ardDate, assessmentType } = window.getPCCAssessmentMetaFromDOM?.() || {};
 
-  const body = {
-    orgSlug,
-    facilityName,
-    externalPatientId: String(patientId),
-    externalAssessmentId: String(assessId),
-  };
+  const body = { orgSlug, facilityName };
+  // NUMERIC ids only — the backend's day-0 shell guard (#966) rejects non-numeric
+  // externalAssessmentId (EID_ tokens grew phantom rows). Omitting a non-numeric
+  // id lets the fallback ladder (pccPublicId + ARD + type) resolve already-synced
+  // assessments; only brand-new day-0 shells need the numeric and no-op without it.
+  if (/^\d+$/.test(String(patientId))) body.externalPatientId = String(patientId);
+  if (/^\d+$/.test(String(assessId))) body.externalAssessmentId = String(assessId);
+  // pccPublicId (MRN) — durable patient anchor #966 accepts when the numeric
+  // client id is EID-dead. Ride-along; backend prefers numeric and ignores rest.
+  const pccPublicId = window.scrapePccPublicIdFromDOM?.();
+  if (pccPublicId) body.pccPublicId = pccPublicId;
   // Always send ardDate when scrapeable — makes day-0 (not-yet-synced) work.
   if (ardDate) body.ardDate = ardDate;
   if (assessmentType) body.assessmentType = assessmentType;
@@ -109,7 +114,6 @@ export async function postVerify({ assessId, patientId, answersBlob }) {
 export async function postDetectionDecision({ mdsItem, mdsColumn, decision, note, assessId }) {
   const { facilityName, orgSlug } = window.getCurrentParams?.() || {};
   const body = {
-    externalAssessmentId: String(assessId),
     facilityName,
     orgSlug,
     decision,
@@ -117,6 +121,9 @@ export async function postDetectionDecision({ mdsItem, mdsColumn, decision, note
     mdsColumn: mdsColumn || '',
     ...(window.getMDSContextBodyFields?.() || {}),
   };
+  // Numeric-only; omit an EID/blank so the chokepoint's pccPublicId + ARD + type
+  // resolve the assessment (getMDSContextBodyFields spread above).
+  if (/^\d+$/.test(String(assessId))) body.externalAssessmentId = String(assessId);
 
   const result = await relay(
     `/api/extension/mds/items/${encodeURIComponent(mdsItem)}/decision`,

@@ -11,7 +11,6 @@ import { UdaViewer } from './modules/uda-viewer/UdaViewer.jsx';
 import { normalizeAnswer, formatAnswerForDisplay, determineStatus, sectionIBadgeLabel } from './super-menu/mds-badge.js';
 import { buildI8000ViewModel } from './i8000-overlay/i8000-model.js';
 import { I8000_MOCK_ENVELOPE } from './i8000-overlay/i8000-mock.js';
-import { openEvidence } from './utils/evidence-helpers.js';
 import { toRecommendedIcd10 } from './queries/lib/icd10-picker-util.js';
 
 // ============================================
@@ -294,7 +293,10 @@ window.SuperRunItCard = SuperRunItCard;
 async function revealSection(section) {
   try {
     const params = await getAPIParams();
-    if (!params.assessmentId || params.section !== section) return; // only the open section
+    // Gate on page presence (rawAssessmentId), not the resolved numeric — a
+    // flipped page with no recoverable numeric still resolves server-side via
+    // pccPublicId + ARD + type, so we must not skip it.
+    if (!params.rawAssessmentId || params.section !== section) return; // only the open section
     const apiResponse = await fetchSectionData(params);
     if (apiResponse.assessment?.patientId) SuperOverlay.patientId = apiResponse.assessment.patientId;
     if (apiResponse.assessment?.externalPatientId) SuperOverlay.externalPatientId = apiResponse.assessment.externalPatientId;
@@ -324,10 +326,12 @@ async function fetchItemEvidence(section, itemCode) {
   if (EvidenceCache.has(cacheKey)) return EvidenceCache.get(cacheKey);
 
   const params = new URLSearchParams({
-    externalAssessmentId: SuperOverlay.assessmentId,
     facilityName: SuperOverlay.facilityName,
     orgSlug: SuperOverlay.orgSlug,
   });
+  // Only send a NUMERIC assessment id; omit when unresolved so the backend
+  // resolves via the pccPublicId + ARD + type context params below.
+  if (SuperOverlay.assessmentId) params.set('externalAssessmentId', SuperOverlay.assessmentId);
   window.appendMDSContextParams?.(params);
   const endpoint = `/api/extension/mds/sections/${section}/items/${encodeURIComponent(itemCode)}/evidence?${params}`;
 
@@ -419,8 +423,17 @@ function getFacilityInfo() {
  */
 function getMDSPageParams() {
   const url = new URL(window.location.href);
+  // Presence of ANY ESOLassessid (EID_ or numeric) means we're on a section
+  // page — use it only for that gate, NEVER as a backend id.
+  const rawAssessmentId = url.searchParams.get('ESOLassessid');
   return {
-    assessmentId: url.searchParams.get('ESOLassessid'),
+    // NUMERIC assessment id: the URL value if numeric, else recovered from the
+    // page's toggleToolsWindow handlers. null when unresolvable — callers then
+    // omit externalAssessmentId and let the backend resolve via
+    // pccPublicId + ARD + assessmentType. NEVER the raw EID_ token: the backend
+    // shell guard (#966) rejects non-numeric ids and grows phantom rows.
+    assessmentId: window.resolveStableAssessmentId?.() ?? null,
+    rawAssessmentId,
     section: url.searchParams.get('sectioncode')
   };
 }
@@ -429,7 +442,7 @@ function getMDSPageParams() {
  * Gather all parameters needed for API call
  */
 async function getAPIParams() {
-  const { assessmentId, section } = getMDSPageParams();
+  const { assessmentId, rawAssessmentId, section } = getMDSPageParams();
 
   // Get org from background (cookie)
   const orgResponse = getOrg();
@@ -440,7 +453,7 @@ async function getAPIParams() {
   const chatFacility = typeof getChatFacilityInfo === 'function' ? getChatFacilityInfo() : null;
   const facilityName = facilityInfo?.facility || chatFacility || '';
 
-  return { assessmentId, section, orgSlug, facilityName };
+  return { assessmentId, rawAssessmentId, section, orgSlug, facilityName };
 }
 
 // Expose getAPIParams globally for evidence-viewers.js
@@ -452,11 +465,11 @@ window.getCurrentParams = getAPIParams;
 async function fetchSectionData(params) {
   const { assessmentId, section, orgSlug, facilityName } = params;
 
-  const sectionParams = new URLSearchParams({
-    externalAssessmentId: assessmentId,
-    facilityName,
-    orgSlug,
-  });
+  const sectionParams = new URLSearchParams({ facilityName, orgSlug });
+  // Only send a NUMERIC assessment id; omit when unresolved (flipped page with
+  // no recoverable numeric) and let the chokepoint's pccPublicId + ARD + type
+  // resolve the assessment server-side.
+  if (assessmentId) sectionParams.set('externalAssessmentId', assessmentId);
   window.appendMDSContextParams?.(sectionParams);
   const endpoint = `/api/extension/mds/sections/${section}?${sectionParams}`;
 
@@ -477,6 +490,49 @@ async function fetchSectionData(params) {
   return response.data;
 }
 
+// EID-migration diagnosability (#966). The backend now echoes, on its 404s,
+// exactly what it received and which identity it resolved. Surface that so a
+// mis-wired id call is instantly visible in the console, cache the resolved
+// numeric assessment id (subsequent calls then tier-1 direct-match), and flag
+// when the card bound to a SIBLING assessment (different ARD/type than on
+// screen). Pure logging + caching — never throws, never blocks the overlay.
+function logMdsResolutionDiagnostics(error, params) {
+  try {
+    const body = error?.body || {};
+    // ASSESSMENT_NOT_FOUND: `received: { externalAssessmentId, externalPatientId,
+    // pccPublicId, assessmentType, ardDate }` — a missing field pinpoints the bug.
+    if (body.code === 'ASSESSMENT_NOT_FOUND' && body.received) {
+      console.warn(`Super LTC [${params?.section}]: ASSESSMENT_NOT_FOUND — backend received:`, body.received);
+    }
+    // NO_RUN_YET (and some 404s) echo `assessment: { externalAssessmentId,
+    // ardDate, description, resolvedVia }`.
+    const a = body.assessment;
+    if (a) {
+      if (a.externalAssessmentId && /^\d+$/.test(String(a.externalAssessmentId))) {
+        SuperOverlay.assessmentId = String(a.externalAssessmentId); // cache → later calls tier-1 match
+      }
+      const onScreenArd = window.getPCCAssessmentMetaFromDOM?.().ardDate || null;
+      const boundToSibling =
+        (a.resolvedVia && a.resolvedVia !== 'none') ||
+        (a.ardDate && onScreenArd && a.ardDate !== onScreenArd);
+      if (boundToSibling) {
+        console.warn(
+          'Super LTC: analysis bound to a SIBLING assessment — showing',
+          a.description || '(unknown type)', 'ARD', a.ardDate, '(on screen:', onScreenArd + ')'
+        );
+        // Recorded for a follow-up "showing analysis for <type>, ARD <date>"
+        // banner on SuperRunItCard (SUP-177 fast-follow).
+        SuperOverlay.boundSibling = { description: a.description || null, ardDate: a.ardDate || null, resolvedVia: a.resolvedVia };
+      } else {
+        SuperOverlay.boundSibling = null;
+      }
+    }
+    if (body.syncing) {
+      console.info('Super LTC: assessment syncing — retry shortly');
+    }
+  } catch (_) { /* diagnostics must never break the overlay */ }
+}
+
 /**
  * Fetch all decisions for this assessment from the server.
  * Returns a map keyed by mdsItem+mdsColumn (e.g. "O0250B", "I2000").
@@ -484,11 +540,9 @@ async function fetchSectionData(params) {
 async function fetchDecisions(params) {
   const { assessmentId, orgSlug, facilityName } = params;
 
-  const decisionParams = new URLSearchParams({
-    externalAssessmentId: assessmentId,
-    facilityName,
-    orgSlug,
-  });
+  const decisionParams = new URLSearchParams({ facilityName, orgSlug });
+  // Numeric-only; omit when unresolved and resolve via the context params.
+  if (assessmentId) decisionParams.set('externalAssessmentId', assessmentId);
   window.appendMDSContextParams?.(decisionParams);
   const endpoint = `/api/extension/mds/decisions?${decisionParams}`;
 
@@ -521,13 +575,20 @@ async function initSuperOverlay() {
     return;
   }
 
+  // Declared outside the try so the catch can reach it — the EID diagnostics
+  // (logMdsResolutionDiagnostics) and the "Run it" card both need the params.
+  // A block-scoped `const params` inside try threw ReferenceError in catch,
+  // aborting the handler before it could hide the spinner → infinite spin.
+  let params;
   try {
     // Gather API parameters
-    const params = await getAPIParams();
+    params = await getAPIParams();
     console.log('Super LTC: API params:', params);
 
-    // Validate required params
-    if (!params.assessmentId || !params.section) {
+    // Validate required params. Gate on rawAssessmentId (URL presence): a
+    // flipped page may have no recoverable numeric id yet still be a valid
+    // section page the backend resolves via pccPublicId + ARD + type.
+    if (!params.rawAssessmentId || !params.section) {
       console.log('Super LTC: Missing URL params (assessmentId or section)');
       return;
     }
@@ -619,6 +680,9 @@ async function initSuperOverlay() {
 
   } catch (error) {
     console.error('Super LTC: Failed to fetch section data:', error);
+    // EID-migration diagnosability: log what the backend received / resolved and
+    // cache the numeric id before we branch into Run-it / notice handling.
+    logMdsResolutionDiagnostics(error, params);
     // A solve is already in flight for this assessment → show live progress and
     // poll to completion, instead of offering "Run it" (which would re-trigger
     // the running solve). See MdsRunNow.runningState / superapp PR #767.
@@ -4043,8 +4107,10 @@ function renderAdminModalError(modal, message) {
 
 // Get context needed for query modal
 async function getQueryContext() {
-  const url = new URL(window.location.href);
-  const assessmentId = url.searchParams.get('ESOLassessid');
+  // Prefer the backend-confirmed numeric id the overlay already resolved, then
+  // the page resolver. NEVER the raw ESOLassessid URL param — it's an EID_ token
+  // on migrated facilities, which the backend rejects.
+  const assessmentId = SuperOverlay.assessmentId || window.resolveStableAssessmentId?.() || null;
 
   // Use stored patientId from API response (preferred), fallback to the stable
   // numeric id from the page (handles EID_ tokens in the URL).
@@ -4221,9 +4287,13 @@ async function fetchAIGeneratedNote(result) {
   const solverResult = result.aiAnswer;
 
   const endpoint = `/api/extension/diagnosis-queries/generate-note`;
+  // orgSlug is required server-side; omitting it 400s "Missing required field: orgSlug".
+  const { orgSlug, facilityName } = (window.getCurrentParams && window.getCurrentParams()) || {};
   const body = {
     mdsItem: mdsItem,
-    solverResult: solverResult
+    solverResult: solverResult,
+    ...(orgSlug ? { orgSlug } : {}),
+    ...(facilityName ? { facilityName } : {}),
   };
 
   const response = await chrome.runtime.sendMessage({
@@ -4788,7 +4858,6 @@ function navigateToItem(elementId) {
 async function postItemDecision(result, decision, note) {
   const mdsColumn = result.column || '';
   const body = {
-    externalAssessmentId: SuperOverlay.assessmentId,
     facilityName: SuperOverlay.facilityName,
     orgSlug: SuperOverlay.orgSlug,
     decision,
@@ -4796,6 +4865,9 @@ async function postItemDecision(result, decision, note) {
     mdsColumn,
     ...(window.getMDSContextBodyFields?.() || {}),
   };
+  // Numeric-only; omit when unresolved so the body's pccPublicId + ARD + type
+  // resolve the assessment (never send a null/EID externalAssessmentId).
+  if (SuperOverlay.assessmentId) body.externalAssessmentId = SuperOverlay.assessmentId;
   const response = await chrome.runtime.sendMessage({
     type: 'API_REQUEST',
     endpoint: `/api/extension/mds/items/${encodeURIComponent(result.mdsItem)}/decision`,
@@ -5159,11 +5231,12 @@ async function fetchI8000Data(params) {
 
   const { assessmentId, orgSlug, facilityName } = params;
   const qp = new URLSearchParams({
-    externalAssessmentId: assessmentId,
     facilityName,
     orgSlug,
     include: 'evidence', // each result arrives with its evidence inline (no lazy 2nd fetch)
   });
+  // Numeric-only; omit when unresolved and resolve via the context params.
+  if (assessmentId) qp.set('externalAssessmentId', assessmentId);
   // Live DOM I8000 values → audit reflects the screen, not the synced snapshot.
   const liveCodes = readLiveI8000Values();
   if (Object.keys(liveCodes).length > 0) qp.set('enteredCodes', JSON.stringify(liveCodes));
@@ -5353,69 +5426,43 @@ function buildAuditDetail(audit) {
   };
 }
 
-// Friendlier chip labels for the raw evidence `type` values the I8000 endpoint
-// ships (clinical_note / order / medication). Fallback: the raw type.
-const I8000_EVIDENCE_TYPE_LABEL = {
-  clinical_note: 'Progress Note',
-  order: 'Order',
-  medication: 'MAR',
-};
+// Normalize an I8000 evidence row into the shape the regular Section I evidence
+// renderer + split/slide-out viewer already understand (renderEvidence →
+// setupAdministrationViewers → enterSplitView). This lets the I8000 detail reuse
+// the exact same inline "grow the panel sideways" evidence experience as every
+// other MDS item, instead of stacking a separate modal.
+//
+// The I8000 endpoint ships a few source shapes:
+//   - documents:  { evidenceId: "<docId>-chunk-N", documentId, wordBlocks }  (no sourceId)
+//   - orders/MAR: { type: "order"|"medication", sourceId: "order-.."|"admin-.." }
+//   - notes:      { type: "clinical_note", sourceId: "pcc-prognote-.." }
+function normalizeI8000Evidence(ev) {
+  const out = { ...ev };
+  out.quoteText = ev.quoteText || ev.orderDescription || ev.quote || ev.text || '';
+  const type = String(ev.type || ev.sourceType || '');
+  const sourceId = String(ev.sourceId || '');
 
-// Resolve an evidence row to its in-extension viewer, or null when there's
-// nothing to open (no sourceId, or a source we have no viewer for).
-function i8000EvidenceAction(ev) {
-  const sourceId = String(ev?.sourceId || '');
-  if (!sourceId) return null;
-  const type = String(ev?.type || ev?.sourceType || '');
-  // Orders + MAR administrations (sourceId "admin-<orderId>") → administrations modal.
-  if (type === 'order') return { kind: 'admin', orderId: sourceId.replace(/^order-/, ''), label: 'View administrations' };
-  if (type === 'medication' || sourceId.startsWith('admin-')) return { kind: 'admin', orderId: sourceId.replace(/^admin-/, ''), label: 'View administrations' };
-  // Everything else routes through the shared evidence dispatcher.
-  if (type === 'clinical_note' || /^(pcc-prognote|pcc-practnote|patient-practnote)-/.test(sourceId)) return { kind: 'evidence', label: 'View note' };
-  if (sourceId.startsWith('uda-')) return { kind: 'evidence', label: 'View assessment' };
-  if (type === 'document' || sourceId.includes('-chunk-')) return { kind: 'evidence', label: 'View document' };
-  return null;
-}
-
-function openI8000Evidence(ev) {
-  const action = i8000EvidenceAction(ev);
-  if (!action) return;
-  window.SuperAnalytics?.track?.('i8000_evidence_opened', {
-    source_type: String(ev.type || ev.sourceType || ''),
-    viewer: action.kind === 'admin' ? 'administrations' : 'evidence',
-  });
-  if (action.kind === 'admin') {
-    window.showAdministrationModal?.(action.orderId);
-    return;
+  // Orders + MAR administrations → order viewer (administrations). parseEvidenceForViewer
+  // keys orders off sourceType==='order' || sourceId.startsWith('order-').
+  if (type === 'order' || sourceId.startsWith('order-')) {
+    out.sourceType = 'order';
+    out.sourceId = sourceId.startsWith('order-') ? sourceId : `order-${sourceId}`;
+    return out;
   }
-  openEvidence({ ...ev, quoteText: ev.quoteText || ev.text || '' });
-}
-
-// Evidence card — same CSS as the popover's cards; clickable when the source
-// resolves to one of our viewers (progress note, order administrations, UDA…).
-function renderI8000EvidenceCard(ev, idx) {
-  const quote = ev.quoteText || ev.orderDescription || ev.quote || ev.text || '';
-  const sourceType = ev.sourceType || ev.type || 'document';
-  const typeClassSuffix = String(sourceType).replace(/_/g, '-'); // CSS uses hyphens (lab-result)
-  const rawDate = ev.effectiveDate || ev.date || '';
-  const dateText = /^\d{4}-\d{2}-\d{2}/.test(rawDate) ? rawDate.slice(0, 10) : rawDate;
-  const date = dateText ? ` &middot; ${escapeHTML(dateText)}` : '';
-  const typeLabel = (ev.displayName || I8000_EVIDENCE_TYPE_LABEL[sourceType] || sourceType) + date;
-  const body = quote || ev.rationale || '';
-  if (!body) return '';
-  const showRationale = ev.rationale && quote;
-  const action = i8000EvidenceAction(ev);
-  const linkAttrs = action ? ` data-ev-idx="${idx}" role="button" tabindex="0"` : '';
-  return `
-    <div class="super-evidence-card${action ? ' super-evidence-card--link' : ''}"${linkAttrs}>
-      <div class="super-evidence-card__header">
-        <span class="super-evidence-card__type super-evidence-card__type--${escapeHTML(typeClassSuffix)}">${escapeHTML(typeLabel)}</span>
-      </div>
-      <div class="super-evidence-card__quote">${escapeHTML(body)}</div>
-      ${showRationale ? `<div class="super-evidence-card__rationale">${escapeHTML(ev.rationale)}</div>` : ''}
-      ${action ? `<div class="super-evidence-card__action">${escapeHTML(action.label)} &#8250;</div>` : ''}
-    </div>
-  `;
+  if (type === 'medication' || sourceId.startsWith('admin-')) {
+    out.sourceType = 'order';
+    out.sourceId = `order-${sourceId.replace(/^admin-/, '')}`;
+    return out;
+  }
+  // Clinical / progress notes — leave type/sourceId; parseEvidenceForViewer resolves them.
+  if (type === 'clinical_note') return out;
+  // Documents: a chunk-encoded evidenceId already resolves; otherwise fall back to
+  // the bare documentId so parseEvidenceForViewer's sourceType==='document' path fires.
+  if (!(ev.evidenceId && String(ev.evidenceId).includes('-chunk-')) && ev.documentId) {
+    out.sourceType = 'document';
+    out.sourceId = String(ev.documentId);
+  }
+  return out;
 }
 
 function buildI8000ModalHTML(detail) {
@@ -5458,12 +5505,11 @@ function buildI8000ModalHTML(detail) {
        </div>`
     : '';
 
-  const cards = (detail.evidence || []).map(renderI8000EvidenceCard).filter(Boolean);
-  const evidenceHTML = cards.length
-    ? `<div class="super-evidence-section">
-         <div class="super-evidence-section__label">Evidence (${cards.length})</div>
-         ${cards.join('')}
-       </div>`
+  // Reuse the regular popover's evidence renderer (detail.evidence is normalized
+  // in showI8000Modal) so cards carry the standard data-viewer-* attributes and
+  // open inline via the split/slide-out view — same as Section I items.
+  const evidenceHTML = (detail.evidence && detail.evidence.length)
+    ? renderEvidence(detail.evidence)
     : (detail.noEvidenceNote ? `<div class="super-evidence-empty">${escapeHTML(detail.noEvidenceNote)}</div>` : '');
 
   const actionsHTML = detail.canQuery
@@ -5496,6 +5542,10 @@ function buildI8000ModalHTML(detail) {
 function showI8000Modal(detail, anchorEl) {
   closePopover();
 
+  // Normalize evidence once so the modal HTML and the split-view state (_evidence)
+  // share identical rows + indices.
+  detail = { ...detail, evidence: (detail.evidence || []).map(normalizeI8000Evidence) };
+
   const backdrop = document.createElement('div');
   backdrop.className = 'super-backdrop';
   backdrop.addEventListener('click', closePopover);
@@ -5504,20 +5554,25 @@ function showI8000Modal(detail, anchorEl) {
   const popover = document.createElement('div');
   popover.className = 'super-popover super-popover--i8000';
   popover.innerHTML = buildI8000ModalHTML(detail);
-  document.body.appendChild(popover);
 
+  // Wire the same split-view state the regular popover uses (showPopover) so
+  // clicking evidence grows the panel sideways with the inline viewer instead
+  // of stacking a separate modal.
+  popover._evidence = detail.evidence;
+  popover._result = { aiAnswer: detail.queryResult?.aiAnswer || {} }; // enterSplitView reads aiAnswer.falls (none here)
+  popover._docCache = new Map();
+  popover._anchorEl = anchorEl;
+  popover._section = SuperOverlay.section;
+
+  document.body.appendChild(popover);
   positionPopover(popover, anchorEl);
+
   popover.querySelector('.super-popover-close')?.addEventListener('click', closePopover);
 
-  // Evidence cards → open the underlying source (note / administrations / doc).
-  popover.querySelectorAll('.super-evidence-card--link').forEach((card) => {
-    const open = () => {
-      const ev = (detail.evidence || [])[Number(card.dataset.evIdx)];
-      if (ev) openI8000Evidence(ev);
-    };
-    card.addEventListener('click', open);
-    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-  });
+  // Evidence cards → inline split/slide-out viewer (documents, notes, orders).
+  setupAdministrationViewers(popover);
+  setupEvidenceFilters(popover);
+  prefetchDocuments(popover);
 
   // "Query Physician" → hand off to the shared diagnosis-query send flow.
   popover.querySelector('[data-action="i8000-query"]')?.addEventListener('click', () => {

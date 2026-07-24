@@ -81,6 +81,9 @@ export function parseViewer(ev) {
     if (evidenceId.includes('-chunk-')) return { viewerType: 'document', id: evidenceId.split('-chunk-')[0], chunk: parseInt(evidenceId.split('-chunk-')[1], 10) };
     if (evidenceId.startsWith('uda-')) return { viewerType: 'uda', id: evidenceId.replace('uda-', '') };
   }
+  // Last resort: some endpoints (I8000 audit/suggestion evidence) ship a bare
+  // documentId alongside wordBlocks instead of a chunk-encoded evidenceId.
+  if (ev.documentId) return { viewerType: 'document', id: String(ev.documentId) };
   return { viewerType: null, id: null };
 }
 

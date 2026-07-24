@@ -76,8 +76,12 @@ function injectMdsEstimateLinks() {
 
   // cp_mds.jsp now carries an ephemeral EID_ token in its URL; resolve the
   // stable numeric id from the page so the injected links use a storable id.
-  const patientId = window.resolveStableClientId?.();
-  if (!patientId) return;
+  // On fully-flipped pages there is NO numeric client id anywhere — the MRN
+  // (resident header, via appendMDSContextParams) is the patient anchor then,
+  // so keep injecting as long as either exists.
+  const patientId = window.resolveStableClientId?.() || '';
+  const mrn = window.scrapePccPublicIdFromDOM?.() || '';
+  if (!patientId && !mrn) return;
 
   // Find all assessment rows in the MDS table
   const rows = document.querySelectorAll('tr[bgcolor] td:first-child');
@@ -88,12 +92,13 @@ function injectMdsEstimateLinks() {
     const is5Day = desc.toLowerCase().includes('5 day') || desc.toLowerCase().includes('5-day');
     if (!is5Day) return;
 
-    // Extract assessment ID from the edit/view link
-    const editLink = td.querySelector('a[href*="ESOLassessid"]');
-    if (!editLink) return;
-    const match = editLink.href.match(/ESOLassessid=(\d+)/);
-    if (!match) return;
-    const assessmentId = match[1];
+    // Extract the NUMERIC assessment ID: edit/view link first, then the
+    // pdpmAnalyzer(...) call in the HIPPS cell (which keeps the numeric id
+    // even after the row links flip to EID_ tokens). A flipped row with no
+    // HIPPS yields null — the backend then finds the closest 5-Day via the
+    // patient anchor (numeric id or MRN), so still inject the link.
+    const rowHtml = td.parentElement?.outerHTML || '';
+    const assessmentId = rowHtml.match(/ESOLassessid=(\d+)/)?.[1] || null;
 
     // Don't inject twice
     if (td.querySelector('.super-est-link')) return;

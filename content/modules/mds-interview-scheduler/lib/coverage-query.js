@@ -63,6 +63,10 @@ export function buildCoverageQuery(form) {
   if (!ardDate) return null;
   const q = {
     patientExternalId: String(form.patientId || ''),
+    // MRN anchor #967 resolves by when the numeric id is EID-dead. Forward-compat:
+    // only emitted once the scheduler form supplies it (ardDate + description
+    // already carry the fallback match in the meantime).
+    ...(form.pccPublicId ? { pccPublicId: String(form.pccPublicId) } : {}),
     facilityName: form.facilityName || '',
     orgSlug: form.orgSlug || '',
     ardDate,

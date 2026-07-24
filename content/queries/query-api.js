@@ -22,11 +22,12 @@ const QueryAPI = {
    * @returns {Promise<{queries: Array, mdsAssessment: Object|null}>}
    */
   async fetchAssessmentQueries(mdsAssessmentId, facilityName, orgSlug) {
-    const params = new URLSearchParams({
-      mdsAssessmentId,
-      facilityName,
-      orgSlug
-    });
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    // NUMERIC assessment id only — never an EID_ token. When it's EID-dead the
+    // resolver context appended below (pccPublicId + ARD + assessmentType) binds
+    // the assessment instead (#967 — this panel silently emptied on flipped pages).
+    if (/^\d+$/.test(String(mdsAssessmentId || ''))) params.set('mdsAssessmentId', mdsAssessmentId);
+    window.appendMDSContextParams?.(params);
 
     const endpoint = `/api/extension/diagnosis-queries/by-assessment?${params}`;
 
@@ -225,9 +226,16 @@ const QueryAPI = {
     // clicked). Backend defaults preferredIcd10 to this code when it's a
     // valid option, instead of letting the model pick alphabetically.
     const sourceIcd10Code = solverResult?.icd10Code || solverResult?.sourceIcd10Code || solverResult?.code || null;
-    const body = sourceIcd10Code
-      ? { mdsItem, icd10Code: sourceIcd10Code, solverResult }
-      : { mdsItem, solverResult };
+    // orgSlug is required server-side (scopes the org's ICD-10 dictionary / note
+    // template). Omitting it 400s with "Missing required field: orgSlug".
+    const { orgSlug, facilityName } = (window.getCurrentParams && window.getCurrentParams()) || {};
+    const body = {
+      mdsItem,
+      solverResult,
+      ...(sourceIcd10Code ? { icd10Code: sourceIcd10Code } : {}),
+      ...(orgSlug ? { orgSlug } : {}),
+      ...(facilityName ? { facilityName } : {}),
+    };
 
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',

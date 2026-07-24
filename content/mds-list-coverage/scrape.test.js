@@ -21,6 +21,9 @@ describe('assessmentIdFromHtml', () => {
   it('returns null when no assessment id is present', () => {
     expect(assessmentIdFromHtml('<tr><td>header</td></tr>')).toBeNull();
   });
+  // NOTE: pdpmAnalyzer/EID recovery cases live in __tests__/scrape-cells.test.js
+  // — vitest's include is content/**/__tests__/**, so THIS file is not run by the
+  // suite (kept for reference alongside the pure parsers).
 });
 
 describe('mrnFromHtml / patientNameFromHtml', () => {
