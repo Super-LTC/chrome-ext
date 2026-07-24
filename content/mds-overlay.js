@@ -11,7 +11,6 @@ import { UdaViewer } from './modules/uda-viewer/UdaViewer.jsx';
 import { normalizeAnswer, formatAnswerForDisplay, determineStatus, sectionIBadgeLabel } from './super-menu/mds-badge.js';
 import { buildI8000ViewModel } from './i8000-overlay/i8000-model.js';
 import { I8000_MOCK_ENVELOPE } from './i8000-overlay/i8000-mock.js';
-import { openEvidence } from './utils/evidence-helpers.js';
 import { toRecommendedIcd10 } from './queries/lib/icd10-picker-util.js';
 
 // ============================================
@@ -5427,75 +5426,43 @@ function buildAuditDetail(audit) {
   };
 }
 
-// Friendlier chip labels for the raw evidence `type` values the I8000 endpoint
-// ships (clinical_note / order / medication). Fallback: the raw type.
-const I8000_EVIDENCE_TYPE_LABEL = {
-  clinical_note: 'Progress Note',
-  order: 'Order',
-  medication: 'MAR',
-};
+// Normalize an I8000 evidence row into the shape the regular Section I evidence
+// renderer + split/slide-out viewer already understand (renderEvidence →
+// setupAdministrationViewers → enterSplitView). This lets the I8000 detail reuse
+// the exact same inline "grow the panel sideways" evidence experience as every
+// other MDS item, instead of stacking a separate modal.
+//
+// The I8000 endpoint ships a few source shapes:
+//   - documents:  { evidenceId: "<docId>-chunk-N", documentId, wordBlocks }  (no sourceId)
+//   - orders/MAR: { type: "order"|"medication", sourceId: "order-.."|"admin-.." }
+//   - notes:      { type: "clinical_note", sourceId: "pcc-prognote-.." }
+function normalizeI8000Evidence(ev) {
+  const out = { ...ev };
+  out.quoteText = ev.quoteText || ev.orderDescription || ev.quote || ev.text || '';
+  const type = String(ev.type || ev.sourceType || '');
+  const sourceId = String(ev.sourceId || '');
 
-// Resolve an evidence row to its in-extension viewer, or null when there's
-// nothing to open (no sourceId, or a source we have no viewer for).
-function i8000EvidenceAction(ev) {
-  const sourceId = String(ev?.sourceId || '');
-  // Document evidence from the I8000 endpoint carries evidenceId ("<docId>-chunk-N")
-  // and documentId but NO sourceId — key off both so those cards stay clickable
-  // (the shared parseViewer/openEvidence dispatcher resolves them via evidenceId).
-  const evidenceId = String(ev?.evidenceId || '');
-  const documentId = String(ev?.documentId || '');
-  const noteRe = /^(pcc-prognote|pcc-practnote|patient-practnote)-/;
-  if (!sourceId && !evidenceId && !documentId) return null;
-  const type = String(ev?.type || ev?.sourceType || '');
-  // Orders + MAR administrations (sourceId "admin-<orderId>") → administrations modal.
-  if (type === 'order') return { kind: 'admin', orderId: sourceId.replace(/^order-/, ''), label: 'View administrations' };
-  if (type === 'medication' || sourceId.startsWith('admin-')) return { kind: 'admin', orderId: sourceId.replace(/^admin-/, ''), label: 'View administrations' };
-  // Everything else routes through the shared evidence dispatcher.
-  if (type === 'clinical_note' || noteRe.test(sourceId) || noteRe.test(evidenceId)) return { kind: 'evidence', label: 'View note' };
-  if (sourceId.startsWith('uda-') || evidenceId.startsWith('uda-')) return { kind: 'evidence', label: 'View assessment' };
-  if (type === 'document' || sourceId.includes('-chunk-') || evidenceId.includes('-chunk-') || documentId) return { kind: 'evidence', label: 'View document' };
-  return null;
-}
-
-function openI8000Evidence(ev) {
-  const action = i8000EvidenceAction(ev);
-  if (!action) return;
-  window.SuperAnalytics?.track?.('i8000_evidence_opened', {
-    source_type: String(ev.type || ev.sourceType || ''),
-    viewer: action.kind === 'admin' ? 'administrations' : 'evidence',
-  });
-  if (action.kind === 'admin') {
-    window.showAdministrationModal?.(action.orderId);
-    return;
+  // Orders + MAR administrations → order viewer (administrations). parseEvidenceForViewer
+  // keys orders off sourceType==='order' || sourceId.startsWith('order-').
+  if (type === 'order' || sourceId.startsWith('order-')) {
+    out.sourceType = 'order';
+    out.sourceId = sourceId.startsWith('order-') ? sourceId : `order-${sourceId}`;
+    return out;
   }
-  openEvidence({ ...ev, quoteText: ev.quoteText || ev.text || '' });
-}
-
-// Evidence card — same CSS as the popover's cards; clickable when the source
-// resolves to one of our viewers (progress note, order administrations, UDA…).
-function renderI8000EvidenceCard(ev, idx) {
-  const quote = ev.quoteText || ev.orderDescription || ev.quote || ev.text || '';
-  const sourceType = ev.sourceType || ev.type || 'document';
-  const typeClassSuffix = String(sourceType).replace(/_/g, '-'); // CSS uses hyphens (lab-result)
-  const rawDate = ev.effectiveDate || ev.date || '';
-  const dateText = /^\d{4}-\d{2}-\d{2}/.test(rawDate) ? rawDate.slice(0, 10) : rawDate;
-  const date = dateText ? ` &middot; ${escapeHTML(dateText)}` : '';
-  const typeLabel = (ev.displayName || I8000_EVIDENCE_TYPE_LABEL[sourceType] || sourceType) + date;
-  const body = quote || ev.rationale || '';
-  if (!body) return '';
-  const showRationale = ev.rationale && quote;
-  const action = i8000EvidenceAction(ev);
-  const linkAttrs = action ? ` data-ev-idx="${idx}" role="button" tabindex="0"` : '';
-  return `
-    <div class="super-evidence-card${action ? ' super-evidence-card--link' : ''}"${linkAttrs}>
-      <div class="super-evidence-card__header">
-        <span class="super-evidence-card__type super-evidence-card__type--${escapeHTML(typeClassSuffix)}">${escapeHTML(typeLabel)}</span>
-      </div>
-      <div class="super-evidence-card__quote">${escapeHTML(body)}</div>
-      ${showRationale ? `<div class="super-evidence-card__rationale">${escapeHTML(ev.rationale)}</div>` : ''}
-      ${action ? `<div class="super-evidence-card__action">${escapeHTML(action.label)} &#8250;</div>` : ''}
-    </div>
-  `;
+  if (type === 'medication' || sourceId.startsWith('admin-')) {
+    out.sourceType = 'order';
+    out.sourceId = `order-${sourceId.replace(/^admin-/, '')}`;
+    return out;
+  }
+  // Clinical / progress notes — leave type/sourceId; parseEvidenceForViewer resolves them.
+  if (type === 'clinical_note') return out;
+  // Documents: a chunk-encoded evidenceId already resolves; otherwise fall back to
+  // the bare documentId so parseEvidenceForViewer's sourceType==='document' path fires.
+  if (!(ev.evidenceId && String(ev.evidenceId).includes('-chunk-')) && ev.documentId) {
+    out.sourceType = 'document';
+    out.sourceId = String(ev.documentId);
+  }
+  return out;
 }
 
 function buildI8000ModalHTML(detail) {
@@ -5538,12 +5505,11 @@ function buildI8000ModalHTML(detail) {
        </div>`
     : '';
 
-  const cards = (detail.evidence || []).map(renderI8000EvidenceCard).filter(Boolean);
-  const evidenceHTML = cards.length
-    ? `<div class="super-evidence-section">
-         <div class="super-evidence-section__label">Evidence (${cards.length})</div>
-         ${cards.join('')}
-       </div>`
+  // Reuse the regular popover's evidence renderer (detail.evidence is normalized
+  // in showI8000Modal) so cards carry the standard data-viewer-* attributes and
+  // open inline via the split/slide-out view — same as Section I items.
+  const evidenceHTML = (detail.evidence && detail.evidence.length)
+    ? renderEvidence(detail.evidence)
     : (detail.noEvidenceNote ? `<div class="super-evidence-empty">${escapeHTML(detail.noEvidenceNote)}</div>` : '');
 
   const actionsHTML = detail.canQuery
@@ -5576,6 +5542,10 @@ function buildI8000ModalHTML(detail) {
 function showI8000Modal(detail, anchorEl) {
   closePopover();
 
+  // Normalize evidence once so the modal HTML and the split-view state (_evidence)
+  // share identical rows + indices.
+  detail = { ...detail, evidence: (detail.evidence || []).map(normalizeI8000Evidence) };
+
   const backdrop = document.createElement('div');
   backdrop.className = 'super-backdrop';
   backdrop.addEventListener('click', closePopover);
@@ -5584,20 +5554,25 @@ function showI8000Modal(detail, anchorEl) {
   const popover = document.createElement('div');
   popover.className = 'super-popover super-popover--i8000';
   popover.innerHTML = buildI8000ModalHTML(detail);
-  document.body.appendChild(popover);
 
+  // Wire the same split-view state the regular popover uses (showPopover) so
+  // clicking evidence grows the panel sideways with the inline viewer instead
+  // of stacking a separate modal.
+  popover._evidence = detail.evidence;
+  popover._result = { aiAnswer: detail.queryResult?.aiAnswer || {} }; // enterSplitView reads aiAnswer.falls (none here)
+  popover._docCache = new Map();
+  popover._anchorEl = anchorEl;
+  popover._section = SuperOverlay.section;
+
+  document.body.appendChild(popover);
   positionPopover(popover, anchorEl);
+
   popover.querySelector('.super-popover-close')?.addEventListener('click', closePopover);
 
-  // Evidence cards → open the underlying source (note / administrations / doc).
-  popover.querySelectorAll('.super-evidence-card--link').forEach((card) => {
-    const open = () => {
-      const ev = (detail.evidence || [])[Number(card.dataset.evIdx)];
-      if (ev) openI8000Evidence(ev);
-    };
-    card.addEventListener('click', open);
-    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-  });
+  // Evidence cards → inline split/slide-out viewer (documents, notes, orders).
+  setupAdministrationViewers(popover);
+  setupEvidenceFilters(popover);
+  prefetchDocuments(popover);
 
   // "Query Physician" → hand off to the shared diagnosis-query send flow.
   popover.querySelector('[data-action="i8000-query"]')?.addEventListener('click', () => {
