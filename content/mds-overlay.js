@@ -4283,9 +4283,13 @@ async function fetchAIGeneratedNote(result) {
   const solverResult = result.aiAnswer;
 
   const endpoint = `/api/extension/diagnosis-queries/generate-note`;
+  // orgSlug is required server-side; omitting it 400s "Missing required field: orgSlug".
+  const { orgSlug, facilityName } = (window.getCurrentParams && window.getCurrentParams()) || {};
   const body = {
     mdsItem: mdsItem,
-    solverResult: solverResult
+    solverResult: solverResult,
+    ...(orgSlug ? { orgSlug } : {}),
+    ...(facilityName ? { facilityName } : {}),
   };
 
   const response = await chrome.runtime.sendMessage({
@@ -5430,15 +5434,21 @@ const I8000_EVIDENCE_TYPE_LABEL = {
 // nothing to open (no sourceId, or a source we have no viewer for).
 function i8000EvidenceAction(ev) {
   const sourceId = String(ev?.sourceId || '');
-  if (!sourceId) return null;
+  // Document evidence from the I8000 endpoint carries evidenceId ("<docId>-chunk-N")
+  // and documentId but NO sourceId — key off both so those cards stay clickable
+  // (the shared parseViewer/openEvidence dispatcher resolves them via evidenceId).
+  const evidenceId = String(ev?.evidenceId || '');
+  const documentId = String(ev?.documentId || '');
+  const noteRe = /^(pcc-prognote|pcc-practnote|patient-practnote)-/;
+  if (!sourceId && !evidenceId && !documentId) return null;
   const type = String(ev?.type || ev?.sourceType || '');
   // Orders + MAR administrations (sourceId "admin-<orderId>") → administrations modal.
   if (type === 'order') return { kind: 'admin', orderId: sourceId.replace(/^order-/, ''), label: 'View administrations' };
   if (type === 'medication' || sourceId.startsWith('admin-')) return { kind: 'admin', orderId: sourceId.replace(/^admin-/, ''), label: 'View administrations' };
   // Everything else routes through the shared evidence dispatcher.
-  if (type === 'clinical_note' || /^(pcc-prognote|pcc-practnote|patient-practnote)-/.test(sourceId)) return { kind: 'evidence', label: 'View note' };
-  if (sourceId.startsWith('uda-')) return { kind: 'evidence', label: 'View assessment' };
-  if (type === 'document' || sourceId.includes('-chunk-')) return { kind: 'evidence', label: 'View document' };
+  if (type === 'clinical_note' || noteRe.test(sourceId) || noteRe.test(evidenceId)) return { kind: 'evidence', label: 'View note' };
+  if (sourceId.startsWith('uda-') || evidenceId.startsWith('uda-')) return { kind: 'evidence', label: 'View assessment' };
+  if (type === 'document' || sourceId.includes('-chunk-') || evidenceId.includes('-chunk-') || documentId) return { kind: 'evidence', label: 'View document' };
   return null;
 }
 
