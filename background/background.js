@@ -237,7 +237,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         console.warn('[Auth] Token cleared:', { reason: 'explicit-logout', at: Date.now() });
-        await chrome.storage.local.remove(['authToken', 'user', 'authState']);
+        // superPccIdentity goes too: an explicit logout usually means someone
+        // else is about to use this browser, and the cached binding is scoped
+        // to the user who just left. (The record also stamps superUserId, which
+        // covers switching accounts *without* a clean logout.)
+        await chrome.storage.local.remove(['authToken', 'user', 'authState', 'superPccIdentity']);
         sendResponse({ success: true });
       } catch (error) {
         sendResponse({ success: false, error: error.message });

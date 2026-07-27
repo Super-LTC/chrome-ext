@@ -167,3 +167,9 @@ try {
   // sessionStorage unavailable (private mode, etc.) — fall back to firing.
   track('extension_loaded');
 }
+
+// 12. Capture the logged-in PCC login name so MDS authorship can be resolved
+// to a Super user. Self-throttling (once per user/org/week) and fire-and-forget
+// — nothing here is user-facing, so failures stay silent.
+import { initPccIdentityCapture } from './modules/pcc-identity/index.js';
+initPccIdentityCapture();
