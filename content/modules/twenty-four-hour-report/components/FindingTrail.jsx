@@ -12,6 +12,7 @@ import {
   ACTION_VERB,
   formatTrailTime,
 } from '../utils/reviewStatus.js';
+import { useProgressNote } from '../hooks/useProgressNote.js';
 
 function actorLabel(entry) {
   return entry.actorName || entry.actorEmail || 'Someone';
@@ -25,10 +26,19 @@ export function FindingTrail({
   error,
   onAction,
   trackType,
+  pccClientId,
 }) {
   const [composing, setComposing] = useState(null); // null | 'resolved' | 'needs_input'
   const [note, setNote] = useState('');
   const [localError, setLocalError] = useState(null);
+
+  const progressNote = useProgressNote({
+    pccClientId,
+    onOpened: () =>
+      window.SuperAnalytics?.track?.('report_24hr_progress_note_opened', {
+        finding_type: trackType,
+      }),
+  });
 
   const startCompose = (action) => {
     setComposing(action);
@@ -42,11 +52,12 @@ export function FindingTrail({
     setLocalError(null);
   };
 
-  const submit = async (action, noteText) => {
+  const submit = async (action, noteText, resolutionType) => {
     setLocalError(null);
     try {
-      await onAction(action, noteText?.trim() || undefined);
+      await onAction(action, noteText?.trim() || undefined, resolutionType);
       cancelCompose();
+      progressNote.reset();
     } catch (err) {
       setLocalError(err?.message || 'Could not save. Try again.');
     }
@@ -141,6 +152,53 @@ export function FindingTrail({
             </button>
           </div>
         </div>
+      ) : progressNote.state === 'writing' ? (
+        <div class="thr__trail-note-wait">
+          <p class="thr__trail-hint">
+            Writing a progress note in PointClickCare… close that window when
+            you’re done.
+          </p>
+          <div class="thr__trail-actions">
+            <button
+              type="button"
+              class="thr__btn thr__btn--ghost"
+              onClick={progressNote.cancel}
+              // NO_TRACK — backing out of a wait state, no outcome to record.
+            >
+              Never mind
+            </button>
+          </div>
+        </div>
+      ) : progressNote.state === 'ready' ? (
+        <div class="thr__trail-note-wait">
+          <p class="thr__trail-hint">
+            {progressNote.blocked
+              ? 'Couldn’t open PointClickCare — write the note there, then sign off here.'
+              : 'Note written? Signing off records that you handled this.'}
+          </p>
+          <div class="thr__trail-actions">
+            <button
+              type="button"
+              class="thr__btn thr__btn--ghost"
+              onClick={progressNote.cancel}
+              disabled={submitting}
+              // NO_TRACK — abandons the flow; the sign-off below is tracked.
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="thr__btn thr__btn--primary"
+              onClick={() => submit(REVIEW_STATUS.RESOLVED, undefined, 'progress_note')}
+              disabled={submitting}
+              data-track="report_24hr_finding_action"
+              data-track-prop-action="progress_note"
+              data-track-prop-finding-type={trackType}
+            >
+              {submitting ? 'Saving…' : 'Note written — sign off'}
+            </button>
+          </div>
+        </div>
       ) : (
         <div class="thr__trail-actions">
           {isResolved ? (
@@ -157,6 +215,19 @@ export function FindingTrail({
             </button>
           ) : (
             <>
+              {pccClientId && (
+                <button
+                  type="button"
+                  class="thr__btn thr__btn--ghost"
+                  onClick={progressNote.open}
+                  disabled={submitting}
+                  title="Open a new progress note in PointClickCare"
+                  // NO_TRACK — the hook fires report_24hr_progress_note_opened,
+                  // since a blocked popup is still an open attempt worth seeing.
+                >
+                  Write note
+                </button>
+              )}
               <button
                 type="button"
                 class="thr__btn thr__btn--ghost"

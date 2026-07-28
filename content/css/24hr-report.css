@@ -1365,3 +1365,18 @@
   border-color: #d1d5db;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
+
+/* Progress-note flow: waiting on the PCC popup, then the confirm step. */
+
+.thr__trail-note-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thr__trail-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4b5563;
+}

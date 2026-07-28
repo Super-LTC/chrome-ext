@@ -71,6 +71,11 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
   const findingId = finding.id || finding.findingId || null;
   const patientId = finding.patientId || finding.residentId || null;
   const href = pccPatientUrl(patientId);
+  // Only set when the backend confidently resolved the PCC client id. Writing a
+  // progress note gates on this, never on `patientId` — that one falls back to
+  // the raw display id when the MRN parse misses, and charting into the wrong
+  // resident's record is a documentation error, not a bad link.
+  const pccClientId = finding.pccClientId || null;
 
   const [expanded, setExpanded] = useState(false);
   const activity = useFindingActivity({ reportId, findingId });
@@ -139,6 +144,7 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
             error={activity.error}
             onAction={activity.applyAction}
             trackType={trackType}
+            pccClientId={pccClientId}
           />
         )}
       </div>

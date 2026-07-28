@@ -57,10 +57,11 @@ export function useFindingActivity({ reportId, findingId }) {
 
   /**
    * Apply an action ('needs_input' | 'resolved' | 'reopened') with an optional
-   * note. Resolves to the new review status so the caller can update the row,
-   * or throws so the caller can keep its form open.
+   * note, and — for a resolution — how it happened ('manual' | 'progress_note').
+   * Resolves to the new review status so the caller can update the row, or
+   * throws so the caller can keep its form open.
    */
-  const applyAction = useCallback(async (action, note) => {
+  const applyAction = useCallback(async (action, note, resolutionType) => {
     if (!reportId || !findingId) throw new Error('Missing report or finding id');
     setSubmitting(true);
     setError(null);
@@ -75,6 +76,7 @@ export function useFindingActivity({ reportId, findingId }) {
             findingId,
             action,
             ...(note ? { note } : {}),
+            ...(resolutionType ? { resolutionType } : {}),
           }),
         },
       });
