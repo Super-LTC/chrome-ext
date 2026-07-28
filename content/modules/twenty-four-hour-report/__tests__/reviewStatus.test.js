@@ -138,6 +138,7 @@ describe('detectionEntry', () => {
       at: '2026-07-28T11:04:00Z',
       data: {
         id: 'note-9',
+        pccNoteId: null,
         summary: 'Sliding scale given, recheck 168',
         detectedAt: '2026-07-28T11:04:00Z',
       },

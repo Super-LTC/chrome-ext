@@ -20,6 +20,7 @@ import {
 } from '../utils/reviewStatus.js';
 import { useFindingActivity } from '../hooks/useFindingActivity.js';
 import { useCurrentUser } from '../../../hooks/useCurrentUser.js';
+import { noteOrChartUrl } from '../../../utils/pcc-links.js';
 import { FindingTrail } from './FindingTrail.jsx';
 
 const SEVERITY_LABEL = {
@@ -105,11 +106,16 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
     onOpenInPCC?.(finding, { href });
   };
 
-  const handleOpenNote = useCallback(() => {
-    // PCC has no reliable per-note deep link, so land on the resident's chart
-    // where the note lives rather than inventing a URL that might 404.
-    if (href) onOpenInPCC?.(finding, { href });
-  }, [href, finding, onOpenInPCC]);
+  const handleOpenNote = useCallback(
+    (pccNoteId) => {
+      // Prefer the note itself; fall back to the resident's chart. The note URL
+      // needs BOTH ids — pccClientId (confirmed MRN map hit) and PCC's own note
+      // id — so a miss on either degrades to the chart rather than a dead link.
+      const target = noteOrChartUrl(pccClientId, pccNoteId) || href;
+      if (target) onOpenInPCC?.(finding, { href: target });
+    },
+    [pccClientId, href, finding, onOpenInPCC]
+  );
 
   const toggleTrail = useCallback(() => {
     setExpanded((prev) => {

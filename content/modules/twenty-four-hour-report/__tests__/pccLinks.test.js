@@ -3,6 +3,8 @@ import { render, h } from 'preact';
 import {
   progressNoteUrl,
   patientDashboardUrl,
+  existingProgressNoteUrl,
+  noteOrChartUrl,
 } from '../../../utils/pcc-links.js';
 import { useProgressNote } from '../hooks/useProgressNote.js';
 
@@ -131,5 +133,30 @@ describe('useProgressNote', () => {
     await Promise.resolve();
 
     expect(onOpened).toHaveBeenCalledOnce();
+  });
+});
+
+describe('existingProgressNoteUrl / noteOrChartUrl', () => {
+  it('builds a note deep-link from BOTH ids', () => {
+    expect(existingProgressNoteUrl('12345', '987')).toBe(
+      `${window.location.origin}/care/chart/ipn/newipn.jsp?ESOLclientid=12345&res_pn=Y&ESOLpnid=987`
+    );
+  });
+
+  it('falls back to the chart when the note id is missing', () => {
+    // Detection can land without a PCC note id (practitioner note, odd external
+    // id). The chart is where this button goes today, so this is not a
+    // regression — but a dead ESOLpnid would be.
+    expect(noteOrChartUrl('12345', null)).toBe(patientDashboardUrl('12345'));
+    expect(noteOrChartUrl('12345', undefined)).toBe(patientDashboardUrl('12345'));
+  });
+
+  it('returns null when there is no client id at all', () => {
+    expect(noteOrChartUrl(null, '987')).toBeNull();
+  });
+
+  it('encodes ids rather than splicing them raw into the query', () => {
+    expect(existingProgressNoteUrl('a b', 'c&d')).toContain('ESOLclientid=a%20b');
+    expect(existingProgressNoteUrl('a b', 'c&d')).toContain('ESOLpnid=c%26d');
   });
 });

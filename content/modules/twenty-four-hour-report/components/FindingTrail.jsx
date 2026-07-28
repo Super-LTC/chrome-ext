@@ -158,11 +158,20 @@ export function FindingTrail({
                     <button
                       type="button"
                       class="thr__trail-open-note"
-                      onClick={() => onOpenNote(data.id)}
+                      onClick={() => onOpenNote(data.pccNoteId)}
+                      title={
+                        data.pccNoteId
+                          ? 'Open this note in PointClickCare'
+                          : 'Open the resident’s chart in PointClickCare'
+                      }
                       data-track="report_24hr_detection_note_opened"
                       data-track-prop-finding-type={trackType}
+                      // Whether we landed on the note or just the chart is the
+                      // difference between one click and several; worth knowing
+                      // how often the deep link is actually available.
+                      data-track-prop-has-note-id={data.pccNoteId ? 'yes' : 'no'}
                     >
-                      open note
+                      {data.pccNoteId ? 'open note' : 'open chart'}
                     </button>
                   )}
                 </p>

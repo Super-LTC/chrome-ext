@@ -84,6 +84,9 @@ export function detectionEntry(followup) {
     at: followup.detectedAt || null,
     data: {
       id: followup.detectedSourceId,
+      // PCC's id for the same note, when we have it. Distinct from `id`, which
+      // is our clinical_notes row id and cannot be turned into a PCC URL.
+      pccNoteId: followup.detectedPccNoteId || null,
       summary: followup.summary,
       detectedAt: followup.detectedAt || null,
     },

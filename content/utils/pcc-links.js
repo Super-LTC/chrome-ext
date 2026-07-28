@@ -37,6 +37,34 @@ export function progressNoteUrl(pccClientId) {
   return `${origin()}/care/chart/ipn/newipn.jsp?ESOLclientid=${encodeURIComponent(pccClientId)}&res_pn=Y&ESOLpnid=-1`;
 }
 
+/**
+ * An EXISTING progress note, by PCC's note id.
+ *
+ * Same ipn screen as the new-note form, with the real id in place of the -1
+ * sentinel. That is the inference, not a verified fact — the scraper reads
+ * notes through its own API, so the URL shape is not written down anywhere in
+ * our code. If PCC does not honour it, `openExistingNote` below falls back to
+ * the resident dashboard, which is where this button already lands today, so a
+ * wrong guess costs nothing.
+ *
+ * `pccNoteId` comes from `followup.detectedPccNoteId`. It is NOT
+ * `detectedSourceId` — that one is our own clinical_notes row id, which PCC
+ * has never seen and cannot resolve.
+ */
+export function existingProgressNoteUrl(pccClientId, pccNoteId) {
+  if (!pccClientId || !pccNoteId) return null;
+  return `${origin()}/care/chart/ipn/newipn.jsp?ESOLclientid=${encodeURIComponent(pccClientId)}&res_pn=Y&ESOLpnid=${encodeURIComponent(pccNoteId)}`;
+}
+
+/**
+ * Best available destination for "show me that note": the note itself when we
+ * have its PCC id, otherwise the resident's chart. Never returns null when a
+ * client id exists, so the affordance always does something.
+ */
+export function noteOrChartUrl(pccClientId, pccNoteId) {
+  return existingProgressNoteUrl(pccClientId, pccNoteId) || patientDashboardUrl(pccClientId);
+}
+
 /** Navigate the current (PCC) tab to a deep-link. Returns false if no URL. */
 export function navigatePcc(url) {
   if (!url) return false;
