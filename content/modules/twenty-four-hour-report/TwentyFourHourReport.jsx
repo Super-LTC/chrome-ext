@@ -457,7 +457,12 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
           {!listError && !error && !loading && currentReport && filteredFindings.length > 0 && (
             <ul class="thr__row-list" ref={listRef}>
               {filteredFindings.map((f, i) => (
-                <FindingRow key={f.id || i} finding={f} onOpenInPCC={handleOpenInPCC} />
+                <FindingRow
+                  key={f.id || i}
+                  finding={f}
+                  reportId={currentReport?.id}
+                  onOpenInPCC={handleOpenInPCC}
+                />
               ))}
             </ul>
           )}

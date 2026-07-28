@@ -1149,3 +1149,219 @@
     animation: none;
   }
 }
+
+/* ── Sign-off: action rail, status pill, activity trail ─────────────────────
+   Signing off never hides a finding — it records that a named person looked.
+   The rail sits opposite the severity bar so state reads down the right edge. */
+
+.thr__row-rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.thr__status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 150px;
+  padding: 3px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #6b7280;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__status-pill:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.thr__status-pill:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.thr__status-pill--resolved {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.thr__status-pill--resolved:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.thr__status-pill--needs_input {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.thr__status-pill--needs_input:hover {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.thr__status-check {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.thr__status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thr__trail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.thr__trail-empty,
+.thr__trail-error {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.thr__trail-error {
+  color: #b91c1c;
+}
+
+.thr__trail-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thr__trail-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.thr__trail-actor {
+  font-weight: 600;
+  color: #111827;
+}
+
+.thr__trail-verb {
+  color: #4b5563;
+}
+
+.thr__trail-time {
+  color: #9ca3af;
+}
+
+.thr__trail-note {
+  margin: 3px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #374151;
+  white-space: pre-wrap;
+}
+
+.thr__trail-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thr__trail-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #111827;
+  resize: vertical;
+}
+
+.thr__trail-textarea:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -1px;
+  border-color: #2563eb;
+}
+
+.thr__trail-textarea:disabled {
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.thr__trail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.thr__btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.thr__btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.thr__btn--ghost {
+  border-color: #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.thr__btn--ghost:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.thr__btn--primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.thr__btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+/* An expanded row stays visually anchored while the trail pushes it taller. */
+.thr__row--expanded {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
