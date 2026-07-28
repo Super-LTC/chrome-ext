@@ -1380,3 +1380,68 @@
   line-height: 1.5;
   color: #4b5563;
 }
+
+/* Comment threads: message bodies, delete affordance, composer, count badge. */
+
+.thr__status-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 4px;
+  margin-left: 2px;
+  border-left: 1px solid currentColor;
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.thr__trail-item--comment .thr__trail-head {
+  gap: 6px;
+}
+
+.thr__trail-message {
+  margin: 3px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid #dbeafe;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1f2937;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thr__trail-delete {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.thr__trail-item--comment:hover .thr__trail-delete,
+.thr__trail-delete:focus-visible {
+  opacity: 1;
+}
+
+.thr__trail-delete:hover:not(:disabled) {
+  color: #b91c1c;
+}
+
+.thr__trail-delete:disabled {
+  cursor: default;
+}
+
+@media (hover: none) {
+  .thr__trail-delete { opacity: 1; }
+}
+
+.thr__trail-comment-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}

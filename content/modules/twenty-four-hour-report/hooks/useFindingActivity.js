@@ -19,6 +19,7 @@ import { unwrap } from '../utils/api.js';
  */
 export function useFindingActivity({ reportId, findingId }) {
   const [actions, setActions] = useState(null); // null = never loaded
+  const [comments, setComments] = useState(null); // null = never loaded
   const [reviewStatus, setReviewStatus] = useState(undefined); // undefined = unknown
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +41,7 @@ export function useFindingActivity({ reportId, findingId }) {
       if (!res?.success) throw new Error(res?.error || 'Failed to load activity');
       const data = unwrap(res.data) || {};
       setActions(Array.isArray(data.actions) ? data.actions : []);
+      setComments(Array.isArray(data.comments) ? data.comments : []);
       setReviewStatus(data.reviewStatus);
       loadedRef.current = true;
     } catch (err) {
@@ -93,5 +95,64 @@ export function useFindingActivity({ reportId, findingId }) {
     }
   }, [reportId, findingId, load]);
 
-  return { actions, reviewStatus, loading, submitting, error, load, applyAction };
+  /**
+   * Post a comment. Appends the returned row locally rather than refetching the
+   * whole trail — the server hands back the hydrated comment, so a round-trip
+   * would only re-fetch what we already hold.
+   */
+  const postComment = useCallback(async (message) => {
+    const body = message?.trim();
+    if (!body) return null;
+    if (!reportId || !findingId) throw new Error('Missing report or finding id');
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: 'API_REQUEST',
+        endpoint: '/api/extension/24hr-report/comment',
+        options: {
+          method: 'POST',
+          body: JSON.stringify({ reportId, findingId, message: body }),
+        },
+      });
+      if (!res?.success) throw new Error(res?.error || 'Failed to post comment');
+      const data = unwrap(res.data) || {};
+      if (data.comment) {
+        setComments((prev) => [...(prev ?? []), data.comment]);
+      }
+      return data.comment ?? null;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [reportId, findingId]);
+
+  /** Remove your own comment. Drops it locally on success. */
+  const removeComment = useCallback(async (commentId) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: 'API_REQUEST',
+        endpoint: `/api/extension/24hr-report/comment/${encodeURIComponent(commentId)}`,
+        options: { method: 'DELETE' },
+      });
+      if (!res?.success) throw new Error(res?.error || 'Failed to delete comment');
+      setComments((prev) => (prev ?? []).filter((c) => c.id !== commentId));
+    } finally {
+      setSubmitting(false);
+    }
+  }, []);
+
+  return {
+    actions,
+    comments,
+    reviewStatus,
+    loading,
+    submitting,
+    error,
+    load,
+    applyAction,
+    postComment,
+    removeComment,
+  };
 }

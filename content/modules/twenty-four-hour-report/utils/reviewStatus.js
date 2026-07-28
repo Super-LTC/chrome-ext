@@ -54,6 +54,34 @@ export function formatTrailTime(iso) {
   return `${date}, ${time}`;
 }
 
+/**
+ * Merge sign-off actions and comments into one chronological timeline.
+ *
+ * They interleave rather than sitting in separate lists because together they
+ * ARE the story of the finding — "Ricky asked whether the MD was called, Joanna
+ * answered, Jake signed off" only reads correctly in order. Splitting them would
+ * make you reconstruct the sequence from timestamps by eye.
+ *
+ * Stable: equal timestamps keep actions ahead of comments, so a comment posted
+ * alongside a sign-off reads as the explanation for it.
+ */
+export function mergeTimeline(actions, comments) {
+  const items = [
+    ...(Array.isArray(actions) ? actions : []).map((a) => ({ kind: 'action', at: a.createdAt, data: a })),
+    ...(Array.isArray(comments) ? comments : []).map((c) => ({ kind: 'comment', at: c.createdAt, data: c })),
+  ];
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const ta = Date.parse(a.item.at) || 0;
+      const tb = Date.parse(b.item.at) || 0;
+      if (ta !== tb) return ta - tb;
+      if (a.item.kind !== b.item.kind) return a.item.kind === 'action' ? -1 : 1;
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
+}
+
 /** First name only, so the pill stays short: "✓ Jake 2:14 PM". */
 export function shortName(name, email) {
   const source = name || email || '';

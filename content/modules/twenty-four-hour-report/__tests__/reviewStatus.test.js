@@ -6,6 +6,7 @@ import {
   ACTION_VERB,
   formatTrailTime,
   shortName,
+  mergeTimeline,
 } from '../utils/reviewStatus.js';
 
 afterEach(() => {
@@ -70,6 +71,55 @@ describe('formatTrailTime', () => {
     expect(formatTrailTime(null)).toBe('');
     expect(formatTrailTime('')).toBe('');
     expect(formatTrailTime('not-a-date')).toBe('');
+  });
+});
+
+describe('mergeTimeline', () => {
+  const action = (id, at) => ({ id, action: 'resolved', createdAt: at });
+  const comment = (id, at) => ({ id, message: 'note', createdAt: at });
+
+  it('interleaves comments and sign-offs in the order they happened', () => {
+    // The sequence IS the story — splitting them would force you to
+    // reconstruct it from timestamps by eye.
+    const merged = mergeTimeline(
+      [action('a1', '2026-07-28T09:00:00Z'), action('a2', '2026-07-28T15:00:00Z')],
+      [comment('c1', '2026-07-28T12:00:00Z')]
+    );
+    expect(merged.map((i) => [i.kind, i.data.id])).toEqual([
+      ['action', 'a1'],
+      ['comment', 'c1'],
+      ['action', 'a2'],
+    ]);
+  });
+
+  it('puts an action ahead of a comment posted at the same instant', () => {
+    // A comment alongside a sign-off reads as the explanation for it.
+    const merged = mergeTimeline(
+      [action('a1', '2026-07-28T09:00:00Z')],
+      [comment('c1', '2026-07-28T09:00:00Z')]
+    );
+    expect(merged.map((i) => i.kind)).toEqual(['action', 'comment']);
+  });
+
+  it('is stable within a kind at identical timestamps', () => {
+    const merged = mergeTimeline(
+      [],
+      [comment('c1', '2026-07-28T09:00:00Z'), comment('c2', '2026-07-28T09:00:00Z')]
+    );
+    expect(merged.map((i) => i.data.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('handles either side being empty, null or undefined', () => {
+    expect(mergeTimeline([], [])).toEqual([]);
+    expect(mergeTimeline(null, null)).toEqual([]);
+    expect(mergeTimeline(undefined, undefined)).toEqual([]);
+    expect(mergeTimeline([action('a1', '2026-07-28T09:00:00Z')], null)).toHaveLength(1);
+    expect(mergeTimeline(null, [comment('c1', '2026-07-28T09:00:00Z')])).toHaveLength(1);
+  });
+
+  it('does not drop entries with an unparseable timestamp', () => {
+    const merged = mergeTimeline([action('a1', 'garbage')], [comment('c1', '2026-07-28T09:00:00Z')]);
+    expect(merged).toHaveLength(2);
   });
 });
 

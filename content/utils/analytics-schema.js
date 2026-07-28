@@ -173,6 +173,8 @@ export const EVENT_SCHEMA = {
   report_24hr_finding_action_cancelled: ['action'],
   // Fired on the open ATTEMPT, so a blocked popup still shows up as intent.
   report_24hr_progress_note_opened: ['finding_type'],
+  report_24hr_comment_posted: ['finding_type'],
+  report_24hr_comment_deleted: [],
 
   ard_estimator_estimated: ['duration_ms', 'has_recommendation'],
   ard_estimator_recommendation_accepted: [],

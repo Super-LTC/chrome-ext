@@ -19,6 +19,7 @@ import {
   shortName,
 } from '../utils/reviewStatus.js';
 import { useFindingActivity } from '../hooks/useFindingActivity.js';
+import { useCurrentUser } from '../../../hooks/useCurrentUser.js';
 import { FindingTrail } from './FindingTrail.jsx';
 
 const SEVERITY_LABEL = {
@@ -79,11 +80,17 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
 
   const [expanded, setExpanded] = useState(false);
   const activity = useFindingActivity({ reportId, findingId });
+  // Needed only to decide whose comments show a Delete affordance — the server
+  // enforces authorship regardless.
+  const { user } = useCurrentUser();
 
   // The list payload carries the finding's status; once the trail loads, the
   // server's value wins.
   const status = activity.reviewStatus ?? reviewStatusOf(finding);
   const resolution = latestResolution(activity.actions);
+  // Server count until the thread is opened, live count after — so posting or
+  // deleting updates the badge without another round-trip.
+  const commentCount = activity.comments?.length ?? finding.commentCount ?? 0;
 
   const handleClick = (e) => {
     if (!href) return;
@@ -138,11 +145,15 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
         {expanded && canAct && (
           <FindingTrail
             actions={activity.actions}
+            comments={activity.comments}
             reviewStatus={status}
             loading={activity.loading}
             submitting={activity.submitting}
             error={activity.error}
             onAction={activity.applyAction}
+            onComment={activity.postComment}
+            onDeleteComment={activity.removeComment}
+            currentUserId={user?.id}
             trackType={trackType}
             pccClientId={pccClientId}
           />
@@ -169,6 +180,12 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
                 ? `${shortName(resolution.actorName, resolution.actorEmail)} ${formatTrailTime(resolution.createdAt)}`
                 : STATUS_LABEL[status]}
             </span>
+            {commentCount > 0 && (
+              <span class="thr__status-comments" title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}>
+                <span aria-hidden="true">💬</span>
+                {commentCount}
+              </span>
+            )}
           </button>
         )}
 
