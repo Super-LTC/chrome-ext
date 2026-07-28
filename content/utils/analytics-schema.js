@@ -175,6 +175,7 @@ export const EVENT_SCHEMA = {
   report_24hr_progress_note_opened: ['finding_type'],
   report_24hr_comment_posted: ['finding_type'],
   report_24hr_comment_deleted: [],
+  report_24hr_detection_note_opened: ['finding_type'],
 
   ard_estimator_estimated: ['duration_ms', 'has_recommendation'],
   ard_estimator_recommendation_accepted: [],

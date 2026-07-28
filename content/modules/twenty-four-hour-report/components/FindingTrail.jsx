@@ -12,6 +12,7 @@ import {
   ACTION_VERB,
   formatTrailTime,
   mergeTimeline,
+  detectionEntry,
 } from '../utils/reviewStatus.js';
 import { useProgressNote } from '../hooks/useProgressNote.js';
 
@@ -33,7 +34,9 @@ export function FindingTrail({
   onAction,
   onComment,
   onDeleteComment,
+  onOpenNote,
   currentUserId,
+  followup,
   trackType,
   pccClientId,
 }) {
@@ -43,7 +46,11 @@ export function FindingTrail({
   const [localError, setLocalError] = useState(null);
 
   const loaded = actions !== null || comments !== null;
-  const timeline = useMemo(() => mergeTimeline(actions, comments), [actions, comments]);
+  const detection = useMemo(() => detectionEntry(followup), [followup]);
+  const timeline = useMemo(
+    () => mergeTimeline(actions, comments, detection),
+    [actions, comments, detection]
+  );
 
   const progressNote = useProgressNote({
     pccClientId,
@@ -135,6 +142,30 @@ export function FindingTrail({
                   <span class="thr__trail-time">{formatTrailTime(data.createdAt)}</span>
                 </div>
                 {data.note && <p class="thr__trail-note">{data.note}</p>}
+              </li>
+            ) : kind === 'detection' ? (
+              <li class="thr__trail-item thr__trail-item--detection" key={`d-${data.id}`}>
+                <div class="thr__trail-head">
+                  <span class="thr__trail-bot" aria-hidden="true">🔎</span>
+                  <span class="thr__trail-verb">Looks addressed</span>
+                  {data.detectedAt && (
+                    <span class="thr__trail-time">{formatTrailTime(data.detectedAt)}</span>
+                  )}
+                </div>
+                <p class="thr__trail-message thr__trail-message--detection">
+                  {data.summary}
+                  {onOpenNote && (
+                    <button
+                      type="button"
+                      class="thr__trail-open-note"
+                      onClick={() => onOpenNote(data.id)}
+                      data-track="report_24hr_detection_note_opened"
+                      data-track-prop-finding-type={trackType}
+                    >
+                      open note
+                    </button>
+                  )}
+                </p>
               </li>
             ) : (
               <li class="thr__trail-item thr__trail-item--comment" key={`c-${data.id}`}>

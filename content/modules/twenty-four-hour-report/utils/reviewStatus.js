@@ -65,18 +65,44 @@ export function formatTrailTime(iso) {
  * Stable: equal timestamps keep actions ahead of comments, so a comment posted
  * alongside a sign-off reads as the explanation for it.
  */
-export function mergeTimeline(actions, comments) {
+/** Tie-break order at identical timestamps: humans before machines. */
+const KIND_RANK = { action: 0, comment: 1, detection: 2 };
+
+/**
+ * A machine-found follow-up, as a timeline entry — or null.
+ *
+ * Only ever built from a POSITIVE detection. There is deliberately no "we looked
+ * and found nothing" entry: absence of evidence is not evidence of absence when
+ * our note sync can lag, and a false "nobody handled this" is the error that
+ * makes someone stop trusting the whole feature.
+ */
+export function detectionEntry(followup) {
+  if (!followup || followup.status !== 'detected') return null;
+  if (!followup.summary || !followup.detectedSourceId) return null;
+  return {
+    kind: 'detection',
+    at: followup.detectedAt || null,
+    data: {
+      id: followup.detectedSourceId,
+      summary: followup.summary,
+      detectedAt: followup.detectedAt || null,
+    },
+  };
+}
+
+export function mergeTimeline(actions, comments, detection = null) {
   const items = [
     ...(Array.isArray(actions) ? actions : []).map((a) => ({ kind: 'action', at: a.createdAt, data: a })),
     ...(Array.isArray(comments) ? comments : []).map((c) => ({ kind: 'comment', at: c.createdAt, data: c })),
+    ...(detection ? [detection] : []),
   ];
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) => {
-      const ta = Date.parse(a.item.at) || 0;
-      const tb = Date.parse(b.item.at) || 0;
+      const ta = a.item.at ? Date.parse(a.item.at) || 0 : 0;
+      const tb = b.item.at ? Date.parse(b.item.at) || 0 : 0;
       if (ta !== tb) return ta - tb;
-      if (a.item.kind !== b.item.kind) return a.item.kind === 'action' ? -1 : 1;
+      if (a.item.kind !== b.item.kind) return KIND_RANK[a.item.kind] - KIND_RANK[b.item.kind];
       return a.index - b.index;
     })
     .map(({ item }) => item);

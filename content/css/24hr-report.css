@@ -1445,3 +1445,57 @@
   gap: 8px;
   margin-top: 10px;
 }
+
+/* Machine-found follow-up. Visually distinct from a human entry on purpose:
+   detection says the work happened, sign-off says a named person is
+   accountable. If this reads like a person signed off, it silently answers the
+   wrong question. */
+
+.thr__status-pill--detected {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  /* Wider than the other states on purpose: "Looks addressed — confirm?" is the
+     call to action, and truncating it to "Looks addressed — co..." loses the
+     part that tells you what to do. */
+  max-width: 210px;
+}
+
+.thr__status-pill--detected:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.thr__trail-item--detection .thr__trail-verb {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.thr__trail-bot {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.thr__trail-message--detection {
+  border-left-color: #bfdbfe;
+  color: #1e3a5f;
+  font-style: italic;
+}
+
+.thr__trail-open-note {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-size: 11px;
+  font-style: normal;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.thr__trail-open-note:hover {
+  color: #1e40af;
+}

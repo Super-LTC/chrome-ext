@@ -7,6 +7,7 @@ import {
   formatTrailTime,
   shortName,
   mergeTimeline,
+  detectionEntry,
 } from '../utils/reviewStatus.js';
 
 afterEach(() => {
@@ -119,6 +120,92 @@ describe('mergeTimeline', () => {
 
   it('does not drop entries with an unparseable timestamp', () => {
     const merged = mergeTimeline([action('a1', 'garbage')], [comment('c1', '2026-07-28T09:00:00Z')]);
+    expect(merged).toHaveLength(2);
+  });
+});
+
+describe('detectionEntry', () => {
+  const detected = {
+    status: 'detected',
+    detectedSourceId: 'note-9',
+    detectedAt: '2026-07-28T11:04:00Z',
+    summary: 'Sliding scale given, recheck 168',
+  };
+
+  it('builds a timeline entry from a positive detection', () => {
+    expect(detectionEntry(detected)).toEqual({
+      kind: 'detection',
+      at: '2026-07-28T11:04:00Z',
+      data: {
+        id: 'note-9',
+        summary: 'Sliding scale given, recheck 168',
+        detectedAt: '2026-07-28T11:04:00Z',
+      },
+    });
+  });
+
+  describe('never renders a negative', () => {
+    // Absence of evidence is not evidence of absence — our note sync lags, and
+    // a false "nobody handled this" is what makes someone stop trusting it.
+    it('returns null for the none status', () => {
+      expect(detectionEntry({ status: 'none' })).toBeNull();
+    });
+
+    it('returns null for a missing or malformed followup', () => {
+      expect(detectionEntry(null)).toBeNull();
+      expect(detectionEntry(undefined)).toBeNull();
+      expect(detectionEntry({})).toBeNull();
+    });
+  });
+
+  describe('refuses a detection it cannot show', () => {
+    it('returns null without a source id to link to', () => {
+      expect(detectionEntry({ ...detected, detectedSourceId: null })).toBeNull();
+    });
+
+    it('returns null without a summary to display', () => {
+      expect(detectionEntry({ ...detected, summary: '' })).toBeNull();
+    });
+  });
+});
+
+describe('mergeTimeline with a detection', () => {
+  const action = (id, at) => ({ id, action: 'resolved', createdAt: at });
+  const comment = (id, at) => ({ id, message: 'note', createdAt: at });
+  const det = (at) =>
+    detectionEntry({
+      status: 'detected',
+      detectedSourceId: 'n1',
+      detectedAt: at,
+      summary: 'MD notified',
+    });
+
+  it('places the detection chronologically among human entries', () => {
+    const merged = mergeTimeline(
+      [action('a1', '2026-07-28T15:00:00Z')],
+      [comment('c1', '2026-07-28T09:00:00Z')],
+      det('2026-07-28T12:00:00Z')
+    );
+    expect(merged.map((i) => i.kind)).toEqual(['comment', 'detection', 'action']);
+  });
+
+  it('sorts a human action ahead of a detection at the same instant', () => {
+    // People outrank machines in the narrative.
+    const merged = mergeTimeline([action('a1', '2026-07-28T09:00:00Z')], [], det('2026-07-28T09:00:00Z'));
+    expect(merged.map((i) => i.kind)).toEqual(['action', 'detection']);
+  });
+
+  it('is unchanged when there is no detection', () => {
+    const merged = mergeTimeline([action('a1', '2026-07-28T09:00:00Z')], [], null);
+    expect(merged.map((i) => i.kind)).toEqual(['action']);
+  });
+
+  it('still includes a detection that has no timestamp', () => {
+    const merged = mergeTimeline([action('a1', '2026-07-28T09:00:00Z')], [], {
+      kind: 'detection',
+      at: null,
+      data: { id: 'n1', summary: 'MD notified', detectedAt: null },
+    });
     expect(merged).toHaveLength(2);
   });
 });

@@ -91,6 +91,11 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
   // Server count until the thread is opened, live count after — so posting or
   // deleting updates the badge without another round-trip.
   const commentCount = activity.comments?.length ?? finding.commentCount ?? 0;
+  // A machine-found follow-up that nobody has confirmed yet. Deliberately a
+  // separate signal from `status` — detection says the work happened, sign-off
+  // says a named person is accountable for it.
+  const hasPendingDetection =
+    finding.followup?.status === 'detected' && status === REVIEW_STATUS.OPEN;
 
   const handleClick = (e) => {
     if (!href) return;
@@ -99,6 +104,12 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
     e.preventDefault();
     onOpenInPCC?.(finding, { href });
   };
+
+  const handleOpenNote = useCallback(() => {
+    // PCC has no reliable per-note deep link, so land on the resident's chart
+    // where the note lives rather than inventing a URL that might 404.
+    if (href) onOpenInPCC?.(finding, { href });
+  }, [href, finding, onOpenInPCC]);
 
   const toggleTrail = useCallback(() => {
     setExpanded((prev) => {
@@ -153,7 +164,9 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
             onAction={activity.applyAction}
             onComment={activity.postComment}
             onDeleteComment={activity.removeComment}
+            onOpenNote={handleOpenNote}
             currentUserId={user?.id}
+            followup={finding.followup}
             trackType={trackType}
             pccClientId={pccClientId}
           />
@@ -164,7 +177,9 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
         {canAct && (
           <button
             type="button"
-            class={`thr__status-pill thr__status-pill--${status}`}
+            class={`thr__status-pill thr__status-pill--${status}${
+              hasPendingDetection ? ' thr__status-pill--detected' : ''
+            }`}
             onClick={toggleTrail}
             aria-expanded={expanded}
             aria-label={`${STATUS_LABEL[status]} — show activity for ${name}`}
@@ -178,7 +193,9 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
             <span class="thr__status-text">
               {status === REVIEW_STATUS.RESOLVED && resolution
                 ? `${shortName(resolution.actorName, resolution.actorEmail)} ${formatTrailTime(resolution.createdAt)}`
-                : STATUS_LABEL[status]}
+                : hasPendingDetection
+                  ? 'Looks addressed — confirm?'
+                  : STATUS_LABEL[status]}
             </span>
             {commentCount > 0 && (
               <span class="thr__status-comments" title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}>
