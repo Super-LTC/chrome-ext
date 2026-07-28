@@ -25,6 +25,14 @@ import {
   DEMO_QM_GG_AIDE_DETAIL,
 } from './demo-qm-real-fixtures.js';
 import {
+  withRealLocations,
+  buildGgDetailFromDashboard,
+  buildQuarterRates,
+  buildRolling,
+  buildDfsStay,
+  buildAideDetail,
+} from './demo-qm-derived-fixtures.js';
+import {
   FTAG_MODULE_STATUS,
   buildFtagFindings,
   buildFtagMar,
@@ -705,14 +713,38 @@ function routeApiRequest(endpoint, options = {}) {
     return { success: true, data: DEMO_QM_FIVE_STAR };
   }
 
+  // Per-stay DFS outcome (admission → discharge by GG item). MUST precede the
+  // exact-match /dfs route below — it's a different, longer path.
+  const dfsStayMatch = path.match(/\/api\/extension\/qm-planner\/dfs\/stay\/([^/]+)$/);
+  if (dfsStayMatch) {
+    const data = buildDfsStay(decodeURIComponent(dfsStayMatch[1]));
+    return { success: true, data };
+  }
+
   // Discharge Function Score page.
   if (path === '/api/extension/qm-planner/dfs') {
     return { success: true, data: DEMO_QM_DFS };
   }
 
-  // GG functional-decline dashboard (Residents view).
+  // Windowed (discharged-inclusive) per-measure rates + the resident roster that
+  // backs the denominator drill-in. back=0 current quarter, 1 = last complete.
+  // Rows are reconciled to the captured facility rates, so the drill-in sums
+  // back to exactly the headline numerator/denominator.
+  if (path === '/api/extension/qm-planner/quarter-rates') {
+    const back = Number(params.get('back') || 0);
+    return { success: true, data: buildQuarterRates(Number.isFinite(back) ? back : 0) };
+  }
+
+  // Trailing 4 quarters + the weighted rolling rate CMS scores points on.
+  // Feeds the Regional scorecard's Last/This-quarter columns and trend chart.
+  if (path === '/api/extension/qm-planner/rolling') {
+    return { success: true, data: buildRolling() };
+  }
+
+  // GG functional-decline dashboard (Residents view). Locations are re-derived
+  // because the HAR anonymizer collapsed every locationName to the facility name.
   if (path === '/api/extension/qm-planner/gg-decline-dashboard') {
-    return { success: true, data: DEMO_QM_GG_DASHBOARD };
+    return { success: true, data: withRealLocations(DEMO_QM_GG_DASHBOARD) };
   }
 
   // Aide scoring (CNA scorecards). With ?aideId= → single-aide detail; otherwise
@@ -720,11 +752,12 @@ function routeApiRequest(endpoint, options = {}) {
   if (path === '/api/extension/qm-planner/gg-aide-deviation') {
     const aideId = params.get('aideId');
     if (aideId) {
-      const detail = DEMO_QM_GG_AIDE_DETAIL[aideId];
-      if (detail) return { success: true, data: detail };
-      // Fall back to the one captured aide so any card opens to a real scorecard.
-      const sample = Object.values(DEMO_QM_GG_AIDE_DETAIL)[0];
-      return { success: true, data: sample || null };
+      // Prefer the one captured detail; otherwise rebuild THIS aide's card from
+      // their own roster row (grade, counts, category + shift deviations). The
+      // old fallback served the single captured aide for all 56, so every row
+      // opened someone else's scorecard.
+      const detail = DEMO_QM_GG_AIDE_DETAIL[aideId] || buildAideDetail(aideId);
+      return { success: true, data: detail || null };
     }
     return { success: true, data: DEMO_QM_GG_AIDE_LIST };
   }
@@ -761,13 +794,21 @@ function routeApiRequest(endpoint, options = {}) {
     return { success: true, data: buildFtagVitals(params.get('patientId')) };
   }
 
-  // /api/extension/patients/:id/gg-decline — rich detail for the GG modal
+  // /api/extension/patients/:id/gg-decline — rich detail for the GG modal.
+  //
+  // Resolution order matters. The dashboard row already carries this resident's
+  // real GG items, baselines, ARD and up to ~12 real charted scores, so rebuild
+  // from THAT first — otherwise the drill-in charts different body items than
+  // the roster row you clicked (it used to show "Lying to Sitting / Walk 150ft"
+  // for a resident the roster listed as "Sit to Stand / Toilet Transfer").
+  // The hand-authored demo-p-100X fixtures and the seeded synthesizer stay as
+  // fallbacks for ids that aren't in the GG dashboard at all.
   const ggMatch = path.match(/\/api\/extension\/patients\/([^/]+)\/gg-decline$/);
   if (ggMatch) {
     const patientId = ggMatch[1];
-    // Hand-authored fixture when we have one; otherwise synthesize a plausible
-    // decline story so every QM Board resident opens to a populated chart.
-    const data = DEMO_GG_DETAIL_BY_PATIENT[patientId] || buildGgDetailFor(patientId);
+    const data = buildGgDetailFromDashboard(patientId)
+      || DEMO_GG_DETAIL_BY_PATIENT[patientId]
+      || buildGgDetailFor(patientId);
     return { success: true, data };
   }
 

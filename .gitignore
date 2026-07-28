@@ -12,6 +12,7 @@ demo/jspdf.plugin.autotable-*.js
 demo/purify.es-*.js
 demo/pcc-demo-entry-*.js
 demo/demo-entry-*.js
+demo/mock-audit-v2-*.js
 installed-users.csv
 .env
 *.log
