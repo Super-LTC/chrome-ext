@@ -62,7 +62,7 @@ function latestResolution(actions) {
   return null;
 }
 
-export function FindingRow({ finding, reportId, onOpenInPCC }) {
+export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   const sev = (finding.severity || 'low').toLowerCase();
   const sevLabel = SEVERITY_LABEL[sev] || sev;
   const name = patientDisplayName(finding);
@@ -96,7 +96,9 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
   // separate signal from `status` — detection says the work happened, sign-off
   // says a named person is accountable for it.
   const hasPendingDetection =
-    finding.followup?.status === 'detected' && status === REVIEW_STATUS.OPEN;
+    signoffEnabled &&
+    finding.followup?.status === 'detected' &&
+    status === REVIEW_STATUS.OPEN;
 
   const handleClick = (e) => {
     if (!href) return;
@@ -129,8 +131,10 @@ export function FindingRow({ finding, reportId, onOpenInPCC }) {
   const trackType = finding.category || 'unknown';
 
   // Sign-off needs a stable anchor on both ids; without them the row is still
-  // fully readable, just not actionable.
-  const canAct = Boolean(reportId && findingId);
+  // fully readable, just not actionable. `signoffEnabled` is the per-building
+  // pilot switch — with it off the finding reads exactly as it did before any
+  // of this shipped, and the server refuses the writes anyway.
+  const canAct = Boolean(signoffEnabled && reportId && findingId);
 
   return (
     <li

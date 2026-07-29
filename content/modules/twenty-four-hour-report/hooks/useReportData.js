@@ -26,6 +26,7 @@ export function useReportData({ facilityName, orgSlug, initialDate = null }) {
   const [availableByDate, setAvailableByDate] = useState({}); // date → list item (for counts on empty filtered view)
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [currentReport, setCurrentReport] = useState(undefined); // undefined = not yet loaded; null = confirmed empty
+  const [signoffEnabled, setSignoffEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [listLoading, setListLoading] = useState(true);
@@ -111,6 +112,10 @@ export function useReportData({ facilityName, orgSlug, initialDate = null }) {
         throw new Error(res?.error || 'Failed to load report');
       }
       const data = unwrap(res.data) || {};
+      // Per-building pilot switch for sign-off / comments / follow-up. Comes
+      // back with the report because it is a property of the FACILITY, not the
+      // day — an older extension simply gets undefined and shows no rail.
+      setSignoffEnabled(data.signoffEnabled === true);
       const report = data.report || null;
       cacheRef.current.set(date, report);
       setCurrentReport(report);
@@ -200,6 +205,7 @@ export function useReportData({ facilityName, orgSlug, initialDate = null }) {
     timezone,
     currentDate,
     currentReport,
+    signoffEnabled,
     loading,
     listLoading,
     error,

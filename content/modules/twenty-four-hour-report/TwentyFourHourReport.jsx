@@ -67,6 +67,7 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
     timezone,
     currentDate,
     currentReport,
+    signoffEnabled,
     loading,
     listLoading,
     error,
@@ -461,6 +462,7 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
                   key={f.id || i}
                   finding={f}
                   reportId={currentReport?.id}
+                  signoffEnabled={signoffEnabled}
                   onOpenInPCC={handleOpenInPCC}
                 />
               ))}
