@@ -173,6 +173,11 @@ export const EVENT_SCHEMA = {
   report_24hr_finding_action_cancelled: ['action'],
   // Fired on the open ATTEMPT, so a blocked popup still shows up as intent.
   report_24hr_progress_note_opened: ['finding_type'],
+  // Whether the note she wrote got linked back to the finding, and which signal
+  // found it: 'url' (PCC put the id in the popup's location) or 'list' (we
+  // diffed her notes list). `via` is what tells us if the URL read holds up in
+  // the field — if it is always 'list', the cheap path is not working.
+  report_24hr_note_linked: ['finding_type', 'via'],
   report_24hr_comment_posted: ['finding_type'],
   report_24hr_comment_deleted: [],
   report_24hr_detection_note_opened: ['finding_type'],

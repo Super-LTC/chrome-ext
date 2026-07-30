@@ -90,8 +90,14 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   // and as named evidence inside — never as an action competing with the
   // human's. "Super found a possible resolution note" in words, because a bare
   // magnifying glass tells a nurse nothing.
-  const followup = finding.followup;
-  const hasNote = Boolean(signoffEnabled && followup?.status === 'detected');
+  // Server value once the panel has loaded, list payload before that — so a
+  // note linked seconds ago shows immediately instead of after a full refetch.
+  const followup = activity.followup !== undefined ? activity.followup : finding.followup;
+  // 'detected' is the machine's guess; 'confirmed' is a note a person wrote and
+  // attached. Both mean there is a note to read.
+  const hasNote = Boolean(
+    signoffEnabled && (followup?.status === 'detected' || followup?.status === 'confirmed')
+  );
 
   const goToChart = useCallback(
     (e) => {
@@ -174,6 +180,9 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             onComment={activity.postComment}
             onDeleteComment={activity.removeComment}
             onViewNote={() => setNoteOpen(true)}
+            onNoteLinked={activity.load}
+            reportId={reportId}
+            findingId={findingId}
             hasNote={hasNote}
             noteSummary={followup?.summary}
             currentUserId={user?.id}

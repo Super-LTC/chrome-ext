@@ -18,6 +18,7 @@ import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
 import { ACTION_VERB, REVIEW_STATUS, formatTrailTime, mergeTimeline, initialsOf } from '../utils/reviewStatus.js';
 import { progressNoteUrl, openPccWindow } from '../../../utils/pcc-links.js';
 import { MentionInput, toMentionTokens } from './MentionInput.jsx';
+import { captureWrittenNote, snapshotNoteIds } from '../utils/captureWrittenNote.js';
 
 function actorLabel(entry) {
   return entry.actorName || entry.actorEmail || 'Someone';
@@ -40,8 +41,11 @@ export function FindingTrail({
   onComment,
   onDeleteComment,
   onViewNote,
+  onNoteLinked,
   hasNote,
   noteSummary,
+  reportId,
+  findingId,
   currentUserId,
   pccClientId,
   teammates,
@@ -50,7 +54,8 @@ export function FindingTrail({
   const [commentText, setCommentText] = useState('');
   const [picked, setPicked] = useState([]);
   const [localError, setLocalError] = useState(null);
-  // 'idle' | 'writing' (PCC window open) | 'asking' (came back, did it resolve?)
+  // 'idle' | 'writing' (PCC window open) | 'linking' (locating the saved
+  // note) | 'asking' (came back — did it resolve the finding?)
   const [noteFlow, setNoteFlow] = useState('idle');
   const pollRef = useRef(null);
 
@@ -112,49 +117,78 @@ export function FindingTrail({
   const openNoteForm = () => {
     const url = progressNoteUrl(pccClientId);
     if (!url) return;
-    // Must be synchronous with the click or the popup is blocked.
+
+    // Open FIRST, synchronously. Any await before window.open loses the user
+    // gesture and the browser blocks the popup — so the snapshot is kicked off
+    // after and awaited later, while she is still typing.
     const win = openPccWindow(url, 'super_pcc_note');
+    const openedAt = new Date();
+
+    // What was on her notes list before she started. The diff can only tell
+    // what is NEW if we know what was already there, and eMAR rows land
+    // continuously, so "newest" alone would not be enough.
+    const beforeIds = snapshotNoteIds(pccClientId);
     window.SuperAnalytics?.track?.('report_24hr_progress_note_opened', {
       finding_type: trackType,
     });
     if (!win) {
-      // Popup blocked — she can still write it in her own tab, so ask anyway
-      // rather than dead-ending.
       setNoteFlow('asking');
       return;
     }
+
     setNoteFlow('writing');
     clearInterval(pollRef.current);
 
-    const seen = new Set();
-    let captured = null;
+    let urlPnid = null;
     pollRef.current = setInterval(() => {
-      // Same-origin read. Wrapped anyway: PCC could bounce the window through
-      // an SSO or CDN host mid-flow, and a cross-origin read throws.
       try {
         if (!win.closed) {
-          const href = win.location.href || '';
-          if (href && !seen.has(href)) {
-            seen.add(href);
-            const m = href.match(/ESOLpnid=(-?\d+)/);
-            const pnid = m ? m[1] : null;
-            console.log('[24hr note probe] url:', href, '| ESOLpnid:', pnid ?? '(none)');
-            // -1 is the blank form; any other value is a note that now exists.
-            if (pnid && pnid !== '-1') captured = pnid;
-          }
+          const m = (win.location.href || '').match(/ESOLpnid=(-?\d+)/);
+          // -1 is the blank form; anything else is a note that now exists.
+          if (m && m[1] !== '-1') urlPnid = m[1];
         }
-      } catch (err) {
-        console.log('[24hr note probe] cross-origin, cannot read:', err?.message);
+      } catch {
+        // PCC can bounce the window through another host mid-flow; the list
+        // diff still covers us.
       }
 
-      if (win.closed) {
-        clearInterval(pollRef.current);
-        console.log(
-          '[24hr note probe] window closed.',
-          captured ? `CAPTURED pnid=${captured}` : 'no pnid seen — list diff would be the fallback'
-        );
-        setNoteFlow('asking');
-      }
+      if (!win.closed) return;
+      clearInterval(pollRef.current);
+      setNoteFlow('linking');
+
+      beforeIds
+        .then((known) =>
+          captureWrittenNote({ pccClientId, urlPnid, knownIds: known, since: openedAt })
+        )
+        .then(async (found) => {
+          if (!found) {
+            // She still gets credit for writing one — it just has no link.
+            setNoteFlow('asking');
+            return;
+          }
+          try {
+            const res = await chrome.runtime.sendMessage({
+              type: 'API_REQUEST',
+              endpoint: '/api/extension/24hr-report/finding/link-note',
+              options: {
+                method: 'POST',
+                body: JSON.stringify({ reportId, findingId, pccNoteId: found.pnid }),
+              },
+            });
+            if (res?.success) {
+              window.SuperAnalytics?.track?.('report_24hr_note_linked', {
+                finding_type: trackType,
+                via: found.via,
+              });
+              await onNoteLinked?.();
+            }
+          } catch {
+            // Linking is a bonus on top of the note she already wrote in PCC.
+            // Never block the flow on it.
+          }
+          setNoteFlow('asking');
+        })
+        .catch(() => setNoteFlow('asking'));
     }, 500);
   };
 
@@ -225,7 +259,11 @@ export function FindingTrail({
         <p class="thr__trail-empty">No comments yet.</p>
       )}
 
-      {noteFlow === 'writing' ? (
+      {noteFlow === 'linking' ? (
+        <div class="thr__prompt">
+          <p class="thr__prompt-text">Finding your note in PointClickCare…</p>
+        </div>
+      ) : noteFlow === 'writing' ? (
         <div class="thr__prompt">
           <p class="thr__prompt-text">Writing a note in PointClickCare…</p>
           {/* NO_TRACK */}
