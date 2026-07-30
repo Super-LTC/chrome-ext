@@ -1,27 +1,30 @@
 /**
  * FindingRow — single finding card in the 24-hour report list.
  *
- * The row carries a right-side action rail: sign-off state, a toggle for the
- * activity trail, and the ↗ link into PCC. The ↗ stays an <a href> so
- * middle-click / cmd-click open in a new tab natively; plain same-tab click is
- * intercepted by onOpenInPCC which persists state for the auto-restore flow.
+ * ── The rule this layout follows ───────────────────────────────────────────
+ * ONE action, ONE link, ONE thread. The first version put three peer buttons
+ * (Write note / Needs input / Sign off), two separate link-outs, and an
+ * always-open comment box in the same cramped rail, and nothing told you which
+ * was the point. Worse, the status pill for an untouched finding read "Open" —
+ * a state, but it parses as a verb, so people clicked it expecting the chart
+ * and got a comment thread instead.
+ *
+ * So: the pill is now always the ACTION or the RESULT ("Sign off" -> "✓ Signed
+ * off"), never an ambiguous noun. Going to the chart is the patient's NAME plus
+ * the ↗, which are the two things that already look like links. Everything
+ * conversational lives behind one disclosure.
  *
  * Signing off never hides a finding — it records that a named person looked.
  */
 
 import { useState, useCallback } from 'preact/hooks';
 import { categoryInfo, subcategoryLabel, findingText } from '../utils/formatFinding.js';
-import {
-  REVIEW_STATUS,
-  STATUS_LABEL,
-  reviewStatusOf,
-  formatTrailTime,
-  shortName,
-} from '../utils/reviewStatus.js';
+import { REVIEW_STATUS, reviewStatusOf } from '../utils/reviewStatus.js';
 import { useFindingActivity } from '../hooks/useFindingActivity.js';
 import { useCurrentUser } from '../../../hooks/useCurrentUser.js';
 import { noteOrChartUrl } from '../../../utils/pcc-links.js';
 import { FindingTrail } from './FindingTrail.jsx';
+import { NoteModal } from './NoteModal.jsx';
 
 const SEVERITY_LABEL = {
   critical: 'Critical',
@@ -53,15 +56,6 @@ function patientDisplayName(finding) {
   return joined || 'Unknown';
 }
 
-/** Most recent sign-off, for the collapsed pill: "✓ Jake 2:14 PM". */
-function latestResolution(actions) {
-  if (!Array.isArray(actions)) return null;
-  for (let i = actions.length - 1; i >= 0; i -= 1) {
-    if (actions[i].action === 'resolved') return actions[i];
-  }
-  return null;
-}
-
 export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   const sev = (finding.severity || 'low').toLowerCase();
   const sevLabel = SEVERITY_LABEL[sev] || sev;
@@ -80,43 +74,33 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   const pccClientId = finding.pccClientId || null;
 
   const [expanded, setExpanded] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const activity = useFindingActivity({ reportId, findingId });
   // Needed only to decide whose comments show a Delete affordance — the server
   // enforces authorship regardless.
   const { user } = useCurrentUser();
 
-  // The list payload carries the finding's status; once the trail loads, the
-  // server's value wins.
   const status = activity.reviewStatus ?? reviewStatusOf(finding);
-  const resolution = latestResolution(activity.actions);
-  // Server count until the thread is opened, live count after — so posting or
-  // deleting updates the badge without another round-trip.
+  const isResolved = status === REVIEW_STATUS.RESOLVED;
   const commentCount = activity.comments?.length ?? finding.commentCount ?? 0;
-  // A machine-found follow-up that nobody has confirmed yet. Deliberately a
-  // separate signal from `status` — detection says the work happened, sign-off
-  // says a named person is accountable for it.
-  const hasPendingDetection =
-    signoffEnabled &&
-    finding.followup?.status === 'detected' &&
-    status === REVIEW_STATUS.OPEN;
 
-  const handleClick = (e) => {
-    if (!href) return;
-    // Let middle-click / cmd-click / ctrl-click do native new-tab behavior.
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-    e.preventDefault();
-    onOpenInPCC?.(finding, { href });
-  };
+  // A machine-found follow-up nobody has confirmed yet. Rendered inline under
+  // the finding rather than as a second pill — it is context for the decision,
+  // not a competing action.
+  const followup = finding.followup;
+  const [followupHidden, setFollowupHidden] = useState(false);
+  const showFollowup =
+    signoffEnabled && !followupHidden && followup?.status === 'detected' && !isResolved;
 
-  const handleOpenNote = useCallback(
-    (pccNoteId) => {
-      // Prefer the note itself; fall back to the resident's chart. The note URL
-      // needs BOTH ids — pccClientId (confirmed MRN map hit) and PCC's own note
-      // id — so a miss on either degrades to the chart rather than a dead link.
-      const target = noteOrChartUrl(pccClientId, pccNoteId) || href;
-      if (target) onOpenInPCC?.(finding, { href: target });
+  const goToChart = useCallback(
+    (e) => {
+      if (!href) return;
+      // Let middle-click / cmd-click / ctrl-click do native new-tab behavior.
+      if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return;
+      e?.preventDefault();
+      onOpenInPCC?.(finding, { href });
     },
-    [pccClientId, href, finding, onOpenInPCC]
+    [href, finding, onOpenInPCC]
   );
 
   const toggleTrail = useCallback(() => {
@@ -130,10 +114,6 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   // include patient name, MRN, room, or finding free-text — those are PHI.
   const trackType = finding.category || 'unknown';
 
-  // Sign-off needs a stable anchor on both ids; without them the row is still
-  // fully readable, just not actionable. `signoffEnabled` is the per-building
-  // pilot switch — with it off the finding reads exactly as it did before any
-  // of this shipped, and the server refuses the writes anyway.
   const canAct = Boolean(signoffEnabled && reportId && findingId);
 
   return (
@@ -151,7 +131,18 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
           data-track-prop-finding-type={trackType}
         >
           <span class={`thr__sev-badge thr__sev-badge--${sev}`}>{sevLabel}</span>
-          <span class="thr__row-name">{name}</span>
+          {href ? (
+            <a
+              class="thr__row-name thr__row-name--link"
+              href={href}
+              onClick={goToChart}
+              title={`Open ${name} in PointClickCare`}
+            >
+              {name}
+            </a>
+          ) : (
+            <span class="thr__row-name">{name}</span>
+          )}
           {room && <span class="thr__row-meta">{room}</span>}
           {cat && (
             <span class="thr__chip">
@@ -162,6 +153,34 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
           {subLabel && <span class="thr__chip thr__chip--type">{subLabel}</span>}
         </div>
         {text && <p class="thr__row-text">{text}</p>}
+
+        {showFollowup && (
+          <div class="thr__followup">
+            <span class="thr__followup-icon" aria-hidden="true">🔎</span>
+            <span class="thr__followup-text">
+              Looks addressed — <em>{followup.summary}</em>
+            </span>
+            <button
+              type="button"
+              class="thr__followup-link"
+              onClick={() => setNoteOpen(true)}
+              data-track="report_24hr_detection_note_opened"
+              data-track-prop-finding-type={trackType}
+            >
+              View note
+            </button>
+            <button
+              type="button"
+              class="thr__followup-dismiss"
+              onClick={() => setFollowupHidden(true)}
+              aria-label="Hide this suggestion"
+              title="Hide this suggestion"
+              // NO_TRACK — hiding a hint is not an outcome; the sign-off is.
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {expanded && canAct && (
           <FindingTrail
@@ -174,11 +193,8 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             onAction={activity.applyAction}
             onComment={activity.postComment}
             onDeleteComment={activity.removeComment}
-            onOpenNote={handleOpenNote}
             currentUserId={user?.id}
-            followup={finding.followup}
             trackType={trackType}
-            pccClientId={pccClientId}
           />
         )}
       </div>
@@ -187,29 +203,24 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
         {canAct && (
           <button
             type="button"
-            class={`thr__status-pill thr__status-pill--${status}${
-              hasPendingDetection ? ' thr__status-pill--detected' : ''
-            }`}
+            class={`thr__pill${isResolved ? ' thr__pill--done' : ''}`}
             onClick={toggleTrail}
             aria-expanded={expanded}
-            aria-label={`${STATUS_LABEL[status]} — show activity for ${name}`}
-            title={STATUS_LABEL[status]}
+            aria-label={
+              isResolved
+                ? `Signed off — show activity for ${name}`
+                : `Sign off — show activity for ${name}`
+            }
             data-track="report_24hr_finding_trail_toggled"
             data-track-prop-finding-type={trackType}
           >
-            {status === REVIEW_STATUS.RESOLVED && (
-              <span class="thr__status-check" aria-hidden="true">✓</span>
-            )}
-            <span class="thr__status-text">
-              {status === REVIEW_STATUS.RESOLVED && resolution
-                ? `${shortName(resolution.actorName, resolution.actorEmail)} ${formatTrailTime(resolution.createdAt)}`
-                : hasPendingDetection
-                  ? 'Looks addressed — confirm?'
-                  : STATUS_LABEL[status]}
-            </span>
+            {isResolved && <span class="thr__pill-check" aria-hidden="true">✓</span>}
+            <span class="thr__pill-text">{isResolved ? 'Signed off' : 'Sign off'}</span>
             {commentCount > 0 && (
-              <span class="thr__status-comments" title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}>
-                <span aria-hidden="true">💬</span>
+              <span
+                class="thr__pill-count"
+                title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+              >
                 {commentCount}
               </span>
             )}
@@ -220,7 +231,7 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
           <a
             class="thr__row-open"
             href={href}
-            onClick={handleClick}
+            onClick={goToChart}
             aria-label={`Open ${name} in PointClickCare`}
             title="Open in PointClickCare"
           >
@@ -232,6 +243,18 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
           </a>
         )}
       </div>
+
+      {noteOpen && (
+        <NoteModal
+          reportId={reportId}
+          findingId={findingId}
+          summary={followup?.summary}
+          detectedAt={followup?.detectedAt}
+          chartHref={noteOrChartUrl(pccClientId, followup?.detectedPccNoteId) || href}
+          onOpenChart={(url) => onOpenInPCC?.(finding, { href: url })}
+          onClose={() => setNoteOpen(false)}
+        />
+      )}
     </li>
   );
 }

@@ -22,11 +22,28 @@ export function reviewStatusOf(finding) {
   return REVIEW_STATUS.OPEN;
 }
 
+/**
+ * The pill used to render STATUS_LABEL[open] === 'Open', which reads as a verb.
+ * People clicked it expecting the resident's chart. The row now labels the pill
+ * with the ACTION ("Sign off") or the RESULT ("Signed off") instead, so these
+ * are only for aria/tooltips where a state reading is unambiguous.
+ */
 export const STATUS_LABEL = {
-  [REVIEW_STATUS.OPEN]: 'Open',
+  [REVIEW_STATUS.OPEN]: 'Not signed off',
   [REVIEW_STATUS.NEEDS_INPUT]: 'Needs input',
   [REVIEW_STATUS.RESOLVED]: 'Signed off',
 };
+
+/** "Jonathan Cameron" -> "JC". Falls back to one letter, never empty. */
+export function initialsOf(nameOrEmail) {
+  const raw = String(nameOrEmail || '').trim();
+  if (!raw) return '?';
+  const base = raw.includes('@') ? raw.split('@')[0].replace(/[._-]+/g, ' ') : raw;
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 /** Past-tense phrasing for the trail: "Jake signed off". */
 export const ACTION_VERB = {
@@ -65,8 +82,8 @@ export function formatTrailTime(iso) {
  * Stable: equal timestamps keep actions ahead of comments, so a comment posted
  * alongside a sign-off reads as the explanation for it.
  */
-/** Tie-break order at identical timestamps: humans before machines. */
-const KIND_RANK = { action: 0, comment: 1, detection: 2 };
+/** Tie-break order at identical timestamps: actions before comments. */
+const KIND_RANK = { action: 0, comment: 1 };
 
 /**
  * A machine-found follow-up, as a timeline entry — or null.
@@ -93,11 +110,10 @@ export function detectionEntry(followup) {
   };
 }
 
-export function mergeTimeline(actions, comments, detection = null) {
+export function mergeTimeline(actions, comments) {
   const items = [
     ...(Array.isArray(actions) ? actions : []).map((a) => ({ kind: 'action', at: a.createdAt, data: a })),
     ...(Array.isArray(comments) ? comments : []).map((c) => ({ kind: 'comment', at: c.createdAt, data: c })),
-    ...(detection ? [detection] : []),
   ];
   return items
     .map((item, index) => ({ item, index }))

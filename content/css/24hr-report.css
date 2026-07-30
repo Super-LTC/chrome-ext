@@ -1150,352 +1150,448 @@
   }
 }
 
-/* ── Sign-off: action rail, status pill, activity trail ─────────────────────
-   Signing off never hides a finding — it records that a named person looked.
-   The rail sits opposite the severity bar so state reads down the right edge. */
+
+/* ── Sign-off, follow-up hint, and the thread ──────────────────────────────
+   One action, one link, one thread. The rail carries a single pill; the row's
+   patient name and the ↗ are the two ways to the chart, because those already
+   look like links. Everything conversational hides behind the pill. */
 
 .thr__row-rail {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 4px;
 }
 
-.thr__status-pill {
+/* Patient name doubles as the chart link — underline only on hover so 295 rows
+   don't read as a wall of blue. */
+.thr__row-name--link {
+  color: #111827;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.thr__row-name--link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.thr__row-name--link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The one action. Label is a verb before, a state after — never the bare word
+   "Open", which reads as an instruction to open the chart. */
+.thr__pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: 150px;
-  padding: 3px 8px;
-  border: 1px solid #e5e7eb;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
   border-radius: 999px;
   background: #fff;
-  color: #6b7280;
+  color: #374151;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.2;
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
-.thr__status-pill:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  color: #374151;
+.thr__pill:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
-.thr__status-pill:focus-visible {
+.thr__pill:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
 }
 
-.thr__status-pill--resolved {
-  border-color: #a7f3d0;
-  background: #ecfdf5;
-  color: #047857;
+.thr__pill--done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
 }
 
-.thr__status-pill--resolved:hover {
-  background: #d1fae5;
-  border-color: #6ee7b7;
-  color: #065f46;
+.thr__pill--done:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
 }
 
-.thr__status-pill--needs_input {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #b45309;
-}
-
-.thr__status-pill--needs_input:hover {
-  background: #fef3c7;
-  border-color: #fcd34d;
-  color: #92400e;
-}
-
-.thr__status-check {
-  font-size: 12px;
+.thr__pill-check {
+  font-size: 11px;
   line-height: 1;
 }
 
-.thr__status-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.thr__pill-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
 }
 
-.thr__trail {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #f3f4f6;
+.thr__pill--done .thr__pill-count {
+  background: #dcfce7;
+  color: #15803d;
 }
 
-.thr__trail-empty,
-.thr__trail-error {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: #6b7280;
-}
+/* ── Follow-up hint ─────────────────────────────────────────────────────────
+   Inline under the finding, not a second pill in the rail: it is context for
+   the decision, not a competing action. Dismissible, because a suggestion you
+   have already judged should stop taking up space. */
 
-.thr__trail-error {
-  color: #b91c1c;
-}
-
-.thr__trail-list {
-  margin: 0 0 10px;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.thr__trail-head {
+.thr__followup {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-left: 2px solid #93c5fd;
+  border-radius: 0 4px 4px 0;
   font-size: 12px;
+  color: #475569;
+  line-height: 1.45;
 }
 
-.thr__trail-actor {
-  font-weight: 600;
-  color: #111827;
+.thr__followup-icon {
+  flex: 0 0 auto;
+  font-size: 11px;
 }
 
-.thr__trail-verb {
-  color: #4b5563;
+.thr__followup-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.thr__trail-time {
-  color: #9ca3af;
+.thr__followup-text em {
+  font-style: normal;
+  color: #334155;
 }
 
-.thr__trail-note {
-  margin: 3px 0 0;
-  padding-left: 8px;
-  border-left: 2px solid #e5e7eb;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #374151;
-  white-space: pre-wrap;
-}
-
-.thr__trail-compose {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.thr__trail-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #111827;
-  resize: vertical;
-}
-
-.thr__trail-textarea:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: -1px;
-  border-color: #2563eb;
-}
-
-.thr__trail-textarea:disabled {
-  background: #f9fafb;
-  color: #6b7280;
-}
-
-.thr__trail-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.thr__btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid transparent;
+.thr__followup-link {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.thr__btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+.thr__followup-link:hover { color: #1e40af; }
+
+.thr__followup-dismiss {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #94a3b8;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.thr__btn:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
+.thr__followup-dismiss:hover { background: #e2e8f0; color: #475569; }
+
+/* ── Thread ────────────────────────────────────────────────────────────────*/
+
+.thr__trail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
 }
 
-.thr__btn--ghost {
-  border-color: #d1d5db;
-  background: #fff;
-  color: #374151;
+.thr__trail-empty {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #9ca3af;
 }
 
-.thr__btn--ghost:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #9ca3af;
+.thr__trail-error {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #b91c1c;
 }
 
-.thr__btn--primary {
-  background: #2563eb;
-  color: #fff;
-}
-
-.thr__btn--primary:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-/* An expanded row stays visually anchored while the trail pushes it taller. */
-.thr__row--expanded {
-  border-color: #d1d5db;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-}
-
-/* Progress-note flow: waiting on the PCC popup, then the confirm step. */
-
-.thr__trail-note-wait {
+.thr__thread {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+
+.thr__thread-item {
+  display: flex;
   gap: 8px;
+  align-items: flex-start;
 }
 
-.thr__trail-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #4b5563;
-}
-
-/* Comment threads: message bodies, delete affordance, composer, count badge. */
-
-.thr__status-comments {
+.thr__avatar {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding-left: 4px;
-  margin-left: 2px;
-  border-left: 1px solid currentColor;
-  font-size: 10px;
-  opacity: 0.85;
+  justify-content: center;
 }
 
-.thr__trail-item--comment .thr__trail-head {
+.thr__thread-body { flex: 1 1 auto; min-width: 0; }
+
+.thr__thread-head {
+  display: flex;
+  align-items: baseline;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
-.thr__trail-message {
-  margin: 3px 0 0;
-  padding-left: 8px;
-  border-left: 2px solid #dbeafe;
+.thr__thread-who {
   font-size: 12px;
-  line-height: 1.5;
-  color: #1f2937;
-  white-space: pre-wrap;
-  word-break: break-word;
+  font-weight: 700;
+  color: #111827;
 }
 
-.thr__trail-delete {
+.thr__thread-verb {
+  font-size: 12px;
+  color: #15803d;
+  font-weight: 600;
+}
+
+.thr__thread-time {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.thr__thread-delete {
   margin-left: auto;
   padding: 0;
-  border: none;
-  background: transparent;
+  border: 0;
+  background: none;
   color: #9ca3af;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s ease, color 0.12s ease;
+  transition: opacity 0.12s ease;
 }
 
-.thr__trail-item--comment:hover .thr__trail-delete,
-.thr__trail-delete:focus-visible {
-  opacity: 1;
+.thr__thread-item:hover .thr__thread-delete,
+.thr__thread-delete:focus-visible { opacity: 1; }
+
+.thr__thread-delete:hover { color: #b91c1c; }
+
+.thr__thread-text {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.thr__trail-delete:hover:not(:disabled) {
-  color: #b91c1c;
+/* ── Composer ──────────────────────────────────────────────────────────────
+   The action lives next to the comment box, and swaps to "Comment" the moment
+   you type — so one control is always the obvious next step. */
+
+.thr__composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
 
-.thr__trail-delete:disabled {
-  cursor: default;
+.thr__composer-input {
+  flex: 1 1 auto;
+  min-height: 32px;
+  max-height: 120px;
+  padding: 7px 9px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #111827;
+  resize: vertical;
 }
 
-@media (hover: none) {
-  .thr__trail-delete { opacity: 1; }
+.thr__composer-input::placeholder { color: #9ca3af; }
+
+.thr__composer-input:focus-visible {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-.thr__trail-comment-box {
+.thr__composer-input:disabled { background: #f9fafb; color: #9ca3af; }
+
+.thr__composer-actions { flex: 0 0 auto; }
+
+.thr__btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__btn:disabled { opacity: 0.55; cursor: default; }
+
+.thr__btn--primary {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.thr__btn--primary:not(:disabled):hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+.thr__btn--ghost {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.thr__btn--ghost:not(:disabled):hover { background: #f9fafb; color: #111827; }
+
+.thr__btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* ── Note modal ────────────────────────────────────────────────────────────
+   The one dialog that earns stacking on the panel: a note is prose, and
+   inlining it would blow out the row. Reading it here keeps your place in a
+   295-row list. */
+
+.thr__modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+  animation: thr-fade 0.12s ease-out;
+}
+
+.thr__modal {
+  width: min(620px, 100%);
+  max-height: min(78vh, 720px);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
+  animation: thr-rise 0.14s ease-out;
 }
 
-/* Machine-found follow-up. Visually distinct from a human entry on purpose:
-   detection says the work happened, sign-off says a named person is
-   accountable. If this reads like a person signed off, it silently answers the
-   wrong question. */
+@keyframes thr-fade { from { opacity: 0; } }
+@keyframes thr-rise { from { opacity: 0; transform: translateY(6px); } }
 
-.thr__status-pill--detected {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-  /* Wider than the other states on purpose: "Looks addressed — confirm?" is the
-     call to action, and truncating it to "Looks addressed — co..." loses the
-     part that tells you what to do. */
-  max-width: 210px;
+.thr__modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 10px;
 }
 
-.thr__status-pill--detected:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #1e40af;
+.thr__modal-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
 }
 
-.thr__trail-item--detection .thr__trail-verb {
-  font-weight: 600;
-  color: #1d4ed8;
+.thr__modal-title {
+  margin: 3px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
 }
 
-.thr__trail-bot {
+.thr__modal-when {
+  margin: 2px 0 0;
   font-size: 12px;
+  color: #6b7280;
+}
+
+.thr__modal-close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #6b7280;
+  font-size: 20px;
   line-height: 1;
-}
-
-.thr__trail-message--detection {
-  border-left-color: #bfdbfe;
-  color: #1e3a5f;
-  font-style: italic;
-}
-
-.thr__trail-open-note {
-  margin-left: 6px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #2563eb;
-  font: inherit;
-  font-size: 11px;
-  font-style: normal;
   cursor: pointer;
-  text-decoration: underline;
 }
 
-.thr__trail-open-note:hover {
-  color: #1e40af;
+.thr__modal-close:hover { background: #f3f4f6; color: #111827; }
+
+.thr__modal-summary {
+  margin: 0;
+  padding: 0 18px 12px;
+  font-size: 13px;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.thr__modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 18px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+}
+
+.thr__modal-note {
+  margin: 0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #374151;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thr__modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px 16px;
 }
