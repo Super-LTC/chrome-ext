@@ -1595,3 +1595,150 @@
   gap: 8px;
   padding: 12px 18px 16px;
 }
+
+/* ── Disclosure rail ───────────────────────────────────────────────────────
+   The row shows STATE. Badges report what already happened; the chevron opens
+   the panel and commits you to nothing. No verbs out here — 295 rows each
+   demanding an action is what made the earlier "Sign off" pill read as scary. */
+
+.thr__disclose {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.thr__disclose:hover { background: #f8fafc; border-color: #e5e7eb; }
+.thr__disclose:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+.thr__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.thr__badge--note { background: #eff6ff; color: #1d4ed8; }
+.thr__badge--done { background: #f0fdf4; color: #15803d; }
+
+.thr__chevron {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.thr__chevron--open { transform: rotate(180deg); }
+
+/* ── Machine-found evidence ────────────────────────────────────────────────
+   Named in words at the top of the panel. It is context for the human's
+   decision, not a peer of it — so it sits above the thread, not in it. */
+
+.thr__evidence {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.thr__evidence-label {
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.thr__evidence-summary {
+  flex: 1 1 140px;
+  min-width: 0;
+  color: #475569;
+}
+
+.thr__evidence-link {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.thr__evidence-link:hover { color: #1e40af; }
+
+/* ── Secondary actions ─────────────────────────────────────────────────────
+   Text links, deliberately quieter than the Comment button: resolving is the
+   option, commenting is the default. */
+
+.thr__secondary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.thr__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #6b7280;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.thr__link:hover { color: #111827; text-decoration: underline; text-underline-offset: 2px; }
+.thr__link:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+.thr__link:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 3px; }
+
+.thr__link--resolve { margin-left: auto; color: #15803d; }
+.thr__link--resolve:hover { color: #166534; }
+
+/* ── Post-note prompt ──────────────────────────────────────────────────────
+   We cannot see what she wrote in PCC, so we ask the only question we can
+   honestly ask and record her answer. */
+
+.thr__prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.thr__prompt-text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+.thr__prompt-actions {
+  display: flex;
+  gap: 8px;
+}

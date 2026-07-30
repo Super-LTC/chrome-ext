@@ -2,19 +2,18 @@
  * FindingRow — single finding card in the 24-hour report list.
  *
  * ── The rule this layout follows ───────────────────────────────────────────
- * ONE action, ONE link, ONE thread. The first version put three peer buttons
- * (Write note / Needs input / Sign off), two separate link-outs, and an
- * always-open comment box in the same cramped rail, and nothing told you which
- * was the point. Worse, the status pill for an untouched finding read "Open" —
- * a state, but it parses as a verb, so people clicked it expecting the chart
- * and got a comment thread instead.
+ * A row in a 295-item list SHOWS STATE. It does not ask you to do anything.
  *
- * So: the pill is now always the ACTION or the RESULT ("Sign off" -> "✓ Signed
- * off"), never an ambiguous noun. Going to the chart is the patient's NAME plus
- * the ↗, which are the two things that already look like links. Everything
- * conversational lives behind one disclosure.
+ * Two earlier tries got this wrong. First the pill read "Open" — a state that
+ * parses as a verb, so it got clicked expecting the chart. Then it read
+ * "Sign off", which is worse: 295 rows each demanding an action, and a scary
+ * one, when most of the time you just want to look or leave a comment.
  *
- * Signing off never hides a finding — it records that a named person looked.
+ * So the rail is now a chevron plus passive badges — note / comments / who
+ * resolved it. Opening commits you to nothing. Every verb lives INSIDE, where
+ * commenting is the default and resolving is the option.
+ *
+ * Resolving never hides a finding — it records that a named person handled it.
  */
 
 import { useState, useCallback } from 'preact/hooks';
@@ -84,13 +83,12 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   const isResolved = status === REVIEW_STATUS.RESOLVED;
   const commentCount = activity.comments?.length ?? finding.commentCount ?? 0;
 
-  // A machine-found follow-up nobody has confirmed yet. Rendered inline under
-  // the finding rather than as a second pill — it is context for the decision,
-  // not a competing action.
+  // A machine-found follow-up. Surfaced as a passive "note" badge on the row
+  // and as named evidence inside — never as an action competing with the
+  // human's. "Super found a possible resolution note" in words, because a bare
+  // magnifying glass tells a nurse nothing.
   const followup = finding.followup;
-  const [followupHidden, setFollowupHidden] = useState(false);
-  const showFollowup =
-    signoffEnabled && !followupHidden && followup?.status === 'detected' && !isResolved;
+  const hasNote = Boolean(signoffEnabled && followup?.status === 'detected');
 
   const goToChart = useCallback(
     (e) => {
@@ -154,33 +152,6 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
         </div>
         {text && <p class="thr__row-text">{text}</p>}
 
-        {showFollowup && (
-          <div class="thr__followup">
-            <span class="thr__followup-icon" aria-hidden="true">🔎</span>
-            <span class="thr__followup-text">
-              Looks addressed — <em>{followup.summary}</em>
-            </span>
-            <button
-              type="button"
-              class="thr__followup-link"
-              onClick={() => setNoteOpen(true)}
-              data-track="report_24hr_detection_note_opened"
-              data-track-prop-finding-type={trackType}
-            >
-              View note
-            </button>
-            <button
-              type="button"
-              class="thr__followup-dismiss"
-              onClick={() => setFollowupHidden(true)}
-              aria-label="Hide this suggestion"
-              title="Hide this suggestion"
-              // NO_TRACK — hiding a hint is not an outcome; the sign-off is.
-            >
-              ×
-            </button>
-          </div>
-        )}
 
         {expanded && canAct && (
           <FindingTrail
@@ -193,7 +164,11 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             onAction={activity.applyAction}
             onComment={activity.postComment}
             onDeleteComment={activity.removeComment}
+            onViewNote={() => setNoteOpen(true)}
+            hasNote={hasNote}
+            noteSummary={followup?.summary}
             currentUserId={user?.id}
+            pccClientId={pccClientId}
             trackType={trackType}
           />
         )}
@@ -203,27 +178,37 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
         {canAct && (
           <button
             type="button"
-            class={`thr__pill${isResolved ? ' thr__pill--done' : ''}`}
+            class="thr__disclose"
             onClick={toggleTrail}
             aria-expanded={expanded}
-            aria-label={
-              isResolved
-                ? `Signed off — show activity for ${name}`
-                : `Sign off — show activity for ${name}`
-            }
+            aria-label={`Show comments and activity for ${name}`}
+            title="Comments and activity"
             data-track="report_24hr_finding_trail_toggled"
             data-track-prop-finding-type={trackType}
           >
-            {isResolved && <span class="thr__pill-check" aria-hidden="true">✓</span>}
-            <span class="thr__pill-text">{isResolved ? 'Signed off' : 'Sign off'}</span>
-            {commentCount > 0 && (
-              <span
-                class="thr__pill-count"
-                title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
-              >
-                {commentCount}
+            {/* Badges are STATE, not actions — they say what already happened
+                so the row can be read without opening it. */}
+            {hasNote && (
+              <span class="thr__badge thr__badge--note" title="Super found a possible resolution note">
+                note
               </span>
             )}
+            {commentCount > 0 && (
+              <span
+                class="thr__badge"
+                title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+              >
+                {commentCount} 💬
+              </span>
+            )}
+            {isResolved && (
+              <span class="thr__badge thr__badge--done" title="Resolved">
+                ✓ Resolved
+              </span>
+            )}
+            <span class={`thr__chevron${expanded ? ' thr__chevron--open' : ''}`} aria-hidden="true">
+              ⌄
+            </span>
           </button>
         )}
 

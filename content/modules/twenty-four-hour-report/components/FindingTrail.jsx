@@ -1,21 +1,22 @@
 /**
- * FindingTrail — the expanded panel under one finding: who did what, the
- * conversation, and the single action.
+ * FindingTrail — everything you can DO with a finding, once you've opened it.
  *
- * Inline expansion, not a modal: the report is already an overlay panel, and
- * stacking a dialog on top of it reads badly.
+ * Commenting is the default. Resolving is the option. That ordering is the
+ * whole point: most of the time somebody wants to say "I checked with the DON"
+ * and nothing more, and the earlier versions made that the hard path by putting
+ * two or three state-changing buttons in front of it.
  *
- * ── What was cut, and why ──────────────────────────────────────────────────
- * "Needs input" and "Write note" used to sit here as peers of "Sign off".
- * Three equal-weight buttons meant none of them was obviously the thing to do.
- * Mark's actual ask was one thing — "somebody saw this, I'm signing off" — so
- * that is the only button. Sign-off is now ONE click; the note you would have
- * typed goes in the comment box, where it also belongs when you are not
- * signing off. Reopen is the undo.
+ * ── The progress-note loop ────────────────────────────────────────────────
+ * "Add progress note" opens PCC's note form. We cannot see what she types
+ * there. So when she comes back we ask the only question we can honestly ask —
+ * "did you write it, and does that resolve this?" — and record HER answer as
+ * the trail entry. The note itself stays unlinked for now (SUP-231); the entry
+ * has to stand on its own, exactly as a paper hand-off would.
  */
 
-import { useState, useMemo } from 'preact/hooks';
+import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
 import { ACTION_VERB, REVIEW_STATUS, formatTrailTime, mergeTimeline, initialsOf } from '../utils/reviewStatus.js';
+import { progressNoteUrl, openPccWindow } from '../../../utils/pcc-links.js';
 
 function actorLabel(entry) {
   return entry.actorName || entry.actorEmail || 'Someone';
@@ -24,6 +25,8 @@ function actorLabel(entry) {
 function authorLabel(comment) {
   return comment.authorName || comment.authorEmail || 'Someone';
 }
+
+const NOTE_PROMPT = 'Added a progress note in PointClickCare.';
 
 export function FindingTrail({
   actions,
@@ -35,20 +38,30 @@ export function FindingTrail({
   onAction,
   onComment,
   onDeleteComment,
+  onViewNote,
+  hasNote,
+  noteSummary,
   currentUserId,
+  pccClientId,
   trackType,
 }) {
   const [commentText, setCommentText] = useState('');
   const [localError, setLocalError] = useState(null);
+  // 'idle' | 'writing' (PCC window open) | 'asking' (came back, did it resolve?)
+  const [noteFlow, setNoteFlow] = useState('idle');
+  const pollRef = useRef(null);
 
   const loaded = actions !== null || comments !== null;
   const timeline = useMemo(() => mergeTimeline(actions, comments), [actions, comments]);
   const isResolved = reviewStatus === REVIEW_STATUS.RESOLVED;
 
-  const act = async (action) => {
+  useEffect(() => () => clearInterval(pollRef.current), []);
+
+  const act = async (action, note) => {
     setLocalError(null);
     try {
-      await onAction(action);
+      await onAction(action, note);
+      setNoteFlow('idle');
     } catch (err) {
       setLocalError(err?.message || 'Could not save. Try again.');
     }
@@ -73,11 +86,52 @@ export function FindingTrail({
     }
   };
 
+  /** Open PCC's note form, then watch for the window closing to ask the follow-up. */
+  const openNoteForm = () => {
+    const url = progressNoteUrl(pccClientId);
+    if (!url) return;
+    // Must be synchronous with the click or the popup is blocked.
+    const win = openPccWindow(url, 'super_pcc_note');
+    window.SuperAnalytics?.track?.('report_24hr_progress_note_opened', {
+      finding_type: trackType,
+    });
+    if (!win) {
+      // Popup blocked — she can still write it in her own tab, so ask anyway
+      // rather than dead-ending.
+      setNoteFlow('asking');
+      return;
+    }
+    setNoteFlow('writing');
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      if (win.closed) {
+        clearInterval(pollRef.current);
+        setNoteFlow('asking');
+      }
+    }, 700);
+  };
+
   return (
     <div class="thr__trail">
       {loading && !loaded && <p class="thr__trail-empty">Loading…</p>}
       {error && <p class="thr__trail-error">{error}</p>}
       {localError && <p class="thr__trail-error">{localError}</p>}
+
+      {hasNote && (
+        <div class="thr__evidence">
+          <span class="thr__evidence-label">Super found a possible resolution note</span>
+          {noteSummary && <span class="thr__evidence-summary">{noteSummary}</span>}
+          <button
+            type="button"
+            class="thr__evidence-link"
+            onClick={onViewNote}
+            data-track="report_24hr_detection_note_opened"
+            data-track-prop-finding-type={trackType}
+          >
+            View note
+          </button>
+        </div>
+      )}
 
       {timeline.length > 0 && (
         <ol class="thr__thread">
@@ -111,9 +165,7 @@ export function FindingTrail({
                         </button>
                       )}
                   </div>
-                  {kind === 'action' && data.note && (
-                    <p class="thr__thread-text">{data.note}</p>
-                  )}
+                  {kind === 'action' && data.note && <p class="thr__thread-text">{data.note}</p>}
                   {kind === 'comment' && <p class="thr__thread-text">{data.message}</p>}
                 </div>
               </li>
@@ -123,58 +175,106 @@ export function FindingTrail({
       )}
 
       {loaded && timeline.length === 0 && !loading && (
-        <p class="thr__trail-empty">No activity yet.</p>
+        <p class="thr__trail-empty">No comments yet.</p>
       )}
 
-      <div class="thr__composer">
-        <textarea
-          class="thr__composer-input"
-          rows="1"
-          value={commentText}
-          placeholder="Add a comment…"
-          onInput={(e) => setCommentText(e.target.value)}
-          onKeyDown={onCommentKeyDown}
-          disabled={submitting}
-        />
-        <div class="thr__composer-actions">
-          {commentText.trim() ? (
-            <button
-              type="button"
-              class="thr__btn thr__btn--primary"
-              onClick={submitComment}
-              disabled={submitting}
-              data-track="report_24hr_comment_posted"
-              data-track-prop-finding-type={trackType}
-            >
-              {submitting ? 'Posting…' : 'Comment'}
-            </button>
-          ) : isResolved ? (
+      {noteFlow === 'writing' ? (
+        <div class="thr__prompt">
+          <p class="thr__prompt-text">Writing a note in PointClickCare…</p>
+          {/* NO_TRACK */}
+          <button type="button" class="thr__btn thr__btn--ghost" onClick={() => setNoteFlow('asking')}>
+            I’m done
+          </button>
+        </div>
+      ) : noteFlow === 'asking' ? (
+        <div class="thr__prompt">
+          <p class="thr__prompt-text">Did that resolve this finding?</p>
+          <div class="thr__prompt-actions">
+            {/* NO_TRACK — declining just returns to the comment box. */}
             <button
               type="button"
               class="thr__btn thr__btn--ghost"
-              onClick={() => act('reopened')}
+              onClick={() => setNoteFlow('idle')}
               disabled={submitting}
-              data-track="report_24hr_finding_action"
-              data-track-prop-action="reopened"
-              data-track-prop-finding-type={trackType}
             >
-              {submitting ? 'Saving…' : 'Reopen'}
+              Not yet
             </button>
-          ) : (
             <button
               type="button"
               class="thr__btn thr__btn--primary"
-              onClick={() => act(REVIEW_STATUS.RESOLVED)}
+              onClick={() => act(REVIEW_STATUS.RESOLVED, NOTE_PROMPT)}
               disabled={submitting}
               data-track="report_24hr_finding_action"
-              data-track-prop-action="resolved"
+              data-track-prop-action="resolved_via_note"
               data-track-prop-finding-type={trackType}
             >
-              {submitting ? 'Saving…' : 'Sign off'}
+              {submitting ? 'Saving…' : 'Yes, mark resolved'}
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div class="thr__composer">
+            <textarea
+              class="thr__composer-input"
+              rows="1"
+              value={commentText}
+              placeholder="Add a comment…"
+              onInput={(e) => setCommentText(e.target.value)}
+              onKeyDown={onCommentKeyDown}
+              disabled={submitting}
+            />
+            <div class="thr__composer-actions">
+              <button
+                type="button"
+                class="thr__btn thr__btn--primary"
+                onClick={submitComment}
+                disabled={submitting || !commentText.trim()}
+                data-track="report_24hr_comment_posted"
+                data-track-prop-finding-type={trackType}
+              >
+                {submitting ? 'Posting…' : 'Comment'}
+              </button>
+            </div>
+          </div>
+
+          <div class="thr__secondary">
+            {pccClientId && (
+              /* openNoteForm fires report_24hr_progress_note_opened itself, so a
+                 blocked popup still counts as an attempt. */
+              /* NO_TRACK */
+              <button type="button" class="thr__link" onClick={openNoteForm} disabled={submitting}>
+                + Add progress note
+              </button>
+            )}
+            {isResolved ? (
+              <button
+                type="button"
+                class="thr__link"
+                onClick={() => act('reopened')}
+                disabled={submitting}
+                data-track="report_24hr_finding_action"
+                data-track-prop-action="reopened"
+                data-track-prop-finding-type={trackType}
+              >
+                Reopen
+              </button>
+            ) : (
+              <button
+                type="button"
+                class="thr__link thr__link--resolve"
+                onClick={() => act(REVIEW_STATUS.RESOLVED)}
+                disabled={submitting}
+                data-track="report_24hr_finding_action"
+                data-track-prop-action="resolved"
+                data-track-prop-finding-type={trackType}
+              >
+                ✓ Mark resolved
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
