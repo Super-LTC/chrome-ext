@@ -92,7 +92,23 @@ export function FindingTrail({
     }
   };
 
-  /** Open PCC's note form, then watch for the window closing to ask the follow-up. */
+  /**
+   * Open PCC's note form, watch it, and try to learn the id of the note she
+   * saves.
+   *
+   * PCC writes the note, not us. Reverse-engineering the form POST would let us
+   * capture the id directly, but the failure mode is a malformed or
+   * misattributed note in a legal medical record — or a nurse believing she
+   * documented when she did not. Not a trade worth making for a link.
+   *
+   * Instead: the popup is SAME-ORIGIN (we are injected into PCC), so we can
+   * read its location as she works. A saved note navigates to a URL carrying
+   * ESOLpnid=<real id>; the blank form is ESOLpnid=-1, so anything else is the
+   * note that now exists.
+   *
+   * PROBE ONLY for now — the id is logged, not stored. What PCC actually does
+   * on save has never been observed, and the log tells us before we build on it.
+   */
   const openNoteForm = () => {
     const url = progressNoteUrl(pccClientId);
     if (!url) return;
@@ -109,12 +125,37 @@ export function FindingTrail({
     }
     setNoteFlow('writing');
     clearInterval(pollRef.current);
+
+    const seen = new Set();
+    let captured = null;
     pollRef.current = setInterval(() => {
+      // Same-origin read. Wrapped anyway: PCC could bounce the window through
+      // an SSO or CDN host mid-flow, and a cross-origin read throws.
+      try {
+        if (!win.closed) {
+          const href = win.location.href || '';
+          if (href && !seen.has(href)) {
+            seen.add(href);
+            const m = href.match(/ESOLpnid=(-?\d+)/);
+            const pnid = m ? m[1] : null;
+            console.log('[24hr note probe] url:', href, '| ESOLpnid:', pnid ?? '(none)');
+            // -1 is the blank form; any other value is a note that now exists.
+            if (pnid && pnid !== '-1') captured = pnid;
+          }
+        }
+      } catch (err) {
+        console.log('[24hr note probe] cross-origin, cannot read:', err?.message);
+      }
+
       if (win.closed) {
         clearInterval(pollRef.current);
+        console.log(
+          '[24hr note probe] window closed.',
+          captured ? `CAPTURED pnid=${captured}` : 'no pnid seen — list diff would be the fallback'
+        );
         setNoteFlow('asking');
       }
-    }, 700);
+    }, 500);
   };
 
   return (
