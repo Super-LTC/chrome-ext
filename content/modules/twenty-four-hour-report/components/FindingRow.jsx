@@ -20,6 +20,7 @@ import { useState, useCallback } from 'preact/hooks';
 import { categoryInfo, subcategoryLabel, findingText } from '../utils/formatFinding.js';
 import { REVIEW_STATUS, reviewStatusOf } from '../utils/reviewStatus.js';
 import { useFindingActivity } from '../hooks/useFindingActivity.js';
+import { useTeammates } from '../hooks/useTeammates.js';
 import { useCurrentUser } from '../../../hooks/useCurrentUser.js';
 import { noteOrChartUrl } from '../../../utils/pcc-links.js';
 import { FindingTrail } from './FindingTrail.jsx';
@@ -78,6 +79,8 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   // Needed only to decide whose comments show a Delete affordance — the server
   // enforces authorship regardless.
   const { user } = useCurrentUser();
+  // Only once the panel is open — 295 collapsed rows must not each fetch a roster.
+  const teammates = useTeammates(expanded ? reportId : null);
 
   const status = activity.reviewStatus ?? reviewStatusOf(finding);
   const isResolved = status === REVIEW_STATUS.RESOLVED;
@@ -175,6 +178,7 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             noteSummary={followup?.summary}
             currentUserId={user?.id}
             pccClientId={pccClientId}
+            teammates={teammates}
             trackType={trackType}
           />
           </div>

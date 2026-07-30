@@ -17,6 +17,7 @@
 import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
 import { ACTION_VERB, REVIEW_STATUS, formatTrailTime, mergeTimeline, initialsOf } from '../utils/reviewStatus.js';
 import { progressNoteUrl, openPccWindow } from '../../../utils/pcc-links.js';
+import { MentionInput, toMentionTokens } from './MentionInput.jsx';
 
 function actorLabel(entry) {
   return entry.actorName || entry.actorEmail || 'Someone';
@@ -43,9 +44,11 @@ export function FindingTrail({
   noteSummary,
   currentUserId,
   pccClientId,
+  teammates,
   trackType,
 }) {
   const [commentText, setCommentText] = useState('');
+  const [picked, setPicked] = useState([]);
   const [localError, setLocalError] = useState(null);
   // 'idle' | 'writing' (PCC window open) | 'asking' (came back, did it resolve?)
   const [noteFlow, setNoteFlow] = useState('idle');
@@ -72,8 +75,11 @@ export function FindingTrail({
     if (!body) return;
     setLocalError(null);
     try {
-      await onComment(body);
+      // Convert the names she PICKED into @[user:id] tokens. Typed-but-never-
+      // picked names stay literal text and tag nobody.
+      await onComment(toMentionTokens(body, picked));
       setCommentText('');
+      setPicked([]);
     } catch (err) {
       setLocalError(err?.message || 'Could not post that comment. Try again.');
     }
@@ -215,14 +221,14 @@ export function FindingTrail({
       ) : (
         <>
           <div class="thr__composer">
-            <textarea
-              class="thr__composer-input"
-              rows="1"
+            <MentionInput
               value={commentText}
-              placeholder="Add a comment…"
-              onInput={(e) => setCommentText(e.target.value)}
-              onKeyDown={onCommentKeyDown}
+              onInput={setCommentText}
+              onSubmit={submitComment}
+              onPickedChange={setPicked}
+              teammates={teammates}
               disabled={submitting}
+              placeholder="Add a comment… @john to tag a team member"
             />
             <div class="thr__composer-actions">
               <button
