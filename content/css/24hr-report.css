@@ -1866,3 +1866,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* An empty result is a STATE worth showing. Rendering nothing made a working
+   picker look broken when the search simply had no hits. */
+.thr__mention-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}

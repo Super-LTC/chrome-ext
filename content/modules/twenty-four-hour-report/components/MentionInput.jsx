@@ -82,7 +82,10 @@ export function MentionInput({
         .slice(0, 6)
     : [];
 
-  const open = Boolean(query) && matches.length > 0;
+  // Open whenever an @-query is active, even with zero matches. The first
+  // version only opened when something matched, so typing "@test" against a
+  // roster that had nobody by that name looked exactly like a broken picker.
+  const open = Boolean(query);
 
   const sync = (e) => {
     const el = e.target;
@@ -94,7 +97,7 @@ export function MentionInput({
   const choose = useCallback(
     (t) => {
       const el = areaRef.current;
-      if (!el || !query) return;
+      if (!t || !el || !query) return;
       const name = displayName(t);
       const before = value.slice(0, query.at);
       const after = value.slice((el.selectionStart ?? value.length));
@@ -114,7 +117,10 @@ export function MentionInput({
   );
 
   const onKeyDown = (e) => {
-    if (open) {
+    // Only steal the navigation keys when there is something to navigate.
+    // With an empty list, ArrowDown would compute `% 0` (NaN) and Enter would
+    // call choose(undefined) — so an unmatched @-term must leave Enter alone.
+    if (open && matches.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setHighlight((h) => (h + 1) % matches.length);
@@ -137,6 +143,12 @@ export function MentionInput({
         return;
       }
     }
+    if (open && e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setQuery(null);
+      return;
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       onSubmit?.();
@@ -158,6 +170,13 @@ export function MentionInput({
       />
       {open && (
         <ul class="thr__mention-list" role="listbox">
+          {matches.length === 0 && (
+            <li class="thr__mention-empty">
+              {(teammates || []).length === 0
+                ? 'No teammates have access to this facility yet'
+                : `No teammate matches “${query.term}”`}
+            </li>
+          )}
           {matches.map((t, i) => (
             <li key={t.id}>
               <button
