@@ -132,6 +132,12 @@ export function FindingTrail({
       finding_type: trackType,
     });
     if (!win) {
+      // Popup blocked. She can still write the note in her own tab, so ask the
+      // follow-up rather than dead-ending — we just cannot link it.
+      window.SuperAnalytics?.track?.('report_24hr_note_link_failed', {
+        finding_type: trackType,
+        reason: 'popup_blocked',
+      });
       setNoteFlow('asking');
       return;
     }
@@ -163,6 +169,12 @@ export function FindingTrail({
         .then(async (found) => {
           if (!found) {
             // She still gets credit for writing one — it just has no link.
+            // Expected sometimes (she cancelled, or wrote nothing), so this is
+            // a rate to watch rather than an error to chase.
+            window.SuperAnalytics?.track?.('report_24hr_note_link_failed', {
+              finding_type: trackType,
+              reason: urlPnid ? 'note_rejected' : 'no_new_note',
+            });
             setNoteFlow('asking');
             return;
           }
@@ -181,14 +193,34 @@ export function FindingTrail({
                 via: found.via,
               });
               await onNoteLinked?.();
+            } else {
+              // We found the note but could not record it — a real failure,
+              // unlike "she wrote nothing".
+              window.SuperAnalytics?.track?.('report_24hr_note_link_failed', {
+                finding_type: trackType,
+                reason: 'api_rejected',
+              });
+              console.warn('[24hr] link-note rejected:', res?.error);
             }
-          } catch {
+          } catch (err) {
             // Linking is a bonus on top of the note she already wrote in PCC.
             // Never block the flow on it.
+            window.SuperAnalytics?.track?.('report_24hr_note_link_failed', {
+              finding_type: trackType,
+              reason: 'exception',
+            });
+            console.warn('[24hr] link-note threw:', err?.message);
           }
           setNoteFlow('asking');
         })
-        .catch(() => setNoteFlow('asking'));
+        .catch((err) => {
+          window.SuperAnalytics?.track?.('report_24hr_note_link_failed', {
+            finding_type: trackType,
+            reason: 'capture_threw',
+          });
+          console.warn('[24hr] note capture threw:', err?.message);
+          setNoteFlow('asking');
+        });
     }, 500);
   };
 

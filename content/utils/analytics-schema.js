@@ -178,6 +178,10 @@ export const EVENT_SCHEMA = {
   // diffed her notes list). `via` is what tells us if the URL read holds up in
   // the field — if it is always 'list', the cheap path is not working.
   report_24hr_note_linked: ['finding_type', 'via'],
+  // Why a note did not get linked. Not all of these are bugs: 'no_new_note'
+  // usually means she cancelled or wrote nothing. 'api_rejected' and
+  // 'exception' ARE bugs — we found her note and failed to record it.
+  report_24hr_note_link_failed: ['finding_type', 'reason'],
   report_24hr_comment_posted: ['finding_type'],
   report_24hr_comment_deleted: [],
   report_24hr_detection_note_opened: ['finding_type'],
