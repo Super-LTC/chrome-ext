@@ -30,6 +30,32 @@ function authorLabel(comment) {
 
 const NOTE_PROMPT = 'Added a progress note in PointClickCare.';
 
+/**
+ * Only ONE note watch may be live at a time, across every finding on the page.
+ *
+ * `openPccWindow` uses a NAMED target, so a second "Add progress note" — on a
+ * DIFFERENT finding — navigates the same window rather than opening another.
+ * The first finding's watcher would still be polling that window, would see the
+ * second note's id appear in it, and would link the second note to the first
+ * finding. The fallback fails identically: on close, the list diff takes the
+ * newest note it has not seen, which is again the second one. Both signals
+ * agree, and both are wrong.
+ *
+ * So opening a form supersedes whatever watch is already running. The
+ * superseded finding still records that a note was written — it just carries no
+ * link, the same safe degradation as every other failure on this path.
+ */
+let activeWatch = null;
+
+/**
+ * Give up watching a window left open this long.
+ *
+ * Nurses do not always close the popup when they are done; without a ceiling the
+ * poll runs until the tab does. Anything we could still learn after this is also
+ * stale enough to be somebody else's note.
+ */
+const WATCH_LIMIT_MS = 10 * 60 * 1000;
+
 export function FindingTrail({
   actions,
   comments,
@@ -58,12 +84,21 @@ export function FindingTrail({
   // note) | 'asking' (came back — did it resolve the finding?)
   const [noteFlow, setNoteFlow] = useState('idle');
   const pollRef = useRef(null);
+  const watchRef = useRef(null);
 
   const loaded = actions !== null || comments !== null;
   const timeline = useMemo(() => mergeTimeline(actions, comments), [actions, comments]);
   const isResolved = reviewStatus === REVIEW_STATUS.RESOLVED;
 
-  useEffect(() => () => clearInterval(pollRef.current), []);
+  // Leaving the page must not strand a watch — a dead one still holding the
+  // global slot would cancel itself on the next open and look like a bug.
+  useEffect(
+    () => () => {
+      clearInterval(pollRef.current);
+      watchRef.current?.stop();
+    },
+    []
+  );
 
   const act = async (action, note) => {
     setLocalError(null);
@@ -111,12 +146,16 @@ export function FindingTrail({
    * ESOLpnid=<real id>; the blank form is ESOLpnid=-1, so anything else is the
    * note that now exists.
    *
-   * PROBE ONLY for now — the id is logged, not stored. What PCC actually does
-   * on save has never been observed, and the log tells us before we build on it.
+   * Whether PCC actually puts the id in that URL has never been observed in the
+   * field, which is what `via` on `report_24hr_note_linked` is there to tell us.
+   * The list diff carries the flow either way.
    */
   const openNoteForm = () => {
     const url = progressNoteUrl(pccClientId);
     if (!url) return;
+
+    // One window, so one watch. See `activeWatch`.
+    activeWatch?.cancel('superseded');
 
     // Open FIRST, synchronously. Any await before window.open loses the user
     // gesture and the browser blocks the popup — so the snapshot is kicked off
@@ -145,21 +184,45 @@ export function FindingTrail({
     setNoteFlow('writing');
     clearInterval(pollRef.current);
 
+    const watch = {
+      /** Done watching — the window closed and we are about to resolve it. */
+      stop: () => {
+        clearInterval(timer);
+        if (activeWatch === watch) activeWatch = null;
+      },
+      /** Gave up. She keeps credit for the note; it just gets no link. */
+      cancel: (reason) => {
+        watch.stop();
+        window.SuperAnalytics?.track?.('report_24hr_note_link_failed', {
+          finding_type: trackType,
+          reason,
+        });
+        setNoteFlow('asking');
+      },
+    };
+    activeWatch = watch;
+    watchRef.current = watch;
+
     let urlPnid = null;
-    pollRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       try {
         if (!win.closed) {
           const m = (win.location.href || '').match(/ESOLpnid=(-?\d+)/);
           // -1 is the blank form; anything else is a note that now exists.
-          if (m && m[1] !== '-1') urlPnid = m[1];
+          // Keep the FIRST real id we see: if this window gets reused for
+          // another note, the later id belongs to a different finding.
+          if (m && m[1] !== '-1' && !urlPnid) urlPnid = m[1];
         }
       } catch {
         // PCC can bounce the window through another host mid-flow; the list
         // diff still covers us.
       }
 
-      if (!win.closed) return;
-      clearInterval(pollRef.current);
+      if (!win.closed) {
+        if (Date.now() - openedAt.getTime() > WATCH_LIMIT_MS) watch.cancel('timed_out');
+        return;
+      }
+      watch.stop();
       setNoteFlow('linking');
 
       beforeIds
@@ -222,6 +285,8 @@ export function FindingTrail({
           setNoteFlow('asking');
         });
     }, 500);
+    // Unmount clears this too, so navigating away never leaves a poll running.
+    pollRef.current = timer;
   };
 
   return (
