@@ -116,10 +116,11 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
 
   return (
     <li
-      class={`thr__row${expanded ? ' thr__row--expanded' : ''}`}
+      class={`thr__row${expanded ? ' thr__row--expanded' : ''}${canAct ? ' thr__row--clickable' : ''}`}
       data-finding-id={findingId || undefined}
       data-severity={sev}
       data-review-status={status}
+      onClick={canAct ? toggleTrail : undefined}
     >
       <span class={`thr__row-bar thr__row-bar--${sev}`} aria-hidden="true" />
       <div class="thr__row-main">
@@ -133,7 +134,10 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             <a
               class="thr__row-name thr__row-name--link"
               href={href}
-              onClick={goToChart}
+              onClick={(e) => {
+                e.stopPropagation();
+                goToChart(e);
+              }}
               title={`Open ${name} in PointClickCare`}
             >
               {name}
@@ -154,6 +158,8 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
 
 
         {expanded && canAct && (
+          // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+          <div onClick={(e) => e.stopPropagation()}>
           <FindingTrail
             actions={activity.actions}
             comments={activity.comments}
@@ -171,6 +177,7 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             pccClientId={pccClientId}
             trackType={trackType}
           />
+          </div>
         )}
       </div>
 
@@ -186,47 +193,30 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
             data-track="report_24hr_finding_trail_toggled"
             data-track-prop-finding-type={trackType}
           >
-            {/* Badges are STATE, not actions — they say what already happened
-                so the row can be read without opening it. */}
-            {hasNote && (
-              <span class="thr__badge thr__badge--note" title="Super found a possible resolution note">
-                note
-              </span>
-            )}
-            {commentCount > 0 && (
-              <span
-                class="thr__badge"
-                title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
-              >
-                {commentCount} 💬
-              </span>
-            )}
+            {/* A LABEL, not a bare chevron. The glyph alone was invisible —
+                nobody knew the row opened. "Comments" is a noun, so it invites
+                a look without demanding an action the way "Sign off" did. */}
             {isResolved && (
               <span class="thr__badge thr__badge--done" title="Resolved">
                 ✓ Resolved
               </span>
             )}
+            {hasNote && (
+              <span class="thr__badge thr__badge--note" title="A progress note that may relate to this finding">
+                note
+              </span>
+            )}
+            <span class="thr__disclose-label">
+              {commentCount > 0
+                ? `${commentCount} comment${commentCount === 1 ? '' : 's'}`
+                : 'Comments'}
+            </span>
             <span class={`thr__chevron${expanded ? ' thr__chevron--open' : ''}`} aria-hidden="true">
               ⌄
             </span>
           </button>
         )}
 
-        {href && (
-          <a
-            class="thr__row-open"
-            href={href}
-            onClick={goToChart}
-            aria-label={`Open ${name} in PointClickCare`}
-            title="Open in PointClickCare"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M7 17L17 7" />
-              <polyline points="7 7 17 7 17 17" />
-            </svg>
-          </a>
-        )}
       </div>
 
       {noteOpen && (

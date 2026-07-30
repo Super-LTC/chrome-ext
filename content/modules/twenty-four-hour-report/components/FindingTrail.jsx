@@ -119,7 +119,7 @@ export function FindingTrail({
 
       {hasNote && (
         <div class="thr__evidence">
-          <span class="thr__evidence-label">Super found a possible resolution note</span>
+          <span class="thr__evidence-label">Related progress note</span>
           {noteSummary && <span class="thr__evidence-summary">{noteSummary}</span>}
           <button
             type="button"
@@ -238,19 +238,28 @@ export function FindingTrail({
             </div>
           </div>
 
+          {/* Real buttons, not text links. Inside the panel you have already
+              opted in by opening the row, so weight here is not the same as
+              weight on 295 collapsed rows — and as plain links these read as
+              afterthoughts nobody would click. */}
           <div class="thr__secondary">
             {pccClientId && (
               /* openNoteForm fires report_24hr_progress_note_opened itself, so a
                  blocked popup still counts as an attempt. */
               /* NO_TRACK */
-              <button type="button" class="thr__link" onClick={openNoteForm} disabled={submitting}>
-                + Add progress note
+              <button
+                type="button"
+                class="thr__btn thr__btn--ghost"
+                onClick={openNoteForm}
+                disabled={submitting}
+              >
+                Add progress note
               </button>
             )}
             {isResolved ? (
               <button
                 type="button"
-                class="thr__link"
+                class="thr__btn thr__btn--ghost thr__btn--push"
                 onClick={() => act('reopened')}
                 disabled={submitting}
                 data-track="report_24hr_finding_action"
@@ -262,7 +271,7 @@ export function FindingTrail({
             ) : (
               <button
                 type="button"
-                class="thr__link thr__link--resolve"
+                class="thr__btn thr__btn--resolve thr__btn--push"
                 onClick={() => act(REVIEW_STATUS.RESOLVED)}
                 disabled={submitting}
                 data-track="report_24hr_finding_action"
