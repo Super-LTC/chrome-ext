@@ -166,6 +166,16 @@ export const EVENT_SCHEMA = {
   report_24hr_filter_changed: ['filter', 'value'],
   report_24hr_finding_clicked: ['finding_type'],
   report_24hr_export_clicked: ['format'],
+  // Sign-off on a finding. `finding_type` is the category only — never patient
+  // name, room, or the finding free-text.
+  report_24hr_finding_trail_toggled: ['finding_type'],
+  report_24hr_finding_action: ['action', 'finding_type'],
+  report_24hr_finding_action_cancelled: ['action'],
+  // Fired on the open ATTEMPT, so a blocked popup still shows up as intent.
+  report_24hr_progress_note_opened: ['finding_type'],
+  report_24hr_comment_posted: ['finding_type'],
+  report_24hr_comment_deleted: [],
+  report_24hr_detection_note_opened: ['finding_type'],
 
   ard_estimator_estimated: ['duration_ms', 'has_recommendation'],
   ard_estimator_recommendation_accepted: [],

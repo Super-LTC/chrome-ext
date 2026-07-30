@@ -1149,3 +1149,728 @@
     animation: none;
   }
 }
+
+
+/* ── Sign-off, follow-up hint, and the thread ──────────────────────────────
+   One action, one link, one thread. The rail carries a single pill; the row's
+   patient name and the ↗ are the two ways to the chart, because those already
+   look like links. Everything conversational hides behind the pill. */
+
+.thr__row-rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* Patient name doubles as the chart link — underline only on hover so 295 rows
+   don't read as a wall of blue. */
+.thr__row-name--link {
+  color: #111827;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.thr__row-name--link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.thr__row-name--link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The one action. Label is a verb before, a state after — never the bare word
+   "Open", which reads as an instruction to open the chart. */
+.thr__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__pill:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.thr__pill:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.thr__pill--done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.thr__pill--done:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.thr__pill-check {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.thr__pill-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.thr__pill--done .thr__pill-count {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* ── Follow-up hint ─────────────────────────────────────────────────────────
+   Inline under the finding, not a second pill in the rail: it is context for
+   the decision, not a competing action. Dismissible, because a suggestion you
+   have already judged should stop taking up space. */
+
+.thr__followup {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-left: 2px solid #93c5fd;
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.thr__followup-icon {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
+.thr__followup-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.thr__followup-text em {
+  font-style: normal;
+  color: #334155;
+}
+
+.thr__followup-link {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.thr__followup-link:hover { color: #1e40af; }
+
+.thr__followup-dismiss {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #94a3b8;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.thr__followup-dismiss:hover { background: #e2e8f0; color: #475569; }
+
+/* ── Thread ────────────────────────────────────────────────────────────────*/
+
+.thr__trail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.thr__trail-empty {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.thr__trail-error {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.thr__thread {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.thr__thread-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.thr__avatar {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thr__thread-body { flex: 1 1 auto; min-width: 0; }
+
+.thr__thread-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.thr__thread-who {
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.thr__thread-verb {
+  font-size: 12px;
+  color: #15803d;
+  font-weight: 600;
+}
+
+.thr__thread-time {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.thr__thread-delete {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #9ca3af;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.thr__thread-item:hover .thr__thread-delete,
+.thr__thread-delete:focus-visible { opacity: 1; }
+
+.thr__thread-delete:hover { color: #b91c1c; }
+
+.thr__thread-text {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── Composer ──────────────────────────────────────────────────────────────
+   The action lives next to the comment box, and swaps to "Comment" the moment
+   you type — so one control is always the obvious next step. */
+
+.thr__composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.thr__composer-input {
+  flex: 1 1 auto;
+  min-height: 32px;
+  max-height: 120px;
+  padding: 7px 9px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #111827;
+  resize: vertical;
+}
+
+.thr__composer-input::placeholder { color: #9ca3af; }
+
+.thr__composer-input:focus-visible {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.thr__composer-input:disabled { background: #f9fafb; color: #9ca3af; }
+
+.thr__composer-actions { flex: 0 0 auto; }
+
+.thr__btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__btn:disabled { opacity: 0.55; cursor: default; }
+
+.thr__btn--primary {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.thr__btn--primary:not(:disabled):hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+.thr__btn--ghost {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.thr__btn--ghost:not(:disabled):hover { background: #f9fafb; color: #111827; }
+
+.thr__btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* ── Note modal ────────────────────────────────────────────────────────────
+   The one dialog that earns stacking on the panel: a note is prose, and
+   inlining it would blow out the row. Reading it here keeps your place in a
+   295-row list. */
+
+.thr__modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+  animation: thr-fade 0.12s ease-out;
+}
+
+.thr__modal {
+  width: min(620px, 100%);
+  max-height: min(78vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
+  animation: thr-rise 0.14s ease-out;
+}
+
+@keyframes thr-fade { from { opacity: 0; } }
+@keyframes thr-rise { from { opacity: 0; transform: translateY(6px); } }
+
+.thr__modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+
+.thr__modal-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.thr__modal-title {
+  margin: 3px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.thr__modal-when {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.thr__modal-close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #6b7280;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.thr__modal-close:hover { background: #f3f4f6; color: #111827; }
+
+.thr__modal-summary {
+  margin: 0;
+  padding: 0 18px 12px;
+  font-size: 13px;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.thr__modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 18px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+}
+
+.thr__modal-note {
+  margin: 0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #374151;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thr__modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px 16px;
+}
+
+/* ── Disclosure rail ───────────────────────────────────────────────────────
+   The row shows STATE. Badges report what already happened; the chevron opens
+   the panel and commits you to nothing. No verbs out here — 295 rows each
+   demanding an action is what made the earlier "Sign off" pill read as scary. */
+
+.thr__disclose {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.thr__disclose:hover { background: #f8fafc; border-color: #e5e7eb; }
+.thr__disclose:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+.thr__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.thr__badge--note { background: #eff6ff; color: #1d4ed8; }
+.thr__badge--done { background: #f0fdf4; color: #15803d; }
+
+.thr__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 0.15s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__row--clickable:hover .thr__chevron {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.thr__chevron--open { transform: rotate(180deg); }
+
+/* ── Machine-found evidence ────────────────────────────────────────────────
+   Named in words at the top of the panel. It is context for the human's
+   decision, not a peer of it — so it sits above the thread, not in it. */
+
+.thr__evidence {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.thr__evidence-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.thr__evidence-summary {
+  flex: 1 1 140px;
+  min-width: 0;
+  color: #334155;
+  font-size: 13px;
+}
+
+.thr__evidence-link {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.thr__evidence-link:hover { color: #1e40af; }
+
+/* ── Secondary actions ─────────────────────────────────────────────────────
+   Text links, deliberately quieter than the Comment button: resolving is the
+   option, commenting is the default. */
+
+.thr__secondary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.thr__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #6b7280;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.thr__link:hover { color: #111827; text-decoration: underline; text-underline-offset: 2px; }
+.thr__link:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+.thr__link:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 3px; }
+
+.thr__link--resolve { margin-left: auto; color: #15803d; }
+.thr__link--resolve:hover { color: #166534; }
+
+/* ── Post-note prompt ──────────────────────────────────────────────────────
+   We cannot see what she wrote in PCC, so we ask the only question we can
+   honestly ask and record her answer. */
+
+.thr__prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.thr__prompt-text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+.thr__prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Row is the click target ───────────────────────────────────────────────
+   A lone chevron on the right was invisible — nobody knew the row opened. The
+   whole card toggles now; the patient name and the open panel stop propagation
+   so they keep their own behaviour. */
+
+.thr__row--clickable { cursor: pointer; }
+.thr__row--clickable:hover { border-color: #cbd5e1; background: #fcfdff; }
+
+/* And the disclosure carries a WORD. "Comments" is a noun, so it invites a
+   look without demanding an action the way the old "Sign off" pill did. */
+.thr__disclose-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.thr__disclose:hover .thr__disclose-label { color: #1d4ed8; }
+.thr__disclose:hover .thr__chevron { color: #1d4ed8; }
+
+/* Footer actions sit apart from the composer so they read as decisions, not
+   as part of writing a comment. */
+.thr__secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.thr__btn--push { margin-left: auto; }
+
+.thr__btn--resolve {
+  border: 1px solid #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.thr__btn--resolve:not(:disabled):hover {
+  background: #dcfce7;
+  border-color: #4ade80;
+  color: #166534;
+}
+
+/* ── @-mention autocomplete ────────────────────────────────────────────────*/
+
+.thr__mention {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.thr__mention .thr__composer-input { width: 100%; box-sizing: border-box; }
+
+.thr__mention-list {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  width: min(320px, 100%);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.25);
+}
+
+/* Opens UPWARD: the composer sits at the bottom of the panel, and a downward
+   list would fall outside the scroll container. */
+
+.thr__mention-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thr__mention-item--on { background: #eff6ff; }
+
+.thr__mention-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.thr__mention-email {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An empty result is a STATE worth showing. Rendering nothing made a working
+   picker look broken when the search simply had no hits. */
+.thr__mention-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}
