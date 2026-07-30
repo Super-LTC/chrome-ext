@@ -21,6 +21,9 @@ export function useFindingActivity({ reportId, findingId }) {
   const [actions, setActions] = useState(null); // null = never loaded
   const [comments, setComments] = useState(null); // null = never loaded
   const [reviewStatus, setReviewStatus] = useState(undefined); // undefined = unknown
+  // Server truth for the follow-up annotation. The row's own `finding.followup`
+  // comes from the list payload and goes stale the moment a note is linked.
+  const [followup, setFollowup] = useState(undefined);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -43,6 +46,7 @@ export function useFindingActivity({ reportId, findingId }) {
       setActions(Array.isArray(data.actions) ? data.actions : []);
       setComments(Array.isArray(data.comments) ? data.comments : []);
       setReviewStatus(data.reviewStatus);
+      setFollowup(data.followup ?? null);
       loadedRef.current = true;
     } catch (err) {
       console.error('[24HR] finding activity fetch failed', err);
@@ -147,6 +151,7 @@ export function useFindingActivity({ reportId, findingId }) {
     actions,
     comments,
     reviewStatus,
+    followup,
     loading,
     submitting,
     error,
