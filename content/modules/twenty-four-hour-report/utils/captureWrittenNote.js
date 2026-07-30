@@ -46,11 +46,47 @@ export async function snapshotNoteIds(pccClientId) {
 }
 
 /**
+ * Read a note id out of a popup URL, but only if that URL is the note FORM for
+ * THIS resident.
+ *
+ * The naive version — match `ESOLpnid=(\d+)` anywhere — captures a note she
+ * merely opened to read. PCC's note window is where a nurse navigates: she
+ * clicks "Add progress note", meets the e-signature attestation, and goes to
+ * look at an existing note first. That note's id would then be recorded as the
+ * one she wrote, on a finding about a different resident, in a sign-off trail.
+ *
+ * So both halves must hold: the page is `newipn.jsp`, and its `ESOLclientid`
+ * is the resident whose finding we started from.
+ *
+ * @returns {string|null}
+ */
+export function noteIdFromFormUrl(href, pccClientId) {
+  if (!href || !pccClientId) return null;
+  let url;
+  try {
+    url = new URL(href, window.location.origin);
+  } catch {
+    return null;
+  }
+  if (!/\/newipn\.jsp$/i.test(url.pathname)) return null;
+  if (url.searchParams.get('ESOLclientid') !== String(pccClientId)) return null;
+
+  const pnid = url.searchParams.get('ESOLpnid');
+  // -1 is the blank form; a real id means a note now exists.
+  if (!pnid || pnid === '-1' || !/^\d{1,12}$/.test(pnid)) return null;
+  return pnid;
+}
+
+/**
  * @returns {Promise<{pnid: string, via: 'url'|'list'}|null>}
  */
 export async function captureWrittenNote({ pccClientId, urlPnid, knownIds, since }) {
-  if (urlPnid && /^\d+$/.test(urlPnid) && urlPnid !== '-1') {
-    return { pnid: urlPnid, via: 'url' };
+  // The URL said a note exists — but only trust it if it was NOT already on her
+  // list before she started. An id we had already seen is by definition not the
+  // note she just wrote, which is the same test the list path applies.
+  if (urlPnid && /^\d{1,12}$/.test(urlPnid) && urlPnid !== '-1') {
+    const known = knownIds instanceof Set ? knownIds : new Set(knownIds || []);
+    if (!known.has(urlPnid)) return { pnid: urlPnid, via: 'url' };
   }
 
   const url = notesListUrl(pccClientId);

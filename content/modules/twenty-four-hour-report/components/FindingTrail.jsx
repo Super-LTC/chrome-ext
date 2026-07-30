@@ -18,7 +18,11 @@ import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
 import { ACTION_VERB, REVIEW_STATUS, formatTrailTime, mergeTimeline, initialsOf } from '../utils/reviewStatus.js';
 import { progressNoteUrl, openPccWindow } from '../../../utils/pcc-links.js';
 import { MentionInput, toMentionTokens } from './MentionInput.jsx';
-import { captureWrittenNote, snapshotNoteIds } from '../utils/captureWrittenNote.js';
+import {
+  captureWrittenNote,
+  snapshotNoteIds,
+  noteIdFromFormUrl,
+} from '../utils/captureWrittenNote.js';
 
 function actorLabel(entry) {
   return entry.actorName || entry.actorEmail || 'Someone';
@@ -207,11 +211,14 @@ export function FindingTrail({
     const timer = setInterval(() => {
       try {
         if (!win.closed) {
-          const m = (win.location.href || '').match(/ESOLpnid=(-?\d+)/);
-          // -1 is the blank form; anything else is a note that now exists.
+          // Only the note FORM for THIS resident counts — she can navigate that
+          // window to read somebody else's note, and matching the id anywhere
+          // in any URL would record that one instead. See noteIdFromFormUrl.
+          //
           // Keep the FIRST real id we see: if this window gets reused for
           // another note, the later id belongs to a different finding.
-          if (m && m[1] !== '-1' && !urlPnid) urlPnid = m[1];
+          const seen = noteIdFromFormUrl(win.location.href, pccClientId);
+          if (seen && !urlPnid) urlPnid = seen;
         }
       } catch {
         // PCC can bounce the window through another host mid-flow; the list
