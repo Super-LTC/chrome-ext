@@ -1634,10 +1634,23 @@
 .thr__badge--done { background: #f0fdf4; color: #15803d; }
 
 .thr__chevron {
-  color: #94a3b8;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
   line-height: 1;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.thr__row--clickable:hover .thr__chevron {
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .thr__chevron--open { transform: rotate(180deg); }

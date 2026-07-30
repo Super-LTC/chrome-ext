@@ -186,16 +186,23 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
           <button
             type="button"
             class="thr__disclose"
-            onClick={toggleTrail}
+            // The row itself handles the toggle; without stopping here the
+            // click bubbles and fires it a second time, which reads as the
+            // button being broken.
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleTrail();
+            }}
             aria-expanded={expanded}
             aria-label={`Show comments and activity for ${name}`}
             title="Comments and activity"
             data-track="report_24hr_finding_trail_toggled"
             data-track-prop-finding-type={trackType}
           >
-            {/* A LABEL, not a bare chevron. The glyph alone was invisible —
-                nobody knew the row opened. "Comments" is a noun, so it invites
-                a look without demanding an action the way "Sign off" did. */}
+            {/* Badges are STATE — only rendered when there IS state. A word on
+                every row ("Comments" x295) was just noise. Discoverability
+                comes from the whole row being clickable and hover-lit, with the
+                chevron as a bordered affordance rather than a loose glyph. */}
             {isResolved && (
               <span class="thr__badge thr__badge--done" title="Resolved">
                 ✓ Resolved
@@ -206,11 +213,11 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
                 note
               </span>
             )}
-            <span class="thr__disclose-label">
-              {commentCount > 0
-                ? `${commentCount} comment${commentCount === 1 ? '' : 's'}`
-                : 'Comments'}
-            </span>
+            {commentCount > 0 && (
+              <span class="thr__disclose-label">
+                {commentCount} comment{commentCount === 1 ? '' : 's'}
+              </span>
+            )}
             <span class={`thr__chevron${expanded ? ' thr__chevron--open' : ''}`} aria-hidden="true">
               ⌄
             </span>
