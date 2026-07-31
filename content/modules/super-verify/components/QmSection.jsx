@@ -1,32 +1,55 @@
 import { useState } from 'preact/hooks';
 import { openItemInPcc } from '../lib/view-item.js';
 import { dedupeEvidence } from '../lib/verify-derive.js';
+import { itemLabel, groupEvidence, evidenceItemCodes } from '../lib/evidence-model.js';
 
-function evidenceItems(measure) {
-  return [...new Set((measure.evidence || []).map((e) => e.mdsItem).filter(Boolean))];
-}
-
-function EvidenceChips({ measure }) {
+/**
+ * Evidence, grouped by the assessment each value was read from — the
+ * "compared against what?" answer. See lib/evidence-model.js for why this was
+ * already in the payload and merely unrendered.
+ */
+function Evidence({ measure, assessId }) {
   const ev = dedupeEvidence(measure.evidence);
   if (!ev.length) return null;
+  const { summaries, groups } = groupEvidence(ev, assessId);
+
   return (
     <div className="svq-evid">
-      {ev.map((e, i) => (
-        <span key={i} className="svq-ev" title={e.note || ''}>
-          <span className="svq-ev__i">{e.mdsItem}</span>={e.value}
-        </span>
+      {summaries.map((e, i) => (
+        <div key={`sum-${i}`} className="svq-ev-sum">
+          {e.note || `${e.mdsItem} = ${e.value}`}
+        </div>
+      ))}
+      {groups.map((g) => (
+        <div key={g.id} className="svq-ev-grp">
+          <div className="svq-ev-grp__lbl">
+            {g.isTarget ? 'This MDS' : 'Compared with'}
+            {g.label ? ` · ${g.label}` : ''}
+          </div>
+          <div className="svq-ev-grp__rows">
+            {g.rows.map((e, i) => (
+              <span key={i} className="svq-ev" title={e.note || ''}>
+                <span className="svq-ev__i">{itemLabel(e.mdsItem)}</span>
+                <span className="svq-ev__c">{e.mdsItem}</span>
+                <span className="svq-ev__v">{e.value}</span>
+              </span>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
 }
 
 function ViewAct({ measure, assessId }) {
-  const first = evidenceItems(measure)[0];
+  const first = evidenceItemCodes(measure)[0];
   if (!first) return null;
   return (
     <div className="svq-acts">
       {/* NO_TRACK — opens the measure's MDS item in PCC */}
-      <button className="sv-btn" onClick={() => openItemInPcc(assessId, first)}>View {first}</button>
+      <button className="sv-btn" onClick={() => openItemInPcc(assessId, first)}>
+        View {itemLabel(first)}
+      </button>
     </div>
   );
 }
@@ -35,13 +58,20 @@ function ViewAct({ measure, assessId }) {
 // the badge + accent. New triggers additionally show the facility count delta.
 function MeasureCard({ measure, tone, assessId }) {
   const fc = measure.facilityCount;
-  const items = evidenceItems(measure);
+  const items = evidenceItemCodes(measure);
   return (
     <div className={`sv-card svq-card ${tone === 'clear' ? 'is-clear' : 'is-trig'}`}>
       <div className="svq-head">
         <div>
           <div className="svq-title">{measure.label}</div>
-          <div className="svq-mid">{[measure.id, items.join(' / ')].filter(Boolean).join(' · ')}</div>
+          {/* Codes only, and capped: DFS scores 10 GG items, so joining them all
+              produced a line of raw codes wider than the card. The full set is
+              in the evidence groups below, labelled. */}
+          <div className="svq-mid">
+            {[measure.id, items.slice(0, 3).join(' / ') + (items.length > 3 ? ` +${items.length - 3}` : '')]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
         </div>
         <span className={`sv-b ${tone === 'clear' ? 'sv-b--ok' : 'sv-b--warn'}`}>
           {tone === 'clear' ? 'Clearing' : 'New trigger'}
@@ -60,7 +90,7 @@ function MeasureCard({ measure, tone, assessId }) {
       )}
       {tone !== 'new' && measure.headline ? <div className="svq-clear">{measure.headline}</div> : null}
 
-      <EvidenceChips measure={measure} />
+      <Evidence measure={measure} assessId={assessId} />
       <ViewAct measure={measure} assessId={assessId} />
     </div>
   );
