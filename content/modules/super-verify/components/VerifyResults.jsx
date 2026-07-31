@@ -153,7 +153,14 @@ export function VerifyResults({ data, assessId, patientId, onRescan, onClose }) 
         <DfsCallout dfs={dfs} facilityName={facilityName} orgSlug={orgSlug} />
 
         {data?.qm && (
-          <QmSection groups={qmGroups} totalMeasures={totalMeasures} assessId={assessId} />
+          <QmSection
+            groups={qmGroups}
+            totalMeasures={totalMeasures}
+            assessId={assessId}
+            /* The DFS callout above already states observed vs expected; don't
+               repeat it as an evidence row inside the measure card. */
+            summariesHandled={!!dfs?.completed}
+          />
         )}
 
         <CodingSection
