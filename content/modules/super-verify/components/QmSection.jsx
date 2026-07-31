@@ -98,12 +98,21 @@ function MeasureCard({ measure, tone, assessId }) {
         </span>
       </div>
 
+      {/* This count is RESIDENTS FACILITY-WIDE, and it has to say so. The card
+          also carries per-item score changes ("Eating 6 → 5"), so without a unit
+          there are two identical-looking X → Y patterns meaning entirely
+          different things — and they run in opposite directions, 7 → 8 being bad
+          because it rises and 6 → 5 being bad because it falls. Direction is no
+          help; the noun is. */}
       {tone === 'new' && fc && (
         <div className="svq-delta">
           <div className="svq-nums">
             <span className="svq-c">{fc.current}</span>
             <span className="svq-a">→</span>
             <span className="svq-x">{fc.ifLocked}</span>
+            <span className="svq-unit">
+              resident{fc.ifLocked === 1 ? '' : 's'} facility-wide
+            </span>
           </div>
           {measure.headline ? <div className="svq-cap">{measure.headline}</div> : null}
         </div>
