@@ -98,26 +98,28 @@ function MeasureCard({ measure, tone, assessId }) {
         </span>
       </div>
 
-      {/* This count is RESIDENTS FACILITY-WIDE, and it has to say so. The card
-          also carries per-item score changes ("Eating 6 → 5"), so without a unit
-          there are two identical-looking X → Y patterns meaning entirely
-          different things — and they run in opposite directions, 7 → 8 being bad
-          because it rises and 6 → 5 being bad because it falls. Direction is no
-          help; the noun is. */}
+      {/* The SENTENCE leads, the count follows.
+          The facility count used to be the hero — two big numbers in a shaded
+          box at the top of every new-trigger card. But it answers "how many
+          OTHER residents are in this measure", which is context; the nurse is
+          deciding about THIS resident, and that was the small print underneath.
+          It also has to name its unit: the card now carries per-item score
+          changes too, so an unlabelled 7 → 8 sat next to 6 → 5 meaning something
+          entirely different — and direction can't separate them, since 7 → 8 is
+          bad because it rises and 6 → 5 is bad because it falls. */}
+      {measure.headline ? (
+        <div className={tone === 'new' ? 'svq-lede' : 'svq-clear'}>{measure.headline}</div>
+      ) : null}
       {tone === 'new' && fc && (
-        <div className="svq-delta">
-          <div className="svq-nums">
-            <span className="svq-c">{fc.current}</span>
-            <span className="svq-a">→</span>
-            <span className="svq-x">{fc.ifLocked}</span>
-            <span className="svq-unit">
-              resident{fc.ifLocked === 1 ? '' : 's'} facility-wide
-            </span>
-          </div>
-          {measure.headline ? <div className="svq-cap">{measure.headline}</div> : null}
+        <div className="svq-fac">
+          <span className="svq-c">{fc.current}</span>
+          <span className="svq-a">→</span>
+          <span className="svq-x">{fc.ifLocked}</span>
+          <span className="svq-unit">
+            resident{fc.ifLocked === 1 ? '' : 's'} facility-wide in this measure
+          </span>
         </div>
       )}
-      {tone !== 'new' && measure.headline ? <div className="svq-clear">{measure.headline}</div> : null}
 
       <Evidence measure={measure} assessId={assessId} />
       <ViewAct measure={measure} assessId={assessId} />
