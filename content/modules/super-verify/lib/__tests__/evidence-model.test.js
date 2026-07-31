@@ -171,3 +171,25 @@ describe('pairEvidence', () => {
     expect(pairEvidence(ADL_DECLINE_EVIDENCE, TARGET).summaries).toEqual([]);
   });
 });
+
+describe('label vs code (the "I2300 I2300" bug)', () => {
+  it('itemLabel returns the code itself when there is no friendly name', () => {
+    // The renderer relies on this equality to decide whether to print a code
+    // span at all — most measures are not GG, so this is the common path.
+    expect(itemLabel('I2300')).toBe('I2300');
+    expect(itemLabel('J1900C')).toBe('J1900C');
+  });
+
+  it('and a real name when there is one, so both are worth showing', () => {
+    expect(itemLabel('GG0130A3')).not.toBe('GG0130A3');
+  });
+
+  it('pairEvidence rows carry label === code for non-GG items', () => {
+    const nonGg = [
+      { mdsItem: 'I2300', value: '1', assessmentId: TARGET, assessmentArdDate: '2026-06-09', assessmentType: 'OBRA Quarterly' },
+      { mdsItem: 'I2300', value: '0', assessmentId: PRIOR, assessmentArdDate: '2026-04-30', assessmentType: 'OBRA Quarterly' },
+    ];
+    const { comparison } = pairEvidence(nonGg, TARGET);
+    expect(comparison.rows[0].label).toBe(comparison.rows[0].code);
+  });
+});

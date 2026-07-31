@@ -30,7 +30,8 @@ function Evidence({ measure, assessId }) {
           {comparison.rows.map((r) => (
             <div key={r.key} className="svq-cmp__row">
               <span className="svq-cmp__lbl">{r.label}</span>
-              <span className="svq-cmp__code">{r.code}</span>
+              {/* Same rule as the chips: no code when it IS the label. */}
+              <span className="svq-cmp__code">{r.label === r.code ? '' : r.code}</span>
               {r.from != null && r.to != null ? (
                 <span className="svq-cmp__d">
                   <b>{r.from}</b> <span className="svq-cmp__ar">→</span> <b className="is-now">{r.to}</b>
@@ -52,13 +53,20 @@ function Evidence({ measure, assessId }) {
             {g.label ? ` · ${g.label}` : ''}
           </div>
           <div className="svq-ev-grp__rows">
-            {g.rows.map((e, i) => (
-              <span key={i} className="svq-ev" title={e.note || ''}>
-                <span className="svq-ev__i">{itemLabel(e.mdsItem)}</span>
-                <span className="svq-ev__c">{e.mdsItem}</span>
-                <span className="svq-ev__v">{displayValue(e.value)}</span>
-              </span>
-            ))}
+            {/* The code only appears when there's a NAME to distinguish it from.
+                itemLabel() falls back to the code itself for anything without a
+                friendly name — which is most measures, since only GG items have
+                one — and rendering both then printed "I2300 I2300 1". */}
+            {g.rows.map((e, i) => {
+              const label = itemLabel(e.mdsItem);
+              return (
+                <span key={i} className="svq-ev" title={e.note || ''}>
+                  <span className="svq-ev__i">{label}</span>
+                  {label !== e.mdsItem && <span className="svq-ev__c">{e.mdsItem}</span>}
+                  <span className="svq-ev__v">{displayValue(e.value)}</span>
+                </span>
+              );
+            })}
           </div>
         </div>
       ))}
