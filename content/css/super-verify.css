@@ -323,7 +323,9 @@
   display: flex; align-items: center; gap: 11px; margin-top: 11px; padding: 9px 11px;
   border-radius: var(--super-radius-md); background: var(--super-gray-50); border: 1px solid var(--super-gray-100);
 }
-.svq-nums { font-family: var(--super-font-mono); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.svq-nums { font-family: var(--super-font-mono); font-weight: 600; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* The unit, so this count can't be read as a score change. */
+.svq-unit { font-family: var(--super-font); font-size: 11px; font-weight: 600; color: var(--super-gray-500); letter-spacing: 0; }
 .svq-c { font-size: 21px; color: var(--super-gray-400); }
 .svq-a { color: var(--super-gray-300); }
 .svq-x { font-size: 21px; color: var(--super-gray-700); }
@@ -331,9 +333,42 @@
 .svq-card.is-clear .svq-x { color: var(--super-gray-400); }
 .svq-cap { font-size: 11.5px; color: var(--super-gray-600); line-height: 1.3; }
 .svq-cap b { color: var(--super-gray-900); }
-.svq-evid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.svq-ev { font-family: var(--super-font-mono); font-size: 10.5px; border: 1px solid var(--super-gray-200); border-radius: var(--super-radius); padding: 3px 7px; color: var(--super-gray-700); }
-.svq-ev__i { color: var(--super-primary-dark); font-weight: 600; }
+.svq-evid { display: flex; flex-direction: column; gap: 9px; margin-top: 10px; }
+/* Computed summary (DFS observed vs expected) — a sentence, not a code chip. */
+.svq-ev-sum {
+  font-size: 12px; color: var(--super-gray-700); line-height: 1.45;
+  padding: 7px 9px; border-radius: var(--super-radius-md);
+  background: var(--super-gray-50); border: 1px solid var(--super-gray-100);
+}
+.svq-ev-grp__lbl {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--super-gray-400); margin-bottom: 4px;
+}
+/* One row per item: name, code, then the change. The baseline is stated once
+   in the label above, not repeated per row. */
+.svq-cmp__row {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; gap: 8px;
+  padding: 5px 0; border-top: 1px solid var(--super-gray-100);
+}
+.svq-cmp__row:first-of-type { border-top: none; }
+.svq-cmp__lbl { font-size: 12.5px; color: var(--super-gray-800); font-weight: 600; }
+.svq-cmp__code { font-family: var(--super-font-mono); font-size: 9.5px; color: var(--super-gray-400); }
+.svq-cmp__d { font-family: var(--super-font-mono); font-size: 13px; color: var(--super-gray-500); white-space: nowrap; }
+.svq-cmp__ar { color: var(--super-gray-300); margin: 0 2px; }
+/* The value after this MDS locks is the one being decided on. */
+.svq-cmp__d .is-now { color: var(--super-review); font-weight: 700; }
+.svq-card.is-clear .svq-cmp__d .is-now { color: #047857; }
+.svq-ev-grp__rows { display: flex; flex-wrap: wrap; gap: 6px; }
+.svq-ev {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  font-size: 11px; border: 1px solid var(--super-gray-200);
+  border-radius: var(--super-radius); padding: 3px 7px; color: var(--super-gray-700);
+}
+/* The name leads — it's what a nurse reads. The code stays for whoever wants
+   it, demoted; the value is what's being compared, so it carries the weight. */
+.svq-ev__i { color: var(--super-gray-800); font-weight: 600; }
+.svq-ev__c { font-family: var(--super-font-mono); font-size: 9.5px; color: var(--super-gray-400); }
+.svq-ev__v { font-family: var(--super-font-mono); font-weight: 700; color: var(--super-primary-dark); }
 .svq-acts { display: flex; gap: 7px; margin-top: 10px; }
 .svq-clear { margin-top: 10px; font-size: 12.5px; color: var(--super-gray-700); line-height: 1.4; }
 .svq-clear b { color: var(--super-gray-900); }
@@ -469,3 +504,12 @@
 .sv-error-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--super-mismatch-bg); color: var(--super-mismatch); font-weight: 800; font-size: 22px; display: grid; place-items: center; }
 .sv-error-msg { margin: 0; max-width: 420px; color: var(--super-gray-700); }
 .sv-error-actions { display: flex; gap: 10px; }
+/* The lede: the backend's plain-language verdict, which is the point of the card. */
+.svq-lede { margin-top: 10px; font-size: 13.5px; line-height: 1.45; color: var(--super-gray-900); font-weight: 600; }
+/* Facility context, demoted to one quiet line under it. */
+.svq-fac { margin-top: 7px; display: flex; align-items: baseline; gap: 6px; font-family: var(--super-font-mono); font-size: 12.5px; }
+.svq-fac .svq-c { font-size: 12.5px; color: var(--super-gray-400); font-weight: 600; }
+.svq-fac .svq-a { color: var(--super-gray-300); }
+.svq-fac .svq-x { font-size: 12.5px; color: var(--super-gray-700); font-weight: 700; }
+.svq-card.is-trig .svq-fac .svq-x { color: var(--super-review); }
+.svq-fac .svq-unit { font-family: var(--super-font); font-size: 11.5px; font-weight: 500; color: var(--super-gray-500); }
