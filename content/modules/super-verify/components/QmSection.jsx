@@ -11,14 +11,22 @@ import { itemLabel, displayValue, pairEvidence, evidenceItemCodes } from '../lib
  * once. Falls back to per-assessment groups when there's no unambiguous single
  * prior to compare against.
  */
-function Evidence({ measure, assessId }) {
+function Evidence({ measure, assessId, summariesHandled }) {
   const ev = dedupeEvidence(measure.evidence);
   if (!ev.length) return null;
   const { summaries, comparison, groups } = pairEvidence(ev, assessId);
 
+  // `summariesHandled` = a callout above the panel already states this measure's
+  // computed summary. Today that's DFS: the callout renders "35 · target 38 ·
+  // 3 short" with a progress bar and the outcome drill-in, and this row would
+  // repeat the same three numbers as "observed=35, expected=38.44, delta=-3.44"
+  // a few hundred pixels below it. The callout is a strict superset, so the row
+  // is dropped rather than the callout.
+  const shown = summariesHandled ? [] : summaries;
+
   return (
     <div className="svq-evid">
-      {summaries.map((e, i) => (
+      {shown.map((e, i) => (
         <div key={`sum-${i}`} className="svq-ev-sum">
           {e.note || `${e.mdsItem} = ${e.value}`}
         </div>
@@ -88,8 +96,8 @@ function ViewAct({ measure, assessId }) {
 }
 
 // One card; `headline` is rendered verbatim (backend-authored). `tone` drives
-// the badge + accent. New triggers additionally show the facility count delta.
-function MeasureCard({ measure, tone, assessId }) {
+// the badge + accent.
+function MeasureCard({ measure, tone, assessId, summariesHandled }) {
   const fc = measure.facilityCount;
   return (
     <div className={`sv-card svq-card ${tone === 'clear' ? 'is-clear' : 'is-trig'}`}>
@@ -106,15 +114,11 @@ function MeasureCard({ measure, tone, assessId }) {
         </span>
       </div>
 
-      {/* The SENTENCE leads, the count follows.
-          The facility count used to be the hero — two big numbers in a shaded
-          box at the top of every new-trigger card. But it answers "how many
-          OTHER residents are in this measure", which is context; the nurse is
-          deciding about THIS resident, and that was the small print underneath.
-          It also has to name its unit: the card now carries per-item score
-          changes too, so an unlabelled 7 → 8 sat next to 6 → 5 meaning something
-          entirely different — and direction can't separate them, since 7 → 8 is
-          bad because it rises and 6 → 5 is bad because it falls. */}
+      {/* Verdict, then the count as its own labelled line.
+          `classifyQmVerify` used to bury the numbers mid-sentence — "…newly
+          flags this resident — facility 12 → 13" — which reads as cryptic, and
+          duplicated this line. The backend now states the verdict in words and
+          leaves the numbers here, where they can carry a unit. */}
       {measure.headline ? (
         <div className={tone === 'new' ? 'svq-lede' : 'svq-clear'}>{measure.headline}</div>
       ) : null}
@@ -129,7 +133,7 @@ function MeasureCard({ measure, tone, assessId }) {
         </div>
       )}
 
-      <Evidence measure={measure} assessId={assessId} />
+      <Evidence measure={measure} assessId={assessId} summariesHandled={summariesHandled} />
       <ViewAct measure={measure} assessId={assessId} />
     </div>
   );
@@ -165,7 +169,7 @@ function Disclosure({ title, measures }) {
   );
 }
 
-export function QmSection({ groups, totalMeasures, assessId }) {
+export function QmSection({ groups, totalMeasures, assessId, summariesHandled }) {
   const { newTrigger, clearing, locked, incomplete, clinical, firingCount } = groups;
   const nothing = newTrigger.length === 0 && clearing.length === 0 && locked.length === 0;
 
@@ -183,12 +187,12 @@ export function QmSection({ groups, totalMeasures, assessId }) {
 
         {newTrigger.length > 0 && <div className="svq-grouplbl svq-grouplbl--alert">New triggers — preventable</div>}
         {newTrigger.map((m) => (
-          <MeasureCard key={m.id} measure={m} tone="new" assessId={assessId} />
+          <MeasureCard key={m.id} measure={m} tone="new" assessId={assessId} summariesHandled={summariesHandled} />
         ))}
 
         {clearing.length > 0 && <div className="svq-grouplbl svq-grouplbl--good">Clearing from last time</div>}
         {clearing.map((m) => (
-          <MeasureCard key={m.id} measure={m} tone="clear" assessId={assessId} />
+          <MeasureCard key={m.id} measure={m} tone="clear" assessId={assessId} summariesHandled={summariesHandled} />
         ))}
 
         <Disclosure title="Already triggering · can't clear" measures={locked} />
