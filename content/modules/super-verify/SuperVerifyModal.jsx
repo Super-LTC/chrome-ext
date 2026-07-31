@@ -54,7 +54,7 @@ export const SuperVerifyModal = ({ assessId, patientId, onClose }) => {
         </header>
 
         {phase === 'done' ? (
-          <VerifyResults data={data} assessId={assessId} onRescan={retry} onClose={onClose} />
+          <VerifyResults data={data} assessId={assessId} patientId={patientId} onRescan={retry} onClose={onClose} />
         ) : (
           <div className="sv-body">
             {phase === 'scraping' && (

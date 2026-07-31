@@ -513,3 +513,38 @@
 .svq-fac .svq-x { font-size: 12.5px; color: var(--super-gray-700); font-weight: 700; }
 .svq-card.is-trig .svq-fac .svq-x { color: var(--super-review); }
 .svq-fac .svq-unit { font-family: var(--super-font); font-size: 11.5px; font-weight: 500; color: var(--super-gray-500); }
+
+/* ── DFS callout (Verify) ────────────────────────────────────────────────────
+   Echoes the QM Board's DFS card language — eyebrow, big tabular number, a
+   direction pill — at panel scale, so the same measure doesn't read as two
+   different products. */
+.svd { border: 1px solid var(--super-gray-200); border-radius: var(--super-radius-md); overflow: hidden; }
+.svd__bar { height: 3px; }
+.svd--target .svd__bar { background: linear-gradient(90deg, var(--super-primary), var(--super-primary-light)); }
+.svd--miss   .svd__bar { background: linear-gradient(90deg, var(--super-review), var(--super-review-border)); }
+.svd--met    .svd__bar { background: linear-gradient(90deg, #059669, #d1fae5); }
+.svd__body { padding: 14px 15px; }
+.svd__eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .045em; color: var(--super-gray-400); }
+.svd__hero { margin-top: 6px; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.svd__big { font-size: 36px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.svd--target .svd__big { color: var(--super-primary-dark); }
+.svd--miss   .svd__big { color: var(--super-review); }
+.svd--met    .svd__big { color: #047857; }
+.svd__vs { font-family: var(--super-font-mono); font-size: 13px; color: var(--super-gray-500); }
+.svd__vs b { color: var(--super-gray-800); font-weight: 700; }
+.svd__pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 9px; font-size: 11.5px; font-weight: 700; }
+.svd__pill--target { background: #eef2ff; color: var(--super-primary-dark); }
+.svd__pill--risk { background: var(--super-review-bg); color: #92400e; }
+.svd__pill--miss { background: var(--super-review-bg); color: #92400e; }
+.svd__pill--met { background: #ecfdf5; color: #047857; }
+.svd__say { margin-top: 9px; font-size: 12.5px; line-height: 1.45; color: var(--super-gray-600); }
+.svd__say b { color: var(--super-gray-900); font-weight: 600; }
+/* Scale starts at 10 — ten GG items scored 1–6 each. */
+.svd__track { margin-top: 11px; height: 6px; border-radius: 999px; background: var(--super-gray-100); position: relative; }
+.svd__fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; }
+.svd--miss .svd__fill { background: var(--super-review); }
+.svd--met  .svd__fill { background: #059669; }
+.svd__mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--super-gray-800); border-radius: 2px; }
+.svd__scale { margin-top: 5px; display: flex; justify-content: space-between; font-family: var(--super-font-mono); font-size: 10px; color: var(--super-gray-400); }
+.svd__foot { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+.svd__hint { font-size: 11px; color: var(--super-gray-400); }
