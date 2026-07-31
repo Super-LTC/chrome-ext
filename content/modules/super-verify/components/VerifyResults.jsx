@@ -11,6 +11,8 @@ import { isPaymentApplicable, formatPaymentRates } from '../../../utils/payment.
 import { PaymentCard } from '../../pdpm-analyzer/components/PaymentCard.jsx';
 import { useToasts } from './Toasts.jsx';
 import { QmSection } from './QmSection.jsx';
+import { DfsCallout } from './DfsCallout.jsx';
+import { useDfsPatient } from '../hooks/useDfsPatient.js';
 import { CodingSection } from './CodingSection.jsx';
 import { QueriesSection } from './QueriesSection.jsx';
 import { InterviewsSection } from './InterviewsSection.jsx';
@@ -90,9 +92,13 @@ function Reimbursement({ data }) {
   );
 }
 
-export function VerifyResults({ data, assessId, onRescan, onClose }) {
+export function VerifyResults({ data, assessId, patientId, onRescan, onClose }) {
   const [toast, ToastHost] = useToasts();
   const scrollRef = useRef(null);
+
+  // DFS is fetched separately so the panel never waits on it — see useDfsPatient.
+  const { facilityName, orgSlug } = window.getCurrentParams?.() || {};
+  const { dfs } = useDfsPatient({ patientId, facilityName, orgSlug });
 
   // Local UI state for live recompute of tiles + section counts.
   const [decisions, setDecisions] = useState({}); // detection index → 'dismiss'|null
@@ -141,6 +147,10 @@ export function VerifyResults({ data, assessId, onRescan, onClose }) {
         </div>
 
         <Reimbursement data={data} />
+
+        {/* Above the QM measures on purpose: on an admission the target is the
+            forward-looking number a nurse can still act on, so it leads. */}
+        <DfsCallout dfs={dfs} facilityName={facilityName} orgSlug={orgSlug} />
 
         {data?.qm && (
           <QmSection groups={qmGroups} totalMeasures={totalMeasures} assessId={assessId} />
