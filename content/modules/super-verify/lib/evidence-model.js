@@ -43,11 +43,35 @@ export const GG_LABELS = {
   GG0170R: 'Wheel 50 feet with two turns',
 };
 
+/**
+ * The item identity, independent of which column it was read from.
+ *
+ * The evaluator writes `${item}${column}` — the target as GG0130A3 and the
+ * prior as GG0130A1 — so the raw codes never match even though it's the same
+ * item. Resolving through the label map (a lookup against a known set, not a
+ * regex on the code's shape) recovers the base code so the two can be paired.
+ * Non-GG items fall back to the code itself, which pairs only on an exact
+ * match — safe: an unpaired row just renders on its own.
+ */
+export function baseItemKey(code) {
+  if (!code) return '';
+  return Object.keys(GG_LABELS).find((k) => code.startsWith(k)) || code;
+}
+
 /** Evidence codes carry a column suffix (GG0130A1 / GG0130A3), hence prefix match. */
 export function itemLabel(code) {
-  if (!code) return '';
-  const gg = Object.keys(GG_LABELS).find((k) => code.startsWith(k));
-  return gg ? GG_LABELS[gg] : code;
+  const base = baseItemKey(code);
+  return GG_LABELS[base] || base || '';
+}
+
+/**
+ * GG values are stored zero-padded ('05'), but clinicians say "a 5" and TSI
+ * writes "6→5". Number() only for genuinely numeric values, so '88' (not
+ * attempted) and any non-numeric code pass through untouched.
+ */
+export function displayValue(v) {
+  const s = String(v ?? '');
+  return /^\d+$/.test(s) ? String(Number(s)) : s;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -93,6 +117,60 @@ export function groupEvidence(evidence, targetId) {
   }
   groups.sort((a, b) => Number(b.isTarget) - Number(a.isTarget));
   return { summaries, groups };
+}
+
+/**
+ * The shape SUP-253 is actually after: one row per item, "6 → 5", with the
+ * baseline named ONCE.
+ *
+ * Grouping by assessment (above) answers "compared against what?" but still
+ * leaves the nurse pairing "Eating 05" in one list with "Eating 06" in another
+ * — which is the manual diffing this was supposed to remove. TSI states it as a
+ * single fact per item; so does this.
+ *
+ * Only attempted when there is exactly ONE prior assessment: with two or more,
+ * "from" is ambiguous and a made-up arrow would be worse than two honest lists.
+ * Falls back to `groups` in that case, and whenever nothing pairs.
+ */
+export function pairEvidence(evidence, targetId) {
+  const rows = evidence || [];
+  const summaries = rows.filter((e) => isSummaryKey(e.mdsItem));
+  const items = rows.filter((e) => !isSummaryKey(e.mdsItem));
+  const target = items.filter((e) => e.assessmentId === targetId);
+  const prior = items.filter((e) => e.assessmentId !== targetId);
+  const priorIds = [...new Set(prior.map((e) => e.assessmentId))];
+
+  if (prior.length && priorIds.length === 1) {
+    const byKey = new Map();
+    for (const e of target) {
+      byKey.set(baseItemKey(e.mdsItem), {
+        key: baseItemKey(e.mdsItem),
+        label: itemLabel(e.mdsItem),
+        code: e.mdsItem,
+        to: displayValue(e.value),
+        from: null,
+      });
+    }
+    let paired = 0;
+    for (const e of prior) {
+      const k = baseItemKey(e.mdsItem);
+      const row = byKey.get(k);
+      if (row) {
+        row.from = displayValue(e.value);
+        paired += 1;
+      } else {
+        byKey.set(k, { key: k, label: itemLabel(e.mdsItem), code: e.mdsItem, to: null, from: displayValue(e.value) });
+      }
+    }
+    if (paired > 0) {
+      return {
+        summaries,
+        comparison: { baselineLabel: assessmentLabel(prior[0]), rows: [...byKey.values()] },
+        groups: [],
+      };
+    }
+  }
+  return { summaries, comparison: null, groups: groupEvidence(items, targetId).groups };
 }
 
 /** Unique real MDS item codes — drives the header line and the View button. */

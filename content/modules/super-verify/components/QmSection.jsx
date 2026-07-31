@@ -1,17 +1,20 @@
 import { useState } from 'preact/hooks';
 import { openItemInPcc } from '../lib/view-item.js';
 import { dedupeEvidence } from '../lib/verify-derive.js';
-import { itemLabel, groupEvidence, evidenceItemCodes } from '../lib/evidence-model.js';
+import { itemLabel, displayValue, pairEvidence, evidenceItemCodes } from '../lib/evidence-model.js';
 
 /**
- * Evidence, grouped by the assessment each value was read from — the
- * "compared against what?" answer. See lib/evidence-model.js for why this was
+ * What changed, and against what. See lib/evidence-model.js — all of it was
  * already in the payload and merely unrendered.
+ *
+ * Preferred shape is one row per item ("Eating 6 → 5") with the baseline named
+ * once. Falls back to per-assessment groups when there's no unambiguous single
+ * prior to compare against.
  */
 function Evidence({ measure, assessId }) {
   const ev = dedupeEvidence(measure.evidence);
   if (!ev.length) return null;
-  const { summaries, groups } = groupEvidence(ev, assessId);
+  const { summaries, comparison, groups } = pairEvidence(ev, assessId);
 
   return (
     <div className="svq-evid">
@@ -20,6 +23,28 @@ function Evidence({ measure, assessId }) {
           {e.note || `${e.mdsItem} = ${e.value}`}
         </div>
       ))}
+
+      {comparison && (
+        <div className="svq-cmp">
+          <div className="svq-ev-grp__lbl">Compared with · {comparison.baselineLabel}</div>
+          {comparison.rows.map((r) => (
+            <div key={r.key} className="svq-cmp__row">
+              <span className="svq-cmp__lbl">{r.label}</span>
+              <span className="svq-cmp__code">{r.code}</span>
+              {r.from != null && r.to != null ? (
+                <span className="svq-cmp__d">
+                  <b>{r.from}</b> <span className="svq-cmp__ar">→</span> <b className="is-now">{r.to}</b>
+                </span>
+              ) : (
+                <span className="svq-cmp__d">
+                  <b className="is-now">{r.to ?? r.from}</b>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {groups.map((g) => (
         <div key={g.id} className="svq-ev-grp">
           <div className="svq-ev-grp__lbl">
@@ -31,7 +56,7 @@ function Evidence({ measure, assessId }) {
               <span key={i} className="svq-ev" title={e.note || ''}>
                 <span className="svq-ev__i">{itemLabel(e.mdsItem)}</span>
                 <span className="svq-ev__c">{e.mdsItem}</span>
-                <span className="svq-ev__v">{e.value}</span>
+                <span className="svq-ev__v">{displayValue(e.value)}</span>
               </span>
             ))}
           </div>
@@ -58,20 +83,15 @@ function ViewAct({ measure, assessId }) {
 // the badge + accent. New triggers additionally show the facility count delta.
 function MeasureCard({ measure, tone, assessId }) {
   const fc = measure.facilityCount;
-  const items = evidenceItemCodes(measure);
   return (
     <div className={`sv-card svq-card ${tone === 'clear' ? 'is-clear' : 'is-trig'}`}>
       <div className="svq-head">
         <div>
           <div className="svq-title">{measure.label}</div>
-          {/* Codes only, and capped: DFS scores 10 GG items, so joining them all
-              produced a line of raw codes wider than the card. The full set is
-              in the evidence groups below, labelled. */}
-          <div className="svq-mid">
-            {[measure.id, items.slice(0, 3).join(' / ') + (items.length > 3 ? ` +${items.length - 3}` : '')]
-              .filter(Boolean)
-              .join(' · ')}
-          </div>
+          {/* Just the measure id. This used to join every evidence code, which
+              on DFS (10 GG items) ran wider than the card — and now that each
+              row below carries its own labelled code, it was saying it twice. */}
+          <div className="svq-mid">{measure.id}</div>
         </div>
         <span className={`sv-b ${tone === 'clear' ? 'sv-b--ok' : 'sv-b--warn'}`}>
           {tone === 'clear' ? 'Clearing' : 'New trigger'}
