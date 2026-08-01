@@ -1306,10 +1306,11 @@ const ICD10EvidencePanel = {
    * means the two can't drift — they previously did, with the per-keystroke
    * path flattening away the primary/alternate split.
    *
-   * Section order is deliberate: evidence-backed codes for this group first,
-   * Comprehend's lower-confidence alternates next, and the full library last.
-   * A coder should have to scroll past what's actually documented before
-   * reaching a code nothing in the chart supports.
+   * The search box searches everything: this group's own codes and the full
+   * ICD-10 library land in ONE list, not separate sections. Evidence-backed
+   * rows sort first because they're the likelier pick, but there is no header
+   * or divider between them and the library — as far as the coder is
+   * concerned they typed in a box and got codes back.
    */
   _renderCodeDropdownBody() {
     const q = this.codeSearchQuery;
@@ -1325,13 +1326,22 @@ const ICD10EvidencePanel = {
     const primaryShown = primary.slice(0, 10);
     const altsShown = altsOpen ? alternates.slice(0, 10) : [];
 
+    // Library hits continue the same list right under the group's own codes.
     const library = this._libraryRows();
-    const librarySection = this._renderLibrarySection(library);
-    // "No matches" now means no matches anywhere, including the library —
-    // otherwise it would contradict the library rows sitting right below it.
+    const libraryHtml = library.map(r => this._renderCodeOption({
+      code: r.code,
+      description: r.description || '',
+      evidenceKind: 'library',
+      pdpmCategory: null,
+      pdpmPoints: null,
+      pdpmCategoryName: null,
+    })).join('');
+
+    const status = this._libraryStatusHtml(library);
+    // "No matches" has to mean no matches anywhere, including the library, or
+    // it would contradict the rows sitting right under it.
     const nothingLocal = primary.length === 0 && (alternates.length === 0 || !altsOpen);
-    const showEmpty = nothingLocal && library.length === 0
-      && !this.librarySearchLoading && !librarySection;
+    const showEmpty = nothingLocal && library.length === 0 && !status;
 
     return `
       ${showEmpty ? `
@@ -1345,6 +1355,8 @@ const ICD10EvidencePanel = {
           Showing 10 of ${primary.length} — refine search to narrow
         </div>
       ` : ''}
+      ${libraryHtml}
+      ${status}
       ${alternateAll.length > 0 ? `
         <!-- NO_TRACK: pure UI disclosure toggle, no API call -->
         <button type="button" class="icd10-evidence-panel__alts-toggle ${altsOpen ? 'icd10-evidence-panel__alts-toggle--open' : ''}"
@@ -1367,7 +1379,6 @@ const ICD10EvidencePanel = {
           </div>
         ` : ''}
       ` : ''}
-      ${librarySection}
     `;
   },
 
@@ -1388,40 +1399,24 @@ const ICD10EvidencePanel = {
   },
 
   /**
-   * The "All ICD-10 codes" section. Returns '' when there is nothing to say,
-   * so the caller can tell the difference between "no section" and "section
-   * with a loading/empty state in it".
+   * A single status line for the library lookup — "Searching…" while it's in
+   * flight, an error if it couldn't be reached. Returns '' when the rows speak
+   * for themselves, so a successful search shows nothing but codes.
    */
-  _renderLibrarySection(rows) {
+  _libraryStatusHtml(rows) {
     const q = (this.codeSearchQuery || '').trim();
     if (q.length < LIBRARY_MIN_QUERY) return '';
-
-    let inner;
-    if (this.librarySearchLoading && this.librarySearchFor !== q) {
-      inner = `<div class="icd10-evidence-panel__code-option-hint">Searching…</div>`;
-    } else if (this.librarySearchError) {
-      inner = `<div class="icd10-evidence-panel__code-option-hint">Couldn't reach the ICD-10 library.</div>`;
-    } else if (rows.length === 0) {
-      if (this.librarySearchFor !== q) return '';
-      inner = `<div class="icd10-evidence-panel__code-option-hint">No library codes match "${this._escapeHtml(q)}".</div>`;
-    } else {
-      inner = rows.map(r => this._renderCodeOption({
-        code: r.code,
-        description: r.description || '',
-        evidenceKind: 'library',
-        pdpmCategory: null,
-        pdpmPoints: null,
-        pdpmCategoryName: null,
-      })).join('');
+    if (this.librarySearchError) {
+      return `<div class="icd10-evidence-panel__code-option-hint">Couldn't reach the ICD-10 library.</div>`;
     }
-
-    return `
-      <div class="icd10-evidence-panel__library-header">All ICD-10 codes</div>
-      <div class="icd10-evidence-panel__library-hint">
-        Not extracted from this chart — you're vouching for the documentation yourself.
-      </div>
-      ${inner}
-    `;
+    if (this.librarySearchFor !== q) {
+      // Results for this query aren't in yet.
+      return `<div class="icd10-evidence-panel__code-option-hint">Searching…</div>`;
+    }
+    if (rows.length >= LIBRARY_MAX_ROWS) {
+      return `<div class="icd10-evidence-panel__code-option-hint">Keep typing to narrow the list</div>`;
+    }
+    return '';
   },
 
   /**

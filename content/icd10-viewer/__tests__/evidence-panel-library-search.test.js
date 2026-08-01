@@ -136,6 +136,24 @@ describe('evidence panel — full-library code search', () => {
     expect(codes).toContain('I69.90');
   });
 
+  it('puts library hits in the same list, with no section header or divider', async () => {
+    // Product call: one search box, one list. Library results must not be
+    // fenced off behind their own heading — a coder types and gets codes.
+    window.QueryAPI.searchIcd10 = vi.fn(async () => ({
+      results: [{ code: 'E11.9', description: 'Type 2 diabetes mellitus without complications' }],
+    }));
+
+    panel._toggleCodeDropdown();
+    await typeSearch(container, 'diabetes');
+
+    expect(container.textContent).not.toMatch(/All ICD-10 codes/i);
+    expect(container.textContent).not.toMatch(/Not extracted from this chart/i);
+    expect(container.querySelector('.icd10-evidence-panel__library-header')).toBeNull();
+    // And the row itself carries no distinguishing chrome beyond the hook class.
+    const row = container.querySelector('[data-select-code="E11.9"]');
+    expect(row.className).toContain('icd10-evidence-panel__code-option');
+  });
+
   it('does not call the endpoint below the 2-char floor', async () => {
     panel._toggleCodeDropdown();
     await typeSearch(container, 'd');
