@@ -39,6 +39,15 @@ function _formatPdpmLabel(o) {
  */
 const EVIDENCE_VIEW_MODE = 'full';
 
+// Full-library ICD-10 search in the code dropdown (SUP-264).
+// The floor matches the server's — /api/extension/icd10-search returns [] below
+// 2 chars — so we don't spend a round trip to be told nothing.
+const LIBRARY_MIN_QUERY = 2;
+const LIBRARY_DEBOUNCE_MS = 250;
+// The endpoint caps at 50; showing all of them buries the evidence-backed rows
+// above under a wall of scroll.
+const LIBRARY_MAX_ROWS = 15;
+
 const ICD10EvidencePanel = {
   // State
   selectedItemId: null,
@@ -67,6 +76,19 @@ const ICD10EvidencePanel = {
   // Whether the "alternate readings" section in the dropdown is expanded.
   // Persists across renders within a group; resets on group switch.
   alternatesExpanded: false,
+  // Full-library ICD-10 search (SUP-264). The dropdown's evidence-backed rows
+  // only cover what Comprehend returned for this group; coders regularly want
+  // a specific code that was never extracted. These hold the results of
+  // GET /api/extension/icd10-search for the current query.
+  librarySearchResults: [],
+  librarySearchLoading: false,
+  librarySearchError: false,
+  // The query librarySearchResults actually correspond to. Guards against
+  // painting results under a query the user has already typed past.
+  librarySearchFor: '',
+  // True when the focused code came from the library rather than from this
+  // group's evidence. Staging such a code must not touch any annotation.
+  selectedCodeFromLibrary: false,
   itemsLoading: false,
   itemsError: null,
   itemsRetry: null,
@@ -104,7 +126,27 @@ const ICD10EvidencePanel = {
     this.codeDropdownOpen = false;
     this.codeSearchQuery = '';
     this.alternatesExpanded = false;
+    this._resetLibrarySearch();
+    this.selectedCodeFromLibrary = false;
     this.render();
+  },
+
+  /**
+   * Clear full-library search state and cancel any in-flight debounce.
+   * Bumping the token invalidates a request that's already on the wire, so a
+   * slow response can't paint stale rows into a dropdown that has since been
+   * closed or pointed at another group.
+   */
+  _resetLibrarySearch() {
+    this.librarySearchResults = [];
+    this.librarySearchLoading = false;
+    this.librarySearchError = false;
+    this.librarySearchFor = '';
+    this._librarySearchToken = (this._librarySearchToken || 0) + 1;
+    if (this._librarySearchTimer) {
+      clearTimeout(this._librarySearchTimer);
+      this._librarySearchTimer = null;
+    }
   },
 
   /**
@@ -131,6 +173,8 @@ const ICD10EvidencePanel = {
     this.codeDropdownOpen = false;
     this.codeSearchQuery = '';
     this.alternatesExpanded = false;
+    this._resetLibrarySearch();
+    this.selectedCodeFromLibrary = false;
     this.itemsLoading = false;
     this.itemsError = null;
     this.itemsRetry = null;
@@ -541,7 +585,11 @@ const ICD10EvidencePanel = {
     const code = this.selectedCode || '';
     const description = this.selectedDescription || '';
     const availableCodes = this._getAvailableCodes();
-    const hasMultipleCodes = availableCodes.length > 1;
+    // The chevron is always live now: even when this group yielded a single
+    // code, the dropdown is the way into the full ICD-10 library (SUP-264).
+    // Gating it on availableCodes.length > 1 would make library search
+    // unreachable exactly on the sparse groups that need it most.
+    const hasMultipleCodes = true;
 
     // Resolve focused leaf metadata up front — used for the header badge,
     // the alternate-detection, and the staged/alternate Add button choice.
@@ -775,57 +823,14 @@ const ICD10EvidencePanel = {
             <span class="icd10-evidence-panel__diagnosis-desc">${this._escapeHtml(description)}</span>
           </div>
           ${this.codeDropdownOpen ? (() => {
-            const q = this.codeSearchQuery;
-            const primaryAll = availableCodes.filter(c => c.evidenceKind !== 'alternate');
-            const alternateAll = availableCodes.filter(c => c.evidenceKind === 'alternate');
-            const primary = this._filterCodes(primaryAll, q);
-            const alternates = this._filterCodes(alternateAll, q);
-            // Auto-expand alternates when the user is searching and there are
-            // hits there — otherwise the search would feel broken.
-            const altsAutoExpand = q && alternates.length > 0;
-            const altsOpen = this.alternatesExpanded || altsAutoExpand;
-            const primaryShown = primary.slice(0, 10);
-            const altsShown = altsOpen ? alternates.slice(0, 10) : [];
             return `
             <div class="icd10-evidence-panel__code-dropdown">
               <input type="text" class="icd10-evidence-panel__code-search"
                      data-action="code-search"
-                     placeholder="Search by code or name..."
-                     value="${this._escapeHtml(q)}"
+                     placeholder="Search all ICD-10 by code or name..."
+                     value="${this._escapeHtml(this.codeSearchQuery)}"
                      autocomplete="off" />
-              ${primary.length === 0 && (alternates.length === 0 || !altsOpen) ? `
-                <div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
-                  <span class="icd10-evidence-panel__code-option-desc">No matches</span>
-                </div>
-              ` : ''}
-              ${primaryShown.map(opt => this._renderCodeOption(opt)).join('')}
-              ${primary.length > 10 ? `
-                <div class="icd10-evidence-panel__code-option-hint">
-                  Showing 10 of ${primary.length} — refine search to narrow
-                </div>
-              ` : ''}
-              ${alternateAll.length > 0 ? `
-                <!-- NO_TRACK: pure UI disclosure toggle, no API call -->
-                <button type="button" class="icd10-evidence-panel__alts-toggle ${altsOpen ? 'icd10-evidence-panel__alts-toggle--open' : ''}"
-                        data-action="toggle-alternates"
-                        aria-expanded="${altsOpen}">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                  ${altsOpen ? 'Hide' : 'Show'} ${alternateAll.length} alternate reading${alternateAll.length === 1 ? '' : 's'}
-                </button>
-              ` : ''}
-              ${altsOpen && alternateAll.length > 0 ? `
-                <div class="icd10-evidence-panel__alts-hint">
-                  Comprehend's lower-confidence readings of the same text. Primary code is documented elsewhere.
-                </div>
-                ${altsShown.map(opt => this._renderCodeOption(opt)).join('')}
-                ${alternates.length > 10 ? `
-                  <div class="icd10-evidence-panel__code-option-hint">
-                    Showing 10 of ${alternates.length} — refine search to narrow
-                  </div>
-                ` : ''}
-              ` : ''}
+              ${this._renderCodeDropdownBody()}
             </div>
             `;
           })() : ''}
@@ -1199,12 +1204,16 @@ const ICD10EvidencePanel = {
       searchInput.addEventListener('click', (e) => e.stopPropagation());
       searchInput.addEventListener('input', (e) => {
         this.codeSearchQuery = e.target.value;
+        // Repaint the local (evidence-backed) rows immediately so typing feels
+        // instant, then let the debounced library lookup fill in below.
         this._renderCodeDropdownList();
+        this._scheduleLibrarySearch();
       });
       searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           this.codeDropdownOpen = false;
           this.codeSearchQuery = '';
+          this._resetLibrarySearch();
           this.render();
         }
       });
@@ -1215,6 +1224,7 @@ const ICD10EvidencePanel = {
       if (this.codeDropdownOpen && !e.target.closest('[data-action="toggle-codes"]') && !e.target.closest('.icd10-evidence-panel__code-dropdown')) {
         this.codeDropdownOpen = false;
         this.codeSearchQuery = '';
+        this._resetLibrarySearch();
         this.render();
       }
     });
@@ -1269,13 +1279,17 @@ const ICD10EvidencePanel = {
   },
 
   /**
-   * Toggle the code selector dropdown
+   * Toggle the code selector dropdown.
+   *
+   * No longer gated on availableCodes.length — the dropdown is the entry point
+   * to the full ICD-10 library, so it has to open even for a single-code group.
    */
   _toggleCodeDropdown() {
-    const availableCodes = this._getAvailableCodes();
-    if (availableCodes.length <= 1) return;
     this.codeDropdownOpen = !this.codeDropdownOpen;
-    if (!this.codeDropdownOpen) this.codeSearchQuery = '';
+    if (!this.codeDropdownOpen) {
+      this.codeSearchQuery = '';
+      this._resetLibrarySearch();
+    }
     this.render();
     if (this.codeDropdownOpen) {
       const input = this.container.querySelector('[data-action="code-search"]');
@@ -1284,57 +1298,230 @@ const ICD10EvidencePanel = {
   },
 
   /**
-   * Fuzzy-ish filter: matches against code prefix or substrings of code/description.
-   * Empty query returns the full list unchanged.
+   * Build everything in the dropdown BELOW the search input.
+   *
+   * Both render paths go through this: the full `render()` (which rebuilds the
+   * whole panel) and `_renderCodeDropdownList()` (per keystroke, which swaps
+   * only these rows so the input keeps focus and caret). Keeping one source
+   * means the two can't drift — they previously did, with the per-keystroke
+   * path flattening away the primary/alternate split.
+   *
+   * Section order is deliberate: evidence-backed codes for this group first,
+   * Comprehend's lower-confidence alternates next, and the full library last.
+   * A coder should have to scroll past what's actually documented before
+   * reaching a code nothing in the chart supports.
    */
+  _renderCodeDropdownBody() {
+    const q = this.codeSearchQuery;
+    const availableCodes = this._getAvailableCodes();
+    const primaryAll = availableCodes.filter(c => c.evidenceKind !== 'alternate');
+    const alternateAll = availableCodes.filter(c => c.evidenceKind === 'alternate');
+    const primary = this._filterCodes(primaryAll, q);
+    const alternates = this._filterCodes(alternateAll, q);
+    // Auto-expand alternates when the user is searching and there are
+    // hits there — otherwise the search would feel broken.
+    const altsAutoExpand = q && alternates.length > 0;
+    const altsOpen = this.alternatesExpanded || altsAutoExpand;
+    const primaryShown = primary.slice(0, 10);
+    const altsShown = altsOpen ? alternates.slice(0, 10) : [];
+
+    const library = this._libraryRows();
+    const librarySection = this._renderLibrarySection(library);
+    // "No matches" now means no matches anywhere, including the library —
+    // otherwise it would contradict the library rows sitting right below it.
+    const nothingLocal = primary.length === 0 && (alternates.length === 0 || !altsOpen);
+    const showEmpty = nothingLocal && library.length === 0
+      && !this.librarySearchLoading && !librarySection;
+
+    return `
+      ${showEmpty ? `
+        <div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
+          <span class="icd10-evidence-panel__code-option-desc">No matches</span>
+        </div>
+      ` : ''}
+      ${primaryShown.map(opt => this._renderCodeOption(opt)).join('')}
+      ${primary.length > 10 ? `
+        <div class="icd10-evidence-panel__code-option-hint">
+          Showing 10 of ${primary.length} — refine search to narrow
+        </div>
+      ` : ''}
+      ${alternateAll.length > 0 ? `
+        <!-- NO_TRACK: pure UI disclosure toggle, no API call -->
+        <button type="button" class="icd10-evidence-panel__alts-toggle ${altsOpen ? 'icd10-evidence-panel__alts-toggle--open' : ''}"
+                data-action="toggle-alternates"
+                aria-expanded="${altsOpen}">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+          ${altsOpen ? 'Hide' : 'Show'} ${alternateAll.length} alternate reading${alternateAll.length === 1 ? '' : 's'}
+        </button>
+      ` : ''}
+      ${altsOpen && alternateAll.length > 0 ? `
+        <div class="icd10-evidence-panel__alts-hint">
+          Comprehend's lower-confidence readings of the same text. Primary code is documented elsewhere.
+        </div>
+        ${altsShown.map(opt => this._renderCodeOption(opt)).join('')}
+        ${alternates.length > 10 ? `
+          <div class="icd10-evidence-panel__code-option-hint">
+            Showing 10 of ${alternates.length} — refine search to narrow
+          </div>
+        ` : ''}
+      ` : ''}
+      ${librarySection}
+    `;
+  },
+
   /**
-   * Re-render only the dropdown's option rows (preserves search input focus).
+   * Library results worth painting: drop anything already shown as an
+   * evidence-backed row above, and only trust results fetched for the query
+   * currently in the box (a slower earlier request must not paint under a
+   * newer query).
+   */
+  _libraryRows() {
+    const q = (this.codeSearchQuery || '').trim();
+    if (q.length < LIBRARY_MIN_QUERY) return [];
+    if (this.librarySearchFor !== q) return [];
+    const shown = new Set(this._getAvailableCodes().map(c => c.code));
+    return (this.librarySearchResults || [])
+      .filter(r => r && r.code && !shown.has(r.code))
+      .slice(0, LIBRARY_MAX_ROWS);
+  },
+
+  /**
+   * The "All ICD-10 codes" section. Returns '' when there is nothing to say,
+   * so the caller can tell the difference between "no section" and "section
+   * with a loading/empty state in it".
+   */
+  _renderLibrarySection(rows) {
+    const q = (this.codeSearchQuery || '').trim();
+    if (q.length < LIBRARY_MIN_QUERY) return '';
+
+    let inner;
+    if (this.librarySearchLoading && this.librarySearchFor !== q) {
+      inner = `<div class="icd10-evidence-panel__code-option-hint">Searching…</div>`;
+    } else if (this.librarySearchError) {
+      inner = `<div class="icd10-evidence-panel__code-option-hint">Couldn't reach the ICD-10 library.</div>`;
+    } else if (rows.length === 0) {
+      if (this.librarySearchFor !== q) return '';
+      inner = `<div class="icd10-evidence-panel__code-option-hint">No library codes match "${this._escapeHtml(q)}".</div>`;
+    } else {
+      inner = rows.map(r => this._renderCodeOption({
+        code: r.code,
+        description: r.description || '',
+        evidenceKind: 'library',
+        pdpmCategory: null,
+        pdpmPoints: null,
+        pdpmCategoryName: null,
+      })).join('');
+    }
+
+    return `
+      <div class="icd10-evidence-panel__library-header">All ICD-10 codes</div>
+      <div class="icd10-evidence-panel__library-hint">
+        Not extracted from this chart — you're vouching for the documentation yourself.
+      </div>
+      ${inner}
+    `;
+  },
+
+  /**
+   * Debounced full-library lookup. Fires only once the query clears the
+   * endpoint's 2-char floor; below that we clear results so stale rows from a
+   * longer query don't linger as the user backspaces.
+   */
+  _scheduleLibrarySearch() {
+    if (this._librarySearchTimer) clearTimeout(this._librarySearchTimer);
+
+    const q = (this.codeSearchQuery || '').trim();
+    if (q.length < LIBRARY_MIN_QUERY) {
+      // Invalidate anything in flight, then repaint so old rows disappear.
+      this._resetLibrarySearch();
+      this._renderCodeDropdownList();
+      return;
+    }
+    if (this.librarySearchFor === q && !this.librarySearchError) return; // already have it
+
+    this.librarySearchLoading = true;
+    this.librarySearchError = false;
+    this._renderCodeDropdownList();
+
+    this._librarySearchTimer = setTimeout(() => {
+      this._librarySearchTimer = null;
+      this._runLibrarySearch(q);
+    }, LIBRARY_DEBOUNCE_MS);
+  },
+
+  async _runLibrarySearch(q) {
+    const token = (this._librarySearchToken || 0) + 1;
+    this._librarySearchToken = token;
+
+    // QueryAPI is loaded ahead of the viewer in content.js, but this panel is
+    // also exercised from the demo harness where it may not be — degrade to
+    // "no library results" rather than throwing inside the input handler.
+    const api = typeof window !== 'undefined' ? window.QueryAPI : null;
+    if (!api || typeof api.searchIcd10 !== 'function') {
+      this.librarySearchLoading = false;
+      this.librarySearchError = true;
+      this._renderCodeDropdownList();
+      return;
+    }
+
+    try {
+      const { results } = await api.searchIcd10(q);
+      if (token !== this._librarySearchToken) return; // superseded
+      this.librarySearchResults = Array.isArray(results) ? results : [];
+      this.librarySearchFor = q;
+      this.librarySearchError = false;
+    } catch (err) {
+      if (token !== this._librarySearchToken) return;
+      console.error('[ICD10EvidencePanel] library search failed:', err);
+      this.librarySearchResults = [];
+      this.librarySearchFor = '';
+      this.librarySearchError = true;
+    } finally {
+      if (token === this._librarySearchToken) {
+        this.librarySearchLoading = false;
+        this._renderCodeDropdownList();
+      }
+    }
+  },
+
+  /**
+   * Re-render only the dropdown's rows (preserves search input focus).
    */
   _renderCodeDropdownList() {
-    const dropdown = this.container.querySelector('.icd10-evidence-panel__code-dropdown');
+    const dropdown = this.container?.querySelector('.icd10-evidence-panel__code-dropdown');
     if (!dropdown) return;
     const input = dropdown.querySelector('[data-action="code-search"]');
-    const availableCodes = this._getAvailableCodes();
-    const matches = this._filterCodes(availableCodes, this.codeSearchQuery);
-    const filtered = matches.slice(0, 10);
 
     // Remove all children except the search input
     Array.from(dropdown.children).forEach(child => {
       if (child !== input) child.remove();
     });
 
-    const append = (html) => {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html;
-      while (tmp.firstChild) dropdown.appendChild(tmp.firstChild);
-    };
+    const tmp = document.createElement('div');
+    tmp.innerHTML = this._renderCodeDropdownBody();
+    while (tmp.firstChild) dropdown.appendChild(tmp.firstChild);
 
-    if (filtered.length === 0) {
-      append(`<div class="icd10-evidence-panel__code-option icd10-evidence-panel__code-option--empty">
-        <span class="icd10-evidence-panel__code-option-desc">No matches</span>
-      </div>`);
-    } else {
-      filtered.forEach(opt => {
-        append(`<div class="icd10-evidence-panel__code-option ${opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : ''}"
-             data-select-code="${this._escapeHtml(opt.code)}" data-select-desc="${this._escapeHtml(opt.description)}">
-          <span class="icd10-evidence-panel__code-option-value">${this._escapeHtml(opt.code)}</span>
-          <span class="icd10-evidence-panel__code-option-desc">${this._escapeHtml(opt.description)}</span>
-        </div>`);
-      });
-      if (matches.length > 10) {
-        append(`<div class="icd10-evidence-panel__code-option-hint">
-          Showing 10 of ${matches.length} — refine search to narrow
-        </div>`);
-      }
-    }
+    this._bindCodeDropdownRows(dropdown);
+  },
 
-    // Re-bind option click handlers
+  /** Wire row clicks + the alternates disclosure inside the dropdown. */
+  _bindCodeDropdownRows(dropdown) {
     dropdown.querySelectorAll('[data-select-code]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         this._selectCode(el.dataset.selectCode, el.dataset.selectDesc);
       });
     });
+    const altsToggle = dropdown.querySelector('[data-action="toggle-alternates"]');
+    if (altsToggle) {
+      altsToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.alternatesExpanded = !this.alternatesExpanded;
+        this._renderCodeDropdownList();
+      });
+    }
   },
 
   _filterCodes(codes, query) {
@@ -1361,6 +1548,7 @@ const ICD10EvidencePanel = {
    */
   _renderCodeOption(opt) {
     const isAlternate = opt.evidenceKind === 'alternate';
+    const isLibrary = opt.evidenceKind === 'library';
     const cat = opt.pdpmCategory;
     let badgeHtml = '';
     if (cat) {
@@ -1377,6 +1565,7 @@ const ICD10EvidencePanel = {
       'icd10-evidence-panel__code-option',
       opt.code === this.selectedCode ? 'icd10-evidence-panel__code-option--selected' : '',
       isAlternate ? 'icd10-evidence-panel__code-option--alternate' : '',
+      isLibrary ? 'icd10-evidence-panel__code-option--library' : '',
     ].filter(Boolean).join(' ');
     return `
       <div class="${cls}"
@@ -1397,8 +1586,17 @@ const ICD10EvidencePanel = {
     this.selectedCode = code;
     this.selectedDescription = description;
     this.codeDropdownOpen = false;
+    // A code the coder found in the library has no annotation behind it in
+    // this group. Remember that: the staging path must not attach an unrelated
+    // annotation's id to it.
+    this.selectedCodeFromLibrary = !this._getAvailableCodes().some(c => c.code === code);
+    this.codeSearchQuery = '';
+    this._resetLibrarySearch();
     // Code is ICD-10 reference data — safe categorical value.
-    _track('icd10_code_clicked', { code, source: 'evidence' });
+    _track('icd10_code_clicked', {
+      code,
+      source: this.selectedCodeFromLibrary ? 'library' : 'evidence',
+    });
     this.render();
   },
 
@@ -1415,12 +1613,21 @@ const ICD10EvidencePanel = {
     this.render();
 
     try {
-      // Construct an item with the selected code
-      const baseItem = this.items[0] || {};
+      // Construct an item with the selected code.
+      //
+      // For an evidence-backed code we inherit the group's first annotation so
+      // the viewer can retire that annotation from the sidebar once staged.
+      // A library-picked code has no annotation behind it — inheriting items[0]
+      // would make the viewer splice out an unrelated annotation (it keys the
+      // removal off item.id), silently dropping a real finding from the list.
+      // Send a bare item instead; the viewer skips the splice when id is null.
+      const baseItem = this.selectedCodeFromLibrary ? {} : (this.items[0] || {});
       const approveItem = {
         ...baseItem,
+        id: this.selectedCodeFromLibrary ? null : baseItem.id,
         icd10Code: this.selectedCode,
-        description: this.selectedDescription
+        description: this.selectedDescription,
+        fromLibrary: !!this.selectedCodeFromLibrary,
       };
 
       if (this.onApprove) {
@@ -1667,6 +1874,8 @@ const ICD10EvidencePanel = {
     this.selectedCode = null;
     this.selectedDescription = null;
     this.codeDropdownOpen = false;
+    this.selectedCodeFromLibrary = false;
+    this._resetLibrarySearch();
     this.clearSummary();
     this.render();
   }
