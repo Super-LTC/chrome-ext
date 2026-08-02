@@ -108,7 +108,8 @@ const MdsTagInbox = {
           <span class="mti__title">Inbox</span>
           <span class="mti__subtitle">Conversations on MDS items, across your buildings</span>
         </div>
-        <button class="mti__close" aria-label="Close" data-track="mds_comment_panel_closed">&times;</button>
+        <!-- NO_TRACK: mds_comment_panel_closed means the THREAD panel; reusing it here would inflate it. -->
+        <button class="mti__close" aria-label="Close">&times;</button>
       </header>
       <div class="mti__body">
         ${this._loading ? '<p class="mti__muted">Loading…</p>' : ''}
@@ -120,12 +121,18 @@ const MdsTagInbox = {
 
     p.querySelector('.mti__close')?.addEventListener('click', () => this.close());
 
-    p.querySelectorAll('[data-thread]').forEach((el) =>
+    p.querySelectorAll('[data-thread]').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (e.target.closest('[data-pcc]')) return;
         this._openThread(el.dataset.thread);
-      })
-    );
+      });
+      // The row claims role="button"; without this it is only pretending.
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        this._openThread(el.dataset.thread);
+      });
+    });
 
     p.querySelectorAll('[data-pcc]').forEach((btn) =>
       btn.addEventListener('click', (e) => {
@@ -266,7 +273,8 @@ function rowHtml(r) {
         <span class="mti__muted">${esc(relativeTime(r.lastMessage.createdAt))}${
           r.messageCount > 1 ? ` · ${r.messageCount} messages` : ''
         }</span>
-        <button class="mti__pcc" data-pcc="${esc(r.threadKey)}" data-track="mds_inbox_pcc_jump">
+        <!-- NO_TRACK: _openInPcc fires mds_inbox_pcc_jump itself, with properties. -->
+        <button class="mti__pcc" data-pcc="${esc(r.threadKey)}">
           ${here ? 'Open the MDS' : 'Open in PCC'}
         </button>
       </div>

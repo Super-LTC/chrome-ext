@@ -44,7 +44,9 @@ const MdsCommentThread = {
       assessmentId: row.assessmentId,
       mdsItem: row.mdsItem,
       mdsColumn: row.mdsColumn || '',
-      description: row.itemLabel || '',
+      // The inbox's label leads with the item code, which the title above it
+      // already is. Left alone it reads "I0200 / I0200 Diabetes mellitus…".
+      description: stripItemPrefix(row.itemLabel, row.mdsItem, row.mdsColumn),
       subtitle: [row.patientLabel, row.facilityName].filter(Boolean).join(' · '),
       onChange,
       onOpenInPcc,
@@ -122,11 +124,8 @@ const MdsCommentThread = {
           ${subtitle ? `<span class="mct__subtitle">${esc(subtitle)}</span>` : ''}
         </div>
         <div class="mct__header-actions">
-          ${
-            onOpenInPcc
-              ? '<button class="mct__link" data-open-pcc data-track="mds_inbox_pcc_jump">Open in PCC</button>'
-              : ''
-          }
+          ${/* NO_TRACK: routes into the inbox's _openInPcc, which fires the event with properties. */ ''}
+          ${onOpenInPcc ? '<button class="mct__link" data-open-pcc>Open in PCC</button>' : ''}
           <button class="mct__close" aria-label="Close" data-track="mds_comment_panel_closed">&times;</button>
         </div>
       </header>
@@ -335,6 +334,19 @@ const NO_SUGGESTION_COPY = {
   author_not_on_super: "We couldn't match the nurse who opened this MDS to a Super account.",
   author_not_at_this_facility: 'The nurse who worked this item no longer has access to this building.',
 };
+
+/**
+ * Drop the leading item code from an inbox label, so the panel does not say the
+ * code twice. Falls back to the label untouched when it does not start with one
+ * — a subtitle with a redundant prefix beats a subtitle mangled by a guess.
+ */
+function stripItemPrefix(label, mdsItem, mdsColumn) {
+  const text = String(label || '');
+  for (const prefix of [`${mdsItem}${mdsColumn || ''} `, `${mdsItem} `]) {
+    if (prefix.trim() && text.startsWith(prefix)) return text.slice(prefix.length);
+  }
+  return text;
+}
 
 function personLabel(p) {
   return p?.name || (p?.email || '').split('@')[0] || 'Someone';
