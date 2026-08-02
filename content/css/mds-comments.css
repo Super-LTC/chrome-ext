@@ -1,0 +1,265 @@
+/* MDS item conversations — bubble on the item, right-side slide-in panel.
+   Panel geometry mirrors .thr__panel (24-hour report) so the two feel like the
+   same product; the bubble borrows .super-badge sizing from the overlay. */
+
+/* ── The bubble on an item ──────────────────────────────────────────────── */
+
+.super-badge--comment {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  cursor: pointer;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.super-badge--comment:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+/* Amber + a dot only when YOU were asked. A conversation you are merely
+   watching stays grey — a bubble that nags everybody gets ignored by
+   everybody. */
+.super-badge--comment-awaiting {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fcd34d;
+}
+
+.super-badge--comment-awaiting:hover {
+  background: #fef3c7;
+}
+
+.super-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  margin-left: 1px;
+}
+
+/* ── The panel ─────────────────────────────────────────────────────────── */
+
+.mct__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100001; /* above the 24hr panel, which can be open behind it */
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: flex-end;
+  animation: mct-fade-in 0.15s ease-out;
+}
+
+@keyframes mct-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.mct__panel {
+  width: 560px;
+  max-width: 100vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -12px 0 32px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--super-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  animation: mct-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes mct-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.mct__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.mct__titles { min-width: 0; }
+
+.mct__title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.mct__subtitle {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.mct__close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.mct__close:hover { background: #f1f5f9; color: #0f172a; }
+
+.mct__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+
+.mct__muted { color: #94a3b8; font-size: 12.5px; }
+.mct__error { color: #b91c1c; font-size: 12.5px; margin-top: 6px; }
+
+/* ── Thread ────────────────────────────────────────────────────────────── */
+
+.mct__thread {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mct__msg-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mct__msg-author { font-size: 12.5px; font-weight: 600; color: #334155; }
+
+.mct__msg-asked { margin: 2px 0 0; font-size: 11.5px; color: #1d4ed8; }
+
+.mct__msg-body {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Composer ──────────────────────────────────────────────────────────── */
+
+.mct__composer { border-top: 1px solid #e5e7eb; padding-top: 14px; }
+
+.mct__label { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; color: #334155; }
+
+.mct__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+.mct__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mct__chip-x {
+  border: none;
+  background: transparent;
+  color: #93c5fd;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.mct__chip-x:hover { color: #1d4ed8; }
+
+.mct__chip-add {
+  border: 1px dashed #cbd5e1;
+  background: transparent;
+  color: #64748b;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mct__chip-add:hover { border-color: #94a3b8; color: #334155; }
+
+.mct__hint { margin: 0 0 8px; font-size: 11.5px; color: #94a3b8; }
+
+.mct__picker {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.12);
+}
+
+.mct__picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.mct__picker-item:hover { background: #f8fafc; }
+
+.mct__input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: #1e293b;
+}
+
+.mct__input:focus { outline: none; border-color: #cbd5e1; box-shadow: 0 0 0 1px #cbd5e1; }
+
+.mct__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+.mct__btn {
+  border: none;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #475569;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mct__btn:hover:not(:disabled) { background: #f1f5f9; color: #0f172a; }
+
+.mct__btn--primary { background: #0f172a; color: #fff; }
+.mct__btn--primary:hover:not(:disabled) { background: #1e293b; color: #fff; }
+
+.mct__btn:disabled { opacity: 0.5; cursor: not-allowed; }

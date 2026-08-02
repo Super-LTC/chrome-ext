@@ -182,6 +182,13 @@ export const EVENT_SCHEMA = {
   // usually means she cancelled or wrote nothing. 'api_rejected' and
   // 'exception' ARE bugs — we found her note and failed to record it.
   report_24hr_note_link_failed: ['finding_type', 'reason'],
+  // MDS item conversations. `mds_item` is a categorical code (I0200), not a
+  // name-like value, so it survives the PHI suffix guard.
+  mds_comment_posted: ['mds_item', 'assignee_count', 'is_new_thread'],
+  mds_comment_resolved: ['mds_item'],
+  mds_comment_panel_opened: ['mds_item', 'awaiting_me'],
+  mds_comment_panel_closed: [],
+  mds_comment_assignee_opened: [],
   report_24hr_comment_posted: ['finding_type'],
   report_24hr_comment_deleted: [],
   report_24hr_detection_note_opened: ['finding_type'],
