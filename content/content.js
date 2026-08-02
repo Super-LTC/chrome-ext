@@ -41,6 +41,9 @@ import './modules/notifications/notifications-api.js';
 import './modules/mds-comments/comments-api.js';
 import './modules/mds-comments/comment-badges.js';
 import './modules/mds-comments/comment-thread.js';
+// The inbox is deliberately NOT gated to MDS pages: an ask waiting at another
+// building has to be reachable from wherever the user happens to be in PCC.
+import './modules/mds-comments/inbox-panel.js';
 
 // 4. Import query system
 import './queries/query-api.js';

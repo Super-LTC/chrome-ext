@@ -189,6 +189,17 @@ export const EVENT_SCHEMA = {
   mds_comment_panel_opened: ['mds_item', 'awaiting_me'],
   mds_comment_panel_closed: [],
   mds_comment_assignee_opened: [],
+  // The cross-facility inbox. `open_count` / `unread_count` are the two badge
+  // numbers at the moment it was opened — the pair that tells us whether the
+  // badge is doing its job or just decorating the FAB.
+  mds_inbox_opened: ['open_count', 'unread_count'],
+  mds_inbox_thread_opened: ['mds_item', 'awaiting_me', 'same_facility'],
+  // The PCC jump. `same_facility` false means a facility switch was attempted;
+  // pair it with mds_inbox_pcc_jump_failed to see how often the switch holds.
+  mds_inbox_pcc_jump: ['mds_item', 'same_facility'],
+  mds_inbox_pcc_jump_failed: ['reason'],
+  // Announced once ever, so this counts announcements and not impressions.
+  mds_assign_toast_shown: ['count'],
   report_24hr_comment_posted: ['finding_type'],
   report_24hr_comment_deleted: [],
   report_24hr_detection_note_opened: ['finding_type'],

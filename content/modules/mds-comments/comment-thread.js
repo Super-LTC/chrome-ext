@@ -21,19 +21,51 @@ const MdsCommentThread = {
   /** @param {object} result The overlay's per-item result object. */
   async open(result) {
     if (!result?.mdsItem) return;
-    this.close();
-
-    this._ctx = {
+    this._openWith({
       mdsItem: result.mdsItem,
       mdsColumn: result.column || '',
       description: result.description || '',
       result,
-    };
-    this._state = { comments: [], teammates: [], assignees: [], suggestionReason: null, noSuggestionWhy: null, myAssignmentId: null, busy: false };
+    });
+    await this._load();
+  },
 
+  /**
+   * Open from an inbox row instead of the page.
+   *
+   * The item is usually in another building, so there is no overlay result to
+   * read and the assessment has to be named explicitly. `onOpenInPcc` is what
+   * turns the header into a way out — without it the thread is a dead end for
+   * anyone who actually wants to fix the coding.
+   */
+  async openForRow(row, { onChange, onOpenInPcc } = {}) {
+    if (!row?.mdsItem) return;
+    this._openWith({
+      assessmentId: row.assessmentId,
+      mdsItem: row.mdsItem,
+      mdsColumn: row.mdsColumn || '',
+      description: row.itemLabel || '',
+      subtitle: [row.patientLabel, row.facilityName].filter(Boolean).join(' · '),
+      onChange,
+      onOpenInPcc,
+    });
+    await this._load();
+  },
+
+  _openWith(ctx) {
+    this.close();
+    this._ctx = ctx;
+    this._state = {
+      comments: [],
+      teammates: [],
+      assignees: [],
+      suggestionReason: null,
+      noSuggestionWhy: null,
+      myAssignmentId: null,
+      busy: false,
+    };
     this._mount();
     this._renderLoading();
-    await this._load();
   },
 
   close() {
@@ -81,30 +113,46 @@ const MdsCommentThread = {
   },
 
   _headerHtml() {
-    const { mdsItem, description } = this._ctx || {};
+    const { mdsItem, description, subtitle, onOpenInPcc } = this._ctx || {};
     return `
       <header class="mct__header">
         <div class="mct__titles">
           <span class="mct__title">${esc(mdsItem || '')}</span>
           ${description ? `<span class="mct__subtitle">${esc(description)}</span>` : ''}
+          ${subtitle ? `<span class="mct__subtitle">${esc(subtitle)}</span>` : ''}
         </div>
-        <button class="mct__close" aria-label="Close" data-track="mds_comment_panel_closed">&times;</button>
+        <div class="mct__header-actions">
+          ${
+            onOpenInPcc
+              ? '<button class="mct__link" data-open-pcc data-track="mds_inbox_pcc_jump">Open in PCC</button>'
+              : ''
+          }
+          <button class="mct__close" aria-label="Close" data-track="mds_comment_panel_closed">&times;</button>
+        </div>
       </header>
     `;
   },
 
   _bindHeader() {
-    this._panel()
-      ?.querySelector('.mct__close')
-      ?.addEventListener('click', () => this.close());
+    const p = this._panel();
+    p?.querySelector('.mct__close')?.addEventListener('click', () => this.close());
+    p?.querySelector('[data-open-pcc]')?.addEventListener('click', () => {
+      this._ctx?.onOpenInPcc?.();
+    });
   },
 
   async _load() {
     try {
-      const data = await window.MdsCommentsAPI.fetchThread(
-        this._ctx.mdsItem,
-        this._ctx.mdsColumn
-      );
+      const data = this._ctx.assessmentId
+        ? await window.MdsCommentsAPI.fetchThreadByAssessment(
+            this._ctx.assessmentId,
+            this._ctx.mdsItem,
+            this._ctx.mdsColumn
+          )
+        : await window.MdsCommentsAPI.fetchThread(
+            this._ctx.mdsItem,
+            this._ctx.mdsColumn
+          );
       const s = this._state;
       s.comments = data?.comments || [];
       s.teammates = data?.teammates || [];
@@ -240,6 +288,7 @@ const MdsCommentThread = {
         s.myAssignmentId = null;
       } else {
         await window.MdsCommentsAPI.postComment({
+          assessmentId: this._ctx.assessmentId || null,
           mdsItem: this._ctx.mdsItem,
           mdsColumn: this._ctx.mdsColumn,
           message,
@@ -254,6 +303,7 @@ const MdsCommentThread = {
       // Repaint the item's bubble and tell the rest of the app, matching the
       // `super:item-decision` side-channel the decision flow already uses.
       await window.CommentBadges?.load();
+      this._ctx?.onChange?.();
       window.dispatchEvent(
         new CustomEvent('super:mds-thread-changed', {
           detail: { mdsItem: this._ctx.mdsItem, column: this._ctx.mdsColumn },

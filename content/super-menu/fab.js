@@ -13,10 +13,23 @@ function createBubbles() {
       </svg>
     </button>
     <button id="super-feedback-action" class="super-dial__action super-dial__action--feedback" aria-label="Send Feedback" data-track="fab_clicked" data-track-prop-fab="feedback">?</button>
-    <button id="super-chat-action" class="super-dial__action super-dial__action--chat" aria-label="Open Chat" data-track="fab_clicked" data-track-prop-fab="chat">
+    <!-- Ask Super (AI). A sparkle, not a speech bubble: the bubble belongs to
+         the thing where a real person is on the other end. -->
+    <button id="super-chat-action" class="super-dial__action super-dial__action--chat" aria-label="Ask Super" data-track="fab_clicked" data-track-prop-fab="chat">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/>
+        <path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/>
+      </svg>
+    </button>
+    <!-- Inbox — MDS items somebody asked you about, across every building you
+         can reach. Its own launcher rather than a Command Center tab: that tab
+         strip marks its contents seen on enter, which would quietly clear tags
+         nobody had read. -->
+    <button id="super-inbox-action" class="super-dial__action super-dial__action--inbox" aria-label="Inbox" data-track="fab_clicked" data-track-prop-fab="inbox">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
+      <span class="super-dial__action-badge" id="super-inbox-badge" style="display:none;"></span>
     </button>
     <!-- F-Tag Prevention (Survey Readiness) — facility-scoped. Hidden until
          module-status reports the module is enabled for the current facility. -->
@@ -56,6 +69,7 @@ function createBubbles() {
   const mainBtn = document.getElementById('super-bubble-main');
   const mdsAction = document.getElementById('super-mds-action');
   const chatAction = document.getElementById('super-chat-action');
+  const inboxAction = document.getElementById('super-inbox-action');
   const ftagAction = document.getElementById('super-ftag-action');
   const qmAction = document.getElementById('super-qm-action');
 
@@ -173,6 +187,16 @@ function createBubbles() {
     openChatOverlay();
   });
 
+  inboxAction.addEventListener('click', (e) => {
+    e.stopPropagation();
+    container.classList.remove('super-dial--open');
+    if (window.MdsTagInbox?.isOpen()) {
+      window.MdsTagInbox.close();
+    } else {
+      window.MdsTagInbox?.open();
+    }
+  });
+
   // Show/hide patient button based on context
   updateBubblesContext();
 
@@ -194,6 +218,36 @@ function createBubbles() {
   // If we just came back from a "open in PCC" click inside the 24-hour panel,
   // re-open the panel at the same date scrolled to the same finding.
   hydrateTwentyFourHourRestore();
+
+  // The MDS tag handoff, which may still have a facility switch to finish.
+  hydrateMdsTagRestore();
+}
+
+/**
+ * Continue a jump from the inbox to an MDS item.
+ *
+ * Deliberately NOT modelled on `hydrateTwentyFourHourRestore` above. That one
+ * deletes its payload whenever the current facility differs from the one it was
+ * written at — correct there, because that handoff never leaves a building. Here
+ * a facility mismatch is the expected middle of the trip, so the same rule would
+ * throw the payload away every single time. See `tag-restore.js`.
+ */
+async function hydrateMdsTagRestore() {
+  try {
+    const { hydrateTagRestore } = await import('../modules/mds-comments/tag-restore.js');
+    const result = await hydrateTagRestore({
+      onFailure: (message) => window.SuperToast?.error(message),
+    });
+    if (!result?.arrived) return;
+    window.SuperMdsTagArrival = result.arrived;
+    // The overlay scans asynchronously; it announces when the item is on screen
+    // and reachable, which is the only moment opening a thread makes sense.
+    window.dispatchEvent(
+      new CustomEvent('super:mds-tag-arrived', { detail: result.arrived })
+    );
+  } catch (err) {
+    console.warn('[MdsTags] restore failed', err);
+  }
 }
 
 async function hydrateTwentyFourHourRestore() {
@@ -1153,10 +1207,13 @@ async function updateMDSBadge() {
   const badge = document.getElementById('super-mds-badge');
   const mainBadge = document.getElementById('super-bubble-badge');
   const report24hrDot = document.getElementById('super-24hr-dot');
+  const inboxBadge = document.getElementById('super-inbox-badge');
   if (!badge && !mainBadge) return;
 
   let count = 0;
   let report24hUnseen = false;
+  let mdsTagCount = 0;
+  let mdsTagToasts = [];
 
   // Warm the dashboard cache ONLY to resolve facilityName/orgSlug — the badge
   // count itself is driven entirely by the notification summary below, NOT by
@@ -1181,7 +1238,12 @@ async function updateMDSBadge() {
       if (facilityName && orgSlug) {
         const summary = await NotificationsAPI.fetchSummary(facilityName, orgSlug);
         if (summary) {
-          count = summary.actionCount + summary.fyiUnseenCount;
+          // Certs, queries and the 24h report are facility-scoped. MDS tags are
+          // NOT — an ask waiting at another building still counts, which is the
+          // whole reason the inbox and the facility switch exist.
+          mdsTagCount = summary.mdsTagActionCount + summary.mdsTagUnreadCount;
+          mdsTagToasts = summary.mdsTagToasts;
+          count = summary.actionCount + summary.fyiUnseenCount + mdsTagCount;
           report24hUnseen = summary.report24hUnseen;
         }
       }
@@ -1203,10 +1265,59 @@ async function updateMDSBadge() {
     }
   });
 
+  // The inbox action carries its own count, so an open ask is attributable to
+  // one launcher rather than hiding inside the aggregate.
+  if (inboxBadge) {
+    if (mdsTagCount > 0) {
+      inboxBadge.textContent = mdsTagCount > 99 ? '99+' : String(mdsTagCount);
+      inboxBadge.style.display = '';
+    } else {
+      inboxBadge.style.display = 'none';
+    }
+  }
+
   // Standalone red dot on the 24H button when today's report is unseen.
   if (report24hrDot) {
     report24hrDot.style.display = report24hUnseen ? '' : 'none';
   }
+
+  announceNewAsks(mdsTagToasts);
+}
+
+/**
+ * Say once, out loud, that somebody asked you something.
+ *
+ * Announced ONCE EVER per ask, batched into a single toast, and it fades on its
+ * own — no dismiss click. Anything else turns into a thing people learn to
+ * swat: re-showing on every page load across a shift would be dozens of
+ * interruptions for the same three items.
+ *
+ * ⚠️ The seen-key drives the TOAST ONLY. It must never be read as "dealt with":
+ * the ask stays in the badge and in the inbox until it is answered. Wiring one
+ * key to both would let somebody clear an open assignment by glancing at a
+ * toast, which is precisely what reply-to-resolve exists to stop.
+ */
+async function announceNewAsks(toasts) {
+  if (!Array.isArray(toasts) || toasts.length === 0) return;
+
+  const first = toasts[0];
+  const message =
+    toasts.length === 1
+      ? `${first.taggerName} asked you about ${first.itemLabel}`
+      : `${toasts.length} new questions about MDS items — open the Inbox`;
+
+  window.SuperToast?.show({
+    type: 'info',
+    message,
+    duration: 6000,
+    action: 'Open Inbox',
+    onAction: () => window.MdsTagInbox?.open(),
+  });
+  window.SuperAnalytics?.track('mds_assign_toast_shown', { count: toasts.length });
+
+  // Marked seen only after it has actually been shown. Marking first and
+  // failing to render would silently eat the one announcement this ever gets.
+  await window.NotificationsAPI?.markSeen(toasts.map((t) => t.key));
 }
 
 // Backward-compat alias — navigation.js calls updateMenuBadge()

@@ -86,6 +86,27 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
+.mct__header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mct__link {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mct__link:hover { background: #f8fafc; border-color: #cbd5e1; }
+
 .mct__titles { min-width: 0; }
 
 .mct__title {
@@ -263,3 +284,173 @@
 .mct__btn--primary:hover:not(:disabled) { background: #1e293b; color: #fff; }
 
 .mct__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── The inbox panel ───────────────────────────────────────────────────────
+   Sits one layer BELOW the thread panel, which opens on top of it. Same
+   geometry as .thr__panel and .mct__panel — three slide-outs that feel like
+   one product rather than three features. */
+
+.mti__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  justify-content: flex-end;
+  animation: mct-fade-in 0.15s ease-out;
+}
+
+.mti__panel {
+  width: 520px;
+  max-width: 100vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -12px 0 32px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--super-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  animation: mct-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mti__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.mti__title { display: block; font-size: 15px; font-weight: 600; color: #0f172a; }
+.mti__subtitle { display: block; margin-top: 2px; font-size: 12.5px; color: #64748b; }
+
+.mti__close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.mti__close:hover { background: #f1f5f9; color: #0f172a; }
+
+.mti__body { flex: 1 1 auto; overflow-y: auto; padding: 8px 16px 24px; }
+
+.mti__muted { color: #94a3b8; font-size: 12.5px; }
+
+.mti__empty { padding: 48px 24px; text-align: center; }
+.mti__empty-title { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: #334155; }
+
+.mti__group { margin-top: 16px; }
+
+.mti__group-title {
+  margin: 0 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.mti__count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+
+.mti__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.mti__row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.mti__row:hover { border-color: #cbd5e1; background: #f8fafc; }
+.mti__row:focus-visible { outline: 2px solid #94a3b8; outline-offset: 1px; }
+
+/* Unread is a left rule, not a colour wash — the row still has to be readable
+   as an item, and a full-bleed highlight makes ten of them look like an alarm. */
+.mti__row--unread { border-left: 3px solid #2563eb; }
+
+.mti__row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.mti__item { font-size: 13px; font-weight: 600; color: #0f172a; }
+
+.mti__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2563eb;
+}
+
+.mti__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+
+.mti__resident { font-size: 11.5px; color: #64748b; }
+
+/* Who asked, as a fact about the thread rather than about the message being
+   previewed. Muted on purpose — the "Asked of you" heading already carries the
+   obligation; this only answers "by whom". */
+.mti__asker { font-size: 11.5px; color: #64748b; font-style: italic; }
+
+/* Separator, not a gap: the resident and the asker are both muted, and side by
+   side with only whitespace they read as one run-on phrase. */
+.mti__asker::before { content: '·'; margin-right: 5px; font-style: normal; }
+
+.mti__facility {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 5px;
+  padding: 0 5px;
+  line-height: 16px;
+}
+
+.mti__preview {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #475569;
+  word-break: break-word;
+}
+
+.mti__who { font-weight: 600; color: #334155; }
+
+.mti__row-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mti__pcc {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mti__pcc:hover { background: #0f172a; border-color: #0f172a; color: #fff; }

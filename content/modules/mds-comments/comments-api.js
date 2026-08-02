@@ -84,18 +84,62 @@ const MdsCommentsAPI = {
     return call(`/api/extension/mds/threads?${params}`, { method: 'GET' });
   },
 
+  /**
+   * The same thread, named by OUR assessment id instead of the PCC page.
+   *
+   * The inbox needs this: its rows are usually about a building the user is not
+   * currently in, so there is no `SuperOverlay` to read a tuple from, and the
+   * facility on screen is the wrong one to authorize against.
+   */
+  async fetchThreadByAssessment(assessmentId, mdsItem, mdsColumn = '') {
+    const params = new URLSearchParams({
+      assessmentId,
+      mdsItem,
+      mdsColumn: mdsColumn || '',
+    });
+    return call(`/api/extension/mds/threads?${params}`, { method: 'GET' });
+  },
+
   /** Post a comment. `assignedUserIds` is what makes it an ask rather than a note. */
-  async postComment({ mdsItem, mdsColumn = '', message, assignedUserIds = [] }) {
+  async postComment({
+    mdsItem,
+    mdsColumn = '',
+    message,
+    assignedUserIds = [],
+    assessmentId = null,
+  }) {
+    // An explicit assessment id wins over the page tuple — same reason as above.
+    const ref = assessmentId ? { assessmentId } : mdsRefBody();
     return call('/api/extension/mds/threads', {
       method: 'POST',
       body: JSON.stringify({
-        ...mdsRefBody(),
+        ...ref,
         mdsItem,
         mdsColumn: mdsColumn || '',
         message,
         assignedUserIds,
       }),
     });
+  },
+
+  /**
+   * Everything waiting on me, across every building I can reach — not just the
+   * one open in PCC. Returns [] on failure: an inbox that cannot load should
+   * read as empty, never as an error page over somebody's chart.
+   */
+  async fetchInbox() {
+    try {
+      const orgSlug = window.getOrg?.()?.org;
+      if (!orgSlug) return [];
+      const data = await call(
+        `/api/extension/mds/inbox?orgSlug=${encodeURIComponent(orgSlug)}`,
+        { method: 'GET' }
+      );
+      return data?.rows || [];
+    } catch (err) {
+      console.warn('[MdsComments] inbox fetch failed:', err?.message);
+      return [];
+    }
   },
 
   /**

@@ -105,3 +105,60 @@ const CommentBadges = {
 };
 
 window.CommentBadges = CommentBadges;
+
+/**
+ * The last leg of a jump from the inbox: we are on the right section page, so
+ * find the item, scroll to it and open its conversation.
+ *
+ * This polls `SuperOverlay.results` rather than hooking a repaint, because the
+ * overlay's scan finishes on its own schedule — it fetches section data first,
+ * and on a slow facility that is several seconds after this page loaded. Tying
+ * the handoff to a render callback would make it a race we lose intermittently,
+ * which is the worst kind of bug to be told about second-hand.
+ *
+ * If the item never appears we say so. Landing on the right page and silently
+ * doing nothing reads as the feature being broken.
+ */
+const ARRIVAL_TIMEOUT_MS = 20000;
+const ARRIVAL_POLL_MS = 300;
+
+function findScannedItem(mdsItem, mdsColumn) {
+  const results = window.SuperOverlay?.results || [];
+  return (
+    results.find(
+      (r) => r.mdsItem === mdsItem && (r.column || '') === (mdsColumn || '')
+    ) || null
+  );
+}
+
+async function landOnTaggedItem(arrival) {
+  if (!arrival?.mdsItem) return;
+  const deadline = Date.now() + ARRIVAL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const match = findScannedItem(arrival.mdsItem, arrival.mdsColumn);
+    if (match) {
+      const el = match.element || document.getElementById(match.elementId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('super-highlight');
+        setTimeout(() => el.classList.remove('super-highlight'), 2000);
+      }
+      // After the scroll settles, so the panel does not slide in over a moving
+      // page.
+      setTimeout(() => window.MdsCommentThread?.open(match), 400);
+      window.SuperMdsTagArrival = null;
+      return;
+    }
+    await new Promise((r) => setTimeout(r, ARRIVAL_POLL_MS));
+  }
+
+  window.SuperMdsTagArrival = null;
+  window.SuperToast?.warning(
+    `${arrival.mdsItem} is not on this page — the assessment may have changed.`
+  );
+}
+
+window.addEventListener('super:mds-tag-arrived', (e) => {
+  landOnTaggedItem(e.detail);
+});
