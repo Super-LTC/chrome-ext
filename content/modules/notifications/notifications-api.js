@@ -20,16 +20,19 @@ const NotificationsAPI = {
    * One request that returns the entire badge breakdown.
    *
    * Certs, queries and the 24h report are scoped to the facility named here.
-   * The `mdsTag*` fields are NOT — they span every building the caller can
-   * reach, because an assignment does not stop mattering when you switch
-   * buildings. They stay separate rather than folded into `actionCount` so the
-   * distinction survives the next person to read this.
+   * The `tag*` fields are NOT — they span every building the caller can reach,
+   * because an assignment does not stop mattering when you switch buildings.
+   * They stay separate rather than folded into `actionCount` so the distinction
+   * survives the next person to read this.
+   *
+   * `tagActionCount` survives being looked at (it clears on RESOLVE);
+   * `tagMentionCount` and `tagUnreadCount` clear when the thread is opened.
    *
    * @param {string} facilityName
    * @param {string} orgSlug
    * @returns {Promise<{actionCount:number, fyiUnseenCount:number, report24hUnseen:boolean,
-   *   mdsTagActionCount:number, mdsTagUnreadCount:number,
-   *   mdsTagToasts:Array<{key:string,itemLabel:string,facilityName:string|null,taggerName:string}>}|null>}
+   *   tagActionCount:number, tagMentionCount:number, tagUnreadCount:number,
+   *   tagToasts:Array<{key:string,itemLabel:string,facilityName:string|null,taggerName:string}>}|null>}
    *   null when the module is unavailable (404/403) or on error — callers
    *   should treat null as "no notification contribution", never throw.
    */
@@ -48,9 +51,10 @@ const NotificationsAPI = {
         actionCount: d.actionCount || 0,
         fyiUnseenCount: d.fyiUnseenCount || 0,
         report24hUnseen: !!d.report24hUnseen,
-        mdsTagActionCount: d.mdsTagActionCount || 0,
-        mdsTagUnreadCount: d.mdsTagUnreadCount || 0,
-        mdsTagToasts: Array.isArray(d.mdsTagToasts) ? d.mdsTagToasts : [],
+        tagActionCount: d.tagActionCount || 0,
+        tagMentionCount: d.tagMentionCount || 0,
+        tagUnreadCount: d.tagUnreadCount || 0,
+        tagToasts: Array.isArray(d.tagToasts) ? d.tagToasts : [],
       };
     } catch (err) {
       console.warn('[Notifications] fetchSummary failed:', err);

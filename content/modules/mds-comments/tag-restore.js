@@ -38,8 +38,14 @@ function normalize(text) {
     .toLowerCase();
 }
 
+/** Enough to identify the destination on the other side of a navigation. */
+function isAddressable(p) {
+  if (p?.source === 'report_finding') return !!(p.reportId && p.findingId && p.reportDateLocal);
+  return !!(p?.assessmentId && p?.mdsItem);
+}
+
 export function writeRestore(payload) {
-  if (!payload?.assessmentId || !payload?.mdsItem) return false;
+  if (!isAddressable(payload)) return false;
   try {
     sessionStorage.setItem(
       KEY,
@@ -59,7 +65,7 @@ export function readRestore() {
     const payload = JSON.parse(raw);
     if (!payload || payload.version !== VERSION) return null;
     if (!Number.isFinite(payload.expiresAt) || Date.now() > payload.expiresAt) return null;
-    if (!payload.assessmentId || !payload.mdsItem) return null;
+    if (!isAddressable(payload)) return null;
     return payload;
   } catch (_) {
     return null;
@@ -153,6 +159,12 @@ export async function hydrateTagRestore({ onFailure } = {}) {
       return fail(
         `Could not switch to ${payload.facilityName || payload.pccFacilityName}. Open it from the facility menu and try again.`
       );
+    }
+    // A 24-hour finding needs no second navigation: the panel is an overlay on
+    // whatever page we landed on, and it loads the report by date itself.
+    if (payload.source === 'report_finding') {
+      clearRestore();
+      return { arrived: payload };
     }
     writeRestore({ ...payload, stage: 'section' });
     window.location.href = sectionUrlFor(payload);

@@ -56,7 +56,7 @@ function patientDisplayName(finding) {
   return joined || 'Unknown';
 }
 
-export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
+export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC, openOnMount }) {
   const sev = (finding.severity || 'low').toLowerCase();
   const sevLabel = SEVERITY_LABEL[sev] || sev;
   const name = patientDisplayName(finding);
@@ -73,7 +73,10 @@ export function FindingRow({ finding, reportId, signoffEnabled, onOpenInPCC }) {
   // resident's record is a documentation error, not a bad link.
   const pccClientId = finding.pccClientId || null;
 
-  const [expanded, setExpanded] = useState(false);
+  // Open on arrival when the inbox sent us straight to this finding. Scrolling
+  // to a collapsed row and stopping there hides the very comment the user came
+  // to read, which reads as the deep link having failed.
+  const [expanded, setExpanded] = useState(Boolean(openOnMount));
   const [noteOpen, setNoteOpen] = useState(false);
   const activity = useFindingActivity({ reportId, findingId });
   // Needed only to decide whose comments show a Delete affordance — the server

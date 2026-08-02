@@ -239,12 +239,21 @@ async function hydrateMdsTagRestore() {
       onFailure: (message) => window.SuperToast?.error(message),
     });
     if (!result?.arrived) return;
-    window.SuperMdsTagArrival = result.arrived;
+    const arrival = result.arrived;
+
+    if (arrival.source === 'report_finding') {
+      // The 24-hour panel is an overlay, so there is nothing to wait for — it
+      // loads the report by date itself and scrolls to the finding.
+      const { build24hrRestore } = await import('../modules/mds-comments/inbox-panel.js');
+      TwentyFourHourReportLauncher.close();
+      TwentyFourHourReportLauncher.open({ restore: build24hrRestore(arrival) });
+      return;
+    }
+
+    window.SuperMdsTagArrival = arrival;
     // The overlay scans asynchronously; it announces when the item is on screen
     // and reachable, which is the only moment opening a thread makes sense.
-    window.dispatchEvent(
-      new CustomEvent('super:mds-tag-arrived', { detail: result.arrived })
-    );
+    window.dispatchEvent(new CustomEvent('super:mds-tag-arrived', { detail: arrival }));
   } catch (err) {
     console.warn('[MdsTags] restore failed', err);
   }
@@ -1238,11 +1247,12 @@ async function updateMDSBadge() {
       if (facilityName && orgSlug) {
         const summary = await NotificationsAPI.fetchSummary(facilityName, orgSlug);
         if (summary) {
-          // Certs, queries and the 24h report are facility-scoped. MDS tags are
-          // NOT — an ask waiting at another building still counts, which is the
-          // whole reason the inbox and the facility switch exist.
-          mdsTagCount = summary.mdsTagActionCount + summary.mdsTagUnreadCount;
-          mdsTagToasts = summary.mdsTagToasts;
+          // Certs, queries and the 24h report are facility-scoped. Tag counts
+          // are NOT — a question waiting at another building still counts,
+          // which is the whole reason the inbox and the facility switch exist.
+          mdsTagCount =
+            summary.tagActionCount + summary.tagMentionCount + summary.tagUnreadCount;
+          mdsTagToasts = summary.tagToasts;
           count = summary.actionCount + summary.fyiUnseenCount + mdsTagCount;
           report24hUnseen = summary.report24hUnseen;
         }

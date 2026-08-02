@@ -368,18 +368,39 @@ function esc(v) {
   );
 }
 
+/**
+ * One message, laid out like `.thr__thread-item` in the 24-hour report: initial
+ * avatar, bold name, muted time, body underneath. The avatar is what makes a
+ * back-and-forth scannable — without it two consecutive messages read as one
+ * block of text with a name buried in the middle.
+ */
 function commentHtml(c) {
+  const who = personLabel({ name: c.authorName, email: c.authorEmail });
   const asked = (c.assignedTo || []).map(personLabel).join(', ');
   return `
     <li class="mct__msg">
-      <div class="mct__msg-head">
-        <span class="mct__msg-author">${esc(personLabel({ name: c.authorName, email: c.authorEmail }))}</span>
-        <span class="mct__muted">${esc(relativeTime(c.createdAt))}</span>
+      <span class="mct__avatar" aria-hidden="true">${esc(initialsOf(who))}</span>
+      <div class="mct__msg-body">
+        <div class="mct__msg-head">
+          <span class="mct__msg-author">${esc(who)}</span>
+          ${asked ? `<span class="mct__msg-asked">asked ${esc(asked)}</span>` : ''}
+          <span class="mct__msg-time">${esc(relativeTime(c.createdAt))}</span>
+        </div>
+        <p class="mct__msg-text">${esc(c.message)}</p>
       </div>
-      ${asked ? `<p class="mct__msg-asked">asked ${esc(asked)}</p>` : ''}
-      <p class="mct__msg-body">${esc(c.message)}</p>
     </li>
   `;
+}
+
+/** Matches `initialsOf` in the 24-hour report so avatars agree everywhere. */
+function initialsOf(nameOrEmail) {
+  const raw = String(nameOrEmail || '').trim();
+  if (!raw) return '?';
+  const base = raw.includes('@') ? raw.split('@')[0].replace(/[._-]+/g, ' ') : raw;
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 window.MdsCommentThread = MdsCommentThread;

@@ -1,23 +1,25 @@
 /**
  * The cross-facility inbox — "what am I on the hook for?"
  *
- * Its own launcher on the FAB, deliberately NOT a tab inside the MDS Command
- * Center: that tab strip marks its contents seen on enter, which would quietly
- * clear tags a regional had not read yet.
+ * Two surfaces: MDS items and 24-hour report findings. UB-04 mentions stay on
+ * the web, because a row you cannot act on from inside PCC is a dead end.
  *
- * Two groups, in this order, because the list is read for obligations before it
- * is read for news:
- *   Asked of you  — an unresolved assignment. No dismiss affordance; the only
- *                   way out is to answer, which is the whole feature.
+ * Its own launcher, deliberately NOT a tab inside the MDS Command Center: that
+ * tab strip marks its contents seen on enter, which would quietly clear tags a
+ * regional had not read yet.
+ *
+ * ── Three groups, in this order ───────────────────────────────────────────
+ *   Asked of you  — an unresolved assignment. MDS only; the 24-hour schema has
+ *                   no assignment axis at all. No dismiss affordance here — the
+ *                   only way out is to answer, which is the whole feature.
+ *   Mentioned you — a live mention. Worth surfacing, but nobody owes anything.
  *   Following     — threads you are in. Unread ones carry a dot.
  *
- * Vanilla, matching `comment-thread.js`. Geometry mirrors `.thr__panel` so the
- * 24-hour report and this feel like one product.
+ * Styling follows `.thr__thread-*` in the 24-hour report — initial avatars,
+ * Tailwind GRAY (not slate), 22px circles — so a conversation looks the same
+ * wherever the extension shows one.
  */
-import {
-  isAlreadyAtFacility,
-  switchToFacility,
-} from './facility-switch.js';
+import { isAlreadyAtFacility, switchToFacility } from './facility-switch.js';
 import {
   clearRestore,
   sectionCodeForItem,
@@ -60,11 +62,9 @@ const MdsTagInbox = {
     if (!this._el) return;
     this._render();
 
-    const open = this._rows.filter((r) => r.awaitingMe).length;
-    const unread = this._rows.filter((r) => r.unread).length;
     window.SuperAnalytics?.track('mds_inbox_opened', {
-      open_count: open,
-      unread_count: unread,
+      open_count: this._rows.filter((r) => r.awaitingMe).length,
+      unread_count: this._rows.filter((r) => r.unread).length,
     });
     // Opening the inbox is not reading the threads inside it, so the unread
     // side of the badge is left alone here — it clears thread by thread.
@@ -100,13 +100,14 @@ const MdsTagInbox = {
     if (!p) return;
 
     const asked = this._rows.filter((r) => r.awaitingMe);
-    const following = this._rows.filter((r) => !r.awaitingMe);
+    const mentioned = this._rows.filter((r) => !r.awaitingMe && r.mentionsMe);
+    const following = this._rows.filter((r) => !r.awaitingMe && !r.mentionsMe);
 
     p.innerHTML = `
       <header class="mti__header">
         <div>
           <span class="mti__title">Inbox</span>
-          <span class="mti__subtitle">Conversations on MDS items, across your buildings</span>
+          <span class="mti__subtitle">Conversations across your buildings</span>
         </div>
         <!-- NO_TRACK: mds_comment_panel_closed means the THREAD panel; reusing it here would inflate it. -->
         <button class="mti__close" aria-label="Close">&times;</button>
@@ -114,8 +115,9 @@ const MdsTagInbox = {
       <div class="mti__body">
         ${this._loading ? '<p class="mti__muted">Loading…</p>' : ''}
         ${!this._loading && this._rows.length === 0 ? emptyStateHtml() : ''}
-        ${asked.length ? sectionHtml('Asked of you', asked) : ''}
-        ${following.length ? sectionHtml('Following', following) : ''}
+        ${asked.length ? groupHtml('Asked of you', asked) : ''}
+        ${mentioned.length ? groupHtml('Mentioned you', mentioned) : ''}
+        ${following.length ? groupHtml('Following', following) : ''}
       </div>
     `;
 
@@ -123,21 +125,21 @@ const MdsTagInbox = {
 
     p.querySelectorAll('[data-thread]').forEach((el) => {
       el.addEventListener('click', (e) => {
-        if (e.target.closest('[data-pcc]')) return;
-        this._openThread(el.dataset.thread);
+        if (e.target.closest('[data-open]')) return;
+        this._openRow(el.dataset.thread);
       });
       // The row claims role="button"; without this it is only pretending.
       el.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
-        this._openThread(el.dataset.thread);
+        this._openRow(el.dataset.thread);
       });
     });
 
-    p.querySelectorAll('[data-pcc]').forEach((btn) =>
+    p.querySelectorAll('[data-open]').forEach((btn) =>
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._openInPcc(btn.dataset.pcc);
+        this._openInPcc(btn.dataset.open);
       })
     );
   },
@@ -146,9 +148,23 @@ const MdsTagInbox = {
     return this._rows.find((r) => r.threadKey === threadKey) || null;
   },
 
-  async _openThread(threadKey) {
+  /**
+   * Clicking a row.
+   *
+   * An MDS thread opens inline — the panel above this one is its natural home.
+   * A 24-hour finding does not: its conversation lives inside the report, next
+   * to the sources and the sign-off, and rebuilding that here would be a second
+   * implementation of a screen that already exists.
+   */
+  async _openRow(threadKey) {
     const row = this._rowByKey(threadKey);
     if (!row) return;
+
+    if (row.source === 'report_finding') {
+      this._openInPcc(threadKey);
+      return;
+    }
+
     window.SuperAnalytics?.track('mds_inbox_thread_opened', {
       mds_item: row.mdsItem,
       awaiting_me: row.awaitingMe,
@@ -164,7 +180,7 @@ const MdsTagInbox = {
   },
 
   /**
-   * Take the user to the item in PCC, switching buildings if that is what it
+   * Take the user to the thing itself, switching buildings if that is what it
    * takes. Always an explicit click; never something that happens to somebody.
    */
   async _openInPcc(threadKey) {
@@ -173,28 +189,50 @@ const MdsTagInbox = {
 
     const targetFacility = row.pccFacilityName || row.facilityName;
     const sameFacility = isAlreadyAtFacility(targetFacility);
-    const payload = {
-      assessmentId: row.assessmentId,
-      externalAssessmentId: row.externalAssessmentId,
-      mdsItem: row.mdsItem,
-      mdsColumn: row.mdsColumn,
-      sectionCode: sectionCodeForItem(row.mdsItem),
-      facilityName: row.facilityName,
-      pccFacilityName: targetFacility,
-    };
+
+    const payload =
+      row.source === 'report_finding'
+        ? {
+            source: 'report_finding',
+            reportId: row.reportId,
+            findingId: row.findingId,
+            reportDateLocal: row.reportDateLocal,
+            facilityName: row.facilityName,
+            pccFacilityName: targetFacility,
+          }
+        : {
+            source: 'mds_item',
+            assessmentId: row.assessmentId,
+            externalAssessmentId: row.externalAssessmentId,
+            mdsItem: row.mdsItem,
+            mdsColumn: row.mdsColumn,
+            sectionCode: sectionCodeForItem(row.mdsItem),
+            facilityName: row.facilityName,
+            pccFacilityName: targetFacility,
+          };
 
     window.SuperAnalytics?.track('mds_inbox_pcc_jump', {
-      mds_item: row.mdsItem,
+      mds_item: row.mdsItem || row.source,
       same_facility: sameFacility,
     });
 
     if (sameFacility) {
+      if (row.source === 'report_finding') {
+        // The launcher is a no-op while a panel is already open, so re-point it
+        // rather than silently doing nothing.
+        window.TwentyFourHourReportLauncher?.close();
+        window.TwentyFourHourReportLauncher?.open({
+          restore: build24hrRestore(payload),
+        });
+        this.close();
+        return;
+      }
       writeRestore({ ...payload, stage: 'section' });
       window.location.href = sectionUrlFor(payload);
       return;
     }
 
-    if (!row.externalAssessmentId) {
+    if (row.source === 'mds_item' && !row.externalAssessmentId) {
       window.SuperToast?.error('We do not have PCC’s id for that assessment yet.');
       window.SuperAnalytics?.track('mds_inbox_pcc_jump_failed', { reason: 'no_external_id' });
       return;
@@ -221,18 +259,32 @@ const MdsTagInbox = {
   },
 };
 
+/** The 24-hour panel's own restore contract — version 1, 30-minute TTL. */
+export function build24hrRestore(payload) {
+  return {
+    version: 1,
+    facilityName: payload.pccFacilityName,
+    orgSlug: window.getOrg?.()?.org || '',
+    date: payload.reportDateLocal,
+    findingId: payload.findingId,
+    scrollTop: 0,
+    expiresAt: Date.now() + 30 * 60 * 1000,
+  };
+}
+
 function emptyStateHtml() {
   return `
     <div class="mti__empty">
       <p class="mti__empty-title">Nothing waiting on you</p>
       <p class="mti__muted">
-        When a regional asks about an MDS item, it lands here — from any building you have access to.
+        When someone asks about an MDS item or tags you on a 24-hour report finding,
+        it lands here — from any building you have access to.
       </p>
     </div>
   `;
 }
 
-function sectionHtml(title, rows) {
+function groupHtml(title, rows) {
   return `
     <section class="mti__group">
       <h3 class="mti__group-title">${esc(title)} <span class="mti__count">${rows.length}</span></h3>
@@ -241,50 +293,57 @@ function sectionHtml(title, rows) {
   `;
 }
 
+// Matches the FAB's own launcher glyphs, so the pill and the button a user
+// would press to get there say the same word.
+const SOURCE_LABEL = {
+  mds_item: 'MDS',
+  report_finding: '24H',
+};
+
 function rowHtml(r) {
   const here = isAlreadyAtFacility(r.pccFacilityName || r.facilityName);
   // The preview names the author of the message being previewed, always. Using
   // the asker's name here reads as "Dana asked <somebody else's words>" the
-  // moment anyone replies — the same misattribution the toast had.
+  // moment anyone replies.
   const who = r.lastMessage.authorName || 'Someone';
-  // Who asked is worth knowing, but it is a fact about the thread, not about
-  // this message, so it sits in the metadata line. Redundant on a one-message
-  // thread, where the preview already is the ask.
+  // Who asked is a fact about the thread, not about this message. Redundant on
+  // a one-message thread, where the preview already IS the ask.
   const showAsker = r.awaitingMe && r.askedByName && r.messageCount > 1;
+  const openLabel =
+    r.source === 'report_finding'
+      ? here
+        ? 'Open the report'
+        : 'Open in PCC'
+      : here
+        ? 'Open the MDS'
+        : 'Open in PCC';
+
+  // A list is for choosing what to open, not for reading. One quiet line of
+  // "who: what", clipped — the avatars and the wrapped message body that were
+  // here before turned four rows into a wall.
+  const meta = [
+    r.patientLabel,
+    showAsker ? `${r.askedByName} asked` : null,
+    relativeTime(r.lastMessage.createdAt),
+    r.messageCount > 1 ? `${r.messageCount} messages` : null,
+  ].filter(Boolean);
+
   return `
-    <li class="mti__row${r.unread ? ' mti__row--unread' : ''}" data-thread="${esc(r.threadKey)}" role="button" tabindex="0">
+    <li class="mti__row" data-thread="${esc(r.threadKey)}" role="button" tabindex="0">
       <div class="mti__row-head">
+        <span class="mti__source mti__source--${esc(r.source)}">${esc(SOURCE_LABEL[r.source] || r.source)}</span>
         <span class="mti__item">${esc(r.itemLabel)}</span>
         ${r.unread ? '<span class="mti__dot" aria-label="Unread"></span>' : ''}
       </div>
-      <div class="mti__meta">
-        ${r.patientLabel ? `<span class="mti__resident">${esc(r.patientLabel)}</span>` : ''}
-        ${showAsker ? `<span class="mti__asker">${esc(r.askedByName)} asked</span>` : ''}
-        ${
-          r.facilityName && !here
-            ? `<span class="mti__facility">${esc(r.facilityName)}</span>`
-            : ''
-        }
-      </div>
-      <p class="mti__preview"><span class="mti__who">${esc(who)}</span> ${esc(
-        truncate(r.lastMessage.message, 120)
-      )}</p>
+      <p class="mti__preview"><span class="mti__who">${esc(who)}:</span> ${esc(r.lastMessage.message)}</p>
       <div class="mti__row-foot">
-        <span class="mti__muted">${esc(relativeTime(r.lastMessage.createdAt))}${
-          r.messageCount > 1 ? ` · ${r.messageCount} messages` : ''
-        }</span>
+        <span class="mti__meta">${esc(meta.join(' · '))}</span>
+        ${r.facilityName && !here ? `<span class="mti__facility">${esc(r.facilityName)}</span>` : ''}
         <!-- NO_TRACK: _openInPcc fires mds_inbox_pcc_jump itself, with properties. -->
-        <button class="mti__pcc" data-pcc="${esc(r.threadKey)}">
-          ${here ? 'Open the MDS' : 'Open in PCC'}
-        </button>
+        <button class="mti__open" data-open="${esc(r.threadKey)}">${esc(openLabel)}</button>
       </div>
     </li>
   `;
-}
-
-function truncate(text, max) {
-  const t = String(text || '').replace(/\s+/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
 function relativeTime(iso) {
