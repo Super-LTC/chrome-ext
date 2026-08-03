@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { unwrap } from '../utils/api.js';
 
-/** Namespaced dismissal kinds the backend accepts (shared resident_dismissals table). */
-export const FL_QIP_PROGNOSIS_KIND = 'fl_qip:prognosis';
-export const FL_QIP_FLU_KIND = 'fl_qip:flu';
+// Re-exported, NOT redefined. These strings are a wire format the POST validates
+// against and 400s on any variation; a second copy is how one of them quietly
+// drifts from the other. Single definition lives in lib/fl-qip-coding-kinds.js.
+export { FL_QIP_PROGNOSIS_KIND, FL_QIP_FLU_KIND } from '../lib/fl-qip-coding-kinds.js';
 
 /**
  * useFlQip — Florida QIP Official-vs-Projected + coding-accuracy for the Regional

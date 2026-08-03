@@ -82,7 +82,13 @@ function ExcludedRow({ r }) {
   );
 }
 
-export function DenominatorPanel({ open, meta, denom, onClose }) {
+/**
+ * @param {object} props
+ * @param {import('preact').ComponentChildren} [props.headerExtra] Controls rendered
+ *   in the panel header — the QIP drill puts its quarter picker here so switching
+ *   quarters doesn't mean leaving the roster you're reading.
+ */
+export function DenominatorPanel({ open, meta, denom, onClose, headerExtra }) {
   const [query, setQuery] = useState('');
   if (!open || !denom || !meta) return null;
 
@@ -110,6 +116,7 @@ export function DenominatorPanel({ open, meta, denom, onClose }) {
             <div className="qmden__header-main">
               <div className="qmden__title-line">
                 <span className="qmden__title">{shortLabel(meta.id, meta.label)}</span>
+                {headerExtra}
                 {code && <span className="qmden__code">{code}</span>}
                 {fiveStar
                   ? <span className="qmc-tag qmc-tag--star">5★</span>

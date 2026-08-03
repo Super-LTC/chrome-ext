@@ -96,6 +96,18 @@ export const ArrowLeft = (p) => (
 export const Minus = (p) => (
   <svg {...base} className={p.className}><path d="M5 12h14"/></svg>
 );
+/** Pencil — edit the facility-entered inputs. */
+export const Pencil = (p) => (
+  <svg {...base} className={p.className}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+);
+/** Broadcast — marks OUR live projection, as against CMS's published figure. */
+export const Radio = (p) => (
+  <svg {...base} className={p.className}><circle cx="12" cy="12" r="2"/><path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4"/></svg>
+);
+/** Institution/agency — marks a number that comes from CMS rather than from us. */
+export const Landmark = (p) => (
+  <svg {...base} className={p.className}><path d="M3 22h18M6 18V11M10 18V11M14 18V11M18 18V11M12 2 2 7h20L12 2Z"/></svg>
+);
 export const FlaskConical = (p) => (
   <svg {...base} className={p.className}><path d="M10 2v7.5L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 9.5V2"/><path d="M8.5 2h7M7 16h10"/></svg>
 );

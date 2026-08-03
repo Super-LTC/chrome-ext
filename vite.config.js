@@ -5,6 +5,7 @@ import { copyFileSync, mkdirSync, readdirSync, renameSync, readFileSync, writeFi
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import manifest from './manifest.json';
+import { tailwindScoped } from './scripts/build-tailwind.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -152,6 +153,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
+      // Must precede the CSS pipeline: it writes content/css/tailwind.generated.css,
+      // which css-bootstrap.js imports `?inline`.
+      tailwindScoped(),
       stubPosthogInStore(mode),
       stripMocksInProduction(mode),
       preact(),

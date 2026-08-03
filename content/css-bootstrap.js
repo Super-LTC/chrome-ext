@@ -55,6 +55,7 @@ import ardEstimator from './css/ard-estimator.css?inline';
 import mdsPlanner from './css/mds-planner.css?inline';
 import udaModal from './css/uda-modal.css?inline';
 import qmBoard from './css/qm-board.css?inline';
+import fiveStar from './css/five-star.css?inline';
 import managedCare from './css/managed-care.css?inline';
 import qmCommandCenter from './css/qm-command-center.css?inline';
 import ftagPrevention from './css/ftag-prevention.css?inline';
@@ -68,6 +69,13 @@ import superVerify from './css/super-verify.css?inline';
 import i8000Overlay from './css/i8000-overlay.css?inline';
 import ipaView from './css/ipa-view.css?inline';
 import extensionSettings from './css/extension-settings.css?inline';
+
+// --- Tailwind (generated + scoped under .sltc-tw) -----------------------
+// LAST on purpose: utilities must beat the hand-written BEM above them when a
+// ported component and an existing stylesheet touch the same element. Built by
+// scripts/build-tailwind.mjs (a Vite plugin regenerates it every build); the
+// file is gitignored, so a clean checkout gets it from the build, not the repo.
+import tailwind from './css/tailwind.generated.css?inline';
 
 const CSS_BUNDLE = [
   variables,
@@ -101,6 +109,7 @@ const CSS_BUNDLE = [
   mdsPlanner,
   udaModal,
   qmBoard,
+  fiveStar,
   managedCare,
   qmCommandCenter,
   ftagPrevention,
@@ -114,6 +123,7 @@ const CSS_BUNDLE = [
   i8000Overlay,
   ipaView,
   extensionSettings,
+  tailwind,
 ].join('\n\n');
 
 function injectCss() {
