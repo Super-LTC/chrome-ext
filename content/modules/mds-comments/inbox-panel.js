@@ -14,6 +14,9 @@
  *                   only way out is to answer, which is the whole feature.
  *   Mentioned you — a live mention. Worth surfacing, but nobody owes anything.
  *   Following     — threads you are in. Unread ones carry a dot.
+ *   Resolved      — the ask was answered and closed. Collapsed by default, and
+ *                   collapsed rather than hidden: hiding loses the only record
+ *                   that the loop actually closed.
  *
  * Styling follows `.thr__thread-*` in the 24-hour report — initial avatars,
  * Tailwind GRAY (not slate), 22px circles — so a conversation looks the same
@@ -32,6 +35,12 @@ const MdsTagInbox = {
   _esc: null,
   _rows: [],
   _loading: false,
+  /**
+   * Resolved threads are collapsed, not hidden. Hiding them outright loses the
+   * only record that the loop actually closed; a disclosure with a count keeps
+   * the list short AND answers "did that ever get sorted?".
+   */
+  _showResolved: false,
 
   isOpen() {
     return !!this._el;
@@ -99,9 +108,13 @@ const MdsTagInbox = {
     const p = this._panel();
     if (!p) return;
 
-    const asked = this._rows.filter((r) => r.awaitingMe);
-    const mentioned = this._rows.filter((r) => !r.awaitingMe && r.mentionsMe);
-    const following = this._rows.filter((r) => !r.awaitingMe && !r.mentionsMe);
+    // Resolved wins over every other bucket: once the ask is answered the
+    // thread is history, whoever it once named.
+    const resolved = this._rows.filter((r) => r.resolved);
+    const live = this._rows.filter((r) => !r.resolved);
+    const asked = live.filter((r) => r.awaitingMe);
+    const mentioned = live.filter((r) => !r.awaitingMe && r.mentionsMe);
+    const following = live.filter((r) => !r.awaitingMe && !r.mentionsMe);
 
     p.innerHTML = `
       <header class="mti__header">
@@ -118,10 +131,17 @@ const MdsTagInbox = {
         ${asked.length ? groupHtml('Asked of you', asked) : ''}
         ${mentioned.length ? groupHtml('Mentioned you', mentioned) : ''}
         ${following.length ? groupHtml('Following', following) : ''}
+        ${!this._loading && live.length === 0 && resolved.length > 0 ? allClearHtml() : ''}
+        ${resolved.length ? resolvedGroupHtml(resolved, this._showResolved) : ''}
       </div>
     `;
 
     p.querySelector('.mti__close')?.addEventListener('click', () => this.close());
+
+    p.querySelector('[data-toggle-resolved]')?.addEventListener('click', () => {
+      this._showResolved = !this._showResolved;
+      this._render();
+    });
 
     p.querySelectorAll('[data-thread]').forEach((el) => {
       el.addEventListener('click', (e) => {
@@ -272,6 +292,29 @@ export function build24hrRestore(payload) {
   };
 }
 
+/** Shown when the only thing left in the inbox is history. */
+function allClearHtml() {
+  return `
+    <div class="mti__clear">
+      <p class="mti__clear-title">All caught up</p>
+      <p class="mti__muted">Nothing is waiting on you.</p>
+    </div>
+  `;
+}
+
+function resolvedGroupHtml(rows, expanded) {
+  return `
+    <section class="mti__group">
+      <!-- NO_TRACK: a disclosure is not a funnel step. -->
+      <button class="mti__disclosure" data-toggle-resolved aria-expanded="${expanded}">
+        <span class="mti__caret${expanded ? ' mti__caret--open' : ''}" aria-hidden="true">&rsaquo;</span>
+        Resolved <span class="mti__count">${rows.length}</span>
+      </button>
+      ${expanded ? `<ol class="mti__list">${rows.map(rowHtml).join('')}</ol>` : ''}
+    </section>
+  `;
+}
+
 function emptyStateHtml() {
   return `
     <div class="mti__empty">
@@ -329,11 +372,12 @@ function rowHtml(r) {
   ].filter(Boolean);
 
   return `
-    <li class="mti__row" data-thread="${esc(r.threadKey)}" role="button" tabindex="0">
+    <li class="mti__row${r.resolved ? ' mti__row--resolved' : ''}" data-thread="${esc(r.threadKey)}" role="button" tabindex="0">
       <div class="mti__row-head">
         <span class="mti__source mti__source--${esc(r.source)}">${esc(SOURCE_LABEL[r.source] || r.source)}</span>
         <span class="mti__item">${esc(r.itemLabel)}</span>
-        ${r.unread ? '<span class="mti__dot" aria-label="Unread"></span>' : ''}
+        ${r.resolved ? '<span class="mti__resolved">Resolved</span>' : ''}
+        ${r.unread && !r.resolved ? '<span class="mti__dot" aria-label="Unread"></span>' : ''}
       </div>
       <p class="mti__preview"><span class="mti__who">${esc(who)}:</span> ${esc(r.lastMessage.message)}</p>
       <div class="mti__row-foot">
