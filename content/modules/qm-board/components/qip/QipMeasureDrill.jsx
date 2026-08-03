@@ -24,7 +24,6 @@ import { useMemo } from 'preact/hooks';
 import { useQuarterRates } from '../../hooks/useQuarterRates.js';
 import { buildDenominatorView } from '../../lib/qm-denominator-view.js';
 import { shortLabel } from '../../lib/qm-view-model.js';
-import { resolveDeferralReason } from '../../lib/fl-qip-deferral.js';
 import { DenominatorPanel } from '../DenominatorPanel.jsx';
 import { ArrowLeft, Landmark } from '../icons.jsx';
 
@@ -54,11 +53,17 @@ export function QipMeasureDrill({
     return shortLabel(measureId, fromRates ?? measureId);
   }, [qr, measureId]);
 
-  // Server-authored when the payload carries it (#1084), our copy until then.
-  // `scoringDeferrals` is attached unconditionally and is not facility-dependent
-  // — it's a four-entry constant, and the DESTINATION decides when it applies,
-  // so the drill never has to know which program a building is in.
-  const deferralReason = resolveDeferralReason(measureId, qr?.scoringDeferrals);
+  // SERVER-AUTHORED, and the only source. `scoringDeferrals` (superltc #1084) is
+  // attached to the quarter-rates payload unconditionally and is not
+  // facility-dependent — it's a four-entry constant, and the DESTINATION decides
+  // when it applies, so the drill never has to know which program a building is
+  // in. We deliberately keep no local copy: this string's entire job is saying
+  // "this number didn't come from where you think", and a stale copy of it would
+  // be confidently wrong about provenance.
+  //
+  // A failed fetch therefore shows no banner. That's correct — there is no roster
+  // on screen to be misread, and the failure message says so.
+  const deferralReason = qr?.scoringDeferrals?.[measureId];
 
   return (
     <div className="sltc-tw">

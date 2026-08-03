@@ -128,7 +128,15 @@ describe('QipDestination', () => {
   it('opens the measure drill instead of the facility view when a measure is set', async () => {
     stubApi(async (msg) => (msg.endpoint.includes('/qip/region')
       ? { success: true, data: rollupPayload }
-      : { success: true, data: { quarter: { label: '2026Q2' }, rates: [], rows: [] } }));
+      // `scoringDeferrals` rides on every real quarter-rates payload (superltc
+      // #1084) and is now the ONLY source of the banner's wording — the
+      // extension keeps no local copy. A fixture without it renders no banner.
+      : { success: true, data: {
+          quarter: { label: '2026Q2' }, rates: [], rows: [],
+          scoringDeferrals: {
+            pressure_ulcer_long: 'CMS publishes a risk-adjusted rate an observed roster cannot reproduce',
+          },
+        } }));
 
     const el = await mount({
       view: 'measure',

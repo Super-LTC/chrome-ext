@@ -35,8 +35,21 @@ const row = (patientId, name, cell = {}) => ({
   }],
 });
 
+/**
+ * The four-entry map the server attaches to every quarter-rates payload
+ * (superltc #1084). Since the extension keeps NO local copy, a fixture without
+ * this renders no banner — which is the behaviour, not a bug.
+ */
+const SERVER_DEFERRALS = {
+  antipsychotic_long: "CMS scores the Jan-2026 hybrid measure with Medicare/Medicaid pharmacy-claims data no MDS view contains",
+  pressure_ulcer_long: 'CMS publishes a risk-adjusted rate an observed roster cannot reproduce',
+  bb_new_worsened: 'CMS publishes a risk-adjusted rate an observed roster cannot reproduce',
+  influenza_vaccine: 'CMS scores the influenza-season cohort (Oct-Mar), a different population than any calendar quarter',
+};
+
 const quarterRates = (measureId, over = {}) => ({
   quarter: { label: '2026Q2', start: '2026-04-01', end: '2026-06-30' },
+  scoringDeferrals: SERVER_DEFERRALS,
   rates: [{ measureId, label: measureId, numerator: 1, denominator: 2, rate: 0.5 }],
   rows: [
     row('p1', 'Test Resident', { measureId, triggers: true }),
@@ -123,12 +136,24 @@ describe('QipMeasureDrill — deferral banner', () => {
     expect(el.textContent).not.toContain("FL QIP scores this measure");
   });
 
-  it('shows the banner even when the roster fails to load', async () => {
-    // The deferral is a fact about the MEASURE, not about the response. If the
-    // fetch dies the reader still needs to know the number isn't ours.
+  it('renders the SERVER\'s wording, not a copy of its own', async () => {
+    // The point of #1084: one source for the words. A sentinel proves the banner
+    // passes through whatever the payload says rather than hardcoding it — which
+    // a fixture using the real strings could not distinguish.
+    stubApi({ success: true, data: quarterRates('uti', {
+      scoringDeferrals: { uti: 'SERVER-AUTHORED SENTINEL' },
+    }) });
+    const el = await mount({ measureId: 'uti' });
+    expect(el.textContent).toContain('SERVER-AUTHORED SENTINEL');
+  });
+
+  it('shows no banner when the roster fails to load', async () => {
+    // The reason travels ON the payload, so a failed fetch has none — and that
+    // is right: there is no roster on screen to be misread, and the failure
+    // message says so. (Before #1084 a local copy kept the banner up here.)
     stubApi({ success: false, error: 'boom' });
     const el = await mount({ measureId: 'bb_new_worsened' });
-    expect(el.textContent).toContain("FL QIP scores this measure");
+    expect(el.textContent).not.toContain("FL QIP scores this measure");
     expect(el.textContent).toContain('Could not load this quarter');
   });
 });
