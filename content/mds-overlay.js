@@ -606,6 +606,10 @@ async function initSuperOverlay() {
       fetchSectionData(params).then(r => { SuperLoadingStatus.completeTask('mds'); return r; }),
       fetchDecisions(params).then(r => { SuperLoadingStatus.completeTask('decisions'); return r; })
     ]);
+    // Comment badges ride along but are NOT awaited with the pair above: a slow
+    // or failing comments endpoint must never delay the MDS analysis, which is
+    // what the nurse actually opened this page for. They paint in when ready.
+    window.CommentBadges?.load();
     console.log('Super LTC: API response:', apiResponse);
     console.log('Super LTC: Decisions:', decisions);
 
@@ -1074,6 +1078,10 @@ function injectBadge(questionEl, result) {
   if (result.mdsItem && result.mdsItem.startsWith('I')) {
     QueryBadges.injectQueryBadge(questionEl, result, badge);
   }
+
+  // Conversation bubble. Renders nothing when the item has no comments, so
+  // this is a no-op on almost every row.
+  window.CommentBadges?.injectCommentBadge(questionEl, result, badge);
 }
 
 // ============================================

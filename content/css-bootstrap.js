@@ -59,6 +59,7 @@ import managedCare from './css/managed-care.css?inline';
 import qmCommandCenter from './css/qm-command-center.css?inline';
 import ftagPrevention from './css/ftag-prevention.css?inline';
 import twentyFourHourReport from './css/24hr-report.css?inline';
+import mdsComments from './css/mds-comments.css?inline';
 import updateBanner from './css/update-banner.css?inline';
 import meddiagAugment from './css/meddiag-augment.css?inline';
 import carePlanStamp from './css/care-plan-stamp.css?inline';
@@ -105,6 +106,7 @@ const CSS_BUNDLE = [
   qmCommandCenter,
   ftagPrevention,
   twentyFourHourReport,
+  mdsComments,
   updateBanner,
   meddiagAugment,
   carePlanStamp,

@@ -464,6 +464,7 @@ export function TwentyFourHourReport({ facilityName, orgSlug, restore, onClose }
                   reportId={currentReport?.id}
                   signoffEnabled={signoffEnabled}
                   onOpenInPCC={handleOpenInPCC}
+                  openOnMount={Boolean(restore?.findingId) && f.id === restore.findingId}
                 />
               ))}
             </ul>

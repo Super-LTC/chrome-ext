@@ -36,6 +36,15 @@ import './modules/managed-care/lib/run-tracker.js';
 // 3.7. Import notifications API (window.NotificationsAPI — badge + seen-state)
 import './modules/notifications/notifications-api.js';
 
+// 3.8. MDS item conversations (window.MdsCommentsAPI / CommentBadges /
+// MdsCommentThread). Vanilla, because the MDS overlay they attach to is.
+import './modules/mds-comments/comments-api.js';
+import './modules/mds-comments/comment-badges.js';
+import './modules/mds-comments/comment-thread.js';
+// The inbox is deliberately NOT gated to MDS pages: an ask waiting at another
+// building has to be reachable from wherever the user happens to be in PCC.
+import './modules/mds-comments/inbox-panel.js';
+
 // 4. Import query system
 import './queries/query-api.js';
 import './queries/icd10-code-picker.js';
