@@ -27,13 +27,18 @@
   to   { transform: translateY(0);    opacity: 1; }
 }
 
+/* Full-screen, matching the MDS Command Center's maximized shell.
+   The 80vw × 85vh modal this replaced could not hold the surface: the regional
+   table is eight columns wide, so at a 1100px cap it scrolled horizontally and
+   the cut-point hovers clipped at the modal edge. This is a whole destination,
+   not a dialog floating over PCC. */
 .qmb__modal {
   position: relative;
-  width: 80vw;
-  max-width: 1100px;
-  height: 85vh;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
   background: #fff;
-  border-radius: var(--super-radius-lg, 12px);
+  border-radius: 0;
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.2);
   display: flex;
   flex-direction: column;

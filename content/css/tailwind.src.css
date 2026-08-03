@@ -1,0 +1,41 @@
+/*
+ * Tailwind source for the ported web surfaces.
+ *
+ * This file is COMPILED, not shipped — `scripts/build-tailwind.mjs` runs it
+ * through Tailwind and then scopes every selector under `.sltc-tw`, writing
+ * `tailwind.generated.css`, which css-bootstrap.js imports `?inline` like every
+ * other stylesheet. Do not import this file directly.
+ *
+ * Pinned to the same Tailwind major/minor as the web app (4.1.16). The version
+ * is a fidelity dependency, not a preference: v4 changed default border colour,
+ * the shipped palette, and several utility names, so a ported component styled
+ * against a different version renders subtly differently from its original.
+ * Bump this only together with the web.
+ */
+
+@import "tailwindcss";
+
+/*
+ * Tell Tailwind where to look for class names. v4 auto-detects by walking up
+ * from this file, which would scan the whole extension — slower, and it would
+ * generate utilities for class-like strings in unrelated vanilla code. The
+ * ported components all live under qm-board, so scan exactly that.
+ */
+@source "../modules/qm-board/**/*.jsx";
+
+/*
+ * The web's default border colour, replicated.
+ *
+ * Tailwind v4's bare `border` utility resolves to `currentColor`. The web app
+ * overrides that in its own base layer (`* { border-color: hsl(var(--border)) }`
+ * in globals.css), and the QIP components use bare `border` 29 times — so
+ * without this they'd draw borders in the text colour instead of the light grey
+ * the design assumes. Value copied from globals.css `--border`.
+ *
+ * Scoped by the build step along with everything else, so it can't reach PCC.
+ */
+@layer base {
+  * {
+    border-color: hsl(214.3 31.8% 91.4%);
+  }
+}

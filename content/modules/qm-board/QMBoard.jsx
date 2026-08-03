@@ -1,56 +1,75 @@
 /**
- * QMBoard — root of the QM Command Center overlay (parity rebuild, PR #626).
+ * QMBoard — root of the QM / Five-Star surface.
  *
- * Surfaces (single-overlay view stack + a resident modal that layers on top):
- *   'dashboard' — Surface A (QmOverview): hero, clear-group segments, the
- *                 predicted Five-Star card, measure tiles, clear-group worklist.
- *   'measure'   — Surface B (MeasureDetail): one measure's residents + what-if.
- *   'signals'   — Surface D (ClinicalSignalsView): Mode-0 clinical signals.
- *   'simulator' — Surface E (WhatIfSimulator): every LS five-star trigger as a
- *                 lever; flip switches → predicted star moves live (client-only).
- *   resident modal — Surface C (ResidentDrillIn): every triggering measure for
- *                 one resident, each as a 3-beat timeline. Overlays any view.
+ * DESTINATIONS (the top bar), same grammar as the web:
+ *   'coordinator' — the nurse's building-level worklist (QmInhouse). EXTENSION-ONLY
+ *                   now: the web hid it, and it is a big part of why the extension
+ *                   matters, so it stays and it stays the default landing.
+ *   'regional'    — the Five-Star world. Lands on the all-buildings GRID
+ *                   (FiveStarLanding) and scopes into one building.
+ *   'qip'         — the FL QIP world: rollup → building → measure, with the
+ *                   deferral banner that keeps a live MDS roster from reading as
+ *                   the input behind a CMS-scored number.
+ *   'cna'         — CNA scorecards (AideScoringView).
+ *   'functional'  — Functional Decline. A separate page on the web; a destination
+ *                   here, because there is no router to link out to.
  *
- * Focus mode (the landing) surfaces a predicted-★ chip; the full board carries
- * the predictor card + the what-if simulator. The predictor is lazy-fetched.
+ * VIEWS (where you drill to inside a destination): 'overview' | 'measure' |
+ * 'signals' | 'simulator' | 'dfs' — plus a resident drill-in modal that layers
+ * over any of them.
  *
- * Groups by the one honest ClearGroup axis (Clear with an MDS / Needs a clinical
- * fix / Locked this quarter) via the pure view-model, not raw cliff urgency.
+ * NAVIGATION is the ported route OBJECT (lib/qm-route.js), backed by an
+ * in-memory stack rather than the URL — a content script doesn't own the address
+ * bar. Keeping the web's route shape is what lets ported components read
+ * `route.measure` / `route.quarter` / `route.scope` unchanged.
  */
-import { useState, useMemo, useCallback, useEffect, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useQmRoute } from './hooks/useQmRoute.js';
 import { useQmBoard } from './hooks/useQmBoard.js';
 import { useFiveStar } from './hooks/useFiveStar.js';
 import { useDfs } from './hooks/useDfs.js';
 import { useQuarterRates } from './hooks/useQuarterRates.js';
 import { useRolling } from './hooks/useRolling.js';
 import { track } from '../../utils/analytics.js';
-import { totalActionable } from './lib/qm-clinical-signals.js';
 import { QmInhouse } from './components/QmInhouse.jsx';
-import { QmFiveStarScorecard } from './components/QmFiveStarScorecard.jsx';
 import { ResidentDrillIn } from './components/ResidentDrillIn.jsx';
 import { MeasureDetail } from './components/MeasureDetail.jsx';
 import { ClinicalSignalsView } from './components/ClinicalSignalsView.jsx';
 import { WhatIfSimulator } from './components/WhatIfSimulator.jsx';
 import { DfsPage } from './components/DfsPage.jsx';
+import { FiveStarLanding } from './components/five-star/FiveStarLanding.jsx';
+import { FacilityScope } from './components/five-star/FacilityScope.jsx';
+import { QipDestination } from './components/qip/QipDestination.jsx';
+import { toMeasureDetailQip } from './lib/fl-qip-view-model.js';
+import { sameFacilityName } from './lib/region-pin.js';
 import { FunctionalDeclineView } from './FunctionalDecline.jsx';
 import { AideScoringView } from './aide-scoring/AideScoringView.jsx';
 import { QmLoading } from './components/QmLoading.jsx';
 
+/** The top bar. Order is the reading order, not an importance ranking. */
+const DESTINATIONS = [
+  { mode: 'coordinator', label: 'Coordinator' },
+  { mode: 'regional', label: 'Five-Star' },
+  { mode: 'qip', label: 'QIP' },
+  { mode: 'cna', label: 'CNA' },
+  { mode: 'functional', label: 'Functional Decline' },
+];
+
 export function QMBoard({ facilityName, orgSlug, onClose }) {
-  // Two modes off one fetch: Coordinator is the landing — the in-house "what do
-  // I clear" worklist (List/Grid/Calendar), replacing the old Focus; QM Board is
-  // the full regional board. The Coordinator | QM Board switch is always visible —
-  // the full board must never feel hidden. (Regional Five-Star scorecard will
-  // replace the 'board' mode in a later session.)
-  const [mode, setMode] = useState('coordinator'); // 'coordinator' | 'board' | 'cna'
-  const [history, setHistory] = useState([{ kind: 'dashboard' }]);
-  const view = history[history.length - 1];
+  const { route, nav } = useQmRoute({ mode: 'coordinator', scope: 'board' });
+  const { mode, view, lens } = route;
+
   // Resident drill-in modal — layers over whatever view is showing.
-  const [resident, setResident] = useState(null); // { patient, entry } | null
-  // Measure-set lens (Five-Star / QIP / Both) — board-only; owned here so it
-  // drives the whole board AND filters the resident drill-in no matter which
-  // surface opened it. Focus is implicitly the Five-Star "what to do now" view.
-  const [lens, setLens] = useState('five_star'); // QmLens
+  const [resident, setResident] = useState(null); // { patient, entry, scopeMeasureId } | null
+
+  // Non-route state that rides along with a view. Deliberately NOT on the route:
+  // these are derived CONTEXT, not part of an address — the same measure at the
+  // same quarter is the same view whichever frame opened it, and the selected
+  // building's name is a lookup on `scopeId`, not an independent fact. Putting
+  // derivable values on the route is how a route starts disagreeing with itself.
+  // The web keeps `qipWhatIf` in React state for the same reason.
+  const [measureCtx, setMeasureCtx] = useState({});
+  const [scopeCtx, setScopeCtx] = useState({}); // { name, pccFacilityName } for route.scopeId
 
   useEffect(() => { track('qm_board_opened', { source: 'fab' }); }, []);
 
@@ -62,46 +81,38 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Changing surface (push/pop a view, or flip mode) should land at the top of
-  // the new page — otherwise the scroll position from the board carries over and
-  // you open a detail page already scrolled into its middle.
+  // Changing surface should land at the top of the new page — otherwise the
+  // scroll position from the board carries over and you open a detail page
+  // already scrolled into its middle.
   const scrollRef = useRef(null);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [view, mode]);
-
-  const push = useCallback((v) => setHistory((h) => [...h, v]), []);
-  const pop = useCallback(() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h)), []);
 
   const { currentlyTriggering, preventableAlerts, upcoming, loading, error, retry } =
     useQmBoard({ facilityName, orgSlug });
   // Predicted Five-Star QM — lazy-fetched separately so the board renders first
   // and the predictor card fills in (it does a double facility-rate pass).
-  const { prediction, loading: predictionLoading } = useFiveStar({ facilityName, orgSlug });
+  const { prediction } = useFiveStar({ facilityName, orgSlug });
   // Discharge Function Score card — also lazy (rolling-12-mo short-stay measure,
   // its own service + cache). Board renders first; the DFS card fills in.
   const { dfs } = useDfs({ facilityName, orgSlug });
   // Windowed (discharged-inclusive) quarter rates + denominator roster, and the
-  // rolling 4-quarter trend — both lazy so the board renders first. The measure
-  // tiles/detail show the active rate until quarter-rates lands, then the true
-  // CMS windowed rate; the trend chart appears once rolling lands.
+  // rolling 4-quarter trend — both lazy so the board renders first.
   const { quarterRates } = useQuarterRates({ facilityName, orgSlug });
   const { rolling } = useRolling({ facilityName, orgSlug });
 
-  const signalCount = useMemo(
-    () => (preventableAlerts ? totalActionable(preventableAlerts) : 0),
-    [preventableAlerts]
-  );
+  const openMeasure = useCallback((measureId, opts) => {
+    setMeasureCtx({ scoreContext: opts?.scoreContext, qip: opts?.qip });
+    nav.go({ view: 'measure', measure: measureId });
+  }, [nav]);
 
-  // opts.scoreContext ('fl_qip') tells MeasureDetail which scoring frame it was
-  // opened from — so it suppresses Five-Star point estimates for FL QIP (which
-  // scores on percentile bands, not star points). Undefined → Five-Star default.
-  const openMeasure = (measureId, opts) => push({ kind: 'measure', measureId, scoreContext: opts?.scoreContext, qip: opts?.qip });
-  const openSignals = (patientId) => push({ kind: 'signals', patientId });
-  const openFunctional = () => push({ kind: 'functional' });
-  const openSimulator = () => push({ kind: 'simulator' });
-  const openDfs = () => push({ kind: 'dfs' });
+  const openSignals = useCallback((patientId) => nav.go({ view: 'signals', patient: patientId }), [nav]);
+  const openSimulator = useCallback(() => nav.go({ view: 'simulator' }), [nav]);
+  const openDfs = useCallback(() => nav.go({ view: 'dfs' }), [nav]);
+  const openFunctional = useCallback(() => nav.go({ mode: 'functional', view: 'overview' }), [nav]);
+  const back = useCallback(() => nav.back({ view: 'overview' }), [nav]);
+
   // scopeMeasureId: set when opened FROM a measure (measure-detail row / crosser),
   // so the drill-in leads with that measure and tucks the rest under an accordion.
-  // Undefined from a worklist patient-row click → the modal shows all at once.
   const openResident = (patient, entry, scopeMeasureId) => setResident({ patient, entry, scopeMeasureId });
   const closeResident = () => setResident(null);
 
@@ -114,6 +125,25 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
     openResident(p, e, measureId);
   };
 
+  const isOverview = view === 'overview';
+  // A Five-Star facility scope swallows its own measure view: the drill has to
+  // read the SCOPED building's residents, and the generic `view === 'measure'`
+  // branch below is bound to the building open in PCC. Without this the two
+  // would both render, the second one showing the wrong facility's people.
+  const inFacilityScope =
+    mode === 'regional' && route.scope === 'facility' && (isOverview || view === 'measure');
+  // QIP owns its whole destination for the same reason: a measure opened from a
+  // QIP building must read THAT building's residents, not the PCC page's.
+  const inQip = mode === 'qip' && (isOverview || view === 'measure');
+  // Mirrors the web's split. A QIP measure opened for the building the user has
+  // open in PCC can use the RICH MeasureDetail — its board, residents and what-if
+  // are already loaded here. Any other building has only quarter-rates, so it gets
+  // the roster drill. Routing every QIP measure at the drill (the first wiring)
+  // silently dropped the what-if for the one building that could show it.
+  const qipMeasureIsCurrentBuilding =
+    inQip && view === 'measure'
+    && sameFacilityName(scopeCtx.pccFacilityName, facilityName);
+
   return (
     <div className="qmb__overlay" role="dialog" aria-modal="true" aria-labelledby="qmb-title">
       <div className="qmb__backdrop" onClick={onClose}></div>
@@ -122,7 +152,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
         <header className="qmb__header">
           <div className="qmb__title-row">
             <div className="qmb__title-group">
-              <h2 className="qmb__title" id="qmb-title">QM Board</h2>
+              <h2 className="qmb__title" id="qmb-title">Quality</h2>
               {facilityName && <span className="qmb__facility">{facilityName}</span>}
             </div>
             <button type="button" className="qmb__close" onClick={onClose} aria-label="Close"> {/* NO_TRACK */}
@@ -146,22 +176,21 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
           <div className="qmc-loading">No QM data for this facility.</div>
         ) : (
           <div className="qmc-scroll" ref={scrollRef}>
-            {/* Persistent Focus ⇄ QM Board switch — its own pill row at the top of
-                the content (matches web), so neither mode ever feels hidden. Shown
-                at each mode's top level; deeper board views carry their own back bar. */}
-            {view.kind === 'dashboard' && (
+            {/* The destination bar. Shown at each destination's top level; deeper
+                views carry their own back bar, so it never competes with one. */}
+            {isOverview && (
               <div className="qmc qmb__modebar">
-                <div className="qmb__modeswitch" role="tablist" aria-label="QM view mode">
-                  <button type="button" role="tab" aria-selected={mode === 'coordinator'} /* NO_TRACK */
-                    className={`qmb__modebtn ${mode === 'coordinator' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('coordinator')}>Coordinator</button>
-                  <button type="button" role="tab" aria-selected={mode === 'board'} /* NO_TRACK */
-                    className={`qmb__modebtn ${mode === 'board' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('board')}>Regional</button>
-                  <button type="button" role="tab" aria-selected={mode === 'cna'} /* NO_TRACK */
-                    className={`qmb__modebtn ${mode === 'cna' ? 'qmb__modebtn--on' : ''}`} onClick={() => setMode('cna')}>CNA</button>
+                <div className="qmb__modeswitch" role="tablist" aria-label="Quality destination">
+                  {DESTINATIONS.map((d) => (
+                    <button key={d.mode} type="button" role="tab" aria-selected={mode === d.mode} /* NO_TRACK */
+                      className={`qmb__modebtn ${mode === d.mode ? 'qmb__modebtn--on' : ''}`}
+                      onClick={() => nav.go({ mode: d.mode, view: 'overview' })}>{d.label}</button>
+                  ))}
                 </div>
               </div>
             )}
-            {mode === 'coordinator' && view.kind === 'dashboard' && (
+
+            {mode === 'coordinator' && isOverview && (
               <QmInhouse
                 board={{ currentlyTriggering, upcoming, alerts: preventableAlerts }}
                 lens="five_star"
@@ -176,74 +205,138 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onOpenFunctional={openFunctional}
               />
             )}
-            {mode === 'board' && view.kind === 'dashboard' && (
-              <QmFiveStarScorecard
-                rolling={rolling}
-                prediction={prediction}
-                board={{ currentlyTriggering, upcoming }}
-                dfs={dfs}
-                quarterRates={quarterRates}
-                lens={lens}
-                facilityState={currentlyTriggering?.facilityState}
+
+            {/* Five-Star lands on the all-buildings grid; clicking a building
+                scopes to it. A facility scope owns BOTH its overview and its
+                measure drill — see FacilityScope for why the drill can't be
+                rendered by the generic `view === 'measure'` branch below. */}
+            {mode === 'regional' && isOverview && route.scope === 'board' && (
+              <FiveStarLanding
                 facilityName={facilityName}
                 orgSlug={orgSlug}
-                onOpenMeasure={openMeasure}
-                onOpenDfs={openDfs}
-                onOpenSimulator={openSimulator}
+                onSelectFacility={(f, isCurrent) => {
+                  // `pccFacilityName` is the ADDRESS — every /api/extension route
+                  // resolves on it. `name` is only the label we show, and it is a
+                  // DIFFERENT column: 20 of 432 locations disagree.
+                  //
+                  // Deliberately NO fallback to `name`. An earlier version fell
+                  // back to cover the cache-version window before #1078 deployed;
+                  // that window has closed (field is populated on every row, cache
+                  // reads fresh), so the fallback is now dead code that can only
+                  // do harm. If it ever fired it would address a building by the
+                  // wrong string — usually a 404, but a silent WRONG BUILDING if
+                  // one location's display name happens to equal another's PCC
+                  // name. A missing address means "can't open", which the scope
+                  // says out loud.
+                  setScopeCtx({ name: f.name, pccFacilityName: f.pccFacilityName || null, isCurrent });
+                  nav.go({ scope: 'facility', scopeId: f.locationId });
+                }}
               />
             )}
-            {mode === 'cna' && view.kind === 'dashboard' && (
+            {inFacilityScope && (
+              // `key` forces a remount per building, so the scope's hooks
+              // re-fetch instead of showing the previous building's numbers
+              // under the new building's name.
+              <FacilityScope
+                key={route.scopeId}
+                facilityName={scopeCtx.pccFacilityName}
+                displayName={scopeCtx.name}
+                orgSlug={orgSlug}
+                view={view}
+                measureId={route.measure}
+                quarterBack={route.quarter}
+                onQuarterBackChange={(q) => nav.set({ quarter: q })}
+                onOpenMeasure={(measureId, quarterBack) =>
+                  nav.go({ view: 'measure', measure: measureId, quarter: quarterBack })}
+                onBackToMeasureHost={() => nav.back({ view: 'overview' })}
+                onScopeOut={() => nav.back({ scope: 'board', view: 'overview' })}
+                onOpenResident={openResident}
+                // The what-if runs off `prediction`, which is fetched for the
+                // building open in PCC only — so it is offered for that building
+                // and withheld for the rest rather than run on the wrong numbers.
+                onOpenSimulator={scopeCtx.isCurrent ? openSimulator : undefined}
+              />
+            )}
+
+            {inQip && !qipMeasureIsCurrentBuilding && (
+              <QipDestination
+                orgSlug={orgSlug}
+                view={view}
+                measureId={route.measure}
+                quarterBack={route.quarter}
+                scope={route.qipScope}
+                scopeCtx={scopeCtx}
+                onSelectFacility={(f) => {
+                  setScopeCtx({ name: f.name, pccFacilityName: f.pccFacilityName || null });
+                  nav.go({ qipScope: 'facility', qipScopeId: f.locationId });
+                }}
+                onOpenMeasure={(measureId, whatIf) => {
+                  // The what-if is CONTEXT, not an address — same rule as the
+                  // Five-Star measure. Dropping it (as the first wiring did) makes
+                  // the QIP what-if unreachable even though MeasureDetail supports it.
+                  setMeasureCtx({ scoreContext: 'fl_qip', qip: toMeasureDetailQip(whatIf) });
+                  nav.go({ view: 'measure', measure: measureId });
+                }}
+                onQuarterChange={(q) => nav.set({ quarter: q })}
+                onBackToRollup={() => nav.back({ qipScope: 'rollup', qipScopeId: undefined, view: 'overview' })}
+                onBackToFacility={() => nav.back({ view: 'overview' })}
+              />
+            )}
+
+            {mode === 'cna' && isOverview && (
               <div className="qmc">
                 <AideScoringView facilityName={facilityName} orgSlug={orgSlug} />
               </div>
             )}
-            {view.kind === 'measure' && (
+
+            {mode === 'functional' && isOverview && (
+              <FunctionalDeclineView
+                facilityName={facilityName}
+                orgSlug={orgSlug}
+                onBack={() => nav.go({ mode: 'coordinator', view: 'overview' })}
+              />
+            )}
+
+            {view === 'measure' && !inFacilityScope && (!inQip || qipMeasureIsCurrentBuilding) && (
               <MeasureDetail
-                measureId={view.measureId}
-                scoreContext={view.scoreContext}
-                qip={view.qip}
+                measureId={route.measure}
+                scoreContext={measureCtx.scoreContext}
+                qip={measureCtx.qip}
                 currentlyTriggering={currentlyTriggering}
                 preventableAlerts={preventableAlerts}
                 upcoming={upcoming}
                 quarterRates={quarterRates}
                 rolling={rolling}
-                onBack={pop}
+                onBack={back}
                 onOpenResident={openResident}
                 onOpenResidentById={openResidentById}
               />
             )}
-            {view.kind === 'signals' && (
+            {view === 'signals' && (
               <ClinicalSignalsView
                 preventableAlerts={preventableAlerts}
                 currentlyTriggering={currentlyTriggering}
                 facilityName={facilityName}
                 orgSlug={orgSlug}
-                onBack={pop}
-                initialOpenPatientId={view.patientId}
+                onBack={back}
+                initialOpenPatientId={route.patient}
               />
             )}
-            {view.kind === 'simulator' && (
+            {view === 'simulator' && (
               <WhatIfSimulator
                 prediction={prediction}
                 data={currentlyTriggering}
                 upcoming={upcoming}
-                onBack={pop}
+                onBack={back}
                 onOpenResident={openResident}
               />
             )}
-            {view.kind === 'functional' && (
-              <FunctionalDeclineView
-                facilityName={facilityName}
-                orgSlug={orgSlug}
-                onBack={pop}
-              />
-            )}
-            {view.kind === 'dfs' && (
+            {view === 'dfs' && (
               <DfsPage
                 dfs={dfs}
                 facilityName={facilityName}
                 orgSlug={orgSlug}
-                onBack={pop}
+                onBack={back}
               />
             )}
           </div>
