@@ -31,10 +31,15 @@ import { QmLoading } from '../QmLoading.jsx';
  * qm-planner hooks are not called until a measure is open — scoping into a
  * building should cost one request, not four.
  */
-function ScopedMeasureDetail({ facilityName, displayName, orgSlug, measureId, onBack, onOpenResident }) {
+function ScopedMeasureDetail({ facilityName, displayName, orgSlug, measureId, quarterBack, onBack, onOpenResident }) {
   const { currentlyTriggering, preventableAlerts, upcoming, loading, error, retry } =
     useQmBoard({ facilityName, orgSlug });
-  const { quarterRates } = useQuarterRates({ facilityName, orgSlug });
+  // `back` is REQUIRED, not optional. The reader picks a quarter on the
+  // scorecard and the route carries it; omitting it here fetched the open
+  // quarter's roster under the selected quarter's heading — real, consistent
+  // numbers answering a different question. Nothing on screen contradicted it,
+  // so it took a user to notice.
+  const { quarterRates } = useQuarterRates({ facilityName, orgSlug, back: quarterBack });
   const { rolling } = useRolling({ facilityName, orgSlug });
 
   if (loading) return <QmLoading title={`Loading ${displayName || 'this building'}`} />;
@@ -113,6 +118,7 @@ export function FacilityScope({
           displayName={displayName}
           orgSlug={orgSlug}
           measureId={measureId}
+          quarterBack={quarterBack}
           onBack={onBackToMeasureHost}
           onOpenResident={onOpenResident}
         />

@@ -167,6 +167,16 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, scoreConte
           {label}
           {code && <span className="qmc-tile__code">{code}</span>}
           {fiveStar ? <span className="qmc-tag qmc-tag--star">5★</span> : <span className="qmc-tag qmc-tag--state">state</span>}
+          {/* WHICH QUARTER THIS ANSWERS FOR. Added after a drill silently served
+              the open quarter's roster under a different quarter's heading: the
+              numbers were real and self-consistent, so nothing on screen
+              contradicted them and only a user caught it. A view that names its
+              own scope can't misrepresent it the same way twice. */}
+          {quarterRates?.quarter?.label && (
+            <span className="qmc-tag qmc-tag--state" title="The quarter this measure's residents and rate are computed for">
+              {quarterRates.quarter.label}
+            </span>
+          )}
         </div>
       </div>
 

@@ -97,7 +97,10 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   const { dfs } = useDfs({ facilityName, orgSlug });
   // Windowed (discharged-inclusive) quarter rates + denominator roster, and the
   // rolling 4-quarter trend — both lazy so the board renders first.
-  const { quarterRates } = useQuarterRates({ facilityName, orgSlug });
+  // Keyed to the SELECTED quarter. This value feeds MeasureDetail and nothing
+  // else, and a measure drill must answer for the quarter the reader is in —
+  // pinning it to the open quarter silently re-answers for a different one.
+  const { quarterRates } = useQuarterRates({ facilityName, orgSlug, back: route.quarter });
   const { rolling } = useRolling({ facilityName, orgSlug });
 
   const openMeasure = useCallback((measureId, opts) => {
