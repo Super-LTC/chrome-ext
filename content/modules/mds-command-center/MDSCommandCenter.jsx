@@ -25,6 +25,8 @@ import { MdsPlanner } from '../mds-planner/MdsPlanner.jsx';
 import { RoundingReports } from '../rounding-reports/RoundingReports.jsx';
 import { IpaView } from './IpaView.jsx';
 import { useIpaOpportunities } from './hooks/useIpaOpportunities.js';
+import { useCaseMix } from './hooks/useCaseMix.js';
+import { CaseMixView } from './CaseMixView.jsx';
 import { RevokeQueryModal } from './RevokeQueryModal.jsx';
 import { EditQueryModal } from './EditQueryModal.jsx';
 import { track } from '../../utils/analytics.js';
@@ -705,6 +707,14 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
   } = useIpaOpportunities({ facilityName, orgSlug });
   const ipaCount = ipaCounts?.recommended || 0;
 
+  // Case Mix — Ohio only, and `enabled` is the SERVER's call. The extension has
+  // no facility→state map, so this cannot be decided client-side; see useCaseMix.
+  const {
+    data: caseMixData,
+    enabled: caseMixEnabled,
+    retry: caseMixRetry,
+  } = useCaseMix({ facilityName, orgSlug });
+
   // Command Center is always facility-wide — no patient scoping even when
   // opened from a patient page. The Certs badge and content must match.
 
@@ -824,6 +834,7 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
           certHasUnseen={certHasUnseen}
           certsEnabled={certsEnabled}
           ipaEnabled={ipaEnabled}
+          caseMixEnabled={caseMixEnabled}
           ipaCount={ipaCount}
           complianceGaps={complianceGaps}
           payerFilter={payerFilter}
@@ -948,6 +959,16 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
               loading={ipaLoading}
               error={ipaError}
               onRefetch={ipaRetry}
+            />
+          )}
+
+          {/* Case Mix — one building's Medicaid CMI, its trend, and the roster */}
+          {activeView === 'case_mix' && (
+            <CaseMixView
+              data={caseMixData}
+              facilityName={facilityName}
+              orgSlug={orgSlug}
+              onRetry={caseMixRetry}
             />
           )}
 
