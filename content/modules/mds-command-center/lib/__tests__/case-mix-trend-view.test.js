@@ -3,11 +3,11 @@ import { buildCaseMixTrend, shortQuarter } from '../case-mix-trend-view.js';
 
 /** Five real Autumnwood quarters — the range that motivated the design. */
 const REAL = [
-  { quarter: '2025Q3', medicaidCmi: 1.4015, allCmi: 1.39, inProgress: false, medicaidScored: 50, scored: 60, carryForward: 2 },
-  { quarter: '2025Q4', medicaidCmi: 1.3517, allCmi: 1.34, inProgress: false, medicaidScored: 51, scored: 61, carryForward: 1 },
-  { quarter: '2026Q1', medicaidCmi: 1.3954, allCmi: 1.38, inProgress: false, medicaidScored: 52, scored: 62, carryForward: 0 },
-  { quarter: '2026Q2', medicaidCmi: 1.3784, allCmi: 1.37, inProgress: false, medicaidScored: 53, scored: 63, carryForward: 3 },
-  { quarter: '2026Q3', medicaidCmi: 1.4827, allCmi: 1.47, inProgress: true, medicaidScored: 49, scored: 59, carryForward: 12 },
+  { quarter: '2025Q3', medicaidCmi: 1.4015, allCmi: 1.39, medicaidWithPendingCmi: 1.42, inProgress: false, medicaidScored: 50, scored: 60, carryForward: 2 },
+  { quarter: '2025Q4', medicaidCmi: 1.3517, allCmi: 1.34, medicaidWithPendingCmi: 1.36, inProgress: false, medicaidScored: 51, scored: 61, carryForward: 1 },
+  { quarter: '2026Q1', medicaidCmi: 1.3954, allCmi: 1.38, medicaidWithPendingCmi: 1.40, inProgress: false, medicaidScored: 52, scored: 62, carryForward: 0 },
+  { quarter: '2026Q2', medicaidCmi: 1.3784, allCmi: 1.37, medicaidWithPendingCmi: 1.39, inProgress: false, medicaidScored: 53, scored: 63, carryForward: 3 },
+  { quarter: '2026Q3', medicaidCmi: 1.4827, allCmi: 1.47, medicaidWithPendingCmi: 1.49, inProgress: true, medicaidScored: 49, scored: 59, carryForward: 12 },
 ];
 
 describe('shortQuarter', () => {
@@ -48,10 +48,23 @@ describe('buildCaseMixTrend', () => {
     expect(t.top).toBeGreaterThan(Math.max(...REAL.map((q) => q.medicaidCmi)));
   });
 
-  it('reads the metric it was asked for', () => {
+  it('reads the metric it was asked for, across all three measures', () => {
     expect(buildCaseMixTrend(REAL).points[0].value).toBe(1.4015);
     expect(buildCaseMixTrend(REAL, { metric: 'allCmi' }).points[0].value).toBe(1.39);
+    expect(buildCaseMixTrend(REAL, { metric: 'medicaidWithPendingCmi' }).points[0].value).toBe(1.42);
     expect(buildCaseMixTrend(REAL, { metric: 'nonsense' }).metric).toBe('medicaidCmi');
+  });
+
+  /**
+   * The denominator has to follow the measure. All-payer counts everyone
+   * scoreable; the Medicaid measures count only the payable set. Printing
+   * "85 counted" under a number computed over 56 residents is a lie about the
+   * denominator, and it looks like the building lost thirty people on a toggle.
+   */
+  it('quotes the denominator that belongs to the measure', () => {
+    expect(buildCaseMixTrend(REAL, { metric: 'allCmi' }).points[0].scored).toBe(60);
+    expect(buildCaseMixTrend(REAL, { metric: 'medicaidCmi' }).points[0].scored).toBe(50);
+    expect(buildCaseMixTrend(REAL, { metric: 'medicaidWithPendingCmi' }).points[0].scored).toBe(50);
   });
 
   /** A quarter with nothing scoreable is a GAP. Rendering it as a zero bar would

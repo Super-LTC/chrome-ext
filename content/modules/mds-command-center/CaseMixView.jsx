@@ -3,6 +3,18 @@ import { useMemo, useState } from 'preact/hooks';
 import { buildCaseMixTrend } from './lib/case-mix-trend-view.js';
 import { CaseMixRosterModal } from './CaseMixRosterModal.jsx';
 
+/** The three scores, mirroring the web surface. */
+const MEASURES = [
+  { key: 'medicaidCmi', label: 'Medicaid', hint: 'The payable score — residents the state counts', track: 'case_mix_measure_medicaid' },
+  { key: 'allCmi', label: 'All residents', hint: 'Every resident on the census, regardless of payer', track: 'case_mix_measure_all' },
+  { key: 'medicaidWithPendingCmi', label: '+ pendings', hint: 'Forecast — assumes every pending Medicaid application is approved', track: 'case_mix_measure_pending' },
+];
+const MEASURE_LABEL = {
+  medicaidCmi: 'Medicaid CMI',
+  allCmi: 'All-resident CMI',
+  medicaidWithPendingCmi: 'Medicaid CMI + pendings',
+};
+
 /**
  * Case Mix tab — one building's Medicaid CMI, its trend, and the residents behind it.
  *
@@ -28,17 +40,43 @@ import { CaseMixRosterModal } from './CaseMixRosterModal.jsx';
  * none of it belongs on a read-while-you-code surface.
  *
  * No portfolio. This is ONE building — the one whose PCC page you are on.
+ *
+ * OHIO ONLY, FOR NOW, AND ON PURPOSE. The long-term plan is a universal CMI —
+ * the nursing classifier is federal PDPM and every state's regional wants their
+ * number. What is NOT universal is the measurement period, and Ohio's is the only
+ * one we have actually read from the rate-setting rule and reconciled against the
+ * state's own report (ODM Preliminary II, 168 residents, zero group mismatches).
+ * TX / WI / GA / NY are case-mix with UNCONFIRMED periods; rendering a confident
+ * number computed the wrong way is worse than rendering nothing. The gate lives
+ * server-side in CASE_MIX_QUARTERLY_SUPPORTED_STATES — one array, and each state
+ * joins it after its rule is read, not before.
  */
 export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
   /** 'capture' leads; 'payable' is the money. See the docblock. */
   const [population, setPopulation] = useState('capture');
+  /** Which score, mirroring the web surface's three. */
+  const [measure, setMeasure] = useState('medicaidCmi');
   const [drillQuarter, setDrillQuarter] = useState(null);
 
   const rows = (population === 'payable' ? data?.payable : data?.capture) ?? [];
-  const trend = useMemo(() => buildCaseMixTrend(rows), [rows]);
+  const trend = useMemo(() => buildCaseMixTrend(rows, { metric: measure }), [rows, measure]);
   const latest = rows[rows.length - 1] ?? null;
-  const recon = population === 'payable' ? data?.reconciliation?.medicaid : null;
+  const latestPoint = trend.points[trend.points.length - 1] ?? null;
+  const recon =
+    population === 'payable'
+      ? measure === 'allCmi'
+        ? data?.reconciliation?.total
+        : data?.reconciliation?.medicaid
+      : null;
   const period = data?.period ?? {};
+
+  // CARRY-FORWARD COMES FROM `payable`, ALWAYS — never from the active toggle.
+  // Capture only contains residents assessed INSIDE the quarter, so by
+  // construction none of them are riding an older record and its carryForward is
+  // structurally 0 for every building (verified across six Ohio facilities).
+  // Reading it from the active population meant the work list — the single most
+  // actionable thing here — silently never rendered on the DEFAULT view.
+  const payableLatest = data?.payable?.[data.payable.length - 1] ?? null;
 
   if (!rows.length) {
     return (
@@ -60,11 +98,11 @@ export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
       <div class="cmi__headline">
         <div class="cmi__headline-main">
           <div class="cmi__eyebrow">
-            {population === 'payable' ? 'Payable Medicaid CMI' : 'Captured this quarter'}
+            {MEASURE_LABEL[measure]} · {population === 'payable' ? 'payable' : 'captured'}
             {latest?.inProgress && <span class="cmi__chip cmi__chip--open">open</span>}
           </div>
           <div class="cmi__value">
-            {latest?.medicaidCmi != null ? latest.medicaidCmi.toFixed(4) : '—'}
+            {latestPoint?.value != null ? latestPoint.value.toFixed(4) : '—'}
           </div>
           <div class="cmi__sub">
             {/* NEVER say "picture date" unless the server says the period rule was
@@ -72,7 +110,14 @@ export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
                 statute by name; `period.boundaryLabel` is what prevents a repeat. */}
             {period.boundaryLabel ?? 'Quarter end'} {latest?.pictureDate ?? '—'}
             {' · '}
-            <b>{latest?.medicaidScored ?? 0}</b> counted of <b>{latest?.residents ?? 0}</b> on census
+            {/* The denominator follows the MEASURE — all-payer counts everyone
+                scoreable, the Medicaid measures only the payable set. Quoting
+                the wrong one makes a building look like it lost thirty
+                residents on a toggle. */}
+            <b>{latestPoint?.scored ?? 0}</b> counted of <b>{latest?.residents ?? 0}</b> on census
+            {measure === 'medicaidWithPendingCmi' && latest?.pendingMedicaid > 0 && (
+              <span> · assumes {latest.pendingMedicaid} pending approve</span>
+            )}
           </div>
           {/* How close this actually lands against ODM's own report. Only Ohio has
               been reconciled at all, and the two scores are NOT equally good —
@@ -84,6 +129,7 @@ export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
           )}
         </div>
 
+        <div class="cmi__toggle-stack">
         <div class="cmi__toggle" role="group" aria-label="Population">
           <button
             type="button"
@@ -103,6 +149,22 @@ export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
           >
             Payable
           </button>
+        </div>
+
+        <div class="cmi__toggle cmi__toggle--measure" role="group" aria-label="Measure">
+          {MEASURES.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              class={`cmi__toggle-btn${measure === m.key ? ' cmi__toggle-btn--active' : ''}`}
+              onClick={() => setMeasure(m.key)}
+              title={m.hint}
+              data-track={m.track}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
         </div>
       </div>
 
@@ -153,15 +215,15 @@ export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
       </div>
 
       {/* ── the work list ────────────────────────────────────────── */}
-      {latest?.inProgress && latest.carryForward > 0 && (
+      {payableLatest?.inProgress && payableLatest.carryForward > 0 && (
         <button
           type="button"
           class="cmi__worklist"
-          onClick={() => setDrillQuarter(latest.quarter)}
+          onClick={() => setDrillQuarter(payableLatest.quarter)}
           data-track="case_mix_worklist_open"
         >
-          <b>{latest.carryForward}</b> resident{latest.carryForward === 1 ? '' : 's'} still scored on an
-          earlier record this quarter
+          <b>{payableLatest.carryForward}</b> resident
+          {payableLatest.carryForward === 1 ? '' : 's'} still scored on an earlier record this quarter
         </button>
       )}
 

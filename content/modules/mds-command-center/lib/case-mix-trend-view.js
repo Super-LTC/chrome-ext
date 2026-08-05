@@ -41,13 +41,17 @@ function padRange(min, max) {
   return { baseline: +(min - pad).toFixed(4), top: +(max + pad).toFixed(4) };
 }
 
+/** The three measures, mirroring the web surface. Anything else falls back to
+ *  the payable one rather than rendering an undefined series. */
+const METRICS = new Set(['medicaidCmi', 'allCmi', 'medicaidWithPendingCmi']);
+
 /**
- * @param {Array<{quarter:string,medicaidCmi:number|null,allCmi:number|null,inProgress:boolean,scored:number,medicaidScored:number,carryForward:number}>} quarters
+ * @param {Array<{quarter:string,medicaidCmi:number|null,allCmi:number|null,medicaidWithPendingCmi:number|null,inProgress:boolean,scored:number,medicaidScored:number,carryForward:number}>} quarters
  *        Oldest first, as the API returns them.
- * @param {{metric?: 'medicaidCmi'|'allCmi'}} [opts]
+ * @param {{metric?: 'medicaidCmi'|'allCmi'|'medicaidWithPendingCmi'}} [opts]
  */
 export function buildCaseMixTrend(quarters, opts = {}) {
-  const metric = opts.metric === 'allCmi' ? 'allCmi' : 'medicaidCmi';
+  const metric = METRICS.has(opts.metric) ? opts.metric : 'medicaidCmi';
   const rows = Array.isArray(quarters) ? quarters : [];
 
   const points = rows.map((q) => {
@@ -59,6 +63,9 @@ export function buildCaseMixTrend(quarters, opts = {}) {
       /** A quarter with no scoreable residents is a GAP, not a zero. */
       present: value != null,
       inProgress: q?.inProgress === true,
+      // All-payer counts everyone scoreable; the two Medicaid measures count
+      // only the payable set, and quoting the wrong denominator under a number
+      // is how a building 'loses' twenty residents on a toggle.
       scored: metric === 'allCmi' ? (q?.scored ?? 0) : (q?.medicaidScored ?? 0),
       carryForward: q?.carryForward ?? 0,
     };
