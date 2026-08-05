@@ -5399,9 +5399,19 @@ function buildSuggestionDetail(s) {
     // popovers pass. The AI note generator feeds on queryReason/queryEvidence;
     // the ICD-10 picker seeds its search with mdsItemName (nurse still picks —
     // AI-guessed codes are never auto-attached).
-    canQuery: r.status === 'needs_physician_query',
+    //
+    // Offered on every suggestion, not just `needs_physician_query`. A "Code it"
+    // row still hands the coder 3-5 ranked ICD-10 candidates, and choosing among
+    // them is a clinical call an MDS coordinator can't make. The Section I
+    // checkbox popover already queries at any status, and the backend never
+    // gated on it either. `dont_code` rows never reach the banner.
+    canQuery: true,
     queryResult: {
-      mdsItem: 'I8000',
+      // Composite key ("I8000:NTA:40") is the convention every other surface
+      // uses; it's what getIcd10MapForMdsItem parses to resolve the category's
+      // code list for the doctor portal's "choose a different code" fallback.
+      // Bare "I8000" resolves to nothing.
+      mdsItem: s.categoryKey ? `I8000:${s.categoryKey}` : 'I8000',
       description: name,
       aiAnswer: { ...r, mdsItemName: name },
     },
