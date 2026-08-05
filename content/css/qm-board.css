@@ -27,25 +27,26 @@
   to   { transform: translateY(0);    opacity: 1; }
 }
 
-/* ~80% of the viewport — a destination, but one you can still see PCC around.
+/* 80% of the viewport — a destination, but one you can still see PCC around.
    `.qmb__overlay` is flex-centred, so nothing else is needed to place it.
 
-   THE FLOOR IS NOT DECORATION. This was briefly full-screen because the 80vw
-   modal before it capped at `max-width: 1100px`, and the widest tables (the
-   8-column regional board, the 11-column Quality Measure Detail) did not fit:
-   `.qmc-scroll` is `overflow-x: hidden`, so anything past the modal edge is
-   CLIPPED, not scrollable — the right-hand Projected columns and the cut-point
-   hovers simply became unreachable. The cap was the bug, not the 80%.
+   This carried a `min-width: min(100vw, 1420px)` floor, on the theory that the
+   widest tables (8-column regional board, 11-column Quality Measure Detail) must
+   never be narrower than they need. That was the wrong trade: on a ~1434px
+   laptop the floor resolved to 1420px — 99% of the screen — so the modal was
+   full-width in practice and the 80% only existed above ~1775px. Nobody asked
+   for a modal that is 80% on a desktop and 99% on the machine they actually use.
 
-   So: 80vw, but never narrower than the widest table needs (`.fs-frame` is
-   1380px border-box + `.qmc-scroll`'s 20px gutters), and never wider than the
-   viewport. Above ~1775px wide that is a true 80%; below it the floor takes
-   over and degrades to today's full-width rather than clipping a column off the
-   screen. Re-adding a fixed px `max-width` here re-breaks the tables. */
+   The floor was compensating for `.qmc-scroll` being `overflow-x: hidden`, which
+   CLIPS rather than scrolls. That is now `auto`, so a table wider than the modal
+   scrolls and stays reachable at any width — which is what the floor was
+   protecting against, solved where the problem actually was.
+
+   Do NOT re-add a fixed px `max-width` (an old 1100px cap is what broke the
+   tables originally) or the floor. */
 .qmb__modal {
   position: relative;
   width: 80vw;
-  min-width: min(100vw, 1420px);
   max-width: 100vw;
   height: 80vh;
   max-height: 100vh;

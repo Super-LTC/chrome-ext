@@ -227,7 +227,14 @@ function QuarterNote({ q, quarterEnd }) {
   if (q.state === 'published') {
     return (
       <>
-        Live on Care Compare since the {fmtDateShort(q.publishedOnProcessingDate)} refresh.
+        {/* Null on an older published quarter — it went live on an earlier CMS
+            refresh than the one we hold. Two quarters can both be `published`
+            (the Jul 1 2026 refresh covers MDS through 2026Q1, so 2025Q4 and
+            2026Q1 both are) but only the newest went live on the date we know.
+            Without this branch the backend's null renders as "since the  refresh". */}
+        {q.publishedOnProcessingDate
+          ? `Live on Care Compare since the ${fmtDateShort(q.publishedOnProcessingDate)} refresh.`
+          : 'Live on Care Compare — posted by an earlier CMS refresh.'}
         {q.disagreesWithPublished ? (
           <> Our window scores <b>{q.computedStar}★</b> — surfaced, not hidden.</>
         ) : null}

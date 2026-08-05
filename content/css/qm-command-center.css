@@ -333,7 +333,11 @@
 .qmc-ev__sub{margin-top:4px;font-size:12px;color:var(--slate-500)}
 
 /* ── Modal content scroll wrapper (replaces old qmb body grid) ───────────── */
-.qmc-scroll{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;padding:16px 20px}
+/* overflow-x is `auto`, not `hidden`. Hidden CLIPS: a table wider than the modal
+   lost its right-hand columns with no way to reach them, which is why the shell
+   carried a min-width floor that made "80%" resolve to 99% on a laptop. Scrolling
+   fixes it where the problem is, so the shell can just be 80%. */
+.qmc-scroll{flex:1;min-width:0;min-height:0;overflow-y:auto;overflow-x:auto;padding:16px 20px}
 
 /* ── Breadcrumb (Surface B/D) ────────────────────────────────────────────── */
 .qmc-bc{display:flex;align-items:center;gap:8px;font-size:13px}
