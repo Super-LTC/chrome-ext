@@ -552,6 +552,12 @@
   font-family: inherit;
   outline: none;
   background: var(--super-gray-50);
+  /* The list can now run past the 360px cap with library results, and the
+     input is inside the scroll container — pin it so you can still see what
+     you typed after scrolling down to the library section. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .icd10-evidence-panel__code-search:focus {
@@ -3329,6 +3335,15 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   line-height: 1.4;
+}
+
+/* Full-library ICD-10 search results (SUP-264).
+ *
+ * Deliberately unstyled: library hits continue the same list as the group's
+ * own codes rather than forming a separate section, so they must look
+ * identical to a normal row. The class stays as a hook for analytics/tests. */
+.icd10-evidence-panel__code-option--library {
+  /* intentionally no visual override */
 }
 
 /* "Add anyway" amber button used when the focused code is an alternate. */

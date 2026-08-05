@@ -671,28 +671,35 @@ const ICD10Viewer = {
       this.stagedCodes.push({
         icd10Code: item.icd10Code,
         description: item.description,
-        annotationId: item.id,
-        category: item.category,
+        annotationId: item.id || null,
+        category: item.category || null,
         groupCode: item.groupCode || item.icd10Code
       });
 
-      // Remove from flat annotations
-      if (Array.isArray(this.annotations)) {
-        const index = this.annotations.findIndex(a => a.id === item.id);
-        if (index > -1) {
-          this.annotations.splice(index, 1);
+      // Codes picked out of the full ICD-10 library (SUP-264) have no
+      // annotation behind them, so there is nothing to retire from the
+      // sidebar. Guard on the id: a findIndex for `undefined`/`null` would
+      // match the first annotation missing an id and splice out a real
+      // finding the coder never acted on.
+      if (item.id) {
+        // Remove from flat annotations
+        if (Array.isArray(this.annotations)) {
+          const index = this.annotations.findIndex(a => a.id === item.id);
+          if (index > -1) {
+            this.annotations.splice(index, 1);
+          }
         }
-      }
 
-      // Also remove from topRanked groups
-      if (Array.isArray(this.topRanked)) {
-        for (const group of this.topRanked) {
-          if (!Array.isArray(group?.annotations)) continue;
-          const annIdx = group.annotations.findIndex(a => a.id === item.id);
-          if (annIdx > -1) {
-            group.annotations.splice(annIdx, 1);
-            group.annotationCount = group.annotations.length;
-            break;
+        // Also remove from topRanked groups
+        if (Array.isArray(this.topRanked)) {
+          for (const group of this.topRanked) {
+            if (!Array.isArray(group?.annotations)) continue;
+            const annIdx = group.annotations.findIndex(a => a.id === item.id);
+            if (annIdx > -1) {
+              group.annotations.splice(annIdx, 1);
+              group.annotationCount = group.annotations.length;
+              break;
+            }
           }
         }
       }
