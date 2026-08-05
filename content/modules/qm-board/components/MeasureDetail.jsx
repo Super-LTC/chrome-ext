@@ -155,7 +155,18 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, scoreConte
 
   const label = shortLabel(measureId, meta?.label ?? '');
   const code = measureCode(measureId);
+  // CURRENT quarter. Correct for the crosser copy below — a day-101 crossing is
+  // only meaningful against the quarter that is still open — and WRONG for the
+  // headline, which describes whichever quarter's roster was actually loaded.
   const qLabel = quarterLabel(data.summary.currentQuarterEnd);
+  // The DRILLED quarter. `data` is the live board (always current); `quarterRates`
+  // is the quarter the reader picked on the grid, so the two part company the
+  // moment a historical card is clicked. Labelling the headline off `data` would
+  // put 2025-Q4's residents under "Q3 2026 locks Sep 30" — numbers about one
+  // quarter, heading about another, neither of them visibly wrong on its own.
+  // A closed quarter also has no lock date left to promise.
+  const rosterQLabel = quarterLabel(quarterRates?.quarter?.end ?? data.summary.currentQuarterEnd);
+  const rosterIsOpen = rosterQLabel === qLabel;
 
   return (
     <div className="qmc" style={{ gap: '16px' }}>
@@ -185,7 +196,10 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, scoreConte
               <span className="qmc-rate__tag">{windowed ? 'CMS' : 'active'}</span>
               {moved && <span className="qmc-rate__proj">→ {projPct.toFixed(1)}% <small>active</small></span>}
               <span className="qmc-rate__sub">
-                {headlineNum} of {headlineDen} {windowed ? 'residents (CMS window)' : 'active residents'} · {qLabel} locks {prettyDate(data.summary.currentQuarterEnd)}
+                {headlineNum} of {headlineDen} {windowed ? 'residents (CMS window)' : 'active residents'} ·{' '}
+                {rosterIsOpen
+                  ? `${rosterQLabel} locks ${prettyDate(data.summary.currentQuarterEnd)}`
+                  : `${rosterQLabel} (closed)`}
               </span>
             </div>
             {/* Active worklist count vs CMS rate — reconciled so they never read as
