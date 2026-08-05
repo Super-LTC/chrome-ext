@@ -44,10 +44,25 @@ import '../content/css/ard-estimator.css';
 import '../content/css/qm-board.css';
 import '../content/css/qm-command-center.css';
 import '../content/css/24hr-report.css';
+import '../content/css/mds-comments.css';
 import '../content/css/ai-chat.css';
 import '../content/css/draggable-overlay.css';
 import './demo-chat.css';
+import './demo-qm-overrides.css';
 import './pcc-demo-overrides.css';
+
+// ── Step 2.5: Register the REAL comment/inbox/notification modules ──
+// Side-effect imports: each hangs its singleton on window (MdsCommentsAPI,
+// CommentBadges, MdsCommentThread, MdsTagInbox, NotificationsAPI) — the same
+// objects the production content script registers. The demo talks to them
+// through those globals; the mock chrome layer answers their API calls.
+// (inbox-panel's PCC facility-switch / deep-link imports are aliased to demo
+// shims in vite.demo.config.js.)
+import '../content/modules/notifications/notifications-api.js';
+import '../content/modules/mds-comments/comments-api.js';
+import '../content/modules/mds-comments/comment-badges.js';
+import '../content/modules/mds-comments/comment-thread.js';
+import '../content/modules/mds-comments/inbox-panel.js';
 
 // ── Step 3: Mount PCCDemoApp ──
 import * as preact from 'preact';

@@ -1,0 +1,16 @@
+/*
+ * Demo-only QM board tweaks.
+ *
+ * Relabel the third destination tab ("QIP" in QMBoard.jsx DESTINATIONS) to
+ * "QIP/QIPP" without forking the production component: zero the real text and
+ * paint the demo label via ::after. Matches .qmb__modebtn's own 14px/600.
+ * If DESTINATIONS reorders, update the :nth-child index here.
+ */
+.qmb__modeswitch .qmb__modebtn:nth-child(3) {
+  font-size: 0;
+}
+.qmb__modeswitch .qmb__modebtn:nth-child(3)::after {
+  content: 'QIP/QIPP';
+  font-size: 14px;
+  font-weight: 600;
+}

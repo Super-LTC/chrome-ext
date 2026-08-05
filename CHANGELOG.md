@@ -4,12 +4,107 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.67** was zipped for Chrome Web Store submission on
-> 2026-07-23 (`super-ltc-store.zip`) to hotfix the broken PDF viewer in the live
-> 1.0.66 build (see below). Before that, v1.0.66 was zipped on 2026-07-22,
-> v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20, v1.0.63 on
-> 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62 were
-> dev/internal only. Update this note when you `zip:store` and upload.
+> **Store note:** **v1.0.69** was zipped for Chrome Web Store submission on
+> 2026-07-26 (`super-ltc-store.zip`) — it is the first store build carrying the
+> EID migration (1.0.68, below) and PCC username capture. **v1.0.68 was never
+> uploaded**: it was bumped when #59 merged, then #60 landed on top of it, so
+> 1.0.69 supersedes it. Before that, v1.0.67 was zipped on 2026-07-23 to hotfix
+> the broken PDF viewer in the live 1.0.66 build, v1.0.66 was zipped on
+> 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
+> v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
+> were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.69] — 2026-07-26
+
+Captures the logged-in PCC username so MDS authorship can be attributed to a
+real Super user. Ships on top of the unreleased 1.0.68 (below), so this store
+build carries both.
+
+### Added
+- **PCC username capture for MDS authorship** (#60, SUP-216). `mds_assessments.
+  created_by` names the MDS coordinator who opened an assessment, but as a PCC
+  login username (`kmcdonald5`), which joined to Super users at 0% — 838 of 838
+  misses had no candidate at any threshold, because those people have no Super
+  account. The extension is the only place both identities are visible at once,
+  so it observes the binding instead of guessing it. Once per Super user / org /
+  week on boot: read `ESOLuserid` off the page (free), same-origin GET
+  `editmyprofile.jsp`, parse the login name, POST it. Fire-and-forget — every
+  failure path is silent and leaves the cache untouched so the next boot retries.
+  Two corruption modes are pinned as tests: PCC renders the org code as a loose
+  text node *outside* the input (`Login Name: eac.<input value="jcameron">`), so
+  reading the input's `value` excludes it structurally rather than by stripping a
+  prefix; and dots *inside* the value are real (22 of 895 prod usernames, e.g.
+  `jennifer.russell1`), so the value is sent verbatim — normalizing would collide
+  distinct people. The cache keys on `esolUserId` + `superUserId` + `orgSlug`
+  together: gating on `esolUserId` rather than the username avoids the very fetch
+  the cache exists to prevent, and the `superUserId` stamp is what keeps user A
+  binding, logging out, and user B logging in on the same browser profile from
+  leaving B permanently unbound.
+
+## [1.0.68] — 2026-07-23 *(never uploaded to the Web Store — superseded by 1.0.69)*
+
+PCC replaced numeric URL/link ids with ephemeral, login-bound `EID_` tokens. The
+extension must never send an EID to the backend. This release resolves stable
+numeric ids (URL if numeric, else DOM recovery) and rides `pccPublicId` (MRN) as
+the durable patient anchor the backend (superapp #966/#967) accepts when the
+numeric id is EID-dead.
+
+### Fixed
+- **Stable id resolution across every MDS surface** (#59, SUP-177). New
+  `client-id.js` helpers: `resolveStableAssessmentId()` (toggleToolsWindow DOM
+  scan), `scrapePccPublicIdFromDOM()` (MRN from title/header), and
+  `resolveStablePatientRef()` (`{externalPatientId?, pccPublicId?}`); the string
+  contract of `resolveStableClientId()` is unchanged. The `context.js` chokepoints
+  (`appendMDSContextParams` / `getMDSContextBodyFields`) now emit `pccPublicId`,
+  and `getMDSContext` / `getChatContext` no longer forward the raw EID. In
+  `mds-overlay.js`, `getMDSPageParams` returns a numeric-or-null `assessmentId`
+  plus a separate `rawAssessmentId` for page detection, and every
+  `externalAssessmentId` send-site omits the field when null instead of
+  stringifying `"null"` / an EID. Super Verify, the ICD-10 viewer (which also had
+  an internal-id leak into the external slot), query-send-modal and care-plan-stamp
+  dedup were routed onto the resolver; Preact MDS hooks inherit the fix via the
+  chokepoints.
+- **Fail-closed regressions on flipped pages.** Super Verify's `_readIds` returned
+  a numeric-only id, so `if (!assessId)` blocked the modal on pages with no
+  recoverable numeric id — but that id also drives same-session PCC navigation,
+  where an `EID_` token works fine. It now prefers the numeric and falls back to
+  the raw token so the modal opens and scrapes, with `verify-api` still guarding
+  the backend. Separately, `getMDSContext` gated scope `'mds'` on the resolved
+  numeric, so a flipped page silently downgraded to patient/global scope and the
+  side panel stopped rendering; detection now keys on raw `ESOLassessid` presence.
+  Non-flipped facilities were never affected.
+- **False "PCC returned an error" on accepted diagnosis pushes.**
+  `submitDiagnosis` flagged failure when the response HTML merely *contained*
+  `class="errormsg"` or the substring `Error:` — but PCC ships an empty
+  `errormsg` container on success and its pages carry stray `Error:` strings, so
+  diagnoses PCC actually added were reported as failed. It now fails only when a
+  `.errormsg` element contains actual text. A verbose response dump sits behind
+  `PCC_DIAG_DEBUG`, default off.
+- **Infinite "Loading MDS analysis…" spin on NO_RUN_YET.** `initSuperOverlay`
+  declared `const params` inside the `try`, while both the EID diagnostics and the
+  "Run it" card in the `catch` referenced it — so any section fetch error (e.g. a
+  404 `NO_RUN_YET`) threw `ReferenceError: params is not defined` before the
+  spinner could be hidden. `params` is now function-scoped.
+- **`diagnosis-queries/generate-note` 400s.** The backend now requires org
+  scoping; both callers send `orgSlug` (+ `facilityName`).
+
+### Changed
+- **I8000 evidence uses the shared split/slide-out viewer** (#59). The I8000
+  audit/suggestion detail opened evidence in a separate stacked modal, unlike
+  every other MDS item, whose evidence grows the panel sideways inline. A new
+  `normalizeI8000Evidence()` maps the endpoint's evidence shapes (chunk-encoded
+  document ids, order/medication `sourceId`s, clinical notes) into what
+  `renderEvidence` + `parseEvidenceForViewer` + `enterSplitView` already
+  understand, so clicking evidence opens the inline split viewer with wordBlock
+  highlights and Back returns to the detail. Also fixes cards being unclickable
+  entirely: document-chunk evidence has no `sourceId`, but `i8000EvidenceAction`
+  gated on `sourceId` alone. The dead I8000-specific evidence path was removed.
+- **Interview-coverage/batch row correlation** (#59, superapp #967). `rowMap` is
+  index-parallel `string|null` (the resolved `externalAssessmentId` per row), not
+  the coverage objects — those live in `results` keyed by `.key`. Each row maps
+  via `rowMap[i] → results.find(x => x.key === rowMap[i])`; a null entry marks a
+  row the backend couldn't resolve. The incorrect `data.rowMap || data.results`
+  fallback was dropped, since the two shapes aren't interchangeable.
 
 ## [1.0.67] — 2026-07-23
 

@@ -38,6 +38,25 @@ import {
   buildFtagMar,
   buildFtagVitals,
 } from './demo-ftag-fixtures.js';
+import {
+  DEMO_USER,
+  DEMO_TEAMMATES,
+  get24hrFindingActivity,
+  apply24hrAction,
+  post24hrComment,
+  delete24hrComment,
+  get24hrLinkedNote,
+  link24hrNote,
+  decorate24hrFindings,
+  getMdsCommentBadges,
+  getMdsThread,
+  postMdsComment,
+  resolveMdsAssignment,
+  getMdsInbox,
+  getNotificationsSummary,
+  markNotificationsSeen,
+  markMdsThreadRead,
+} from './demo-comments-fixtures.js';
 
 /** In-memory schedule hour for the 24hr report settings demo. */
 let demo24hrScheduleHour = 3;
@@ -865,9 +884,89 @@ function routeApiRequest(endpoint, options = {}) {
     if (date) {
       const report = buildReportForDate(date);
       if (!report) return { success: false, status: 404, error: 'Report not found' };
-      return { success: true, data: { report } };
+      // Live sign-off / comment state must show on the collapsed rows too,
+      // and signoffEnabled is the per-facility pilot switch the rail gates on.
+      report.findings = decorate24hrFindings(report.findings);
+      return { success: true, data: { signoffEnabled: true, report } };
     }
     return { success: true, data: buildReportList() };
+  }
+
+  // ── 24-Hour Report: sign-off trail, comments, linked note ──────
+
+  if (path === '/api/extension/24hr-report/finding') {
+    return { success: true, data: get24hrFindingActivity(params.get('findingId')) };
+  }
+
+  if (path === '/api/extension/24hr-report/action') {
+    const body = JSON.parse(options?.body || '{}');
+    return { success: true, data: apply24hrAction(body) };
+  }
+
+  if (path === '/api/extension/24hr-report/comment') {
+    const body = JSON.parse(options?.body || '{}');
+    return { success: true, data: post24hrComment(body) };
+  }
+
+  const commentDelMatch = path.match(/\/api\/extension\/24hr-report\/comment\/([^/]+)$/);
+  if (commentDelMatch) {
+    return { success: true, data: delete24hrComment(decodeURIComponent(commentDelMatch[1])) };
+  }
+
+  if (path === '/api/extension/24hr-report/teammates') {
+    // Roster minus "you" — you cannot @-mention yourself.
+    return {
+      success: true,
+      data: { teammates: DEMO_TEAMMATES.filter((t) => t.id !== DEMO_USER.id) },
+    };
+  }
+
+  if (path === '/api/extension/24hr-report/finding/note') {
+    return { success: true, data: get24hrLinkedNote(params.get('findingId')) };
+  }
+
+  if (path === '/api/extension/24hr-report/finding/link-note') {
+    const body = JSON.parse(options?.body || '{}');
+    return { success: true, data: link24hrNote(body) };
+  }
+
+  // ── MDS comment threads + cross-building inbox ─────────────────
+
+  if (path === '/api/extension/mds/comment-badges') {
+    return { success: true, data: getMdsCommentBadges() };
+  }
+
+  if (path === '/api/extension/mds/threads') {
+    const method = (options?.method || 'GET').toUpperCase();
+    if (method === 'POST') {
+      const body = JSON.parse(options?.body || '{}');
+      return { success: true, data: postMdsComment(body) };
+    }
+    const mdsItem = params.get('mdsItem');
+    const mdsColumn = params.get('mdsColumn') || '';
+    // Opening a conversation reads it — clears the unread dot, like the server.
+    markMdsThreadRead(mdsItem, mdsColumn);
+    return { success: true, data: getMdsThread(mdsItem, mdsColumn) };
+  }
+
+  if (path === '/api/extension/mds/threads/resolve') {
+    const body = JSON.parse(options?.body || '{}');
+    return { success: true, data: resolveMdsAssignment(body) };
+  }
+
+  if (path === '/api/extension/mds/inbox') {
+    return { success: true, data: getMdsInbox() };
+  }
+
+  // ── Notifications summary (FAB badges) ─────────────────────────
+
+  if (path === '/api/extension/notifications/summary') {
+    return { success: true, data: getNotificationsSummary() };
+  }
+
+  if (path === '/api/extension/notifications/seen') {
+    const body = JSON.parse(options?.body || '{}');
+    return { success: true, data: markNotificationsSeen(body.keys) };
   }
 
   console.warn('[DemoMock] Unhandled API endpoint:', path);
@@ -949,6 +1048,32 @@ export function createMockChrome() {
 
   // Mock chrome.runtime.id (some code checks for extension context)
   window.chrome.runtime.id = 'demo-mock-extension-id';
+
+  // Mock chrome.storage.local — useCurrentUser() reads `user` from here for
+  // comment authorship / delete-your-own-comment in the 24hr report.
+  const storageData = { user: DEMO_USER };
+  window.chrome.storage = window.chrome.storage || {
+    local: {
+      get(keys, callback) {
+        const wanted = Array.isArray(keys) ? keys : typeof keys === 'string' ? [keys] : Object.keys(storageData);
+        const result = {};
+        for (const k of wanted) {
+          if (k in storageData) result[k] = storageData[k];
+        }
+        callback?.(result);
+        return Promise.resolve(result);
+      },
+      set(items, callback) {
+        Object.assign(storageData, items);
+        callback?.();
+        return Promise.resolve();
+      },
+    },
+    onChanged: {
+      addListener() {},
+      removeListener() {},
+    },
+  };
 
   console.log('[DemoMock] Chrome API mocks installed');
 }

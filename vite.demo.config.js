@@ -97,10 +97,30 @@ export default defineConfig(({ command }) => ({
     // demo entry and the dynamically/statically imported feature modules —
     // otherwise hooks break with "Cannot read properties of undefined ('__H')".
     dedupe: ['preact', 'preact/hooks', 'preact/jsx-runtime', 'preact/compat'],
-    alias: {
-      'react': 'preact/compat',
-      'react-dom': 'preact/compat'
-    }
+    alias: [
+      { find: 'react', replacement: 'preact/compat' },
+      { find: 'react-dom', replacement: 'preact/compat' },
+      // mds-comments' inbox drives PCC's facility chooser and deep-links into
+      // PCC section pages — neither exists on the demo host. Swap in demo
+      // shims that navigate to the captured Section I page instead. Matched on
+      // the RELATIVE specifiers used inside content/modules/mds-comments/
+      // (the only place these files are imported from in the demo bundle).
+      {
+        find: /^\.\/facility-switch\.js$/,
+        replacement: resolve(process.cwd(), 'demo/demo-mds-shims/facility-switch.js'),
+      },
+      {
+        find: /^\.\/tag-restore\.js$/,
+        replacement: resolve(process.cwd(), 'demo/demo-mds-shims/tag-restore.js'),
+      },
+      // The QM board's QIP destination needs /api/extension/qm/qip* fixtures
+      // the demo doesn't have yet — swap in a "coming soon" card for now.
+      // (demo-qm-overrides.css relabels the tab itself to "QIP/QIPP".)
+      {
+        find: /^\.\/components\/qip\/QipDestination\.jsx$/,
+        replacement: resolve(process.cwd(), 'demo/components/QipComingSoon.jsx'),
+      },
+    ]
   },
   server: {
     open: '/demo/mds-section-i.html',

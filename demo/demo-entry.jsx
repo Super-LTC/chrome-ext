@@ -43,8 +43,20 @@ import '../content/css/qm-board.css';
 import '../content/css/qm-command-center.css';
 import '../content/css/ftag-prevention.css';
 import '../content/css/24hr-report.css';
+import '../content/css/mds-comments.css';
 import './demo-chat.css';
 import './demo-document-viewer.css';
+import './demo-qm-overrides.css';
+
+// ── Step 2.5: Register the REAL comment/inbox/notification modules ──
+// Side-effect imports hang the production singletons on window (MdsCommentsAPI,
+// CommentBadges, MdsCommentThread, MdsTagInbox, NotificationsAPI); the mock
+// chrome layer answers their API calls. See pcc-demo-entry.jsx for details.
+import '../content/modules/notifications/notifications-api.js';
+import '../content/modules/mds-comments/comments-api.js';
+import '../content/modules/mds-comments/comment-badges.js';
+import '../content/modules/mds-comments/comment-thread.js';
+import '../content/modules/mds-comments/inbox-panel.js';
 
 // ── Step 3: Mount DemoApp ──
 // Mocks are installed above (module body executes in order, before render).

@@ -8,6 +8,12 @@
  * Used by both DemoApp (medical-diagnosis.html, index.html) and PCCDemoApp
  * (mds-section-i.html, mds-section-n.html, pcc-demo.html). The parent wires
  * each action to its own overlay via callbacks.
+ *
+ * Badge parity with fab.js updateMDSBadge(): the FAB fetches the notification
+ * summary itself and paints the inbox count, the 24H unseen dot, and the
+ * aggregate on the main "S" bubble. It registers window.updateMDSBadge so the
+ * real inbox-panel/comment-thread modules can trigger a repaint after a post
+ * or resolve, exactly as they do against the production FAB.
  */
 import { useEffect, useState, useRef } from 'preact/hooks';
 
@@ -17,6 +23,7 @@ export function SuperDemoFab({
   onOpenFtag,
   onOpen24hr,
   onOpenChat,
+  onOpenInbox,
   onOpenFeedback,
   onOpenCoverage,
   showCoverage = false,
@@ -24,7 +31,34 @@ export function SuperDemoFab({
   mdsBadgeCount = 0,
 }) {
   const [open, setOpen] = useState(false);
+  const [notif, setNotif] = useState(null);
   const containerRef = useRef(null);
+
+  // Live badge state, refreshed whenever a comment module announces a change.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      const facilityName = window.SuperOverlay?.facilityName || 'SUNNY MEADOWS DEMO FACILITY';
+      const orgSlug = window.getOrg?.()?.org || 'demo-org';
+      const summary = await window.NotificationsAPI?.fetchSummary(facilityName, orgSlug);
+      if (!cancelled && summary) setNotif(summary);
+    };
+    refresh();
+    window.updateMDSBadge = refresh;
+    // comment-thread.js announces every post/resolve on this channel.
+    window.addEventListener('super:mds-thread-changed', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('super:mds-thread-changed', refresh);
+      if (window.updateMDSBadge === refresh) delete window.updateMDSBadge;
+    };
+  }, []);
+
+  // Re-check on every dial open — opening the 24hr report marks it seen, and
+  // the dot should be gone the next time the dial unfolds.
+  useEffect(() => {
+    if (open) window.updateMDSBadge?.();
+  }, [open]);
 
   // Close on outside click, like the real FAB does.
   useEffect(() => {
@@ -46,6 +80,11 @@ export function SuperDemoFab({
     fn?.();
   };
 
+  const inboxCount =
+    (notif?.tagActionCount || 0) + (notif?.tagMentionCount || 0) + (notif?.tagUnreadCount || 0);
+  const show24hrDot = !!notif?.report24hUnseen;
+  const mainCount = mdsBadgeCount + inboxCount + (show24hrDot ? 1 : 0);
+
   return (
     <div
       id="super-bubbles-container"
@@ -62,16 +101,38 @@ export function SuperDemoFab({
         ?
       </button>
 
+      {/* Ask Super (AI). A sparkle, not a speech bubble: the bubble belongs to
+          the thing where a real person is on the other end. */}
       <button
         id="super-chat-action"
         type="button"
         class="super-dial__action super-dial__action--chat"
-        aria-label="Open Chat"
+        aria-label="Ask Super"
         onClick={act(onOpenChat)}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/>
+          <path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/>
+        </svg>
+      </button>
+
+      {/* Inbox — MDS items somebody asked you about, plus 24hr findings you
+          were mentioned on, across every building you can reach. */}
+      <button
+        id="super-inbox-action"
+        type="button"
+        class="super-dial__action super-dial__action--inbox"
+        aria-label="Inbox"
+        onClick={act(onOpenInbox)}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
+        {inboxCount > 0 && (
+          <span class="super-dial__action-badge" id="super-inbox-badge">
+            {inboxCount > 99 ? '99+' : inboxCount}
+          </span>
+        )}
       </button>
 
       <button
@@ -137,6 +198,7 @@ export function SuperDemoFab({
         onClick={act(onOpen24hr)}
       >
         24H
+        {show24hrDot && <span class="super-dial__action-dot" id="super-24hr-dot" />}
       </button>
 
       <button
@@ -150,6 +212,11 @@ export function SuperDemoFab({
         }}
       >
         S
+        {mainCount > 0 && (
+          <span class="super-bubble__badge" id="super-bubble-badge">
+            {mainCount > 99 ? '99+' : mainCount}
+          </span>
+        )}
       </button>
     </div>
   );

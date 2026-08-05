@@ -133,9 +133,13 @@ function ReviewModal({ candidate, onClose, onActed }) {
   const confirm = async () => {
     setBusy(true);
     track('ipa_review_confirmed', { lever: candidate.lever, tier: candidate.tier });
-    await postIpaAction(candidate.id, 'accept');
-    setDone(true);
+    const ok = await postIpaAction(candidate.id, 'accept');
     setBusy(false);
+    if (!ok) {
+      window.SuperToast?.error?.("Couldn't record that — the card will still show. Please let us know.");
+      return;
+    }
+    setDone(true);
     onActed?.();
   };
 
@@ -351,9 +355,16 @@ export function IpaView({ candidates, counts, loading, error, onRefetch }) {
   const [reviewing, setReviewing] = useState(null);
   const [noChangeOpen, setNoChangeOpen] = useState(false);
 
+  // postIpaAction resolves false on a 4xx/network failure. Silently refetching on
+  // failure made a rejected dismiss look identical to a successful one — the card
+  // just came back — so nurses re-clicked instead of reporting it. Say it out loud.
   const act = async (id, action) => {
-    await postIpaAction(id, action);
-    track('ipa_card_action', { action });
+    const ok = await postIpaAction(id, action);
+    track('ipa_card_action', { action, ok });
+    if (!ok) {
+      window.SuperToast?.error?.(`Couldn't ${action} this card — it will still show. Please let us know.`);
+      return;
+    }
     onRefetch?.();
   };
 

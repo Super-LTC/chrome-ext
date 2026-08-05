@@ -28,6 +28,7 @@ import { isCarePlanDemoPage } from '../demo-care-plan-wire.js';
 // never disagree about "code it" vs "don't code".
 import { SECTION_I_DETAIL, sectionIAiAnswer } from '../demo-section-i-fixtures.js';
 import { determineStatus, formatAnswerForDisplay } from '../../content/super-menu/mds-badge.js';
+import { readRestore, clearRestore } from '../demo-mds-shims/tag-restore.js';
 
 const FACILITY_NAME = 'SUNNY MEADOWS DEMO FACILITY';
 const ORG_SLUG = 'demo-org';
@@ -78,6 +79,7 @@ export function PCCDemoApp() {
   const [toast, setToast] = useState(null);
   const [queryData, setQueryData] = useState(null);
   const [carePlanModal, setCarePlanModal] = useState(null); // { defaultMode: 'initial' | 'comprehensive' }
+  const [restore24, setRestore24] = useState(null); // deep-link into the 24hr report (from the inbox)
   const toastTimer = useRef(null);
   const injectedBadges = useRef([]);
   // Keeps the latest resolveBadge available to the (mount-only) tour hook below.
@@ -202,9 +204,53 @@ export function PCCDemoApp() {
     injectedBadges.current = badges;
     console.log(`[PCCDemoApp] Injected ${badges.length} Super badges into PCC form`);
 
+    // ── Comment bubbles (real CommentBadges module) ──
+    // The live overlay repaints bubbles by re-reading SuperOverlay.results, so
+    // publish the same structure here: one entry per badged item, `element`
+    // pointing at the label that holds the main badge. After that, the real
+    // module owns the bubbles — load(), refreshAll() after a post, click →
+    // MdsCommentThread — with zero demo-side copies.
+    if (window.SuperOverlay) {
+      window.SuperOverlay.results = badges.map((badge) => {
+        const code = badge.getAttribute('data-mds-item');
+        return {
+          mdsItem: code,
+          column: '',
+          description: SECTION_I_DETAIL[code]?.item?.itemName || '',
+          element: badge.closest('.question_label'),
+        };
+      });
+      window.CommentBadges?.load();
+    }
+
     return () => {
       badges.forEach(b => b.remove());
+      document.querySelectorAll('.super-badge--comment').forEach(b => b.remove());
     };
+  }, []);
+
+  // ── Arrive from the inbox ("Open the MDS" / cross-building jump) ──
+  // The real flow is fab.js → tag-restore state machine → overlay scan →
+  // comment-badges arrival listener. The demo lands in one hop, so consume the
+  // payload directly: scroll to the item, flash it, open its conversation.
+  useEffect(() => {
+    const payload = readRestore();
+    if (!payload || payload.source !== 'mds_item' || !payload.mdsItem) return;
+    const wrapper = document.getElementById(`${payload.mdsItem}_wrapper`);
+    if (!wrapper) return; // wrong page (Section N, care plan) — leave it for Section I
+    clearRestore();
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    wrapper.classList.add('super-highlight');
+    setTimeout(() => wrapper.classList.remove('super-highlight'), 2000);
+    // After the scroll settles, like the live arrival handler.
+    const tid = setTimeout(() => {
+      window.MdsCommentThread?.open({
+        mdsItem: payload.mdsItem,
+        column: payload.mdsColumn || '',
+        description: SECTION_I_DETAIL[payload.mdsItem]?.item?.itemName || '',
+      });
+    }, 600);
+    return () => clearTimeout(tid);
   }, []);
 
   // ── Inject the Care Plan Audit banner above the action row, demo-only. ──
@@ -298,6 +344,20 @@ export function PCCDemoApp() {
       if (tries >= 10) clearInterval(tid);
     }, 250);
     return () => clearInterval(tid);
+  }, []);
+
+  // ── 24hr launcher shim — the inbox's "Open the report" drives this exactly
+  //    like it drives the production launcher in fab.js. ──
+  useEffect(() => {
+    window.TwentyFourHourReportLauncher = {
+      isOpen: () => false,
+      open: ({ restore } = {}) => {
+        setRestore24(restore || null);
+        setOverlay('24hr');
+      },
+      close: () => {},
+    };
+    return () => { delete window.TwentyFourHourReportLauncher; };
   }, []);
 
   // ── Listen for PDPM open events from Command Center ──
@@ -428,7 +488,8 @@ export function PCCDemoApp() {
         <TwentyFourHourReport
           facilityName={FACILITY_NAME}
           orgSlug={ORG_SLUG}
-          onClose={handleClose}
+          restore={restore24}
+          onClose={() => { setRestore24(null); handleClose(); }}
         />
       )}
 
@@ -504,8 +565,9 @@ export function PCCDemoApp() {
       <SuperDemoFab
         onOpenMds={() => setOverlay('commandCenter')}
         onOpenQm={() => setOverlay('qm')}
-        onOpen24hr={() => setOverlay('24hr')}
+        onOpen24hr={() => { setRestore24(null); setOverlay('24hr'); }}
         onOpenChat={() => setOverlay('chat')}
+        onOpenInbox={() => window.MdsTagInbox?.open()}
         onOpenFeedback={() => setOverlay('feedback')}
         onOpenCoverage={() => setOverlay('coverage')}
         showCoverage={true}

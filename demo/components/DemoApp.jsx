@@ -15,6 +15,7 @@ import { FeedbackModal } from '../../content/modules/feedback/FeedbackModal.jsx'
 import { CoveragePanel } from '../../content/modules/care-plan-coverage/CoveragePanel.jsx';
 import { DemoChatOverlay } from './DemoChatOverlay.jsx';
 import { SuperDemoFab } from './SuperDemoFab.jsx';
+import { useRef } from 'preact/hooks';
 
 const FACILITY_NAME = 'SUNNY MEADOWS DEMO FACILITY';
 const ORG_SLUG = 'demo-org';
@@ -34,6 +35,38 @@ export function DemoApp() {
   const [overlay, setOverlay] = useState(null);
   const [pdpmContext, setPdpmContext] = useState(null);
   const [queryContext, setQueryContext] = useState(null);
+  const [restore24, setRestore24] = useState(null); // deep-link into the 24hr report (from the inbox)
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+
+  // ── SuperToast surface (the inbox's "Switching to …" etc.) ──
+  useEffect(() => {
+    function handleToast(e) {
+      const { type, message } = e.detail || {};
+      setToast({ type: type || 'info', message: message || '' });
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), 3000);
+    }
+    window.addEventListener('demo:toast', handleToast);
+    return () => {
+      window.removeEventListener('demo:toast', handleToast);
+      clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  // ── 24hr launcher shim — the inbox's "Open the report" drives this exactly
+  //    like it drives the production launcher in fab.js. ──
+  useEffect(() => {
+    window.TwentyFourHourReportLauncher = {
+      isOpen: () => false,
+      open: ({ restore } = {}) => {
+        setRestore24(restore || null);
+        setOverlay('24hr');
+      },
+      close: () => {},
+    };
+    return () => { delete window.TwentyFourHourReportLauncher; };
+  }, []);
 
   // ── Guided tour overlay openers (additive; consumed by demo/tour/tour-runner.jsx) ──
   useEffect(() => {
@@ -146,7 +179,8 @@ export function DemoApp() {
         <TwentyFourHourReport
           facilityName={FACILITY_NAME}
           orgSlug={ORG_SLUG}
-          onClose={handleClose}
+          restore={restore24}
+          onClose={() => { setRestore24(null); handleClose(); }}
         />
       )}
 
@@ -216,16 +250,41 @@ export function DemoApp() {
         onOpenMds={() => setOverlay('commandCenter')}
         onOpenQm={() => setOverlay('qm')}
         onOpenFtag={() => setOverlay('ftag')}
-        onOpen24hr={() => setOverlay('24hr')}
+        onOpen24hr={() => { setRestore24(null); setOverlay('24hr'); }}
         onOpenChat={() => setOverlay('chat')}
+        onOpenInbox={() => window.MdsTagInbox?.open()}
         onOpenFeedback={() => setOverlay('feedback')}
         onOpenCoverage={() => setOverlay('coverage')}
         showCoverage={true}
         showFtag={true}
       />
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed', bottom: '96px', right: '24px', zIndex: 200000,
+            padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
+            background: TOAST_COLORS[toast.type]?.bg || TOAST_COLORS.info.bg,
+            color: TOAST_COLORS[toast.type]?.text || TOAST_COLORS.info.text,
+            border: `1px solid ${TOAST_COLORS[toast.type]?.border || TOAST_COLORS.info.border}`,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxWidth: '340px',
+          }}
+          onClick={() => setToast(null)}
+        >
+          {toast.message}
+        </div>
+      )}
     </>
   );
 }
+
+const TOAST_COLORS = {
+  success: { bg: '#ecfdf5', border: '#6ee7b7', text: '#065f46' },
+  error:   { bg: '#fef2f2', border: '#fca5a5', text: '#991b1b' },
+  info:    { bg: '#eff6ff', border: '#93c5fd', text: '#1e40af' },
+  warning: { bg: '#fffbeb', border: '#fcd34d', text: '#92400e' },
+};
 
 // Generic host for secondary overlays (PDPM, Query Items) that don't ship
 // their own backdrop. QMBoard / TwentyFourHourReport / MDSCommandCenter all

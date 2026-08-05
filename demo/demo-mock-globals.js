@@ -175,6 +175,81 @@ export function installGlobalMocks() {
       return { note, preferredIcd10, icd10Options };
     },
 
+    /**
+     * ARD/lookback preview (SUP-131/143). The real QueryAPI resolves this from
+     * the backend and returns null on any failure; useBatchQuery calls it
+     * unguarded on EVERY generate, so its absence here made the whole query
+     * flow die with "Failed to generate any notes".
+     *
+     * Demo: a live upcoming-ARD story — ARD in 4 days with an ARD-7 lookback —
+     * so the countdown badge, "counts as active if dated …" guidance, and the
+     * outside-window warning are all exercisable.
+     */
+    async previewTiming({ mdsItem } = {}) {
+      await new Promise(r => setTimeout(r, 120));
+      if (!mdsItem) return null;
+      const iso = (d) => d.toISOString().slice(0, 10);
+      const today = new Date();
+      const ard = new Date(today); ard.setDate(ard.getDate() + 4);
+      const start = new Date(ard); start.setDate(start.getDate() - 7);
+      return {
+        status: 'upcoming',
+        ardDate: iso(ard),
+        daysUntilArd: 4,
+        lookbackDays: 7,
+        lookbackWindow: { start: iso(start), end: iso(ard) },
+        effectiveDate: iso(today),
+      };
+    },
+
+    /**
+     * ICD-10 free-text search behind the code picker. Small built-in catalog —
+     * enough for the picker's seed search and typing a few obvious terms.
+     */
+    async searchIcd10(q) {
+      await new Promise(r => setTimeout(r, 150));
+      const text = (q || '').trim().toLowerCase();
+      if (text.length < 2) return { results: [] };
+      const CATALOG = [
+        { code: 'I69.320', description: 'Aphasia following cerebral infarction' },
+        { code: 'I69.920', description: 'Aphasia following unspecified cerebrovascular disease' },
+        { code: 'R47.01',  description: 'Aphasia' },
+        { code: 'I69.351', description: 'Hemiplegia and hemiparesis following cerebral infarction affecting right dominant side' },
+        { code: 'I63.9',   description: 'Cerebral infarction, unspecified' },
+        { code: 'E44.0',   description: 'Moderate protein-calorie malnutrition' },
+        { code: 'E46',     description: 'Unspecified protein-calorie malnutrition' },
+        { code: 'E11.9',   description: 'Type 2 diabetes mellitus without complications' },
+        { code: 'E11.40',  description: 'Type 2 diabetes mellitus with diabetic neuropathy, unspecified' },
+        { code: 'I50.9',   description: 'Heart failure, unspecified' },
+        { code: 'I50.32',  description: 'Chronic diastolic (congestive) heart failure' },
+        { code: 'I10',     description: 'Essential (primary) hypertension' },
+        { code: 'N39.0',   description: 'Urinary tract infection, site not specified' },
+        { code: 'N18.9',   description: 'Chronic kidney disease, unspecified' },
+        { code: 'J44.9',   description: 'Chronic obstructive pulmonary disease, unspecified' },
+        { code: 'J18.9',   description: 'Pneumonia, unspecified organism' },
+        { code: 'F32.9',   description: 'Major depressive disorder, single episode, unspecified' },
+        { code: 'F41.9',   description: 'Anxiety disorder, unspecified' },
+        { code: 'F03.90',  description: 'Unspecified dementia, unspecified severity' },
+        { code: 'G30.9',   description: 'Alzheimer’s disease, unspecified' },
+        { code: 'G20',     description: 'Parkinson’s disease' },
+        { code: 'D64.9',   description: 'Anemia, unspecified' },
+        { code: 'L89.153', description: 'Pressure ulcer of sacral region, stage 3' },
+        { code: 'M81.0',   description: 'Age-related osteoporosis without current pathological fracture' },
+        { code: 'R26.81',  description: 'Unsteadiness on feet' },
+      ];
+      const results = CATALOG.filter(
+        (c) => c.code.toLowerCase().startsWith(text) || c.description.toLowerCase().includes(text)
+      ).slice(0, 8);
+      return { results };
+    },
+
+    /** Print-preview PDF download — no backend in the demo, so just succeed. */
+    async printQueryPdf(queryId, opts) {
+      await new Promise(r => setTimeout(r, 400));
+      console.log(`[DemoMock] QueryAPI.printQueryPdf: ${queryId}`, opts?.filename);
+      return { success: true };
+    },
+
     async createQuery(params) {
       await new Promise(r => setTimeout(r, 300));
       return {
