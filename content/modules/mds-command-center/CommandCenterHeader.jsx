@@ -38,6 +38,7 @@ export function CommandCenterHeader({
   onToggleFullscreen,
   queryCount,
   queryHasUnseen,
+  caseMixEnabled,
   certCount,
   certHasUnseen,
   certsEnabled,
@@ -138,6 +139,17 @@ export function CommandCenterHeader({
         >
           Assessments
         </button>
+        {/* Ohio-only, and the SERVER decides that — the extension has no
+            facility→state map at all. See useCaseMix. */}
+        {caseMixEnabled && (
+          <button
+            class={`mds-cc__view-tab${activeView === 'case_mix' ? ' mds-cc__view-tab--active' : ''}`}
+            onClick={() => onViewChange('case_mix')}
+            title="Medicaid case mix for this building — the quarterly CMI and the residents behind it"
+          >
+            Case Mix
+          </button>
+        )}
         {ipaEnabled && (
           <button
             class={`mds-cc__view-tab${activeView === 'ipa' ? ' mds-cc__view-tab--active' : ''}`}

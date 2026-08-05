@@ -70,6 +70,7 @@ import superVerify from './css/super-verify.css?inline';
 import i8000Overlay from './css/i8000-overlay.css?inline';
 import ipaView from './css/ipa-view.css?inline';
 import extensionSettings from './css/extension-settings.css?inline';
+import caseMix from './css/case-mix.css?inline';
 
 // --- Tailwind (generated + scoped under .sltc-tw) -----------------------
 // LAST on purpose: utilities must beat the hand-written BEM above them when a
@@ -125,6 +126,7 @@ const CSS_BUNDLE = [
   i8000Overlay,
   ipaView,
   extensionSettings,
+  caseMix,
   tailwind,
 ].join('\n\n');
 
