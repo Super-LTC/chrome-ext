@@ -247,3 +247,59 @@ describe('buildCaseMixTableRows', () => {
     expect(buildCaseMixTrend([]).rows).toEqual([]);
   });
 });
+
+describe('axis ticks and the average line', () => {
+  /**
+   * A truncated axis with no numbers is unreadable in the other direction: you
+   * can see Q2 is taller than Q1 but not whether that is 0.01 or 0.5. The ticks
+   * are what make the "scaled 1.37–2.03" caption concrete.
+   */
+  it('puts a readable number of gridlines inside the visible band', () => {
+    const t = buildCaseMixTrend(REAL);
+    expect(t.ticks.length).toBeGreaterThanOrEqual(3);
+    expect(t.ticks.length).toBeLessThanOrEqual(8);
+    for (const v of t.ticks) {
+      expect(v).toBeGreaterThanOrEqual(t.baseline);
+      expect(v).toBeLessThanOrEqual(t.top);
+    }
+  });
+
+  it('steps in hundredths, not in unreadable fractions', () => {
+    const t = buildCaseMixTrend(REAL);
+    const step = +(t.ticks[1] - t.ticks[0]).toFixed(4);
+    expect([0.01, 0.02, 0.05, 0.1, 0.2, 0.5]).toContain(step);
+  });
+
+  /**
+   * ⚠️ THE OPEN QUARTER IS EXCLUDED FROM THE AVERAGE. It is partial and runs
+   * systematically low (28 of 28 backtested cells), so folding it in drags the
+   * reference line down and every closed quarter then reads better than it was.
+   */
+  it('averages the closed quarters only', () => {
+    const t = buildCaseMixTrend(REAL);
+    const closed = REAL.filter((q) => !q.inProgress).map((q) => q.medicaidCmi);
+    expect(t.avg).toBeCloseTo(closed.reduce((a, b) => a + b, 0) / closed.length, 4);
+
+    // And it genuinely differs from the all-quarter mean, or this proves nothing.
+    const allMean = REAL.reduce((a, q) => a + q.medicaidCmi, 0) / REAL.length;
+    expect(t.avg).not.toBeCloseTo(allMean, 4);
+  });
+
+  it('places the average line inside the track', () => {
+    const t = buildCaseMixTrend(REAL);
+    expect(t.avgFrac).toBeGreaterThan(0);
+    expect(t.avgFrac).toBeLessThan(1);
+  });
+
+  it('has no average line when every quarter is open', () => {
+    const t = buildCaseMixTrend([{ quarter: '2026Q3', medicaidCmi: 1.5, inProgress: true }]);
+    expect(t.avg).toBeNull();
+    expect(t.avgFrac).toBeNull();
+  });
+
+  it('survives an empty window without inventing an axis', () => {
+    const t = buildCaseMixTrend([]);
+    expect(t.avg).toBeNull();
+    expect(Array.isArray(t.ticks)).toBe(true);
+  });
+});

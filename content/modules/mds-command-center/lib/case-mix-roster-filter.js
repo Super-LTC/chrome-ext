@@ -1,96 +1,161 @@
 /**
- * Filter a quarter's roster down to the population + measure on screen.
+ * Filter a quarter's roster, and score whatever is left.
  *
- * ── WHY THIS IS CLIENT-SIDE AND STILL EXACT ───────────────────────────────
+ * ── THIS REPLACED A SECOND HEADLINE NUMBER ────────────────────────────────
  *
- * The roster endpoint returns EVERY resident on the census for one quarter, with
- * the record each one rides. The tab's two toggles are then just subsets of that,
- * so switching them refetches nothing.
+ * The tab used to carry a Capture / Payable toggle: two parallel CMI scores over
+ * two populations, sitting next to a measure toggle, with nothing on screen
+ * saying which axis you were moving. Nobody could tell them apart, including the
+ * person who asked for them.
  *
- * That is only safe because the fields it filters on are the same ones the score
- * itself gated on, not lookalikes:
+ * They collapsed into this. "Capture" was only ever "the residents assessed
+ * inside this quarter", which is a QUESTION ABOUT THE LIST — so it is a filter on
+ * the list, and `cohortCmi` scores the survivors. Pick `record: 'assessed'` and
+ * the number you get IS the old capture score, next to the names it came from
+ * rather than floating above them.
  *
- *   status === 'locked'  is the `assessed_in_period` gate. Both the roster and
- *                        the quarter score call one `recordTiming`, deliberately,
- *                        "so the roster and the score it drills into must never
- *                        disagree about which residents were assessed".
- *   counts               is the payer tree's own verdict — the exact predicate
- *                        `medicaidCmi` averaged over.
- *   pendingMedicaid      is the exact set `medicaidWithPendingCmi` adds.
+ * That is why `cohortCmi` is not optional decoration. It is the entire reason
+ * removing the toggle did not cost Chelsea her number.
  *
- * So the count this returns should equal the denominator in the headline above
- * it. If those two ever disagree, this file is wrong — not the header.
+ * ── WHY THE PREDICATES ARE EXACT AND NOT APPROXIMATE ──────────────────────
  *
- * ── WHAT "SCOREABLE" MEANS ────────────────────────────────────────────────
+ * Every field filtered on here is the same one the engine gated on, not a
+ * lookalike:
  *
- * A resident with no `currentGroup` has no record in effect at all. They are on
- * the census, they are in `residents`, and they are in NO average. They are kept
- * out of every population here for that reason, and the modal shows them under
- * its own "no scoreable record" heading rather than smuggling them into a count.
+ *   status === 'locked'    the `assessed_in_period` gate — roster and score call
+ *                          one `recordTiming`, deliberately, "so the roster and
+ *                          the score it drills into must never disagree about
+ *                          which residents were assessed in the period".
+ *   counts                 the Ohio payer tree's own verdict — the exact
+ *                          predicate `medicaidCmi` averaged over.
+ *   pendingMedicaid        the exact set `medicaidWithPendingCmi` adds.
+ *   excludedLowGroup       PA1/PA2, removed by statute, not by us.
+ *
+ * So `basis: 'counts'` with no other filter must reproduce the headline's
+ * denominator exactly. If it ever doesn't, this file is wrong — not the header.
  *
  * Pure — no Preact, no fetch, no DOM. Unit-tested in ./__tests__.
  */
 
-/** Residents assessed INSIDE the quarter, per the score's own timing gate. */
-const ASSESSED_IN_PERIOD = 'locked';
+/**
+ * How a resident came to be scored this quarter.
+ *
+ * `backward` rides with `assessed` on purpose: Ohio attributes a late admission
+ * assessment back into the quarter, so from "did we do the work" it IS an
+ * assessment done for this period. The row's Record column still says
+ * "counted back" so the distinction survives where it matters.
+ */
+export const RECORD_FILTERS = [
+  { key: 'any', label: 'Any' },
+  { key: 'assessed', label: 'Assessed this quarter' },
+  { key: 'older', label: 'Scored off an older assessment' },
+  { key: 'none', label: 'No assessment on file' },
+];
 
-export const CASE_MIX_POPULATIONS = ['payable', 'capture'];
-export const CASE_MIX_MEASURES = ['medicaidCmi', 'allCmi', 'medicaidWithPendingCmi'];
+/** Why a resident does or doesn't enter the payable average. */
+export const BASIS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'counts', label: 'Counts' },
+  { key: 'excluded', label: "Doesn't count" },
+  { key: 'lowgroup', label: 'PA1 / PA2' },
+  { key: 'review', label: 'Needs review' },
+];
+
+const RECORD_KEYS = new Set(RECORD_FILTERS.map((f) => f.key));
+const BASIS_KEYS = new Set(BASIS_FILTERS.map((f) => f.key));
 
 /** Has a record in effect that can be scored at all. */
 export function isScoreable(row) {
   return row != null && row.currentGroup != null;
 }
 
+function matchesRecord(row, key) {
+  if (key === 'any') return true;
+  if (key === 'none') return row.status === 'none';
+  if (key === 'assessed') return row.status === 'locked' || row.status === 'backward';
+  // 'older' — on the census, scored, but the record predates the quarter.
+  return row.status === 'carry';
+}
+
+function matchesBasis(row, key) {
+  if (key === 'all') return true;
+  if (key === 'counts') return row.counts === true;
+  if (key === 'lowgroup') return row.excludedLowGroup === true;
+  if (key === 'review') return row.needsReview === true;
+  // "Doesn't count" means exactly that — everyone the payable average excludes,
+  // whatever the reason. PA1/PA2 and needs-review are subsets of it, not
+  // alternatives to it, so they are deliberately NOT subtracted here.
+  return row.counts !== true;
+}
+
+/** Case-insensitive substring over the name, and the PCC id people paste in. */
+function matchesSearch(row, needle) {
+  if (!needle) return true;
+  const q = needle.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    String(row.patientName ?? '').toLowerCase().includes(q) ||
+    String(row.patientId ?? '').toLowerCase().includes(q)
+  );
+}
+
+function mean(values) {
+  if (!values.length) return null;
+  return +(values.reduce((a, b) => a + b, 0) / values.length).toFixed(4);
+}
+
 /**
- * @param {Array<object>} rows        roster residents, as the API returns them
- * @param {{population?: string, measure?: string}} opts
- * @returns {{rows: Array<object>, scoreable: number, unscoreable: number}}
+ * @param {Array<object>} rows  roster residents, as the API returns them
+ * @param {{record?: string, basis?: string, search?: string, category?: string}} opts
+ * @returns {{rows: Array<object>, total: number, unscoreable: number, cohortCmi: number|null, cohortScored: number}}
  */
 export function filterCaseMixRoster(rows, opts = {}) {
-  const population = CASE_MIX_POPULATIONS.includes(opts.population) ? opts.population : 'payable';
-  const measure = CASE_MIX_MEASURES.includes(opts.measure) ? opts.measure : 'medicaidCmi';
+  const record = RECORD_KEYS.has(opts.record) ? opts.record : 'any';
+  const basis = BASIS_KEYS.has(opts.basis) ? opts.basis : 'all';
   const all = Array.isArray(rows) ? rows : [];
 
-  const scoreable = all.filter(isScoreable);
+  const out = all.filter(
+    (r) =>
+      matchesRecord(r, record) &&
+      matchesBasis(r, basis) &&
+      matchesSearch(r, opts.search) &&
+      (!opts.category || r.nursingCategory === opts.category)
+  );
 
-  const inPopulation =
-    population === 'capture'
-      ? scoreable.filter((r) => r.status === ASSESSED_IN_PERIOD)
-      : scoreable;
-
-  const inMeasure = inPopulation.filter((r) => {
-    if (measure === 'allCmi') return true;
-    if (measure === 'medicaidWithPendingCmi') return r.counts === true || r.pendingMedicaid === true;
-    return r.counts === true;
-  });
+  // Scored over the residents who HAVE a record — a resident with none is on the
+  // census and in no average, and averaging them as absent-zero would drag the
+  // cohort down. They stay in `rows` so the list still shows them.
+  const scoreable = out.filter(isScoreable);
 
   return {
-    rows: inMeasure,
-    scoreable: inPopulation.length,
-    /** On the census with no record in effect — in no average, shown separately. */
-    unscoreable: all.length - scoreable.length,
+    rows: out,
+    total: all.length,
+    /** On the census with no record in effect — in the list, in no average. */
+    unscoreable: out.length - scoreable.length,
+    /**
+     * The mean CMI of what survived the filters. THIS IS WHAT REPLACED THE
+     * CAPTURE HEADLINE — filter to `record: 'assessed'` and you have that score.
+     */
+    cohortCmi: mean(scoreable.map((r) => r.currentCmi).filter((v) => typeof v === 'number')),
+    cohortScored: scoreable.length,
   };
 }
 
 /**
- * One line of plain English naming the population currently on screen.
+ * One line naming what is on screen, or null when nothing is filtered.
  *
- * The toggle labels alone do not teach: "Capture" and "Payable" are our words,
- * not the customer's, and the first thing asked on seeing them was what the
- * difference is. This is rendered inline, NOT as a hover — a tooltip that
- * explains the primary control is a tooltip nobody reads.
+ * Deliberately short. The previous version was a two-sentence paragraph
+ * explaining a toggle, and the feedback was that it was "way too much" — which
+ * it was, because it was explaining a control that should not have existed.
  */
-export function describeCaseMixPopulation(population, measure, opts = {}) {
-  const boundary = opts.boundaryLabel ? opts.boundaryLabel.toLowerCase() : 'quarter end';
-  const measureText =
-    measure === 'allCmi'
-      ? 'every resident with a scoreable record, whatever their payer'
-      : measure === 'medicaidWithPendingCmi'
-        ? 'residents the state pays for, plus everyone whose Medicaid application is still pending'
-        : 'only residents the state actually pays for';
-
-  return population === 'capture'
-    ? `Capture — only residents assessed INSIDE this quarter, counting ${measureText}. It tracks what was coded, and it is not the score your state publishes.`
-    : `Payable — the record in effect on the ${boundary}, counting ${measureText}. This is what the state pays on.`;
+export function describeCaseMixCohort(record, basis) {
+  const parts = [];
+  if (record === 'assessed') parts.push('assessed this quarter');
+  if (record === 'older') parts.push('scored off an older assessment');
+  if (record === 'none') parts.push('no assessment on file');
+  if (basis === 'counts') parts.push('counts toward the rate');
+  if (basis === 'excluded') parts.push("doesn't count toward the rate");
+  if (basis === 'lowgroup') parts.push('PA1 / PA2 — excluded by Ohio statute');
+  if (basis === 'review') parts.push('payer we could not classify');
+  return parts.length ? parts.join(' · ') : null;
 }

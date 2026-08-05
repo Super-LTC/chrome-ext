@@ -46,12 +46,18 @@
 }
 .cmi__drift-arrow { font-size: 10px; }
 .cmi__sub { margin-top: 3px; font-size: 12px; color: #64748b; }
-/* Load-bearing prose, not a caption: "Capture" and "Payable" are our words and
-   the toggle alone does not teach them. */
-.cmi__explain {
-  margin-top: 6px; max-width: 62ch;
-  font-size: 11px; line-height: 1.5; color: #64748b;
+.cmi__counts { margin-top: 4px; font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; }
+.cmi__counts b { color: #0f172a; font-weight: 600; }
+.cmi__sep { margin: 0 6px; color: #cbd5e1; }
+/* Pendings read as a fact about the score, not a rival to it — blue because it
+   is neither good news nor bad, it is paperwork. */
+.cmi__pending {
+  margin-top: 5px; display: inline-block;
+  border-radius: 5px; padding: 3px 8px;
+  background: #eff6ff; color: #1d4ed8;
+  font-size: 11px; font-variant-numeric: tabular-nums;
 }
+.cmi__pending b { font-weight: 700; }
 .cmi__sub b { font-variant-numeric: tabular-nums; color: #334155; }
 /* Quiet by design — an accuracy caveat that shouts competes with the number it
    is qualifying. Dotted underline signals "there is more here" without it. */
@@ -60,14 +66,35 @@
   border-bottom: 1px dotted #cbd5e1; display: inline-block; cursor: help;
 }
 
-/* Two toggles stack top-right: population above, measure below. Aligned right
-   so the eye returns to the same edge rather than hunting a second control. */
-.cmi__toggle-stack {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
-  /* Never shrink below the buttons — a squeezed segmented control clips its
-     last option, which is how "+ pendings" lost its final letters. */
+/* The right rail: quarter pills over a single action. Both the population and
+   measure toggles used to live here; see CaseMixView's docblock for why they are
+   gone. Never shrinks below its content — a squeezed segmented control clips its
+   last option, which is how "+ pendings" lost its final letters. */
+.cmi__headline-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
   flex: 0 0 auto;
 }
+.cmi__quarters {
+  display: inline-flex; padding: 2px; gap: 1px;
+  border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+}
+.cmi__qpill {
+  border: 0; background: transparent; cursor: pointer;
+  border-radius: 6px; padding: 4px 9px;
+  font-size: 11px; font-weight: 500; color: #64748b;
+  font-variant-numeric: tabular-nums;
+  transition: background-color .12s, color .12s;
+}
+.cmi__qpill:hover { background: #f8fafc; }
+.cmi__qpill--active { background: #0f172a; color: #fff; }
+.cmi__qpill--active:hover { background: #0f172a; }
+.cmi__residents-btn {
+  border: 0; border-radius: 8px; padding: 6px 12px;
+  background: #0f172a; color: #fff; cursor: pointer;
+  font-size: 11px; font-weight: 600;
+  transition: background-color .12s;
+}
+.cmi__residents-btn:hover { background: #1e293b; }
 .cmi__toggle {
   display: inline-flex; padding: 2px;
   border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
@@ -101,8 +128,47 @@
 .cmi__trend-delta--down { color: #e11d48; }
 .cmi__trend-delta--flat { color: #94a3b8; }
 
-.cmi__bars { display: flex; align-items: flex-end; gap: 6px; }
-.cmi__col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* A real plot area. The bars were 380px wide and 44px tall — an aspect ratio
+   that makes any series look flat and sprawling. Height first, then a cap on bar
+   width so five quarters do not stretch to fill a 1100px panel. */
+.cmi__plot { display: flex; gap: 8px; height: 150px; }
+.cmi__yaxis { position: relative; width: 30px; flex: 0 0 auto; }
+.cmi__ytick {
+  position: absolute; right: 0; transform: translateY(50%);
+  font-size: 9px; color: #94a3b8; font-variant-numeric: tabular-nums;
+}
+.cmi__grid { position: relative; flex: 1; min-width: 0; }
+.cmi__gridline {
+  position: absolute; left: 0; right: 0; height: 1px;
+  background: #f1f5f9;
+}
+/* The average excludes the open quarter — it is partial and runs low. */
+.cmi__avgline {
+  position: absolute; left: 0; right: 0; height: 0;
+  border-top: 1px dashed #94a3b8; z-index: 1;
+}
+.cmi__avglabel {
+  position: absolute; left: 2px; top: -12px;
+  font-size: 9px; color: #64748b; background: #fff; padding: 0 3px;
+}
+.cmi__bars {
+  position: absolute; inset: 0;
+  display: flex; align-items: flex-end; justify-content: space-around; gap: 4px;
+}
+.cmi__col {
+  flex: 1 1 0; min-width: 0; max-width: 96px; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  border: 0; background: transparent; padding: 0; cursor: pointer;
+  border-radius: 4px 4px 0 0; transition: background-color .12s;
+}
+.cmi__col:hover { background: rgba(241, 245, 249, .7); }
+.cmi__col--selected { background: rgba(226, 232, 240, .8); }
+.cmi__barwrap {
+  width: 100%; flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.cmi__xaxis { display: flex; justify-content: space-around; gap: 4px; margin: 6px 0 0 38px; }
+.cmi__xaxis .cmi__qlabel { flex: 1 1 0; max-width: 96px; text-align: center; }
 /* Printed above every bar. A value you must hover to read is a value that gets
    read off the pixel height instead — and the axis is truncated, so that reading
    is wrong. */
@@ -111,14 +177,6 @@
   font-variant-numeric: tabular-nums;
 }
 .cmi__barval--none { color: #cbd5e1; font-weight: 400; }
-.cmi__track {
-  width: 100%; height: 44px;
-  display: flex; align-items: flex-end; justify-content: center;
-  border: 0; background: transparent; padding: 0; cursor: pointer;
-  border-radius: 3px; transition: background-color .12s;
-}
-.cmi__track:hover { background: #f1f5f9; }
-.cmi__stack { width: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
 .cmi__bar { width: 100%; border-radius: 3px 3px 0 0; background: #0d9488; }
 /* HOLLOW on purpose. The drift band is a measured range, not measured height —
    a solid segment would add to the bar and read as CMI we have. An outline that
@@ -299,3 +357,69 @@
   background: #fffbeb; color: #92400e; box-shadow: inset 0 0 0 1px #fde68a;
 }
 .cmi-tbl__proj--set { background: #f5f3ff; color: #5b21b6; box-shadow: inset 0 0 0 1px #ddd6fe; }
+
+/* ── inline category drill ────────────────────────────────────── */
+/* Opens directly under the mix bar that was clicked. A bar reading
+   "Special Care High 23" raises one question — WHICH 23 — and answering it by
+   covering the chart that asked makes you hold both in your head. */
+.cmi-drill {
+  margin: 2px 0 10px 20px;
+  border-left: 2px solid #0d9488;
+  background: #f8fafc; border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+}
+.cmi-drill__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 8px;
+}
+.cmi-drill__title { font-size: 11px; color: #475569; font-variant-numeric: tabular-nums; }
+.cmi-drill__title b { color: #0f172a; }
+.cmi-drill__all {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 11px; font-weight: 600; color: #0d9488; padding: 0;
+}
+.cmi-drill__all:hover { text-decoration: underline; }
+.cmi-drill__msg { font-size: 11px; color: #94a3b8; padding: 4px 0; }
+.cmi-drill__tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.cmi-drill__tbl thead th {
+  padding: 4px 8px; text-align: left; border-bottom: 1px solid #e2e8f0;
+  font-size: 9px; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.cmi-drill__tbl td { padding: 5px 8px; border-bottom: 1px solid #eef2f7; }
+.cmi-drill__name { font-weight: 500; color: #0f172a; }
+.cmi-drill__dim { color: #94a3b8; }
+.cmi-drill__group { font-weight: 600; color: #334155; font-variant-numeric: tabular-nums; }
+.cmi-drill__cmi { color: #334155; font-variant-numeric: tabular-nums; }
+.cmi-drill__qual { color: #475569; max-width: 260px; }
+
+/* ── mix rows are buttons now ─────────────────────────────────── */
+.cmi__mix-row {
+  width: 100%; border: 0; background: transparent; cursor: pointer;
+  text-align: left; border-radius: 6px;
+  display: grid; grid-template-columns: 14px minmax(90px, 1.4fr) 26px minmax(60px, 3fr) 34px;
+  align-items: center; gap: 8px; padding: 4px 6px;
+  transition: background-color .12s;
+}
+.cmi__mix-row:hover { background: #f8fafc; }
+.cmi__mix-row--open { background: #f1f5f9; }
+.cmi__mix-chevron { font-size: 11px; color: #94a3b8; }
+
+/* ── roster filter bar ────────────────────────────────────────── */
+/* Mirrors the web residents page. Between them these two groups answer every
+   question the deleted Capture/Payable toggle gestured at — with names. */
+.cmi-modal__filters {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 18px; flex: 0 0 auto;
+  background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+}
+.cmi-modal__search {
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 5px 10px; font-size: 11px; color: #0f172a;
+  background: #fff; min-width: 150px; flex: 0 1 190px;
+}
+.cmi-modal__search:focus { outline: 2px solid #99f6e4; outline-offset: -1px; }
+.cmi__toggle--filter { flex-wrap: wrap; }
+.cmi__toggle--filter .cmi__toggle-btn { font-size: 10px; padding: 3px 8px; }
+.cmi__toggle--filter .cmi__toggle-btn--active { background: #334155; }
+.cmi-modal__cohort { color: #64748b; }

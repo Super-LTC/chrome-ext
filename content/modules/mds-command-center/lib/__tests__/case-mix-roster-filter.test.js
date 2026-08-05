@@ -1,29 +1,35 @@
 import { describe, it, expect } from 'vitest';
 import {
   filterCaseMixRoster,
-  describeCaseMixPopulation,
+  describeCaseMixCohort,
   isScoreable,
+  RECORD_FILTERS,
+  BASIS_FILTERS,
 } from '../case-mix-roster-filter.js';
 
 /**
- * A roster that exercises every axis at once. Deliberately built so the four
- * populations have DIFFERENT sizes — a fixture where they coincide cannot tell a
- * working filter from one that ignores its arguments.
+ * A roster that exercises every axis at once, with DIFFERENT sizes per filter —
+ * a fixture where the cohorts coincide cannot tell a working filter from one
+ * that ignores its arguments.
  *
- *   a  assessed in quarter, payable
- *   b  assessed in quarter, Medicare A (scoreable, not payable)
- *   c  carried on an earlier record, payable
- *   d  carried, Medicaid application pending
- *   e  counted back from an admission after quarter end, payable
- *   f  on the census with no record at all
+ *   101  assessed this quarter, payable, SCH
+ *   102  assessed this quarter, Medicare A (scoreable, not payable), ES
+ *   103  older record, payable, RPF
+ *   104  older record, Medicaid application pending
+ *   105  counted back from a late admission, payable
+ *   106  PA1 — payer tree admitted, statute excluded
+ *   107  payer we could not classify
+ *   108  on the census, no record at all
  */
 const ROSTER = [
-  { patientId: 'a', currentGroup: 'HBC2', status: 'locked', counts: true, pendingMedicaid: false },
-  { patientId: 'b', currentGroup: 'ES2', status: 'locked', counts: false, pendingMedicaid: false },
-  { patientId: 'c', currentGroup: 'PA1', status: 'carry', counts: true, pendingMedicaid: false },
-  { patientId: 'd', currentGroup: 'HDE2', status: 'carry', counts: false, pendingMedicaid: true },
-  { patientId: 'e', currentGroup: 'CDE2', status: 'backward', counts: true, pendingMedicaid: false },
-  { patientId: 'f', currentGroup: null, status: 'none', counts: false, pendingMedicaid: false },
+  { patientId: '101', patientName: 'Alder, Ann', currentGroup: 'HBC2', currentCmi: 2.12, status: 'locked', counts: true, pendingMedicaid: false, excludedLowGroup: false, needsReview: false, nursingCategory: 'SCH' },
+  { patientId: '102', patientName: 'Birch, Bob', currentGroup: 'ES2', currentCmi: 2.90, status: 'locked', counts: false, pendingMedicaid: false, excludedLowGroup: false, needsReview: false, nursingCategory: 'ES' },
+  { patientId: '103', patientName: 'Cedar, Cal', currentGroup: 'PBC1', currentCmi: 1.10, status: 'carry', counts: true, pendingMedicaid: false, excludedLowGroup: false, needsReview: false, nursingCategory: 'RPF' },
+  { patientId: '104', patientName: 'Dogwood, Dee', currentGroup: 'HDE2', currentCmi: 2.27, status: 'carry', counts: false, pendingMedicaid: true, excludedLowGroup: false, needsReview: false, nursingCategory: 'SCH' },
+  { patientId: '105', patientName: 'Elm, Ed', currentGroup: 'CDE2', currentCmi: 1.50, status: 'backward', counts: true, pendingMedicaid: false, excludedLowGroup: false, needsReview: false, nursingCategory: 'CC' },
+  { patientId: '106', patientName: 'Fir, Fay', currentGroup: 'PA1', currentCmi: 0.68, status: 'locked', counts: false, pendingMedicaid: false, excludedLowGroup: true, needsReview: false, nursingCategory: 'RPF' },
+  { patientId: '107', patientName: 'Gum, Gil', currentGroup: 'CA1', currentCmi: 1.03, status: 'locked', counts: false, pendingMedicaid: false, excludedLowGroup: false, needsReview: true, nursingCategory: 'CC' },
+  { patientId: '108', patientName: 'Hazel, Hal', currentGroup: null, currentCmi: null, status: 'none', counts: false, pendingMedicaid: false, excludedLowGroup: false, needsReview: false, nursingCategory: null },
 ];
 
 const ids = (r) => r.rows.map((x) => x.patientId);
@@ -36,113 +42,163 @@ describe('isScoreable', () => {
   });
 });
 
-describe('filterCaseMixRoster', () => {
+describe('record filter', () => {
   /**
-   * THE ONE THAT MATTERS. A resident with no record in effect is in no average.
-   * Letting them through would inflate every count on the drill and make it
-   * disagree with the headline it drilled from.
+   * ⚠️ THE ONE THAT REPLACED A HEADLINE. "Capture" was a second CMI over the
+   * residents assessed inside the quarter. It is now this filter plus
+   * `cohortCmi`. If this stops selecting on the same `status` the engine gated
+   * on, the number silently becomes something else wearing the same label.
    */
-  it('never lets an unscoreable resident into any population', () => {
-    for (const population of ['payable', 'capture']) {
-      for (const measure of ['medicaidCmi', 'allCmi', 'medicaidWithPendingCmi']) {
-        const out = filterCaseMixRoster(ROSTER, { population, measure });
-        expect(ids(out), `${population}/${measure}`).not.toContain('f');
-        expect(out.unscoreable).toBe(1);
-      }
+  it('assessed-this-quarter selects the old capture population', () => {
+    const out = filterCaseMixRoster(ROSTER, { record: 'assessed' });
+    // 'locked' AND 'backward' — Ohio attributes a late admission back into the quarter.
+    expect(ids(out)).toEqual(['101', '102', '105', '106', '107']);
+  });
+
+  it('older selects only carried records, and it is a different set', () => {
+    const older = filterCaseMixRoster(ROSTER, { record: 'older' });
+    expect(ids(older)).toEqual(['103', '104']);
+    expect(ids(older)).not.toEqual(ids(filterCaseMixRoster(ROSTER, { record: 'assessed' })));
+  });
+
+  it('no-assessment-on-file finds the resident with no record', () => {
+    expect(ids(filterCaseMixRoster(ROSTER, { record: 'none' }))).toEqual(['108']);
+  });
+
+  it('any keeps everyone, including the unscoreable resident', () => {
+    expect(filterCaseMixRoster(ROSTER, { record: 'any' }).rows).toHaveLength(8);
+  });
+});
+
+describe('basis filter', () => {
+  it('counts is the payer tree verdict, nothing else', () => {
+    expect(ids(filterCaseMixRoster(ROSTER, { basis: 'counts' }))).toEqual(['101', '103', '105']);
+  });
+
+  /**
+   * "Doesn't count" must mean everyone the payable average excludes. PA1/PA2 and
+   * needs-review are SUBSETS of it, not alternatives — a reader picking
+   * "Doesn't count" and not seeing their PA1 residents would conclude the filter
+   * is broken, and they'd be right.
+   */
+  it("doesn't-count is a superset of PA1/PA2 and needs-review", () => {
+    const excluded = ids(filterCaseMixRoster(ROSTER, { basis: 'excluded' }));
+    for (const id of ids(filterCaseMixRoster(ROSTER, { basis: 'lowgroup' }))) {
+      expect(excluded).toContain(id);
+    }
+    for (const id of ids(filterCaseMixRoster(ROSTER, { basis: 'review' }))) {
+      expect(excluded).toContain(id);
     }
   });
 
+  it('PA1/PA2 and needs-review are distinct, narrower cohorts', () => {
+    expect(ids(filterCaseMixRoster(ROSTER, { basis: 'lowgroup' }))).toEqual(['106']);
+    expect(ids(filterCaseMixRoster(ROSTER, { basis: 'review' }))).toEqual(['107']);
+  });
+});
+
+describe('cohortCmi', () => {
   /**
-   * ⚠️ THE POPULATION GATE. Capture is `status === 'locked'` because that is the
-   * same `recordTiming` verdict the score gated on. If this ever drifts to "has
-   * a current ARD" or similar, carried residents leak in and the capture number
-   * silently becomes the payable one.
+   * THE POINT OF THE MODULE. Removing the Capture toggle only survives if the
+   * number it used to show is still obtainable. Filter to assessed + counts and
+   * you have it.
    */
-  it('capture keeps only residents assessed inside the quarter', () => {
-    expect(ids(filterCaseMixRoster(ROSTER, { population: 'capture', measure: 'allCmi' })))
-      .toEqual(['a', 'b']);
-    // Not the same set as payable — otherwise the toggle does nothing.
-    expect(ids(filterCaseMixRoster(ROSTER, { population: 'payable', measure: 'allCmi' })))
-      .toEqual(['a', 'b', 'c', 'd', 'e']);
+  it('reproduces the capture score from a filter', () => {
+    const capture = filterCaseMixRoster(ROSTER, { record: 'assessed', basis: 'counts' });
+    // 101 (locked) and 105 (backward) — a late admission counted back into the
+    // quarter IS work done for this period, so it belongs in the capture score.
+    expect(ids(capture)).toEqual(['101', '105']);
+    expect(capture.cohortCmi).toBeCloseTo((2.12 + 1.5) / 2, 4);
+    expect(capture.cohortScored).toBe(2);
   });
 
-  it('payable keeps carried and backward-attributed residents', () => {
-    const out = filterCaseMixRoster(ROSTER, { population: 'payable', measure: 'allCmi' });
-    expect(ids(out)).toContain('c'); // carry
-    expect(ids(out)).toContain('e'); // backward
+  it('scores the payable population when only basis is set', () => {
+    const payable = filterCaseMixRoster(ROSTER, { basis: 'counts' });
+    // (2.12 + 1.10 + 1.50) / 3
+    expect(payable.cohortCmi).toBeCloseTo(1.5733, 4);
+    expect(payable.cohortScored).toBe(3);
   });
 
-  it('the Medicaid measure is the payer tree verdict, nothing else', () => {
-    expect(ids(filterCaseMixRoster(ROSTER, { population: 'payable', measure: 'medicaidCmi' })))
-      .toEqual(['a', 'c', 'e']);
+  /** A resident with no record is on the census and in NO average. Averaging
+   *  them as zero would drag the cohort toward the floor. */
+  it('keeps unscoreable residents in the list but out of the mean', () => {
+    const out = filterCaseMixRoster(ROSTER, { record: 'none' });
+    expect(out.rows).toHaveLength(1);
+    expect(out.cohortScored).toBe(0);
+    expect(out.cohortCmi).toBeNull();
+    expect(out.unscoreable).toBe(1);
   });
 
-  /** + pendings is payable ∪ pending — exactly what that mean averages over. */
-  it('+ pendings adds the pending applications and only those', () => {
+  it('is null rather than NaN when nothing survives', () => {
+    const out = filterCaseMixRoster(ROSTER, { search: 'nobody-by-that-name' });
+    expect(out.rows).toEqual([]);
+    expect(out.cohortCmi).toBeNull();
+  });
+});
+
+describe('search and category', () => {
+  it('matches name case-insensitively and by PCC id', () => {
+    expect(ids(filterCaseMixRoster(ROSTER, { search: 'cedar' }))).toEqual(['103']);
+    expect(ids(filterCaseMixRoster(ROSTER, { search: '107' }))).toEqual(['107']);
+    expect(ids(filterCaseMixRoster(ROSTER, { search: '  ELM ' }))).toEqual(['105']);
+  });
+
+  /** The clinical-mix drill passes a category — clicking "Special Care High"
+   *  must show only SCH residents, or the count under the bar is a lie. */
+  it('narrows to one clinical category', () => {
+    expect(ids(filterCaseMixRoster(ROSTER, { category: 'SCH' }))).toEqual(['101', '104']);
+  });
+
+  it('composes every axis rather than letting one win', () => {
     const out = filterCaseMixRoster(ROSTER, {
-      population: 'payable',
-      measure: 'medicaidWithPendingCmi',
+      category: 'SCH',
+      record: 'assessed',
+      basis: 'counts',
     });
-    expect(ids(out)).toEqual(['a', 'c', 'd', 'e']);
-    expect(ids(out)).not.toContain('b'); // Medicare A is not pending, it is not Medicaid
+    expect(ids(out)).toEqual(['101']);
   });
+});
 
-  it('all-residents includes payers the Medicaid measure excludes', () => {
-    const all = filterCaseMixRoster(ROSTER, { population: 'payable', measure: 'allCmi' });
-    const medicaid = filterCaseMixRoster(ROSTER, { population: 'payable', measure: 'medicaidCmi' });
-    expect(all.rows.length).toBeGreaterThan(medicaid.rows.length);
-    expect(ids(all)).toContain('b');
-    // PA1 is scoreable and payer-admitted; the state's exclusion is upstream of here.
-    expect(ids(all)).toContain('c');
-  });
-
-  it('composes both axes rather than letting one win', () => {
-    expect(ids(filterCaseMixRoster(ROSTER, { population: 'capture', measure: 'medicaidCmi' })))
-      .toEqual(['a']);
-  });
-
-  it('reports the scoreable size of the population, not of the measure', () => {
-    const out = filterCaseMixRoster(ROSTER, { population: 'capture', measure: 'medicaidCmi' });
-    expect(out.rows.length).toBe(1); // just 'a'
-    expect(out.scoreable).toBe(2); // 'a' and 'b' are both in the capture population
-  });
-
-  it('falls back to the payable Medicaid view for nonsense arguments', () => {
-    const bogus = filterCaseMixRoster(ROSTER, { population: 'sideways', measure: 'vibes' });
-    const canonical = filterCaseMixRoster(ROSTER, { population: 'payable', measure: 'medicaidCmi' });
-    expect(ids(bogus)).toEqual(ids(canonical));
+describe('robustness', () => {
+  it('falls back to the unfiltered view for nonsense arguments', () => {
+    const bogus = filterCaseMixRoster(ROSTER, { record: 'sideways', basis: 'vibes' });
+    expect(bogus.rows).toHaveLength(8);
   });
 
   it('survives a non-array', () => {
     expect(filterCaseMixRoster(null).rows).toEqual([]);
-    expect(filterCaseMixRoster(undefined).unscoreable).toBe(0);
+    expect(filterCaseMixRoster(undefined).cohortCmi).toBeNull();
+  });
+
+  it('exposes filter definitions the UI can render without restating them', () => {
+    expect(RECORD_FILTERS.map((f) => f.key)).toEqual(['any', 'assessed', 'older', 'none']);
+    expect(BASIS_FILTERS).toHaveLength(5);
+    // The wording that was called out as meaningless must be gone.
+    const labels = [...RECORD_FILTERS, ...BASIS_FILTERS].map((f) => f.label).join(' ');
+    expect(labels).not.toMatch(/riding an earlier record/i);
+    expect(labels).not.toMatch(/never assessed/i);
   });
 });
 
-describe('describeCaseMixPopulation', () => {
-  it('says which population AND which payers in one sentence', () => {
-    const capture = describeCaseMixPopulation('capture', 'medicaidCmi');
-    expect(capture).toMatch(/INSIDE this quarter/);
-    expect(capture).toMatch(/not the score your state publishes/);
-
-    const payable = describeCaseMixPopulation('payable', 'medicaidCmi', {
-      boundaryLabel: 'Picture date',
-    });
-    expect(payable).toMatch(/picture date/);
-    expect(payable).toMatch(/what the state pays on/);
+describe('describeCaseMixCohort', () => {
+  it('is null when nothing is narrowed — no sentence for a default view', () => {
+    expect(describeCaseMixCohort('any', 'all')).toBeNull();
   });
 
-  /** Never name a state's rule for a state whose rule we have not read — the
-   *  server sends the label it is allowed to use, and this must honour it. */
-  it('falls back to neutral wording without a verified boundary label', () => {
-    expect(describeCaseMixPopulation('payable', 'allCmi')).toMatch(/quarter end/);
-    expect(describeCaseMixPopulation('payable', 'allCmi')).not.toMatch(/picture date/);
+  it('names both axes when both are set', () => {
+    expect(describeCaseMixCohort('assessed', 'counts')).toBe(
+      'assessed this quarter · counts toward the rate'
+    );
   });
 
-  it('changes with the measure, not just the population', () => {
-    const a = describeCaseMixPopulation('payable', 'medicaidCmi');
-    const b = describeCaseMixPopulation('payable', 'allCmi');
-    const c = describeCaseMixPopulation('payable', 'medicaidWithPendingCmi');
-    expect(new Set([a, b, c]).size).toBe(3);
+  /** It replaced a two-sentence paragraph that was "way too much". Keep it short
+   *  enough that the constraint is enforced, not merely intended. */
+  it('stays short', () => {
+    for (const r of RECORD_FILTERS) {
+      for (const b of BASIS_FILTERS) {
+        const s = describeCaseMixCohort(r.key, b.key);
+        if (s) expect(s.length).toBeLessThan(70);
+      }
+    }
   });
 });

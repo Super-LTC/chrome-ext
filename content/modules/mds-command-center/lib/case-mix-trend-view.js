@@ -41,9 +41,42 @@ function padRange(min, max) {
   return { baseline: +(min - pad).toFixed(4), top: +(max + pad).toFixed(4) };
 }
 
-/** The three measures, mirroring the web surface. Anything else falls back to
- *  the payable one rather than rendering an undefined series. */
+/** The three measures the engine publishes. The tab renders only `medicaidCmi`
+ *  now — the measure toggle is gone, because the all-payer score does not pay
+ *  anything and pendings reads better as a footnote than as a third mode. The
+ *  others stay reachable for the web surface, which still reconciles against
+ *  ODM's published Total. */
 const METRICS = new Set(['medicaidCmi', 'allCmi', 'medicaidWithPendingCmi']);
+
+/**
+ * Round a span up to a readable tick step. CMI moves in hundredths, so the
+ * candidates stop there — a 0.001 step would print six gridlines nobody can tell
+ * apart, and a 0.5 step would put two lines on the whole chart.
+ */
+function tickStep(span) {
+  for (const s of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]) {
+    if (span / s <= 6) return s;
+  }
+  return 1;
+}
+
+/**
+ * Gridline values across the visible band.
+ *
+ * The axis is truncated (see the module docblock), and a truncated axis with no
+ * numbers on it is unreadable in the other direction: you can see that Q2 is
+ * taller than Q1 but have no idea whether that is 0.01 or 0.5. The ticks are what
+ * make "scaled 1.37–2.03" concrete instead of a disclaimer.
+ */
+function buildTicks(baseline, top) {
+  const step = tickStep(top - baseline);
+  const first = Math.ceil(baseline / step) * step;
+  const out = [];
+  for (let v = first; v <= top + 1e-9 && out.length < 8; v += step) {
+    out.push(+v.toFixed(4));
+  }
+  return out;
+}
 
 /**
  * @param {Array<{quarter:string,medicaidCmi:number|null,allCmi:number|null,medicaidWithPendingCmi:number|null,inProgress:boolean,scored:number,medicaidScored:number,carryForward:number}>} quarters
@@ -112,12 +145,23 @@ export function buildCaseMixTrend(quarters, opts = {}) {
   const last = present[present.length - 1]?.value ?? null;
   const delta = first != null && last != null ? +(last - first).toFixed(4) : null;
 
+  // The average excludes the OPEN quarter. It is a partial, systematically low
+  // number (28 of 28 backtested cells), so folding it into the mean drags the
+  // reference line down and every closed quarter then reads better than it was.
+  const closed = present.filter((p) => !p.inProgress).map((p) => p.value);
+  const avg = closed.length ? +(closed.reduce((a, b) => a + b, 0) / closed.length).toFixed(4) : null;
+
   return {
     metric,
     points,
     /** Bars are drawn against this floor, NOT zero. Print it. */
     baseline,
     top,
+    /** Gridline values, so the truncated axis carries numbers and not just a caveat. */
+    ticks: buildTicks(baseline, top),
+    /** Mean of the CLOSED quarters, and where to draw it. Null if none are closed. */
+    avg,
+    avgFrac: avg != null ? frac(avg) : null,
     first,
     last,
     delta,

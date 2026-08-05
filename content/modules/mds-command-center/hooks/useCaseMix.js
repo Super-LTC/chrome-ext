@@ -17,11 +17,20 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
  * enabled:false and the tab simply never appears. An error toast inside PCC for
  * a feature the building was never entitled to is worse than silence.
  *
- * ── TWO POPULATIONS, NEITHER DERIVABLE FROM THE OTHER ─────────────────────
+ * ── ONE POPULATION, DELIBERATELY ──────────────────────────────────────────
  *
- * `payable` is the record in effect on the picture date — what ODM publishes and
- * what sets the rate. `capture` is only residents assessed INSIDE the quarter.
- * They run different populations, so this hook keeps both and the view picks.
+ * This used to keep two — `payable` (the record in effect on the picture date)
+ * and `capture` (only residents assessed inside the quarter) — behind a toggle.
+ * Nobody could tell them apart, so the toggle is gone and only `payable` is
+ * rendered: the score that actually sets the rate.
+ *
+ * "Capture" was never a second score so much as a QUESTION ABOUT THE LIST, and it
+ * now lives there: filter the roster drill to "Assessed this quarter" and its
+ * cohort CMI is exactly that number, standing next to the residents it came from.
+ * See `case-mix-roster-filter.js`.
+ *
+ * The response still carries `capture` — the web surface has its own uses and the
+ * route is shared. This hook ignores it.
  */
 export function useCaseMix({ facilityName, orgSlug }) {
   const [data, setData] = useState(null);
