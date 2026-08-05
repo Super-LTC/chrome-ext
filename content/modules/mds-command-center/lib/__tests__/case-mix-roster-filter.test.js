@@ -5,6 +5,7 @@ import {
   isScoreable,
   RECORD_FILTERS,
   BASIS_FILTERS,
+  sortCaseMixRoster,
 } from '../case-mix-roster-filter.js';
 
 /**
@@ -200,5 +201,62 @@ describe('describeCaseMixCohort', () => {
         if (s) expect(s.length).toBeLessThan(70);
       }
     }
+  });
+});
+
+describe('sortCaseMixRoster', () => {
+  /**
+   * THE ONE THAT MATTERS. The Current column reads "HBC2 · 2.12" — sorting it by
+   * the visible string orders ES2 before HBC2 before PA1, which is alphabetical
+   * noise for a number people scan to find outliers.
+   */
+  it('sorts Current by CMI, not by the group name shown beside it', () => {
+    const out = sortCaseMixRoster(ROSTER, 'current', 'desc');
+    const cmis = out.map((r) => r.currentCmi).filter((v) => v != null);
+    expect(cmis).toEqual([...cmis].sort((a, b) => b - a));
+    expect(out[0].currentCmi).toBe(2.9); // ES2, the highest
+  });
+
+  /**
+   * Missing values go LAST in BOTH directions. Ascending would otherwise open
+   * with the residents who have no record at all, burying the lowest real CMIs —
+   * exactly what the click was trying to surface.
+   */
+  it('keeps missing values last in both directions', () => {
+    for (const dir of ['asc', 'desc']) {
+      const out = sortCaseMixRoster(ROSTER, 'current', dir);
+      expect(out[out.length - 1].patientId, dir).toBe('108'); // no record
+    }
+  });
+
+  it('actually reverses when the direction flips', () => {
+    const desc = sortCaseMixRoster(ROSTER, 'current', 'desc').map((r) => r.patientId);
+    const asc = sortCaseMixRoster(ROSTER, 'current', 'asc').map((r) => r.patientId);
+    expect(asc).not.toEqual(desc);
+    // Same membership, different order.
+    expect([...asc].sort()).toEqual([...desc].sort());
+  });
+
+  it('breaks ties by name so the order is stable across renders', () => {
+    const tied = [
+      { patientId: '1', patientName: 'Zeta', currentCmi: 2.0 },
+      { patientId: '2', patientName: 'Alpha', currentCmi: 2.0 },
+    ];
+    expect(sortCaseMixRoster(tied, 'current', 'desc').map((r) => r.patientName))
+      .toEqual(['Alpha', 'Zeta']);
+  });
+
+  it('sorts Counts so the payable residents lead', () => {
+    const out = sortCaseMixRoster(ROSTER, 'counts', 'asc');
+    expect(out[0].counts).toBe(true);
+  });
+
+  it('returns the rows untouched for an unknown column', () => {
+    const out = sortCaseMixRoster(ROSTER, 'nonsense');
+    expect(out.map((r) => r.patientId)).toEqual(ROSTER.map((r) => r.patientId));
+  });
+
+  it('survives a non-array', () => {
+    expect(sortCaseMixRoster(null, 'current')).toEqual([]);
   });
 });

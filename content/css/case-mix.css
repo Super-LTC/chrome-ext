@@ -161,8 +161,12 @@
   border: 0; background: transparent; padding: 0; cursor: pointer;
   border-radius: 4px 4px 0 0; transition: background-color .12s;
 }
-.cmi__col:hover { background: rgba(241, 245, 249, .7); }
-.cmi__col--selected { background: rgba(226, 232, 240, .8); }
+/* Transparent — a background here paints the whole track height, which reads as
+   a grey slab hovering above the bar. Selection is expressed on the BAR. */
+.cmi__col:hover .cmi__bar { filter: brightness(1.08); }
+.cmi__col--selected .cmi__bar { box-shadow: 0 0 0 2px #0f766e; }
+.cmi__col--selected .cmi__bar--open { box-shadow: 0 0 0 2px #d97706; }
+.cmi__col--selected .cmi__barval { color: #0f172a; font-weight: 700; }
 .cmi__barwrap {
   width: 100%; flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; justify-content: flex-end;
@@ -182,12 +186,23 @@
    a solid segment would add to the bar and read as CMI we have. An outline that
    stops short of the fill reads as headroom, which is what it is. */
 .cmi__drift-cap {
+  position: relative;
   width: 100%;
-  border: 1px dashed #5eead4; border-bottom: 0;
+  border: 1px dashed #94a3b8; border-bottom: 0;
   border-radius: 3px 3px 0 0;
-  background: repeating-linear-gradient(
-    -45deg, rgba(20,184,166,.10), rgba(20,184,166,.10) 3px, transparent 3px, transparent 6px
-  );
+  background: transparent;
+  min-height: 10px;
+}
+/* Named in place. An unexplained shape above one bar reads as a second series —
+   it was asked about as "what is this extra green part". It is a RANGE, not a
+   value, so it is drawn hollow and in slate rather than the bar's teal. */
+.cmi__drift-cap::after {
+  content: 'could reach';
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 8px; letter-spacing: .02em; color: #94a3b8;
+  background: #fff; padding: 0 3px;
 }
 /* The open quarter is provisional — hatched rather than solid, so it never reads
    as a settled number. */
@@ -423,3 +438,30 @@
 .cmi__toggle--filter .cmi__toggle-btn { font-size: 10px; padding: 3px 8px; }
 .cmi__toggle--filter .cmi__toggle-btn--active { background: #334155; }
 .cmi-modal__cohort { color: #64748b; }
+
+/* Nothing scoreable — explain rather than render a bare em dash. */
+.cmi__nodata {
+  margin-top: 6px; max-width: 56ch;
+  border-radius: 6px; padding: 6px 9px;
+  background: #fff7ed; color: #9a3412;
+  font-size: 11px; line-height: 1.5;
+}
+
+/* ── sortable headers ─────────────────────────────────────────── */
+.cmi-tbl__sort {
+  border: 0; background: transparent; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+}
+.cmi-tbl__sort:hover { color: #0f172a; }
+.cmi-tbl__sort--active { color: #0f172a; }
+.cmi-tbl__sort-glyph { font-size: 8px; color: #cbd5e1; }
+.cmi-tbl__sort--active .cmi-tbl__sort-glyph { color: #0f766e; }
+
+/* Roster header + filter bar were too small to read at tab width. */
+.cmi-modal__title { font-size: 15px; }
+.cmi-modal__sub { font-size: 12px; }
+.cmi-modal__search { font-size: 12px; padding: 6px 11px; }
+.cmi__toggle--filter .cmi__toggle-btn { font-size: 11px; padding: 4px 10px; }
+.cmi-tbl thead th { font-size: 11px; }
+.cmi-tbl { font-size: 12.5px; }

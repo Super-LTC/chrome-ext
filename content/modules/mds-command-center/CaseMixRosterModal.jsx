@@ -4,9 +4,24 @@ import { fetchCaseMixRoster } from './hooks/useCaseMix.js';
 import {
   filterCaseMixRoster,
   describeCaseMixCohort,
+  sortCaseMixRoster,
   RECORD_FILTERS,
   BASIS_FILTERS,
 } from './lib/case-mix-roster-filter.js';
+
+/** Header label → sort key. `null` = not sortable (Projected is a forecast, and
+ *  ranking by it invites reading the model as a leaderboard). */
+const COLUMNS = [
+  { key: 'name', label: 'Resident' },
+  { key: 'counts', label: 'Counts', cls: 'cmi-tbl__c' },
+  { key: 'category', label: 'Category' },
+  { key: 'prior', label: 'Prior' },
+  { key: 'current', label: 'Current' },
+  { key: 'change', label: 'Change', cls: 'cmi-tbl__r' },
+  { key: null, label: 'Projected', projectedOnly: true },
+  { key: 'qualifier', label: 'Qualifying condition' },
+  { key: 'record', label: 'Record' },
+];
 
 /**
  * The residents behind one quarter's CMI.
@@ -39,8 +54,14 @@ import {
 export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const [record, setRecord] = useState('any');
-  const [basis, setBasis] = useState('all');
+  // Opens on the payable set — that is the number the header quotes and the
+  // one people came to read. 'All' made the first thing on screen a population
+  // nobody asked for.
+  const [basis, setBasis] = useState('counts');
   const [search, setSearch] = useState('');
+  // Opens on the biggest CMI — the residents carrying the building, which is
+  // what people scan a roster for first.
+  const [sort, setSort] = useState({ column: 'current', direction: 'desc' });
 
   useEffect(() => {
     let live = true;
@@ -61,7 +82,10 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
     () => filterCaseMixRoster(all, { record, basis, search }),
     [all, record, basis, search]
   );
-  const rows = filtered.rows;
+  const rows = useMemo(
+    () => sortCaseMixRoster(filtered.rows, sort.column, sort.direction),
+    [filtered.rows, sort]
+  );
   const showProjected = state.data?.inProgress === true;
   const cohortNote = describeCaseMixCohort(record, basis);
 
@@ -167,15 +191,31 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
             <table class="cmi-tbl">
               <thead>
                 <tr>
-                  <th>Resident</th>
-                  <th class="cmi-tbl__c">Counts</th>
-                  <th>Category</th>
-                  <th>Prior</th>
-                  <th>Current</th>
-                  <th class="cmi-tbl__r">Change</th>
-                  {showProjected && <th>Projected</th>}
-                  <th>Qualifying condition</th>
-                  <th>Record</th>
+                  {COLUMNS.filter((c) => !c.projectedOnly || showProjected).map((c) => (
+                    <th key={c.label} class={c.cls}>
+                      {c.key ? (
+                        <button
+                          type="button"
+                          class={`cmi-tbl__sort${sort.column === c.key ? ' cmi-tbl__sort--active' : ''}`}
+                          onClick={() =>
+                            setSort((s2) =>
+                              s2.column === c.key
+                                ? { column: c.key, direction: s2.direction === 'desc' ? 'asc' : 'desc' }
+                                : { column: c.key, direction: 'desc' }
+                            )
+                          }
+                          data-track={`case_mix_roster_sort_${c.key}`}
+                        >
+                          {c.label}
+                          <span class="cmi-tbl__sort-glyph">
+                            {sort.column === c.key ? (sort.direction === 'desc' ? '▼' : '▲') : '↕'}
+                          </span>
+                        </button>
+                      ) : (
+                        c.label
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -225,6 +265,8 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
                         <span class="cmi-tbl__dot">·</span>
                       )}
                       {showProjected &&
+                        r.projected?.basisMatches &&
+                        r.projected?.changed &&
                         r.projected?.delta != null &&
                         Math.abs(r.projected.delta) >= 0.005 && (
                           <div
@@ -242,7 +284,14 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
                     </td>
                     {showProjected && (
                       <td>
-                        {r.projected?.group ? (
+                        {/* Shown ONLY when the projection starts from the group in
+                            the Current column AND the engine says it moved. The
+                            projection re-derives its own current with the
+                            classifier, which disagrees with the record's HIPPS on
+                            12.5% of residents — rendering it anyway produced 72
+                            phantom jumps out of 97, e.g. a ventilator resident
+                            "gaining" 1.87 CMI. */}
+                        {r.projected?.group && r.projected.basisMatches && r.projected.changed ? (
                           <span
                             class={`cmi-tbl__proj${r.projected.isOverride ? ' cmi-tbl__proj--set' : ''}`}
                             title={(r.projected.drops ?? [])
@@ -261,12 +310,20 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
                       {r.qualifier ?? <span class="cmi-tbl__dot">—</span>}
                       {/* Words, not an arrow. "X → Y" made the arrow carry the
                           whole sentence and it read as a range. */}
+                      {/* Only when the SUBCATEGORY changed — not the label.
+                          Multi-part categories report a part name, so one Special
+                          Care High read "COPD falls to Shortness of breath when
+                          lying flat": two halves of a single qualifier
+                          (I6200 AND J1100C) shown as a swap. And the verb follows
+                          the direction rather than always saying "falls". */}
                       {showProjected &&
-                        r.projected?.group &&
-                        r.projected.group !== r.currentGroup && (
+                        r.projected?.basisMatches &&
+                        r.projected?.changed &&
+                        r.projected?.qualifierChanged && (
                           <span class="cmi-tbl__falls">
                             {' '}
-                            falls to {r.projected.qualifier ?? 'nothing qualifying'}
+                            {(r.projected.delta ?? 0) > 0 ? 'becomes' : 'falls to'}{' '}
+                            {r.projected.qualifier ?? 'nothing qualifying'}
                           </span>
                         )}
                     </td>

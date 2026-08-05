@@ -142,6 +142,18 @@ export function CaseMixView({ data, facilityName, orgSlug, onRetry }) {
             <span class="cmi__sep">·</span>
             <b>{selected?.residents ?? 0}</b> on census
           </div>
+          {/* A census with nothing scoreable renders a bare "—", which reads as
+              broken. It is not: the tab is gated on the STATE having a verified
+              rule, not on the building having synced MDS data, so an Ohio
+              building we have never synced lands here with residents and no
+              records. Found on a real building (31 on census, 0 scoreable,
+              `last_active_patients_sync` NULL). Say which it is. */}
+          {selected?.residents > 0 && (selectedPoint?.scored ?? 0) === 0 && (
+            <div class="cmi__nodata">
+              No MDS records synced for this building yet — the census is here, the
+              assessments are not, so there is nothing to score.
+            </div>
+          )}
           {/* Pendings as a fact about the number, not a rival to it. */}
           {selected?.pendingMedicaid > 0 && (
             <div class="cmi__pending">

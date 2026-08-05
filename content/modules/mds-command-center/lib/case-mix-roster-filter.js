@@ -159,3 +159,50 @@ export function describeCaseMixCohort(record, basis) {
   if (basis === 'review') parts.push('payer we could not classify');
   return parts.length ? parts.join(' · ') : null;
 }
+
+/**
+ * Column sorting for the roster.
+ *
+ * Kept here rather than in the component because "which value does this column
+ * actually sort on" is a correctness question, not a rendering one: the Current
+ * column shows "HBC2 · 2.12" and must sort by the CMI, not alphabetically by the
+ * group name — HBC2 before ES2 before PA1 is meaningless ordering for a number
+ * people are scanning for outliers.
+ */
+export const SORT_COLUMNS = {
+  name: (r) => String(r.patientName ?? '').toLowerCase(),
+  counts: (r) => (r.needsReview ? 2 : r.counts ? 0 : 1),
+  category: (r) => String(r.nursingCategory ?? '~'),
+  prior: (r) => (typeof r.priorCmi === 'number' ? r.priorCmi : null),
+  current: (r) => (typeof r.currentCmi === 'number' ? r.currentCmi : null),
+  change: (r) => (typeof r.delta === 'number' ? r.delta : null),
+  qualifier: (r) => String(r.qualifier ?? '~').toLowerCase(),
+  record: (r) => String(r.status ?? ''),
+};
+
+/**
+ * Sort rows by a column, stably, with missing values always LAST regardless of
+ * direction.
+ *
+ * That last part matters: flipping to ascending on Current would otherwise fill
+ * the top of the table with residents who have no record at all, burying the
+ * lowest real CMIs — the thing the sort was clicked to find.
+ */
+export function sortCaseMixRoster(rows, column, direction = 'desc') {
+  const key = SORT_COLUMNS[column];
+  const list = Array.isArray(rows) ? [...rows] : [];
+  if (!key) return list;
+  const dir = direction === 'asc' ? 1 : -1;
+
+  return list.sort((a, b) => {
+    const av = key(a);
+    const bv = key(b);
+    const aMissing = av == null || av === '~';
+    const bMissing = bv == null || bv === '~';
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    if (av === bv) return String(a.patientName ?? '').localeCompare(String(b.patientName ?? ''));
+    return av < bv ? -dir : dir;
+  });
+}
