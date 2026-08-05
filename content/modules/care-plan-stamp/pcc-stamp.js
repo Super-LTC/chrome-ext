@@ -20,8 +20,9 @@
  * Only focuses/goals/interventions WITHOUT a std id (built-in / AI-authored) fall back to
  * the custom endpoints (neededitcust / goaledit / intereditcust).
  */
-import { stampLibraryFocus, isLibraryFocus } from './pcc-library-stamp.js';
+import { stampLibraryFocus, isLibraryFocus, attachLibraryItems } from './pcc-library-stamp.js';
 import { editStampedLibraryTexts } from './pcc-library-edit.js';
+import { verifyAndReport, verifyEnabled } from './pcc-verify.js';
 
 // Verbose stamping trace — flip false once the library-add path is confirmed in real
 // PCC. Logs every PCC POST (url / status / response snippet) + per-item outcome as
@@ -308,6 +309,81 @@ async function _stampCustomItems({ proposal, focus, focusId, miniToken, goals, i
 }
 
 /**
+ * Read back what PCC actually attached to a focus, retry once if it attached
+ * NOTHING, and fold the honest counts into `result`.
+ *
+ * Repair is deliberately limited to the nothing-landed case. On a partial we
+ * can see how many items are missing but not WHICH, so re-sending the batch
+ * could duplicate the ones that did land — and a duplicated care-plan row is a
+ * worse problem than a reported shortfall. Partials are reported, not repaired.
+ *
+ * Verification never fails a stamp: if the read-back itself errors we keep the
+ * optimistic counts and say nothing, exactly as before.
+ */
+async function _verifyAndRepairFocus({ proposal, focus, focusId, result, requested, route, ctx = {} }) {
+  if (!verifyEnabled()) return null;
+
+  let v = await verifyAndReport({
+    patientId: proposal.patientId,
+    focusText: focus.description,
+    requested,
+    saveResponseFocusId: focusId,
+    extra: { route, primed: route === 'library', ...ctx },
+  });
+  if (!v) return null;
+
+  const nothingLanded = v.found &&
+    v.goalsAttached === 0 && v.interventionsAttached === 0 &&
+    (requested.goals > 0 || requested.interventions > 0);
+
+  if (nothingLanded && ctx.retry) {
+    _dlog(`focus ${v.focusId}: NOTHING attached — retrying against the id on the plan`);
+    let repairSucceeded = false;
+    try {
+      await ctx.retry(v.focusId);
+      const after = await verifyAndReport({
+        patientId: proposal.patientId,
+        focusText: focus.description,
+        requested,
+        saveResponseFocusId: v.focusId,
+        extra: { route, primed: true, ...ctx, repairAttempted: true },
+      });
+      if (after) {
+        repairSucceeded = after.goalsAttached > 0 || after.interventionsAttached > 0;
+        v = after;
+      }
+    } catch (e) {
+      _dlog('repair attempt failed:', e.message);
+    }
+    if (!repairSucceeded) {
+      result.ok = false;
+      result.errors.push({ ruleId: focus.ruleId, phase: 'verify', error: 'PCC accepted the focus but attached no goals or interventions' });
+    }
+  } else if (!v.found) {
+    result.ok = false;
+    result.errors.push({ ruleId: focus.ruleId, phase: 'verify', error: 'Focus is not on the care plan after saving' });
+  } else if (!v.complete) {
+    result.ok = false;
+    result.errors.push({ ruleId: focus.ruleId, phase: 'verify', error: `Only ${v.goalsAttached}/${requested.goals} goals and ${v.interventionsAttached}/${requested.interventions} interventions attached` });
+  }
+
+  // Replace the optimistic tallies with what's actually on the chart.
+  result.goalsStamped += v.goalsAttached - (ctx.countedGoals ?? 0);
+  result.interventionsStamped += v.interventionsAttached - (ctx.countedInterventions ?? 0);
+  result.verified.push({
+    ruleId: focus.ruleId,
+    route: v.route,
+    found: v.found,
+    complete: v.complete,
+    goalsRequested: requested.goals,
+    goalsAttached: v.goalsAttached,
+    interventionsRequested: requested.interventions,
+    interventionsAttached: v.interventionsAttached,
+  });
+  return v;
+}
+
+/**
  * Orchestrate the full stamp for a proposal.
  *
  * Sequential — each focus must complete before its goals/interventions can chain
@@ -322,6 +398,9 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
     goalsStamped: 0,
     interventionsStamped: 0,
     errors: [],
+    // Per-focus read-back of what PCC ACTUALLY holds. Empty when verification
+    // is off or couldn't run — callers must treat empty as "unknown", not "fine".
+    verified: [],
   };
 
   const t0 = Date.now();
@@ -365,6 +444,10 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
         `${owedEdits.length} personalization edit(s) owed · ${customGoals.length}/${customInters.length} custom stragglers`);
 
       let focusId;
+      let libResult = null;
+      let personalize = null;
+      const goalsBefore = result.goalsStamped;
+      const intersBefore = result.interventionsStamped;
       try {
         onProgress?.({ ...phaseBase, phase: 'goal', subIndex: 0, subTotal: goals.length });
         const r = await stampLibraryFocus({
@@ -378,6 +461,7 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
           interventionStdIds: libInterIds,
         });
         focusId = r.focusId;
+        libResult = r;
         result.focusesStamped += 1;
         result.goalsStamped += r.goalsStamped;
         result.interventionsStamped += r.interventionsStamped;
@@ -398,6 +482,7 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
               miniToken,
               edits: owedEdits,
             });
+            personalize = pr;
             if (pr.failed || pr.unmatched) {
               result.errors.push({
                 ruleId: focus.ruleId,
@@ -419,6 +504,28 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
 
       // Custom stragglers (rare) — goals/interventions the library row had no std id for.
       await _stampCustomItems({ proposal, focus, focusId, miniToken, goals: customGoals, interventions: customInters, result, phaseBase, onProgress });
+
+      await _verifyAndRepairFocus({
+        proposal, focus, focusId, result, route: 'library',
+        requested: { goals: goals.length, interventions: inters.length },
+        ctx: {
+          countedGoals: result.goalsStamped - goalsBefore,
+          countedInterventions: result.interventionsStamped - intersBefore,
+          msFocusToFirstAttach: libResult?.msFocusToFirstAttach ?? null,
+          personalizeAttempted: personalize?.attempted ?? null,
+          personalizeEdited: personalize?.edited ?? null,
+          personalizeFailed: personalize?.failed ?? null,
+          personalizeUnmatched: personalize?.unmatched ?? null,
+          // Retry the library batch against the id that's actually on the plan.
+          retry: (realFocusId) => attachLibraryItems({
+            patientId: proposal.patientId, careplanId, miniToken,
+            stdNeedId: focus.libraryStdId,
+            genNeedId: realFocusId, needId: realFocusId,
+            goalStdIds: libGoalIds, interventionStdIds: libInterIds,
+            description: focus.description,
+          }),
+        },
+      });
       continue;
     }
 
@@ -441,7 +548,27 @@ export async function orchestrateStamp({ proposal, careplanId, miniToken, deptNa
       _dlog(`focus[${i}] CUSTOM CREATE FAILED:`, e.message);
       continue;
     }
+    const beforeGoals = result.goalsStamped;
+    const beforeInters = result.interventionsStamped;
     await _stampCustomItems({ proposal, focus, focusId, miniToken, goals, interventions: inters, result, phaseBase, onProgress });
+
+    await _verifyAndRepairFocus({
+      proposal, focus, focusId, result, route: 'custom',
+      requested: { goals: goals.length, interventions: inters.length },
+      ctx: {
+        countedGoals: result.goalsStamped - beforeGoals,
+        countedInterventions: result.interventionsStamped - beforeInters,
+        // The custom endpoints get no priming GET — PCC's own UI opens the form
+        // first. Retrying against the plan's real id is what tests whether that,
+        // or the id, was the problem.
+        retry: (realFocusId) => _stampCustomItems({
+          proposal, focus, focusId: realFocusId, miniToken,
+          goals, interventions: inters,
+          result: { ok: true, goalsStamped: 0, interventionsStamped: 0, errors: [] },
+          phaseBase, onProgress,
+        }),
+      },
+    });
   }
 
   result.durationMs = Date.now() - t0;

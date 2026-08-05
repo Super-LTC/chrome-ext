@@ -299,7 +299,41 @@ export const EVENT_SCHEMA = {
   care_plan_audit_remove_kept: [],
   care_plan_audit_remove_kept_click: [],
   care_plan_audit_commit: ['source'],
-  care_plan_audit_commit_stamped: ['scope', 'n_focuses', 'n_goals', 'n_interventions'],
+  care_plan_audit_commit_stamped: ['scope', 'n_focuses', 'n_goals', 'n_interventions',
+    // Failure signal. Without these the event reports only what we ASKED PCC for,
+    // so a stamp that attached nothing looked identical to one that worked —
+    // which is why this failure class stayed invisible in the dashboards.
+    'n_failed', 'n_goals_requested', 'n_interventions_requested', 'verified'],
+
+  // === Care Plan — stamp read-back verification ===
+  // Emitted once per stamped focus after re-reading the live care plan, because a
+  // PCC 200 does not mean PCC attached anything. `*_attached` are counted off the
+  // chart itself; `*_requested` are what the nurse approved. attached < requested
+  // is the nurse's "the focus saved but the goals didn't".
+  //
+  // No free text: focus/goal wording is clinical content and stays in the browser.
+  care_plan_stamp_verified: [
+    'route',                    // library | custom — read from PCC, not our routing
+    'n_goals_requested', 'n_goals_attached',
+    'n_interventions_requested', 'n_interventions_attached',
+    'focus_found',              // false = the focus itself never landed
+    'complete',                 // everything the nurse approved is on the chart
+    'id_source',                // save_response | plan_lookup
+    'id_matched_save_response', // false = we'd have attached to the wrong focus
+    'primed',                   // did we prime the form with a GET first
+    'ms_focus_to_first_attach', // "we fired too fast" — timing to the first attach
+    'personalize_attempted', 'personalize_edited',
+    'personalize_failed', 'personalize_unmatched',
+    'repair_attempted', 'repair_succeeded',
+    'n_plan_pages', 'verify_ms',
+  ],
+  // PCC refused a write. `matched_pattern` is which detector caught it — `none`
+  // alongside a shortfall means PCC refused in wording we don't recognise and we
+  // counted the write as a success.
+  care_plan_stamp_refused: ['phase', 'matched_pattern', 'route', 'resp_len', 'primed'],
+  // Emitted since the V3 polish swap shipped, but never allowlisted — so track()
+  // silently dropped every one and the swap has been invisible in production.
+  care_plan_polish_swapped: ['n_swapped', 'n_to_add', 'mode'],
   // === Care Plan V8 worklist === (patient_id / focus_id stripped by guardrail)
   care_plan_audit_focus_kept: [],                      // Remove/Check "keep on plan"
   care_plan_audit_dropped_confirmed: ['rule_id'],      // acknowledged a dropped[] over-fire
