@@ -1154,11 +1154,22 @@
 .qmc-rate__proj small{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--emerald-500)}
 .qmc-recon{margin-top:6px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:11px;color:var(--slate-500)}
 .qmc-recon b{color:var(--slate-700)}
-.qmc-recon__denom{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--slate-200);background:#fff;
-  border-radius:9999px;padding:2px 9px;font-size:11px;font-weight:600;color:var(--slate-600);cursor:pointer;
-  box-shadow:0 1px 2px rgba(15,23,42,.04);transition:all .12s}
-.qmc-recon__denom:hover{border-color:var(--sky-300,#7dd3fc);color:var(--sky-600)}
-.qmc-recon__denom svg{width:12px;height:12px}
+/* Roster disclosure. Replaces `.qmc-recon__denom`, a pill that sat beside the
+   active-triggering line — deleted with it, since nothing else referenced it.
+   Ports the web drill-in's affordance (SUP-263) so both surfaces read the same:
+   a chip beside the rate read as a filter and got missed; a full-width row reads
+   as "there is more below". */
+.qmc-denomtoggle{display:flex;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer;
+  border:1px solid var(--slate-200);background:#fff;border-radius:14px;padding:11px 18px;
+  font:inherit;color:inherit;transition:background .12s,border-color .12s}
+.qmc-denomtoggle:hover{border-color:var(--slate-300,#cbd5e1);background:var(--slate-50,#f8fafc)}
+.qmc-denomtoggle svg{width:15px;height:15px;flex-shrink:0;color:var(--slate-400)}
+.qmc-denomtoggle__chev{flex-shrink:0;color:var(--slate-400);font-size:15px;line-height:1;
+  transition:transform .12s;display:inline-block}
+.qmc-denomtoggle.is-open .qmc-denomtoggle__chev{transform:rotate(90deg)}
+.qmc-denomtoggle__label{font-size:13px;font-weight:600;color:var(--slate-800)}
+.qmc-denomtoggle__meta{font-size:11px;color:var(--slate-500)}
+.qmc-denomtoggle__action{margin-left:auto;font-size:11px;font-weight:500;color:var(--slate-400)}
 .qmc-mhead__trend{margin-top:10px;max-width:380px}
 .qmc-mhead__trend-chart{margin-top:8px}
 .qmtrend-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--slate-200);background:#fff;
