@@ -278,47 +278,92 @@ export async function stampLibraryFocus({
     NEEDEDIT_URL,
     buildFocusSaveBody({ genNeedId: draftId, stdNeedId, description, reviewDepartments: reviewDepartments || [], clientId: patientId, careplanId, miniToken, dates }),
   );
+  const focusSavedAt = Date.now();
 
   // PCC RE-KEYS the focus on save: the draft (620064) is retired and a COMMITTED id
   // (620074) is minted. It comes back in the 302 redirect (goalwizard?ESOLgenneedid=…),
   // which fetch has already followed → it's in saved.url. Goals/interventions MUST target
   // that committed genneedid (with the draft as needid), or PCC 200s "the related focus
   // has been deleted" and nothing attaches. This was the whole bug. See cp_test.har.
+  // The committed id normally rides the 302 that fetch already followed, so it's in
+  // saved.url. But PCC also navigates via inline script, in which case the redirect
+  // never touches the URL and the id is sitting in the BODY — previously we skipped
+  // straight to the retired draft id and every attach below hit an orphaned focus.
   const committed = parseWizardIds(saved.url);
-  const genNeedId = committed.genNeedId || draftId;
+  const fromBody = committed.genNeedId ? null : parseWizardIds(String(saved.html || '')).genNeedId;
+  const genNeedId = committed.genNeedId || fromBody || draftId;
   const needId = committed.needId || draftId;
+  out.idSource = committed.genNeedId ? 'redirect_url' : (fromBody ? 'response_body' : 'fallback_draft');
   out.focusId = genNeedId;
-  _dlog(`stampLibraryFocus: draft ${draftId} → committed genneedid ${genNeedId} (needid ${needId})`);
+  out.needId = needId;
+  out.stdNeedId = stdNeedId;
+  _dlog(`stampLibraryFocus: draft ${draftId} → committed genneedid ${genNeedId} (needid ${needId}) via ${out.idSource}`);
 
-  // 3 + 4. Goals — prime the wizard, then batch-check all library goal ids in one POST.
+  // 3-6. Attach the library goals + interventions to that focus.
+  const attached = await attachLibraryItems({
+    patientId, careplanId, miniToken, stdNeedId,
+    genNeedId, needId, goalStdIds, interventionStdIds, description, dates, focusSavedAt,
+  });
+  out.goalsStamped = attached.goalsStamped;
+  out.interventionsStamped = attached.interventionsStamped;
+  out.errors.push(...attached.errors);
+  out.msFocusToFirstAttach = attached.msFocusToFirstAttach;
+
+  return out;
+}
+
+/**
+ * Attach library goals + interventions to an EXISTING focus, each batch primed
+ * with the GET that PCC's own UI does before its POST (steps 3-6).
+ *
+ * Split out from `stampLibraryFocus` so a verified shortfall can retry against
+ * the focus id that's actually on the plan — same requests, corrected ids.
+ *
+ * Goal and intervention batches are caught separately so one refusal doesn't
+ * sink the other. `msFocusToFirstAttach` records how fast we chained off the
+ * focus save, to test whether PCC drops writes that arrive too soon after it.
+ */
+export async function attachLibraryItems({
+  patientId, careplanId, miniToken, stdNeedId,
+  genNeedId, needId, goalStdIds = [], interventionStdIds = [], description, dates,
+  focusSavedAt = null,
+}) {
+  const out = { goalsStamped: 0, interventionsStamped: 0, errors: [], msFocusToFirstAttach: null };
+  const d = dates || _todayDates();
+
   if (goalStdIds.length) {
     try {
       await _get(buildGoalWizardUrl({ genNeedId, needId, stdNeedId, clientId: patientId, careplanId }));
+      if (focusSavedAt != null && out.msFocusToFirstAttach == null) {
+        out.msFocusToFirstAttach = Date.now() - focusSavedAt;
+      }
       await _post(
         GOALWIZARD_URL,
         buildGoalWizardBody({ genNeedId, needId, stdNeedId, clientId: patientId, careplanId, miniToken, goalStdIds, focusDescription: description }),
       );
       out.goalsStamped = goalStdIds.length;
-      _dlog(`stampLibraryFocus: ${goalStdIds.length} goal(s) added to focus ${genNeedId}`);
+      _dlog(`attachLibraryItems: ${goalStdIds.length} goal(s) → focus ${genNeedId}`);
     } catch (e) {
       out.errors.push({ phase: 'goal', error: e.message });
-      _dlog('stampLibraryFocus: goal wizard FAILED:', e.message);
+      _dlog('attachLibraryItems: goal wizard FAILED:', e.message);
     }
   }
 
-  // 5 + 6. Interventions — same shape as goals.
   if (interventionStdIds.length) {
     try {
       await _get(buildInterWizardUrl({ genNeedId, needId, stdNeedId, clientId: patientId, careplanId }));
+      if (focusSavedAt != null && out.msFocusToFirstAttach == null) {
+        out.msFocusToFirstAttach = Date.now() - focusSavedAt;
+      }
       await _post(
         INTERWIZARD_URL,
-        buildInterWizardBody({ genNeedId, needId, stdNeedId, clientId: patientId, careplanId, miniToken, interventionStdIds, dates }),
+        buildInterWizardBody({ genNeedId, needId, stdNeedId, clientId: patientId, careplanId, miniToken, interventionStdIds, dates: d }),
       );
       out.interventionsStamped = interventionStdIds.length;
-      _dlog(`stampLibraryFocus: ${interventionStdIds.length} intervention(s) added to focus ${genNeedId}`);
+      _dlog(`attachLibraryItems: ${interventionStdIds.length} intervention(s) → focus ${genNeedId}`);
     } catch (e) {
       out.errors.push({ phase: 'intervention', error: e.message });
-      _dlog('stampLibraryFocus: intervention wizard FAILED:', e.message);
+      _dlog('attachLibraryItems: intervention wizard FAILED:', e.message);
     }
   }
 

@@ -831,11 +831,15 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         onProgress: (p) => setProgress(p),
       });
       // Mark added and return to the editing view (do NOT go to 'done').
-      setStampedRuleIds((prev) => new Set(prev).add(f.ruleId));
+      // Only claim it's added when the read-back agrees — a row stuck on "✓ Added"
+      // is how the nurse stops checking.
+      const outcome = _stampOutcome(result);
+      if (outcome.ok) setStampedRuleIds((prev) => new Set(prev).add(f.ruleId));
       setProgress(null);
       setSingleAddIdx(null);
       setStage('ready');
-      window.SuperToast?.success?.('Added to care plan');
+      if (outcome.ok) window.SuperToast?.success?.(outcome.message);
+      else window.SuperToast?.error?.(outcome.message);
 
       window.SuperAnalytics?.track?.('care_plan_autopop_stamped', {
         patient_id: patientId,
@@ -892,11 +896,18 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         miniToken,
         onProgress: (p) => setProgress(p),
       });
+      // Items whose goals/interventions didn't land stay UNstamped so they remain
+      // in the worklist rather than silently reading as done.
+      const commitOutcome = _stampOutcome(result);
+      const failedRuleIds = new Set(
+        (result?.verified || []).filter((v) => !v.complete).map((v) => v.ruleId),
+      );
       setStampedAddIds((prev) => {
         const n = new Set(prev);
-        eligible.forEach((it) => n.add(it.ruleId));
+        eligible.forEach((it) => { if (!failedRuleIds.has(it.ruleId)) n.add(it.ruleId); });
         return n;
       });
+      if (!commitOutcome.ok) setErrorMsg(commitOutcome.message);
       setStage('ready');
       setComprehensiveStep('dashboard');
       setSelectedRail(null);
@@ -907,6 +918,12 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         n_focuses: result?.focusesStamped ?? eligible.length,
         n_goals: result?.goalsStamped ?? 0,
         n_interventions: result?.interventionsStamped ?? 0,
+        // Without these the event only ever said what we ASKED for, so a stamp
+        // that attached nothing looked identical to one that worked.
+        n_failed: result?.errors?.length ?? 0,
+        n_goals_requested: eligible.reduce((a, it) => a + (it.focus?.goals?.length || 0), 0),
+        n_interventions_requested: eligible.reduce((a, it) => a + (it.focus?.interventions?.length || 0), 0),
+        verified: (result?.verified?.length ?? 0) > 0,
       });
     } catch (e) {
       setErrorMsg(e.message || 'Add failed');
@@ -932,17 +949,32 @@ export const CarePlanStampModal = ({ patientId, patientName, facilityName, orgSl
         miniToken,
         onProgress: (p) => setProgress(p),
       });
-      const nextStamped = new Set([...stampedAddIds, item.ruleId]);
+      const outcome = _stampOutcome(result);
+      // Don't advance past an item PCC didn't fully take — this is the path the
+      // reported data loss came through.
+      const nextStamped = outcome.ok
+        ? new Set([...stampedAddIds, item.ruleId])
+        : new Set(stampedAddIds);
       setStampedAddIds(nextStamped);
       setProgress(null);
       setStage('ready');
-      window.SuperToast?.success?.('Added to care plan');
+      if (outcome.ok) {
+        window.SuperToast?.success?.(outcome.message);
+      } else {
+        window.SuperToast?.error?.(outcome.message);
+        setErrorMsg(outcome.message);
+        return; // stay on this item so she can retry it
+      }
       window.SuperAnalytics?.track?.('care_plan_audit_commit_stamped', {
         patient_id: patientId,
         scope: 'single',
         n_focuses: result?.focusesStamped ?? 1,
         n_goals: result?.goalsStamped ?? 0,
         n_interventions: result?.interventionsStamped ?? 0,
+        n_failed: result?.errors?.length ?? 0,
+        n_goals_requested: focus.goals?.length || 0,
+        n_interventions_requested: focus.interventions?.length || 0,
+        verified: (result?.verified?.length ?? 0) > 0,
       });
       // Advance to the next still-live toAdd item (not stamped, not skipped).
       const toAdd = audit?.toAdd || [];
@@ -1718,6 +1750,45 @@ function _emptyFocusState() {
     tokenValues: {},
     removedFactors: new Set(),
     expanded: false,
+  };
+}
+
+/**
+ * Turn a stamp result into what the nurse should be told.
+ *
+ * `orchestrateStamp` resolves rather than throws when PCC takes the focus but
+ * refuses its goals and interventions, so a bare `await` reads as success. That
+ * gap is what let a nurse finish a care plan, get "Added to care plan", and only
+ * find the goals missing when she opened the chart. Read the result.
+ *
+ * Counts come from reading the plan back, so they describe the chart, not our
+ * requests.
+ */
+function _stampOutcome(result) {
+  if (!result) return { ok: false, message: 'Add failed — nothing was saved.' };
+
+  const shortfalls = (result.verified || []).filter((v) => !v.complete);
+  if (result.ok && !shortfalls.length) return { ok: true, message: 'Added to care plan' };
+
+  const missing = shortfalls.reduce(
+    (a, v) => ({
+      goals: a.goals + Math.max(0, v.goalsRequested - v.goalsAttached),
+      interventions: a.interventions + Math.max(0, v.interventionsRequested - v.interventionsAttached),
+    }),
+    { goals: 0, interventions: 0 },
+  );
+  const lostFocus = shortfalls.some((v) => !v.found);
+
+  if (lostFocus) return { ok: false, message: "PointClickCare didn't save this focus. Nothing was added — please try again." };
+
+  const parts = [];
+  if (missing.goals) parts.push(`${missing.goals} goal${missing.goals === 1 ? '' : 's'}`);
+  if (missing.interventions) parts.push(`${missing.interventions} intervention${missing.interventions === 1 ? '' : 's'}`);
+  if (!parts.length) return { ok: false, message: 'Added, but PointClickCare reported a problem — check the care plan.' };
+
+  return {
+    ok: false,
+    message: `Focus added, but ${parts.join(' and ')} did not save. Add ${missing.goals && missing.interventions ? 'them' : 'it'} in PointClickCare, or try again.`,
   };
 }
 
