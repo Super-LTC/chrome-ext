@@ -1,6 +1,16 @@
 import { h } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { fetchCaseMixRoster } from './hooks/useCaseMix.js';
+import {
+  filterCaseMixRoster,
+  describeCaseMixPopulation,
+} from './lib/case-mix-roster-filter.js';
+
+const MEASURES = [
+  { key: 'medicaidCmi', label: 'Medicaid' },
+  { key: 'allCmi', label: 'All residents' },
+  { key: 'medicaidWithPendingCmi', label: '+ pendings' },
+];
 
 /**
  * The residents behind one quarter's CMI. Centered modal over the tab — a
@@ -9,12 +19,35 @@ import { fetchCaseMixRoster } from './hooks/useCaseMix.js';
  *
  * READ ONLY. No override editing on this surface; see CaseMixView.
  *
+ * ── THE TOGGLES ARE HERE TOO, AND THEY DO NOT REFETCH ─────────────────────
+ *
+ * It opens on whatever population and measure the tab was showing, so the roster
+ * you land on is the one behind the number you clicked. Changing either re-filters
+ * the rows already in hand — the endpoint returns the whole census for the
+ * quarter, and the two toggles are subsets of it.
+ *
+ * That is exact rather than approximate because `filterCaseMixRoster` keys on the
+ * same fields the score gated on: `status === 'locked'` IS the assessed-in-period
+ * gate, and `counts` IS the payer tree's verdict. The count in this header should
+ * therefore equal the denominator in the tab header for the same two toggles. If
+ * it ever doesn't, the filter is wrong, not the header.
+ *
  * The PROJECTED column only exists on an OPEN quarter, and the server is what
  * enforces that — it strips `projected` from a closed quarter's rows rather than
  * trusting each client to remember. This renders whatever it is given.
  */
-export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) {
+export function CaseMixRosterModal({
+  quarter,
+  facilityName,
+  orgSlug,
+  boundaryLabel,
+  initialPopulation = 'payable',
+  initialMeasure = 'medicaidCmi',
+  onClose,
+}) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
+  const [population, setPopulation] = useState(initialPopulation);
+  const [measure, setMeasure] = useState(initialMeasure);
 
   useEffect(() => {
     let live = true;
@@ -27,7 +60,12 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
     };
   }, [quarter, facilityName, orgSlug]);
 
-  const rows = state.data?.residents ?? [];
+  const all = state.data?.residents ?? [];
+  const filtered = useMemo(
+    () => filterCaseMixRoster(all, { population, measure }),
+    [all, population, measure]
+  );
+  const rows = filtered.rows;
   const showProjected = state.data?.inProgress === true;
 
   return (
@@ -40,18 +78,65 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
         onClick={(e) => e.stopPropagation()}
       >
         <div class="cmi-modal__head">
-          <div>
+          <div class="cmi-modal__head-main">
             <div class="cmi-modal__title">{quarter} residents</div>
             {state.data && (
               <div class="cmi-modal__sub">
-                {rows.length} on census · picture {state.data.pictureDate}
+                <b>{rows.length}</b> in this view · {all.length} on census · picture{' '}
+                {state.data.pictureDate}
+                {filtered.unscoreable > 0 && (
+                  <span> · {filtered.unscoreable} with no scoreable record</span>
+                )}
               </div>
             )}
           </div>
-          <button type="button" class="cmi-modal__close" onClick={onClose} data-track="case_mix_roster_close">
-            ✕
-          </button>
+          <div class="cmi-modal__head-right">
+            <div class="cmi__toggle-stack">
+              <div class="cmi__toggle" role="group" aria-label="Population">
+                <button
+                  type="button"
+                  class={`cmi__toggle-btn${population === 'capture' ? ' cmi__toggle-btn--active' : ''}`}
+                  onClick={() => setPopulation('capture')}
+                  title="Only residents assessed inside the quarter"
+                  data-track="case_mix_roster_population_capture"
+                >
+                  Capture
+                </button>
+                <button
+                  type="button"
+                  class={`cmi__toggle-btn${population === 'payable' ? ' cmi__toggle-btn--active' : ''}`}
+                  onClick={() => setPopulation('payable')}
+                  title="The record in effect on the picture date"
+                  data-track="case_mix_roster_population_payable"
+                >
+                  Payable
+                </button>
+              </div>
+              <div class="cmi__toggle cmi__toggle--measure" role="group" aria-label="Measure">
+                {MEASURES.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    class={`cmi__toggle-btn${measure === m.key ? ' cmi__toggle-btn--active' : ''}`}
+                    onClick={() => setMeasure(m.key)}
+                    data-track={`case_mix_roster_measure_${m.key}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button type="button" class="cmi-modal__close" onClick={onClose} data-track="case_mix_roster_close">
+              ✕
+            </button>
+          </div>
         </div>
+
+        {state.data && (
+          <div class="cmi-modal__explain">
+            {describeCaseMixPopulation(population, measure, { boundaryLabel })}
+          </div>
+        )}
 
         <div class="cmi-modal__body">
           {state.loading && (
@@ -68,12 +153,25 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
             </div>
           )}
 
-          {!state.loading && !state.error && (
+          {!state.loading && !state.error && rows.length === 0 && (
+            <div class="mds-cc__state-container">
+              <div class="mds-cc__state-icon">🔍</div>
+              <div class="mds-cc__state-text">
+                No residents in this view.
+                {population === 'capture' && (
+                  <span> Nobody has been assessed inside {quarter} yet.</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!state.loading && !state.error && rows.length > 0 && (
             <table class="cmi-tbl">
               <thead>
                 <tr>
                   <th>Resident</th>
                   <th class="cmi-tbl__c">Counts</th>
+                  <th>Category</th>
                   <th>Prior</th>
                   <th>Current</th>
                   <th class="cmi-tbl__r">Change</th>
@@ -94,10 +192,15 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
                         <span class="cmi-tbl__badge cmi-tbl__badge--review">?</span>
                       ) : r.counts ? (
                         <span class="cmi-tbl__badge cmi-tbl__badge--yes">Y</span>
+                      ) : r.pendingMedicaid ? (
+                        <span class="cmi-tbl__badge cmi-tbl__badge--pending" title="Medicaid application pending">
+                          P
+                        </span>
                       ) : (
                         <span class="cmi-tbl__badge">N</span>
                       )}
                     </td>
+                    <td class="cmi-tbl__cat">{r.nursingCategory ?? <span class="cmi-tbl__dot">—</span>}</td>
                     <td class="cmi-tbl__dim">
                       {r.priorGroup ? `${r.priorGroup} · ${r.priorCmi?.toFixed(2)}` : '—'}
                     </td>
@@ -124,7 +227,7 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
                           title={
                             r.projected.isOverride
                               ? 'Projected change — set by a person'
-                              : 'Projected change at the next assessment — an estimate'
+                              : 'Projected change at the next assessment — an estimate. Right about a third of the time on the residents where it fires; never summed into the building score.'
                           }
                         >
                           {r.projected.delta > 0 ? '▲' : '▼'}

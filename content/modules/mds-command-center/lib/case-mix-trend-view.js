@@ -67,20 +67,44 @@ export function buildCaseMixTrend(quarters, opts = {}) {
       // only the payable set, and quoting the wrong denominator under a number
       // is how a building 'loses' twenty residents on a toggle.
       scored: metric === 'allCmi' ? (q?.scored ?? 0) : (q?.medicaidScored ?? 0),
+      residents: q?.residents ?? 0,
       carryForward: q?.carryForward ?? 0,
+      needsReview: q?.needsReview ?? 0,
+      /**
+       * How far this number is expected to RISE before the quarter settles, or
+       * null. Server-supplied and server-scoped: non-null ONLY on an open quarter
+       * in the payable population, because that is the only place it was
+       * measured. Never synthesise one here.
+       */
+      drift: q?.drift ?? null,
+      /** The clinical-category fold BELONGING TO THIS METRIC. See below. */
+      composition: q?.composition?.[metric] ?? null,
     };
   });
 
   const values = points.filter((p) => p.present).map((p) => p.value);
-  const { baseline, top } = values.length
-    ? padRange(Math.min(...values), Math.max(...values))
+  // The drift cap is drawn ABOVE the bar, so the axis has to contain it too —
+  // otherwise the one quarter the band exists for is the one where it is clipped
+  // flat against the top of the track and reads as no band at all.
+  const capped = points
+    .filter((p) => p.present && p.drift)
+    .map((p) => p.value + p.drift.high);
+  const spread = [...values, ...capped];
+
+  const { baseline, top } = spread.length
+    ? padRange(Math.min(...spread), Math.max(...spread))
     : { baseline: 0, top: 1 };
 
   const span = top - baseline;
+  const frac = (v) => (span > 0 ? Math.min(1, Math.max(0, (v - baseline) / span)) : 0);
   for (const p of points) {
     // Clamped to [0,1] rather than trusted: a value outside the padded range can
     // only come from a bug, and a negative height silently inverts the bar.
-    p.heightFrac = p.present && span > 0 ? Math.min(1, Math.max(0, (p.value - baseline) / span)) : 0;
+    p.heightFrac = p.present ? frac(p.value) : 0;
+    /** Top of the drift band, as a track fraction. Null when there is no band. */
+    p.driftFrac = p.present && p.drift ? frac(p.value + p.drift.high) : null;
+    /** Bottom of the band — the low end of the measured rise, not the bar itself. */
+    p.driftFloorFrac = p.present && p.drift ? frac(p.value + p.drift.low) : null;
   }
 
   const present = points.filter((p) => p.present);
@@ -100,5 +124,36 @@ export function buildCaseMixTrend(quarters, opts = {}) {
     direction: delta == null || Math.abs(delta) < 0.0005 ? 'flat' : delta > 0 ? 'up' : 'down',
     /** The open quarter, if one is in the window — the only one a projection suits. */
     openQuarter: points.find((p) => p.inProgress) ?? null,
+    /** Newest first, for the table view. See `buildCaseMixTableRows`. */
+    rows: buildCaseMixTableRows(points),
   };
+}
+
+/**
+ * The same quarters as a table, newest first, each with its move against the
+ * quarter BEFORE it.
+ *
+ * A table is not a lesser chart here. Five bars can show shape but cannot show
+ * the four numbers behind each one, and the bars were the only way to reach a
+ * quarter's residents — which nobody discovered, because a bar does not look
+ * like a button. Rows do.
+ *
+ * `change` is measured against the previous PRESENT quarter, skipping gaps. A
+ * quarter with nothing scoreable is not a zero to fall from.
+ */
+export function buildCaseMixTableRows(points) {
+  const list = Array.isArray(points) ? points : [];
+  const out = [];
+  let prev = null;
+
+  for (const p of list) {
+    out.push({
+      ...p,
+      /** Move from the previous scoreable quarter, or null for the first one. */
+      change: p.present && prev != null ? +(p.value - prev).toFixed(4) : null,
+    });
+    if (p.present) prev = p.value;
+  }
+
+  return out.reverse();
 }

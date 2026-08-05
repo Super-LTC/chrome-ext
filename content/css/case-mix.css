@@ -6,11 +6,17 @@
 .cmi { padding: 12px 16px 20px; }
 
 /* ── headline ─────────────────────────────────────────────────── */
+/* The panel is `overflow: hidden`, so anything wider than it is silently CLIPPED
+   rather than scrolled — no scrollbar, no error, just a missing right edge. The
+   three rules that make that unrepresentable: the text column may shrink
+   (min-width:0 beats flex's `auto` default), the control column may not shrink
+   below its buttons, and the row wraps rather than overflowing. */
 .cmi__headline {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap;
+  gap: 12px 16px; flex-wrap: wrap;
   padding-bottom: 14px; border-bottom: 1px solid #e2e8f0;
 }
+.cmi__headline-main { flex: 1 1 260px; min-width: 0; }
 .cmi__eyebrow {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; font-weight: 600; letter-spacing: .04em;
@@ -21,12 +27,31 @@
   font-size: 9px; font-weight: 700; letter-spacing: .03em;
 }
 .cmi__chip--open { background: #fef3c7; color: #92400e; }
+.cmi__value-row {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
 .cmi__value {
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
   font-size: 32px; font-weight: 600; letter-spacing: -.02em; color: #0f172a;
 }
+/* The measured floor. Emerald would claim it already happened; slate-teal with an
+   explicit "likely" says it is a band we measured, not a number we computed. */
+.cmi__drift {
+  display: inline-flex; align-items: center; gap: 3px;
+  border-radius: 5px; padding: 2px 7px;
+  background: #f0fdfa; color: #0f766e; box-shadow: inset 0 0 0 1px #99f6e4;
+  font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums;
+  cursor: help; white-space: nowrap;
+}
+.cmi__drift-arrow { font-size: 10px; }
 .cmi__sub { margin-top: 3px; font-size: 12px; color: #64748b; }
+/* Load-bearing prose, not a caption: "Capture" and "Payable" are our words and
+   the toggle alone does not teach them. */
+.cmi__explain {
+  margin-top: 6px; max-width: 62ch;
+  font-size: 11px; line-height: 1.5; color: #64748b;
+}
 .cmi__sub b { font-variant-numeric: tabular-nums; color: #334155; }
 /* Quiet by design — an accuracy caveat that shouts competes with the number it
    is qualifying. Dotted underline signals "there is more here" without it. */
@@ -37,7 +62,12 @@
 
 /* Two toggles stack top-right: population above, measure below. Aligned right
    so the eye returns to the same edge rather than hunting a second control. */
-.cmi__toggle-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.cmi__toggle-stack {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  /* Never shrink below the buttons — a squeezed segmented control clips its
+     last option, which is how "+ pendings" lost its final letters. */
+  flex: 0 0 auto;
+}
 .cmi__toggle {
   display: inline-flex; padding: 2px;
   border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
@@ -58,17 +88,29 @@
 /* ── trend ────────────────────────────────────────────────────── */
 .cmi__trend { margin-top: 16px; }
 .cmi__trend-head {
-  display: flex; align-items: baseline; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
   margin-bottom: 8px;
 }
+.cmi__trend-right { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .cmi__trend-title { font-size: 12px; font-weight: 600; color: #334155; }
+.cmi__toggle--view .cmi__toggle-btn { font-size: 10px; padding: 3px 9px; }
+.cmi__toggle--view .cmi__toggle-btn--active { background: #334155; }
 .cmi__trend-delta { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .cmi__trend-delta--up   { color: #059669; }
 .cmi__trend-delta--down { color: #e11d48; }
 .cmi__trend-delta--flat { color: #94a3b8; }
 
 .cmi__bars { display: flex; align-items: flex-end; gap: 6px; }
-.cmi__col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.cmi__col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* Printed above every bar. A value you must hover to read is a value that gets
+   read off the pixel height instead — and the axis is truncated, so that reading
+   is wrong. */
+.cmi__barval {
+  font-size: 10px; font-weight: 600; color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+.cmi__barval--none { color: #cbd5e1; font-weight: 400; }
 .cmi__track {
   width: 100%; height: 44px;
   display: flex; align-items: flex-end; justify-content: center;
@@ -76,7 +118,19 @@
   border-radius: 3px; transition: background-color .12s;
 }
 .cmi__track:hover { background: #f1f5f9; }
+.cmi__stack { width: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
 .cmi__bar { width: 100%; border-radius: 3px 3px 0 0; background: #0d9488; }
+/* HOLLOW on purpose. The drift band is a measured range, not measured height —
+   a solid segment would add to the bar and read as CMI we have. An outline that
+   stops short of the fill reads as headroom, which is what it is. */
+.cmi__drift-cap {
+  width: 100%;
+  border: 1px dashed #5eead4; border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  background: repeating-linear-gradient(
+    -45deg, rgba(20,184,166,.10), rgba(20,184,166,.10) 3px, transparent 3px, transparent 6px
+  );
+}
 /* The open quarter is provisional — hatched rather than solid, so it never reads
    as a settled number. */
 .cmi__bar--open {
@@ -86,6 +140,62 @@
 .cmi__qlabel { font-size: 10px; color: #94a3b8; white-space: nowrap; }
 /* Load-bearing: the axis IS truncated and this is where it says so. */
 .cmi__axis-note { margin-top: 6px; font-size: 10px; color: #cbd5e1; text-align: right; }
+
+/* ── quarter table ────────────────────────────────────────────── */
+/* Not a lesser chart. Five bars cannot show the four numbers behind each one,
+   and a bar does not look like a button — which is why nobody found the drill. */
+.cmi__qtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cmi__qtable thead th {
+  padding: 5px 8px; text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 10px; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.cmi__qtable td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+.cmi__r { text-align: right; font-variant-numeric: tabular-nums; }
+.cmi__dim { color: #94a3b8; }
+.cmi__dot { color: #cbd5e1; }
+.cmi__qtable-strong { font-weight: 600; color: #0f172a; }
+.cmi__qrow { cursor: pointer; transition: background-color .12s; }
+.cmi__qrow:hover { background: #f8fafc; }
+.cmi__qrow--empty { cursor: default; color: #cbd5e1; }
+.cmi__qrow--empty:hover { background: transparent; }
+
+.cmi__hint { margin-top: 7px; font-size: 10px; color: #94a3b8; }
+
+/* ── clinical mix ─────────────────────────────────────────────── */
+/* Answers "what is this building made of" — the six PDPM nursing categories.
+   Canonical clinical order (ES→RPF), never size-ranked, so the same building
+   reads the same way quarter to quarter. */
+.cmi__mix { margin-top: 18px; }
+.cmi__mix-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 7px;
+}
+.cmi__mix-total { font-size: 11px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.cmi__mix-row {
+  display: grid; grid-template-columns: minmax(90px, 1.4fr) 26px minmax(60px, 3fr) 34px;
+  align-items: center; gap: 8px; padding: 3px 0;
+}
+.cmi__mix-label { font-size: 11px; color: #475569; }
+.cmi__mix-n {
+  font-size: 11px; font-weight: 600; color: #0f172a;
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.cmi__mix-bar-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; }
+.cmi__mix-bar { display: block; height: 100%; border-radius: 4px; background: #94a3b8; }
+/* Acuity ramp — darkest teal is the heaviest category. The hue is ordinal
+   because the categories are, and a categorical palette would imply they are not. */
+.cmi__mix-bar--es   { background: #0f766e; }
+.cmi__mix-bar--sch  { background: #0d9488; }
+.cmi__mix-bar--scl  { background: #2dd4bf; }
+.cmi__mix-bar--cc   { background: #5eead4; }
+.cmi__mix-bar--bscp { background: #a5b4fc; }
+.cmi__mix-bar--rpf  { background: #cbd5e1; }
+.cmi__mix-cmi {
+  font-size: 11px; color: #64748b; text-align: right;
+  font-variant-numeric: tabular-nums; cursor: help;
+}
 
 /* ── work list ────────────────────────────────────────────────── */
 .cmi__worklist {
@@ -115,10 +225,21 @@
 }
 .cmi-modal__head {
   display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 14px 18px; border-bottom: 1px solid #e2e8f0; flex: 0 0 auto;
+  gap: 12px 16px; flex-wrap: wrap;
+  padding: 14px 18px 12px; border-bottom: 1px solid #e2e8f0; flex: 0 0 auto;
 }
+.cmi-modal__head-main { flex: 1 1 240px; min-width: 0; }
+.cmi-modal__head-right { display: flex; align-items: flex-start; gap: 10px; flex: 0 0 auto; }
 .cmi-modal__title { font-size: 14px; font-weight: 600; color: #0f172a; }
 .cmi-modal__sub { margin-top: 2px; font-size: 11px; color: #94a3b8; }
+.cmi-modal__sub b { color: #334155; font-variant-numeric: tabular-nums; }
+/* Same sentence as the tab, for the same reason — the drill inherits the tab's
+   toggles, so it has to inherit the words that explain them. */
+.cmi-modal__explain {
+  padding: 9px 18px; flex: 0 0 auto;
+  background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+  font-size: 11px; line-height: 1.5; color: #64748b;
+}
 .cmi-modal__close {
   border: 0; background: transparent; cursor: pointer;
   font-size: 15px; color: #94a3b8; padding: 2px 6px; border-radius: 6px;
@@ -156,6 +277,13 @@
 }
 .cmi-tbl__badge--yes    { background: #ecfdf5; color: #047857; }
 .cmi-tbl__badge--review { background: #fff7ed; color: #c2410c; }
+/* Pending is its OWN state, not a soft no. Ohio grants eligibility
+   retroactively, so these residents do convert into the payable score later. */
+.cmi-tbl__badge--pending { background: #eff6ff; color: #1d4ed8; }
+
+.cmi-tbl__cat {
+  font-size: 10px; font-weight: 600; letter-spacing: .03em; color: #64748b;
+}
 
 .cmi-tbl__delta { font-weight: 500; font-variant-numeric: tabular-nums; }
 .cmi-tbl__delta--up   { color: #059669; }
