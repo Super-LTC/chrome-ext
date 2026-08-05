@@ -27,18 +27,30 @@
   to   { transform: translateY(0);    opacity: 1; }
 }
 
-/* Full-screen, matching the MDS Command Center's maximized shell.
-   The 80vw × 85vh modal this replaced could not hold the surface: the regional
-   table is eight columns wide, so at a 1100px cap it scrolled horizontally and
-   the cut-point hovers clipped at the modal edge. This is a whole destination,
-   not a dialog floating over PCC. */
+/* ~80% of the viewport — a destination, but one you can still see PCC around.
+   `.qmb__overlay` is flex-centred, so nothing else is needed to place it.
+
+   THE FLOOR IS NOT DECORATION. This was briefly full-screen because the 80vw
+   modal before it capped at `max-width: 1100px`, and the widest tables (the
+   8-column regional board, the 11-column Quality Measure Detail) did not fit:
+   `.qmc-scroll` is `overflow-x: hidden`, so anything past the modal edge is
+   CLIPPED, not scrollable — the right-hand Projected columns and the cut-point
+   hovers simply became unreachable. The cap was the bug, not the 80%.
+
+   So: 80vw, but never narrower than the widest table needs (`.fs-frame` is
+   1380px border-box + `.qmc-scroll`'s 20px gutters), and never wider than the
+   viewport. Above ~1775px wide that is a true 80%; below it the floor takes
+   over and degrades to today's full-width rather than clipping a column off the
+   screen. Re-adding a fixed px `max-width` here re-breaks the tables. */
 .qmb__modal {
   position: relative;
-  width: 100vw;
+  width: 80vw;
+  min-width: min(100vw, 1420px);
   max-width: 100vw;
-  height: 100vh;
+  height: 80vh;
+  max-height: 100vh;
   background: #fff;
-  border-radius: 0;
+  border-radius: 14px;
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.2);
   display: flex;
   flex-direction: column;

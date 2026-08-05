@@ -30,11 +30,20 @@ import { QmLoading } from '../QmLoading.jsx';
  * The measure view for a scoped building. Its own component purely so the
  * qm-planner hooks are not called until a measure is open — scoping into a
  * building should cost one request, not four.
+ *
+ * `quarterBack` is as load-bearing as `facilityName`. The grid promises "drill-ins
+ * open <quarter>" (FacilityFiveStar.jsx) and the quarter cards exist to change it,
+ * so a drill that defaults the hook to back=0 answers a question the reader did not
+ * ask: pick 2025-Q4, click a num/den, read the CURRENT quarter's residents under a
+ * 2025-Q4 heading. Same failure as scoping to the wrong BUILDING — the roster is
+ * internally consistent and about the wrong thing — which is why both arguments are
+ * threaded explicitly rather than defaulted. See QipMeasureDrill, which already
+ * passes it.
  */
-function ScopedMeasureDetail({ facilityName, displayName, orgSlug, measureId, onBack, onOpenResident }) {
+function ScopedMeasureDetail({ facilityName, displayName, orgSlug, measureId, quarterBack, onBack, onOpenResident }) {
   const { currentlyTriggering, preventableAlerts, upcoming, loading, error, retry } =
     useQmBoard({ facilityName, orgSlug });
-  const { quarterRates } = useQuarterRates({ facilityName, orgSlug });
+  const { quarterRates } = useQuarterRates({ facilityName, orgSlug, back: quarterBack });
   const { rolling } = useRolling({ facilityName, orgSlug });
 
   if (loading) return <QmLoading title={`Loading ${displayName || 'this building'}`} />;
@@ -113,6 +122,7 @@ export function FacilityScope({
           displayName={displayName}
           orgSlug={orgSlug}
           measureId={measureId}
+          quarterBack={quarterBack}
           onBack={onBackToMeasureHost}
           onOpenResident={onOpenResident}
         />
