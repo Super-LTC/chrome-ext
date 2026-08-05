@@ -208,11 +208,6 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, scoreConte
             {windowed && (
               <div className="qmc-recon">
                 <span><b>{counts.triggering}</b> active triggering · {ratePct(rate.num, rate.den).toFixed(1)}% active rate</span>
-                {denom && (
-                  <button type="button" className="qmc-recon__denom" onClick={() => setShowDenominator(true)}> {/* NO_TRACK */}
-                    <Users /> View denominator
-                  </button>
-                )}
               </div>
             )}
             {/* Rolling 4-quarter trend — collapsed to a compact "vs last quarter"
@@ -367,8 +362,31 @@ export function MeasureDetail({ currentlyTriggering: data, measureId, scoreConte
         )}
       </div>
 
-      {/* Denominator-roster modal — who's in / excluded / discharged-locked for
-          this measure's windowed CMS denominator (same panel the tiles use). */}
+      {/* ROSTER DISCLOSURE — matches the web drill-in (SUP-263). The affordance
+          used to be a chip beside the active-triggering line, which read as a
+          filter and got missed; a full-width row here reads as "there is more
+          below". Carries its counts so you know what is inside before opening,
+          and stays collapsed by default so the worklist keeps the screen — the
+          two resident lists answer different questions (live census vs the
+          windowed CMS cohort) and stacking them is what made the web page
+          unreadable. */}
+      {denom && meta && (
+        <button
+          type="button"
+          className={`qmc-denomtoggle${showDenominator ? ' is-open' : ''}`} /* NO_TRACK */
+          aria-expanded={showDenominator}
+          onClick={() => setShowDenominator((v) => !v)}
+        >
+          <span className="qmc-denomtoggle__chev">›</span>
+          <Users />
+          <span className="qmc-denomtoggle__label">Numerator &amp; denominator</span>
+          <span className="qmc-denomtoggle__meta">
+            {denom.numerator} of {denom.denominator} counted by CMS this quarter
+            {denom.roster.excluded.length > 0 ? ` · ${denom.roster.excluded.length} excluded` : ''}
+          </span>
+          <span className="qmc-denomtoggle__action">{showDenominator ? 'Hide' : 'Show'}</span>
+        </button>
+      )}
       {showDenominator && denom && meta && (
         <DenominatorPanel open meta={meta} denom={denom} onClose={() => setShowDenominator(false)} />
       )}
