@@ -50,12 +50,18 @@ beforeAll(() => {
 
 /**
  * The views the route object can hold, and what a navigation to each looks like.
- * `quarter-roster` and `resident` are intentionally absent: neither is
- * implemented in the extension yet (the resident drill-in is a modal driven by
- * component state, not a route view). Listing them here would assert a
- * destination we never built.
+ *
+ * `resident` is intentionally absent: the resident drill-in is a modal driven by
+ * component state, not a route view, so listing it would assert a destination we
+ * never built.
+ *
+ * `quarter-roster` WAS in that category and is no longer — it sat in the route's
+ * VIEWS list, unrendered, from the port until the grid shipped. That is the
+ * orphan direction this file does not catch (a view nothing renders, rather than
+ * a component nothing navigates to), which is why QuarterRoster is also in
+ * FEATURE_COMPONENTS below.
  */
-const ROUTED_VIEWS = ['overview', 'measure', 'signals', 'simulator', 'dfs'];
+const ROUTED_VIEWS = ['overview', 'measure', 'quarter-roster', 'signals', 'simulator', 'dfs'];
 
 const DESTINATIONS = ['coordinator', 'regional', 'qip', 'cna', 'functional'];
 
@@ -97,6 +103,7 @@ describe('components that own a feature are actually mounted', () => {
     'FlQipFacilityView',
     'CodingAccuracyPanel',
     'DenominatorPanel',
+    'QuarterRoster',
   ];
 
   it.each(FEATURE_COMPONENTS)('%s is imported by something', (name) => {

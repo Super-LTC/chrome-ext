@@ -1142,3 +1142,196 @@
   gap: 8px;
   padding: 8px 16px 0;
 }
+
+/* ── quarter roster: every resident × every measure, for one quarter ────────
+   Opened from a quarter card. Dense on purpose — the point of the screen is
+   that a 60-resident cohort and 10 measures fit in one reading. The glyph
+   carries the meaning and colour is secondary, so it stays legible printed,
+   projected in a meeting room, or read by someone colour-blind. */
+.fivestar .fsr { padding-top: 12px; padding-bottom: 20px; }
+
+.fivestar .fsr-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+.fivestar .fsr-backicon { width: 13px; height: 13px; vertical-align: -2px; }
+.fivestar .fsr-title { margin-right: auto; }
+.fivestar .fsr-title__main { font-weight: 700; font-size: 14px; color: var(--ink); }
+.fivestar .fsr-title__count {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+.fivestar .fsr-title__sub { font-size: 11px; color: var(--ink-soft); margin-top: 1px; }
+
+.fivestar .fsr-search { position: relative; display: flex; align-items: center; }
+.fivestar .fsr-search__icon {
+  position: absolute;
+  left: 7px;
+  width: 13px;
+  height: 13px;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+.fivestar .fsr-search input {
+  width: 168px;
+  padding: 6px 22px 6px 25px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+}
+.fivestar .fsr-search input:focus { border-color: var(--ink-faint); }
+.fivestar .fsr-search__clear {
+  position: absolute;
+  right: 5px;
+  display: flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.fivestar .fsr-search__clear svg { width: 12px; height: 12px; }
+
+.fivestar .fsr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.fivestar .fsr-btn:hover { background: var(--paper-deep); }
+.fivestar .fsr-btn__icon { width: 13px; height: 13px; }
+/* On = the filter is narrowing what you see. Rose, matching the triggering
+   glyph it filters to, so the button and the cells agree. */
+.fivestar .fsr-btn--on {
+  border-color: #fecaca;
+  background: var(--bad-soft);
+  color: #991b1b;
+}
+
+.fivestar .fsr-tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+/* `auto`, overriding .fivestar table's fixed layout: the column count varies
+   with how many measures the engine scored, so widths have to come from the
+   content rather than from an equal split. */
+.fivestar .fsr-table { table-layout: auto; font-size: 12px; }
+.fivestar .fsr-table thead tr { background: var(--paper); border-bottom: 1px solid var(--line); }
+
+.fivestar .fsr-th {
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+/* Sticky name column: scrolling right to reach the 10th measure must not cost
+   you the ability to tell whose row you are on. */
+.fivestar .fsr-th--name,
+.fivestar .fsr-td--name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  max-width: 220px;
+}
+.fivestar .fsr-th--name { background: var(--paper); }
+.fivestar .fsr-td--name { background: var(--card); }
+.fivestar .fsr-th--meta { width: 92px; }
+.fivestar .fsr-th--measure { padding: 6px 2px; text-align: center; vertical-align: bottom; }
+
+/* Vertical column heads. Ten horizontal measure labels do not fit in any
+   viewport this overlay can occupy. */
+.fivestar .fsr-colhead {
+  display: block;
+  margin: 0 auto;
+  max-height: 128px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+.fivestar .fsr-colhead--link { cursor: pointer; }
+.fivestar .fsr-colhead--link:hover { color: var(--ink); text-decoration: underline; }
+
+.fivestar .fsr-table tbody tr { border-bottom: 1px solid var(--line-soft); }
+.fivestar .fsr-table tbody tr:last-child { border-bottom: 0; }
+.fivestar .fsr-table tbody tr:hover > td { background: var(--paper); }
+.fivestar .fsr-table tbody tr:hover > .fsr-td--name { background: var(--paper); }
+
+.fivestar .fsr-td { padding: 5px 8px; color: var(--ink); }
+.fivestar .fsr-td--name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fivestar .fsr-td--meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); white-space: nowrap; }
+.fivestar .fsr-td--active { color: var(--live); }
+
+.fivestar .fsr-unsub {
+  margin-left: 6px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #e0f2fe;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  color: #0284c7;
+}
+
+.fivestar .fsr-cell {
+  padding: 5px 2px;
+  text-align: center;
+  font-family: var(--mono);
+}
+.fivestar .fsr-cell--numerator { background: var(--bad-soft); color: #b91c1c; font-weight: 700; }
+.fivestar .fsr-cell--denominator { color: var(--ink-faint); }
+.fivestar .fsr-cell--excluded { background: var(--warn-soft); color: var(--warn); }
+.fivestar .fsr-cell--uncounted { color: var(--starempty); }
+
+.fivestar .fsr-nomatch { padding: 28px 12px; text-align: center; color: var(--ink-faint); }
+.fivestar .fsr-empty {
+  margin-top: 14px;
+  padding: 22px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.fivestar .fsr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 9px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.fivestar .fsr-key { font-family: var(--mono); }
+.fivestar .fsr-key--numerator { color: #b91c1c; }
+.fivestar .fsr-key--denominator { color: var(--ink-faint); }
+.fivestar .fsr-key--excluded { color: var(--warn); }
+.fivestar .fsr-key--uncounted { color: var(--starempty); }
