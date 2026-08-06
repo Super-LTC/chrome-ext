@@ -4,8 +4,11 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.69** was zipped for Chrome Web Store submission on
-> 2026-07-26 (`super-ltc-store.zip`) — it is the first store build carrying the
+> **Store note:** **v1.0.70** was zipped for Chrome Web Store submission on
+> 2026-08-05 (`super-ltc-store.zip`) — it carries the Case Mix tab, the QM
+> quarter roster + drill-in fixes, the ICD-10 library search, and the care-plan
+> stamp verification fix. Before that, **v1.0.69** was zipped on 2026-07-26 —
+> the first store build carrying the
 > EID migration (1.0.68, below) and PCC username capture. **v1.0.68 was never
 > uploaded**: it was bumped when #59 merged, then #60 landed on top of it, so
 > 1.0.69 supersedes it. Before that, v1.0.67 was zipped on 2026-07-23 to hotfix
@@ -13,6 +16,91 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.70] — 2026-08-05
+
+A new Case Mix tab in the MDS Command Center (Ohio Medicaid CMI, one building),
+the QM board's quarter drill-in finished properly (right quarter, labelled
+roster, CSV export), full-library ICD-10 search from the code dropdown, and the
+fix for the silent care-plan stamp failure a nurse reported. Seven merged PRs
+(#68, #73–#78) on top of 1.0.69.
+
+### Added
+- **Case Mix tab — one building's Medicaid CMI, gated to Ohio** (#74, #76;
+  backend superltc #1100). The whole CMI surface inside PCC as a Command Center
+  tab, scoped to the building whose page is open. The **server decides
+  entitlement**: `enabled` rides in the case-mix response (the extension has no
+  facility→state map), and every failure path — 403/404/network/thrown —
+  resolves to `enabled:false` so the tab simply doesn't appear. Ships both
+  populations (capture = assessed inside the quarter, payable = record in
+  effect on the picture date); the work list is always sourced from **payable**,
+  because capture carry-forward is structurally zero (verified 0/0/0/0/0/0
+  across six Ohio buildings — the default view would otherwise never show it).
+  The second pass (#76) replaced the Capture/Payable + Medicaid toggles with the
+  web roster's controls (search, record status, counts basis), gave the trend a
+  real plot area (gridlines, dashed closed-quarter average, value labels, floor
+  printed under the truncated axis), made clinical-mix rows expand an inline
+  resident list, and gated per-resident projections on `basisMatches &&
+  changed` — previously 72 of 97 rendered "projections" were jumps the engine
+  never claimed. Open quarter shows a measured carry-forward band ("likely
+  1.69–1.75 by quarter end", hollow cap), not a fake forecast — the projection
+  mean backtested *worse* than doing nothing. Read-only; no override editing.
+- **QM quarter card opens an exportable roster** (#78). Clicking a
+  Projected/Predicted/Published quarter now opens the full resident × measure
+  grid (the artefact people bring to the QM meeting) instead of just re-scoping
+  the tiles. `lib/quarter-roster-view.js` settles what a cell means; the
+  load-bearing rule is that `skipped` is **not** an exclusion — the denominator
+  is `applicable && !excluded && !skipped`, and tests assert per-column
+  reconciliation (✕ == numerator, ✕ + · == denominator) as an invariant.
+  Glyphs are SHP's alphabet on purpose. CSV export (filtered set, UTF-8 BOM,
+  quoted names); no print button — `window.print()` from a content script
+  prints the PCC page, not the overlay.
+- **ICD-10 — search the full library from the code dropdown** (#68, SUP-264).
+  The evidence panel's dropdown said "Search by code or name…" but only
+  filtered the codes Comprehend returned for the group — typing "diabetes" on
+  an I69 group said "No matches". Library results from
+  `/api/extension/icd10-search` (debounced 250ms, 2-char floor, stale-token
+  guarded, 15-row cap) now merge into the same list below the group's own
+  codes — one box, one list, no section header. Fixed alongside: staging a
+  library code spread `items[0]`, carrying an unrelated annotation's id and
+  silently deleting a real finding on approve (library codes now stage with a
+  null id); and the per-keystroke render drifted from `render()`'s split
+  (both now go through one `_renderCodeDropdownBody`).
+
+### Fixed
+- **Care plan — verify what PCC actually attached; stop reporting success when
+  it didn't** (#73). A nurse lost two care plans' worth of work: focus saved,
+  goals and interventions didn't, and the extension toasted "Added to care
+  plan" both times. `orchestrateStamp` resolves rather than throws on partial
+  attach, and three of the four Add paths (including `_stampAuditAddOne`, the
+  one all production telemetry shows nurses using) treated that as success;
+  the library path counted any HTTP 200 as all-goals-stamped. Now the stamp
+  **reads back** `careplandetail_rev.jsp` — each row is tagged with its parent
+  focus — for exact per-focus counts, pinned by unit tests against a real
+  captured page (5 focuses / 9 goals / 39 interventions). Focus resolution
+  matches on the text we wrote, not the phantom id PCC returns on save. Repair
+  retries once and only when *nothing* attached (a duplicated row is worse
+  than a reported shortfall). Also closes the telemetry gaps that kept this
+  invisible: `care_plan_audit_commit_stamped` had no failure signal, and
+  `care_plan_polish_swapped` was never allowlisted so `track()` dropped it.
+  New `care_plan_stamp_verified` event carries the discriminators; verification
+  is on by default (`?cpverify=0` disables). Root cause of PCC's drop still
+  not isolated — this makes it visible, recoverable, and measurable.
+- **QM — drill into the quarter the reader picked** (#75). `ScopedMeasureDetail`
+  never passed `back` to `useQuarterRates`, so all four quarter cards returned
+  the *current* quarter's roster; the heading also labelled off the live board,
+  so fixing the data alone would have shipped right numbers under a wrong
+  title. The headline now labels off the roster actually loaded and says
+  "(closed)" for locked quarters. Board modal went 100vw→80vw with a
+  widest-table floor — the old `max-width: 1100px` cap was the real bug
+  (`.qmc-scroll` is `overflow-x: hidden`, so clipped columns were unreachable).
+- **QM — drill-in roster is a labelled accordion, not a chip** (SUP-263, #77).
+  The "View denominator" pill read as a filter and got missed; now a full-width
+  disclosure row below the worklist carrying its counts ("4 of 62 counted by
+  CMS this quarter · 20 excluded"), still collapsed by default — the worklist
+  (live census) and roster (windowed CMS cohort) answer different questions and
+  must not stack. Dead `.qmc-recon__denom` CSS deleted. The name-format half of
+  SUP-263 ships with the web deploy (superapp #1105), not an extension release.
 
 ## [1.0.69] — 2026-07-26
 
