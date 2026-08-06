@@ -130,8 +130,13 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
   // read the SCOPED building's residents, and the generic `view === 'measure'`
   // branch below is bound to the building open in PCC. Without this the two
   // would both render, the second one showing the wrong facility's people.
+  // `quarter-roster` belongs here for the same reason `measure` does — it is a
+  // resident list, so it must read the SCOPED building's cohort. It has no
+  // generic branch below at all; leave it off this list and a quarter card
+  // navigates to a route nothing renders, i.e. a blank screen.
   const inFacilityScope =
-    mode === 'regional' && route.scope === 'facility' && (isOverview || view === 'measure');
+    mode === 'regional' && route.scope === 'facility'
+    && (isOverview || view === 'measure' || view === 'quarter-roster');
   // QIP owns its whole destination for the same reason: a measure opened from a
   // QIP building must read THAT building's residents, not the PCC page's.
   const inQip = mode === 'qip' && (isOverview || view === 'measure');
@@ -248,6 +253,8 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
                 onQuarterBackChange={(q) => nav.set({ quarter: q })}
                 onOpenMeasure={(measureId, quarterBack) =>
                   nav.go({ view: 'measure', measure: measureId, quarter: quarterBack })}
+                onOpenQuarterRoster={(quarterBack) =>
+                  nav.go({ view: 'quarter-roster', quarter: quarterBack })}
                 onBackToMeasureHost={() => nav.back({ view: 'overview' })}
                 onScopeOut={() => nav.back({ scope: 'board', view: 'overview' })}
                 onOpenResident={openResident}

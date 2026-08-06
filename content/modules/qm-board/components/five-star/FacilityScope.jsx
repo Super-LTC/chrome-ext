@@ -23,6 +23,7 @@ import { useQmBoard } from '../../hooks/useQmBoard.js';
 import { useQuarterRates } from '../../hooks/useQuarterRates.js';
 import { useRolling } from '../../hooks/useRolling.js';
 import { FacilityFiveStar } from './FacilityFiveStar.jsx';
+import { QuarterRoster } from './QuarterRoster.jsx';
 import { MeasureDetail } from '../MeasureDetail.jsx';
 import { QmLoading } from '../QmLoading.jsx';
 
@@ -79,6 +80,47 @@ function ScopedMeasureDetail({ facilityName, displayName, orgSlug, measureId, qu
   );
 }
 
+/**
+ * The quarter roster for a scoped building. Its own component for the same
+ * reason as ScopedMeasureDetail: the quarter-rates request should fire when a
+ * roster is actually open, not on every scope-in.
+ *
+ * Only `quarterRates` is needed here — the roster is the windowed CMS cohort and
+ * nothing else, so this costs ONE request where the measure drill costs three.
+ */
+function ScopedQuarterRoster({ facilityName, displayName, orgSlug, quarterBack, onBack, onOpenMeasure }) {
+  const { quarterRates, loading, failed } = useQuarterRates({ facilityName, orgSlug, back: quarterBack });
+
+  // `loading` starts false and flips inside the hook's own effect, so there is
+  // exactly one paint before the request begins. Treating that as "loaded" would
+  // flash "no roster for this quarter" — a claim about the DATA — a beat before
+  // we have asked. Safe from a permanent spinner because the route always
+  // answers with a `data` object on success (quarter-rates/route.ts), so the
+  // null here can only mean not-yet or failed.
+  if (loading || (!quarterRates && !failed)) {
+    return <QmLoading title={`Loading the roster for ${displayName || 'this building'}`} />;
+  }
+  if (failed) {
+    return (
+      <div className="qmc-error">
+        <div>Couldn't load that quarter's roster</div>
+        {/* NO_TRACK — retry is the same fetch, not a new intent. */}
+        <button type="button" className="qmc-bc__back" onClick={onBack}>‹ Scorecard</button>
+      </div>
+    );
+  }
+
+  return (
+    <QuarterRoster
+      quarterRates={quarterRates}
+      quarterLabel={quarterRates?.quarter?.label ?? 'This quarter'}
+      facilityName={displayName || facilityName}
+      onBack={onBack}
+      onOpenMeasure={onOpenMeasure}
+    />
+  );
+}
+
 export function FacilityScope({
   facilityName,
   displayName,
@@ -88,6 +130,7 @@ export function FacilityScope({
   quarterBack,
   onQuarterBackChange,
   onOpenMeasure,
+  onOpenQuarterRoster,
   onBackToMeasureHost,
   onScopeOut,
   onOpenResident,
@@ -127,6 +170,19 @@ export function FacilityScope({
           onOpenResident={onOpenResident}
         />
       </div>
+    );
+  }
+
+  if (view === 'quarter-roster') {
+    return (
+      <ScopedQuarterRoster
+        facilityName={facilityName}
+        displayName={displayName}
+        orgSlug={orgSlug}
+        quarterBack={quarterBack}
+        onBack={onBackToMeasureHost}
+        onOpenMeasure={onOpenMeasure ? (id) => onOpenMeasure(id, quarterBack) : undefined}
+      />
     );
   }
 
@@ -187,6 +243,7 @@ export function FacilityScope({
         quarterBack={quarterBack}
         onQuarterBackChange={onQuarterBackChange}
         onOpenMeasure={onOpenMeasure}
+        onOpenQuarterRoster={onOpenQuarterRoster}
         onScopeOut={onScopeOut}
       />
     </>
