@@ -160,7 +160,7 @@ function CutBar({ ladder, reversed = false }) {
 
 const QCARD_CLASS = { published: 'now', predicted: 'pred', projected: 'proj' };
 
-function QuarterCard({ q, maxPoints, quarterEnd, selected = false, onSelect }) {
+function QuarterCard({ q, maxPoints, quarterEnd, selected = false, onSelect, opensRoster = false }) {
   const ours = q.state !== 'published';
 
   // One flag, in precedence order: a star you gained or lost outranks a cushion
@@ -189,7 +189,13 @@ function QuarterCard({ q, maxPoints, quarterEnd, selected = false, onSelect }) {
       onKeyDown={onSelect ? (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); }
       } : undefined}
-      title={onSelect ? `Scope the measure grid + drill-ins to ${q.displayLabel}` : undefined}
+      title={onSelect
+        ? (opensRoster
+          // Say the bigger of the two things the click does. A tooltip promising
+          // only a re-scope, on a card that navigates, reads as a misfire.
+          ? `Open the ${q.displayLabel} roster — every resident, every measure`
+          : `Scope the measure grid + drill-ins to ${q.displayLabel}`)
+        : undefined}
     >
       <div className="qh">
         <span className="qq">{q.displayLabel}</span>
@@ -667,10 +673,16 @@ const DATA_STATUS_COPY = {
  * @param {string} [props.scopeOutLabel]
  * @param {number} [props.quarterBack]  Selected quarter, controlled when supplied.
  * @param {(back: number) => void} [props.onQuarterBackChange]
+ * @param {(quarterBack: number) => void} [props.onOpenQuarterRoster]
+ *   Quarter card → that quarter's full resident × measure grid. Fired ALONGSIDE
+ *   the selection, not instead of it (the web does the same): the card both
+ *   re-scopes the measure grid below and opens the roster, so coming back from
+ *   the roster leaves the page on the quarter you were reading.
  */
 export function FacilityFiveStar({
   data,
   onOpenMeasure,
+  onOpenQuarterRoster,
   onScopeOut,
   scopeOutLabel = 'All buildings',
   quarterBack: quarterBackProp,
@@ -776,7 +788,11 @@ export function FacilityFiveStar({
                 maxPoints={qmMax}
                 quarterEnd={data.action.quarterEnd}
                 selected={onOpenMeasure ? back === quarterBack : false}
-                onSelect={onOpenMeasure ? () => setQuarterBack(back) : undefined}
+                onSelect={onOpenMeasure ? () => {
+                  setQuarterBack(back);
+                  onOpenQuarterRoster?.(back);
+                } : undefined}
+                opensRoster={!!onOpenQuarterRoster}
               />
             );
           })}
