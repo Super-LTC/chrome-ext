@@ -4,8 +4,10 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.70** was zipped for Chrome Web Store submission on
-> 2026-08-05 (`super-ltc-store.zip`) — it carries the Case Mix tab, the QM
+> **Store note:** **v1.0.71** was zipped for Chrome Web Store submission on
+> 2026-08-06 (`super-ltc-store.zip`) — it carries the DFS verify ARD-scoping
+> fix (#80) on top of 1.0.70. Before that, **v1.0.70** was zipped on
+> 2026-08-05 — it carries the Case Mix tab, the QM
 > quarter roster + drill-in fixes, the ICD-10 library search, and the care-plan
 > stamp verification fix. Before that, **v1.0.69** was zipped on 2026-07-26 —
 > the first store build carrying the
@@ -16,6 +18,35 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.71] — 2026-08-06
+
+One fix: the Super Verify DFS callout is now scoped to the assessment actually
+on screen. Reported by Joanna Lucius (Director of Quality, Garden Springs) at
+Heritage Painesville: two residents' verify buttons showed a Discharge Function
+Score as met/short on Quarterlies — but DFS is only determined on End of PPS
+Part A Stay assessments. One merged PR (#80) on top of 1.0.70.
+
+### Fixed
+- **DFS callout spoke on assessments that didn't determine it** (#80; regression
+  against SUP-258's intent; backend counterpart in superapp). `useDfsPatient`
+  fetched a resident's DFS standing without telling the server which assessment
+  was open, so the server answered "newest Part A stay in the last 365 days" —
+  and the callout rendered `Met · +7` / `12 short` on Quarterlies months after
+  that stay ended. Now `VerifyResults` reads the ARD via
+  `window.getPCCAssessmentMetaFromDOM()` (the same DOM read `postVerify` uses)
+  and `useDfsPatient` sends it as `ardDate`, re-fetching when it changes, so the
+  server scopes to the assessment on screen: End of PPS Part A Stay → observed
+  vs expected (met/short); mid-Part-A (5-Day, Quarterly, IPA) → live target;
+  anything else → nothing. Endpoint construction is extracted to a pure
+  `buildDfsEndpoint` with tests pinning that the ARD is actually on the request.
+  The scraper only emits valid `YYYY-MM-DD` (else null, and null isn't sent) —
+  a malformed value would match nothing server-side and blank the callout on
+  the one assessment that *should* show it. Backward compatible both ways, but
+  the server falls back to the old unscoped answer when no ARD arrives, so this
+  extension half is what actually ends the wrong-panel failure mode. Verified
+  against prod for both reported residents plus three whose PPS Discharge ARD
+  trails the Part A end date by a day.
 
 ## [1.0.70] — 2026-08-05
 
