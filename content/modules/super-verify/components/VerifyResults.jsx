@@ -97,8 +97,14 @@ export function VerifyResults({ data, assessId, patientId, onRescan, onClose }) 
   const scrollRef = useRef(null);
 
   // DFS is fetched separately so the panel never waits on it — see useDfsPatient.
+  //
+  // The ARD comes from the DOM, the same read `postVerify` uses, so the callout
+  // is scoped to the assessment actually on screen. Without it the backend can
+  // only ask "has this resident ever completed a Part A stay?", which is how a
+  // Quarterly ended up showing "Met · +7" off a discharge from a previous stay.
   const { facilityName, orgSlug } = window.getCurrentParams?.() || {};
-  const { dfs } = useDfsPatient({ patientId, facilityName, orgSlug });
+  const { ardDate } = window.getPCCAssessmentMetaFromDOM?.() || {};
+  const { dfs } = useDfsPatient({ patientId, facilityName, orgSlug, ardDate });
 
   // Local UI state for live recompute of tiles + section counts.
   const [decisions, setDecisions] = useState({}); // detection index → 'dismiss'|null
