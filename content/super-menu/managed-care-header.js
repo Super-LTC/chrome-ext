@@ -16,27 +16,37 @@ const DEBUG = false; // flip on to trace header injection / click wiring in the 
 
 function log(...args) { if (DEBUG) console.log('[MC-header]', ...args); }
 
-function getPatientFromHeader() {
-  // Prefer the stable numeric id (recovers it from the DOM when the URL carries
-  // an ephemeral EID_ token); fall back to the header's "Client ID: NNN" span.
-  let patientId = window.resolveStableClientId?.();
+export function getPatientFromHeader() {
+  // Use the SHARED ladder (client-id.js), same as every other patient-anchored
+  // surface: a NUMERIC client id when the page still exposes one, plus the
+  // resident-header MRN, which survives PCC's EID migration. Sending both lets
+  // the backend resolve the patient even when the numeric id is gone.
+  const ref = window.resolveStablePatientRef?.() || {};
   const nameEl = document.querySelector('.residentName#name, .residentName');
-  // If the resolver couldn't find a numeric id (null, or it returned a raw EID_
-  // token), use the header span — it carries the numeric Client ID directly.
-  if (!patientId || !/^\d+$/.test(patientId)) {
-    const idSpan = nameEl?.querySelector('span[title^="Client ID:"]');
-    const m = idSpan?.title?.match(/Client ID:\s*(\d+)/);
-    patientId = m?.[1] || patientId || null;
+
+  // Last resort, kept from the original implementation: the header's
+  // "Client ID: NNN" span — but ONLY when it isn't the MRN restated. PCC labels
+  // the facility MRN "Client ID" in this header, and an MRN sent as a client id
+  // matches no patient: prod, 2026-09-02, across 42,169 active residents, NO
+  // patient's MRN equals their PCC client id. Sending it anyway is what produced
+  // "Patient not found for the provided external id" on every submit.
+  let externalPatientId = ref.externalPatientId || null;
+  if (!externalPatientId) {
+    const fromSpan = nameEl
+      ?.querySelector('span[title^="Client ID:"]')
+      ?.title?.match(/Client ID:\s*(\d+)/)?.[1] || null;
+    externalPatientId = fromSpan && fromSpan !== ref.pccPublicId ? fromSpan : null;
   }
+
   const patientName = nameEl ? nameEl.childNodes[0]?.textContent?.trim() || null : null;
-  return { patientId, patientName };
+  return { externalPatientId, pccPublicId: ref.pccPublicId || null, patientName };
 }
 
 function openPanel() {
-  const { patientId, patientName } = getPatientFromHeader();
-  log('click → open panel', { patientId, patientName, hasLauncher: !!window.ManagedCareLauncher });
+  const { externalPatientId, pccPublicId, patientName } = getPatientFromHeader();
+  log('click → open panel', { externalPatientId, pccPublicId, hasLauncher: !!window.ManagedCareLauncher });
   if (window.ManagedCareLauncher?.open) {
-    window.ManagedCareLauncher.open({ patientId, patientName, source: 'header' });
+    window.ManagedCareLauncher.open({ patientId: externalPatientId, pccPublicId, patientName, source: 'header' });
   } else {
     console.error('[MC-header] Launcher unavailable; cannot open panel.');
   }
@@ -99,8 +109,8 @@ async function ensureModuleEnabled() {
 
 async function tryInject() {
   if (document.getElementById(BTN_ID)) return;        // already present
-  const { patientId } = getPatientFromHeader();
-  if (!patientId) return;                             // not on a patient chart
+  const { externalPatientId, pccPublicId } = getPatientFromHeader();
+  if (!externalPatientId && !pccPublicId) return;     // not on a patient chart
 
   const enabled = await ensureModuleEnabled();
   if (enabled !== true) return;                       // gated off or not yet resolved

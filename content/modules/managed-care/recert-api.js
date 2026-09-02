@@ -94,10 +94,10 @@ const RecertAPI = {
 
   // One-time 5-min login link into the REAL create wizard, prefilled for the
   // patient. Server enforces module gate + location access before minting.
-  async openCreateLink({ orgSlug, externalPatientId, facilityName }) {
+  async openCreateLink({ orgSlug, externalPatientId, pccPublicId, facilityName }) {
     const res = await apiRequest('/api/extension/recertifications/open-create-link', {
       method: 'POST',
-      body: JSON.stringify({ orgSlug, externalPatientId, facilityName }),
+      body: JSON.stringify({ orgSlug, externalPatientId, pccPublicId, facilityName }),
     });
     if (!res?.success) throw apiError(res, 'Could not start a clinical update');
     return res.data?.url;
@@ -106,9 +106,19 @@ const RecertAPI = {
   // ---- In-extension create wizard (the dashboard handoff is for OPENING
   // runs after the fact; creation lives here in the extension) ----
 
-  // patientId = PCC external client id; drives the prefill block.
-  async formData({ orgSlug, patientId }) {
-    const res = await apiRequest(`/api/extension/recertifications/form-data?${qs({ orgSlug, patientId })}`, { method: 'GET' });
+  // patientId = PCC external client id, pccPublicId = resident-header MRN (the
+  // anchor on EID-flipped pages); facilityName scopes the MRN lookup server-side.
+  // Together they drive the prefill block.
+  //
+  // NO patientName here, on purpose: this is a GET, so every param lands in the
+  // URL — access logs, proxies, browser history. A resident's name is directly
+  // re-identifying in a way an opaque id isn't. The name rides in the POST body
+  // on create/handoff, where it's needed; a prefill can do without it.
+  async formData({ orgSlug, patientId, pccPublicId, facilityName }) {
+    const res = await apiRequest(
+      `/api/extension/recertifications/form-data?${qs({ orgSlug, patientId, pccPublicId, facilityName })}`,
+      { method: 'GET' }
+    );
     if (!res?.success) throw apiError(res, 'Failed to load form data');
     return res.data?.formData;
   },

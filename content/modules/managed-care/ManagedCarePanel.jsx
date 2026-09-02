@@ -7,12 +7,16 @@ import { RunList } from './components/RunList.jsx';
 import { Wizard } from './components/Wizard.jsx';
 import { track } from '../../utils/analytics.js';
 
-export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, patientName, source, onClose }) => {
+export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, pccPublicId, patientName, source, onClose }) => {
+  // `patientId` (numeric PCC client id) and `pccPublicId` (resident-header MRN)
+  // are both optional anchors — a flipped chart page yields only the MRN. Either
+  // one means the panel is scoped to a resident.
+  const patientScoped = !!(patientId || pccPublicId);
   const [refreshToken, setRefreshToken] = useState(0);
   const [showWizard, setShowWizard] = useState(false);
 
   useEffect(() => {
-    track('mc_panel_opened', { source, scope: patientId ? 'patient' : 'all' });
+    track('mc_panel_opened', { source, scope: patientScoped ? 'patient' : 'all' });
   }, []);
 
   const onCreated = () => {
@@ -37,13 +41,15 @@ export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, patientName
             <Wizard
               orgSlug={orgSlug}
               patientId={patientId}
+              pccPublicId={pccPublicId}
+              patientName={patientName}
               facilityName={facilityName}
               onCreated={onCreated}
               onCancel={() => setShowWizard(false)}
             />
           ) : (
             <>
-              {patientId && (
+              {patientScoped && (
                 /* NO_TRACK — wizard mount emits mc_wizard_opened */
                 <button className="mc-panel__new-btn" onClick={() => setShowWizard(true)}>
                   + New Clinical Update
@@ -52,6 +58,7 @@ export const ManagedCarePanel = ({ orgSlug, facilityName, patientId, patientName
               <RunList
                 orgSlug={orgSlug}
                 patientId={patientId}
+                pccPublicId={pccPublicId}
                 currentFacilityName={facilityName}
                 refreshToken={refreshToken}
               />

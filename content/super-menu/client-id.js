@@ -23,6 +23,49 @@ function _isNumericId(v) {
   return typeof v === 'string' && _NUMERIC_ID.test(v) && v !== '0';
 }
 
+// PCC serves the resident-header photo from a file named after the patient's
+// NUMERIC client id (e.g. `.../21068632.jpg`), which makes it a durable id source
+// on EID-flipped pages that expose no ESOLclientid at all. Scoped to the resident
+// header so a wound thumbnail or an avatar elsewhere on the page can't be read as
+// a patient id, and required to be 6+ digits so it can never be an MRN (those are
+// 4-5 digits). A wrong guess is recoverable — the backend verifies the id and
+// falls back to the MRN — but a wrong guess that LOOKS right is not, hence the
+// scoping.
+const _PHOTO_ID = /\/(\d{6,})\.(?:jpg|jpeg|png)(?:[?#]|$)/i;
+
+export function scrapeClientIdFromResidentPhoto(doc = document) {
+  const fromImg = (img) => {
+    for (const attr of ['src', 'data-src']) {
+      const m = _PHOTO_ID.exec(img?.getAttribute?.(attr) || '');
+      if (m) return m[1];
+    }
+    return null;
+  };
+
+  // 1. PCC's own photo elements, when the markup names them.
+  for (const img of doc.querySelectorAll(
+    '#residentPhoto, .residentPhoto, img.resident-photo, .rh-photo img, .residentPhoto img'
+  )) {
+    const id = fromImg(img);
+    if (id) return id;
+  }
+
+  // 2. Otherwise: an <img> inside the resident-header block. Walk up from the
+  //    name element a few levels — PCC's header nesting varies by page.
+  //    Stop at <body>: everything on the page is inside it, so searching there
+  //    would pull in wound thumbnails and other patients' avatars.
+  let node = doc.querySelector('.residentName#name, .residentName');
+  for (let depth = 0; node && node !== doc.body && node !== doc.documentElement && depth < 4; depth += 1) {
+    for (const img of node.querySelectorAll?.('img') || []) {
+      const id = fromImg(img);
+      if (id) return id;
+    }
+    node = node.parentElement;
+  }
+
+  return null;
+}
+
 // Scrape a NUMERIC ESOLclientid from the live DOM. Returns null if none is
 // found. Never returns an EID_ token (every source is matched against digits).
 export function scrapeNumericClientIdFromDOM(doc = document) {
@@ -49,9 +92,21 @@ export function scrapeNumericClientIdFromDOM(doc = document) {
     if (m && _isNumericId(m[1])) return m[1];
   }
 
-  // 5. Resident-header "Client ID: NNN" span — PCC shows the numeric id here
-  //    (in a title attr / text, NOT in ESOLclientid= form) on chart pages whose
-  //    URL only carries an EID_ token and whose body has no ESOLclientid= link.
+  // 5. Resident-header PHOTO filename — PCC serves the resident's photo as
+  //    `<numeric client id>.jpg`, so the id survives on pages that carry no
+  //    ESOLclientid anywhere. Verified against prod 2026-09-02: the header photo
+  //    on MRN 11006's chart is `21068632.jpg`, and 21068632 is exactly that
+  //    patient's stored external_patient_id. Ordered ABOVE the "Client ID:" span
+  //    because that span is the MRN (see step 6) and this is the real id.
+  const fromPhoto = scrapeClientIdFromResidentPhoto(doc);
+  if (fromPhoto) return fromPhoto;
+
+  // 6. Resident-header "Client ID: NNN" span.
+  //    ⚠️ PCC labels the FACILITY MRN "Client ID" in this header, so on many
+  //    facilities this yields an MRN, not a client id (prod, 2026-09-02: across
+  //    42,169 active residents, NO patient's MRN equals their own client id).
+  //    Kept as a last resort — the backend verifies any id we send and falls back
+  //    to the MRN ladder — but every earlier source is preferred for a reason.
   for (const el of doc.querySelectorAll('span[title^="Client ID:"], span[title*="Client ID:"]')) {
     const m = /Client ID:\s*(\d+)/.exec(el.getAttribute('title') || '');
     if (m && _isNumericId(m[1])) return m[1];
@@ -59,7 +114,7 @@ export function scrapeNumericClientIdFromDOM(doc = document) {
   const txtMatch = /Client ID:\s*(\d+)/.exec(doc.body?.innerText || '');
   if (txtMatch && _isNumericId(txtMatch[1])) return txtMatch[1];
 
-  // 6. Last resort: any numeric ESOLclientid anywhere in the page HTML.
+  // 7. Last resort: any numeric ESOLclientid anywhere in the page HTML.
   const m = /ESOLclientid=(\d+)/.exec(doc.body?.innerHTML || '');
   if (m && _isNumericId(m[1])) return m[1];
 
@@ -145,7 +200,18 @@ export function resolveStableAssessmentId(href) {
 export function resolveStablePatientRef(href) {
   const ref = {};
   const numeric = resolveStableClientId(href);
-  if (_isNumericId(numeric)) ref.externalPatientId = numeric;
+  if (_isNumericId(numeric)) {
+    ref.externalPatientId = numeric;
+  } else {
+    // resolveStableClientId() returns null when the URL carries NO ESOLclientid
+    // at all — deliberately, so a resident-LIST page can't latch onto a random
+    // resident from the DOM. The resident-header photo is safe to read even
+    // then: it only exists inside a resident header, so there is no wrong
+    // resident to latch onto. This is the whole ballgame on PCC's newer chart
+    // pages, which carry no client id in the URL.
+    const fromPhoto = scrapeClientIdFromResidentPhoto();
+    if (_isNumericId(fromPhoto)) ref.externalPatientId = fromPhoto;
+  }
   const pccPublicId = scrapePccPublicIdFromDOM();
   if (pccPublicId) ref.pccPublicId = pccPublicId;
   return ref;
@@ -188,6 +254,7 @@ export function scrapePccPublicIdFromDOM(doc = document) {
 if (typeof window !== 'undefined') {
   window.resolveStableClientId = resolveStableClientId;
   window.scrapeNumericClientIdFromDOM = scrapeNumericClientIdFromDOM;
+  window.scrapeClientIdFromResidentPhoto = scrapeClientIdFromResidentPhoto;
   window.resolveStableAssessmentId = resolveStableAssessmentId;
   window.scrapeNumericAssessmentIdFromDOM = scrapeNumericAssessmentIdFromDOM;
   window.resolveStablePatientRef = resolveStablePatientRef;

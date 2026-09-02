@@ -781,7 +781,9 @@ const SettingsLauncher = {
 
 // Managed Care Launcher — dynamic import pattern (same as QMBoardLauncher).
 // Two doors, one panel: the FAB opens it unscoped, the resident-header button
-// passes { patientId, patientName } to scope it to one patient.
+// passes { patientId, pccPublicId, patientName } to scope it to one patient.
+// Both patient anchors ride along: on EID-flipped PCC pages the numeric client
+// id is gone and the resident-header MRN is all we have.
 const ManagedCareLauncher = {
   _overlayEl: null,
   _preactUnmount: null,
@@ -817,6 +819,7 @@ const ManagedCareLauncher = {
           orgSlug: orgSlug || '',
           facilityName: facilityName || '',
           patientId: opts.patientId || null,
+          pccPublicId: opts.pccPublicId || null,
           patientName: opts.patientName || null,
           source: opts.source || 'fab',
           onClose: () => this.close()

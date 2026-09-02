@@ -56,7 +56,9 @@ const FAST_REFRESH_MS = 3000;
 const FAST_WINDOW_MS = 30000;
 const LOCATION_MODE_KEY = 'super-mc-location-mode';
 
-export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken }) => {
+export const RunList = ({ orgSlug, patientId, pccPublicId, currentFacilityName, refreshToken }) => {
+  // Either patient anchor scopes the list; on EID-flipped pages only the MRN exists.
+  const patientScoped = !!(patientId || pccPublicId);
   const [runs, setRuns] = useState(null);       // null = not loaded yet
   const [loadError, setLoadError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -77,10 +79,15 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
     orgSlug,
     mine: mineOnly || undefined,
     patientId: patientId || undefined,
-    facilityName: locationMode === 'this' && !patientId ? currentFacilityName : undefined,
+    pccPublicId: pccPublicId || undefined,
+    // Patient scope carries the facility too: the MRN→patient lookup is
+    // location-scoped server-side (MRNs are unique per facility, not per org),
+    // and a resident's runs all live at the building we're looking at.
+    facilityName:
+      patientScoped || locationMode === 'this' ? currentFacilityName : undefined,
     limit: PAGE_SIZE,
     offset: offset || undefined,
-  }), [orgSlug, mineOnly, patientId, locationMode, currentFacilityName]);
+  }), [orgSlug, mineOnly, patientId, pccPublicId, patientScoped, locationMode, currentFacilityName]);
 
   // force=true bypasses the list TTL cache — used by liveness-driven fetches
   // (polling, tab-focus catch-up, tracker transitions, manual Retry). Mount
@@ -169,7 +176,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
   }
   if (runs === null) return <ListSkeleton />;
 
-  const showFacility = !patientId && locationMode === 'all';
+  const showFacility = !patientScoped && locationMode === 'all';
 
   // Client-side filters over the loaded page — search, status, location.
   const locationNames = showFacility
@@ -198,7 +205,7 @@ export const RunList = ({ orgSlug, patientId, currentFacilityName, refreshToken 
 
   return (
     <div className="mc-run-list">
-      {!patientId && (
+      {!patientScoped && (
         <div className="mc-toolbar">
           <div className="mc-toggle">
             <button
