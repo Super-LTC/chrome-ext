@@ -1,3 +1,5 @@
+import { pccIdentityHeaders } from './pcc-identity-headers.js';
+
 // Background service worker for Super LTC Chrome Extension
 // Handles cross-origin requests and authentication
 
@@ -21,17 +23,41 @@ const CONFIG = {
 // once with the same token before clearing storage. Safe because 401 means
 // the request was rejected at auth time → no side effects → retry is idempotent
 // for any HTTP method.
+/**
+ * Report WHICH PointClickCare account is driving this request, so the backend
+ * can refuse survey logins outright. The staleness rule and the compatibility
+ * guarantees live in ./pcc-identity-headers.js, which is pure and tested.
+ *
+ * Best-effort by construction: a storage read must never take down an API
+ * call, and this is a safety net beneath building-level survey mode, not the
+ * control itself.
+ */
+async function livePccIdentityHeaders() {
+  try {
+    const { superPccIdentity, superPccCurrent } = await chrome.storage.local.get([
+      'superPccIdentity',
+      'superPccCurrent',
+    ]);
+    return pccIdentityHeaders(superPccIdentity, superPccCurrent);
+  } catch {
+    return {};
+  }
+}
+
 async function apiRequest(endpoint, options = {}) {
   const { authToken } = await chrome.storage.local.get('authToken');
   if (!authToken) {
     throw new Error('Not authenticated');
   }
 
+  const pccHeaders = await livePccIdentityHeaders();
+
   const doFetch = () => fetch(`${CONFIG.API_BASE}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${authToken}`,
+      ...pccHeaders,
       ...options.headers,
     },
   });

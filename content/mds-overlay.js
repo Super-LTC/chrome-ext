@@ -723,6 +723,18 @@ async function initSuperOverlay() {
     // EID-migration diagnosability: log what the backend received / resolved and
     // cache the numeric id before we branch into Run-it / notice handling.
     logMdsResolutionDiagnostics(error, params);
+    // Survey mode (or a PCC survey login): render NOTHING. Not a notice, not a
+    // "Run it" card, not a spinner — a banner saying we hid something is worse
+    // than the recommendations it replaced, because it tells a surveyor there
+    // was something to hide. Checked before every other branch so no fallback
+    // can draw over it.
+    if (error?.body?.code === 'SURVEY_MODE') {
+      SuperLoadingStatus.hide();
+      // The beacon still fires: it is how we would notice an overlay trying to
+      // render somewhere it shouldn't, and it carries no clinical content.
+      sendOverlayBeacon({ section: params?.section, orgSlug: params?.orgSlug, facilityName: params?.facilityName, outcome: 'suppressed' });
+      return;
+    }
     // A solve is already in flight for this assessment → show live progress and
     // poll to completion, instead of offering "Run it" (which would re-trigger
     // the running solve). See MdsRunNow.runningState / superapp PR #767.
