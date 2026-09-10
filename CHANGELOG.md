@@ -4,7 +4,10 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.75** was zipped for Chrome Web Store submission on
+> **Store note:** **v1.0.76** was zipped for Chrome Web Store submission on
+> 2026-09-02 (`super-ltc-store.zip`) — it carries the Clinical Update
+> patient-reference fix (#92): the wizard was sending the facility MRN as the
+> PCC client id and failing on every submit. Before that, **v1.0.75** was zipped on
 > 2026-09-01 (`super-ltc-store.zip`) — it carries the 24-hour report's per-user
 > category filters (#91), the Functional Decline therapy/runway/payer parity
 > pass (#90), the neutral `not_expected` care-plan shield (#87), and the FAB
@@ -32,6 +35,74 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.76] — 2026-09-02
+
+One merged PR (#92) on top of 1.0.75, and it is a customer-reported break: the
+Clinical Update button — the entry point to the managed-care/recert wizard — has
+been failing on every submit for the residents whose chart URL doesn't carry a
+client id. Three commits: stop sending the wrong number, find the right one, and
+keep the resident's name out of a URL while doing it.
+
+### Fixed
+- **"Patient not found for the provided external id" on every Clinical Update
+  submit** (#92). Reported on Lilac / Ventura, 2026-09-02. The Clinical Update
+  button was the one patient-anchored surface that never adopted the shared
+  patient-ref ladder: it called `resolveStableClientId()`, which returns null
+  outright when the URL carries no `ESOLclientid`, and then read the resident
+  header's "Client ID: NNN" span as if that were the client id. It isn't — PCC
+  labels the FACILITY MRN "Client ID" in that header. The value is numeric, so
+  it passed every shape check and went out as `externalPatientId`, matching no
+  patient. Prod the same day settles that it never could: across 42,169 active
+  residents with a numeric MRN, ZERO have an MRN equal to their own PCC client
+  id. `getPatientFromHeader()` now uses `resolveStablePatientRef()` like every
+  other surface and returns both anchors; the span fallback survives only for
+  the case where it might still be right, a header printing something other
+  than the MRN. Both anchors ride launcher → panel → wizard → API, and
+  `pccPublicId` + `facilityName` now reach create, list, form-data and
+  open-create-link so the backend can resolve by MRN, location-scoped, when the
+  numeric id is gone. Panel scoping keys off "either anchor present" rather
+  than the numeric id, so the New button and the patient-scoped run list still
+  appear on flipped pages.
+
+### Added
+- **The client id read off the resident header photo** (#92). The Ventura chart
+  settles what that page actually exposes: no `ESOLclientid` in the URL at all,
+  and the only number in the resident header is `(11006)` — the MRN, wearing
+  PCC's "Client ID" label. But the id *is* on the page. PCC serves the header
+  photo as `<numeric client id>.jpg`; on that chart `21068632.jpg`, which is
+  exactly that patient's stored `external_patient_id` in prod. New
+  `scrapeClientIdFromResidentPhoto()` reads it and sits ABOVE the "Client ID:"
+  span in the shared scraper, so every surface already on the ladder — MDS
+  Run-it, verify, ARD recommendation — now gets a real id where it used to get
+  an MRN. `resolveStablePatientRef()` tries the photo when the URL carries no
+  client id at all. That case used to return null by design — don't guess a
+  resident from the DOM, a LIST page would latch onto a random one — and the
+  rule still holds: the scrape is scoped to the resident header, which a list
+  page doesn't have, and requires 6+ digits, so it can never be an MRN (4–5).
+  Both guards are tested, including the wound-thumbnail and list-page false
+  positives.
+- **Resident name as the last-resort anchor** (#92). The wizard sends the
+  resident-header name behind both ids. The server matches it within the
+  facility and refuses on ambiguity or on a near-miss surname — it will not
+  guess between two residents.
+
+### Changed
+- **The resident's name no longer rides in a GET URL** (#92). `formData()` is a
+  GET, so every param lands in the URL — access logs, proxies, browser history.
+  A name is directly re-identifying in a way an opaque client id isn't, so it
+  was dropped from that call. It still goes in the POST body on create, where
+  the name tier is actually needed; the prefill resolves off the ids, which
+  covers every case seen so far.
+
+### Known, not fixed here
+- The photo-filename read is a DOM contract with PCC, not an API: if PCC ever
+  serves header photos under a different name, the ladder falls back to the URL
+  and span reads it had before, silently.
+- The nurse's edited care-plan focus *text* still doesn't persist (carried over
+  from 1.0.72, 1.0.74 and 1.0.75).
+- Nothing verifies extension payload keys against backend routes at build time
+  (carried over from 1.0.74 and 1.0.75).
 
 ## [1.0.75] — 2026-09-01
 

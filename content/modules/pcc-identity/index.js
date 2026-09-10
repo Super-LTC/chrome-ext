@@ -12,6 +12,7 @@
 import { getEsolUserId, parseLoginName, isValidPccUsername, shouldCapture } from './capture.js';
 
 const STORAGE_KEY = 'superPccIdentity';
+const CURRENT_KEY = 'superPccCurrent';
 const PROFILE_PATH = '/home/editmyprofile.jsp';
 const ENDPOINT = '/api/extension/identity/pcc-username';
 
@@ -95,6 +96,15 @@ export function initPccIdentityCapture() {
     try {
       const esolUserId = getEsolUserId(document);
       if (!esolUserId) return { posted: false, reason: 'no-user-chrome' };
+
+      // Publish WHICH PCC account is on screen right now. Free (already parsed
+      // from the DOM, no fetch) and written on every boot, so the background
+      // worker can tell whether the cached username still describes the live
+      // session before it puts that name on a request header. Without this,
+      // an account switch would keep sending the previous nurse's username
+      // until the weekly re-capture caught up — attributing a surveyor's
+      // session to her, which is the exact opposite of what we need.
+      await chrome.storage.local.set({ [CURRENT_KEY]: { esolUserId } });
 
       const { user } = await chrome.storage.local.get('user');
       // Not signed in to Super yet — there's no one to bind the username to.
