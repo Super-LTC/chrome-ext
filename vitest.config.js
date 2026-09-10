@@ -12,7 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom', // DOMParser + Document for the MDS section parser
-    include: ['content/**/__tests__/**/*.test.js'],
+    include: ['{content,background}/**/__tests__/**/*.test.js'],
     globals: false,
     // Pinned to a NEGATIVE-offset zone on purpose. Several screens render
     // date-only ISO strings (`2026-06-25`), which parse as UTC midnight — format
