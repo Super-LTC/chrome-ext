@@ -231,6 +231,33 @@ function appendMDSContextParams(params) {
   return params;
 }
 
+// Set `externalAssessmentId` on a URLSearchParams — but ONLY when we have a
+// stable id the backend can actually match.
+//
+// PCC's flipped MDS pages hand out `EID_…` render tokens: ephemeral,
+// login-bound, never persisted, so an id lookup on one is guaranteed to miss.
+// Forwarding one is worse than sending nothing: it reads as "we have an id" to
+// the backend, which then withholds its id-less resolution tiers (the only ones
+// that can reach a LOCKED assessment) and answers ASSESSMENT_NOT_FOUND. That is
+// the Verify-says-yes / View-evidence-says-no split nurses were hitting.
+//
+// So: pass a numeric candidate straight through; on an EID (or nothing), try to
+// recover the numeric id from the page; otherwise set nothing and let the
+// context params (pccPublicId + ARD + type) resolve it. Mirrors the rule
+// verify-api.js already applies to its POST body.
+function appendAssessmentIdParam(params, candidate) {
+  const id = candidate == null ? '' : String(candidate).trim();
+  if (/^\d+$/.test(id)) {
+    params.set('externalAssessmentId', id);
+    return params;
+  }
+  const recovered = resolveStableAssessmentId();
+  if (/^\d+$/.test(String(recovered || ''))) {
+    params.set('externalAssessmentId', String(recovered));
+  }
+  return params;
+}
+
 // Same fields, but for POST JSON bodies. Returns a plain object — caller
 // spreads it into the body.
 function getMDSContextBodyFields() {
@@ -308,5 +335,6 @@ window.getCurrentParams = getCurrentParams;
 window.getChatContext = getChatContext;
 window.getPCCAssessmentMetaFromDOM = getPCCAssessmentMetaFromDOM;
 window.appendMDSContextParams = appendMDSContextParams;
+window.appendAssessmentIdParam = appendAssessmentIdParam;
 window.getMDSContextBodyFields = getMDSContextBodyFields;
 window.scrapeClientIdFromDOM = scrapeClientIdFromDOM;

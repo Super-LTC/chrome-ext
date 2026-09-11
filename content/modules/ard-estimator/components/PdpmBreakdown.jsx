@@ -12,7 +12,9 @@ import { NtaProgressBar } from './NtaProgressBar.jsx';
 
 export async function fetchItemDetail(itemCode, assessmentId, facilityName, orgSlug, categoryKey) {
   const params = new URLSearchParams({ facilityName, orgSlug });
-  if (assessmentId) params.set('externalAssessmentId', assessmentId);
+  // NUMERIC ids only — an EID_ token suppresses the backend's id-less tiers and
+  // 404s locked assessments. See appendAssessmentIdParam in super-menu/context.js.
+  window.appendAssessmentIdParam?.(params, assessmentId);
   // I8000 (and similar bucket items) require categoryKey to disambiguate
   // multiple sub-items that share the same MDS code (e.g. NTA:18 vs NTA:26).
   if (categoryKey) params.set('categoryKey', categoryKey);

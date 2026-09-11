@@ -91,6 +91,40 @@ describe('pccPublicId ride-along on the MDS context chokepoints', () => {
   });
 });
 
+// Sep 2026 — "View evidence → Assessment not found" on a Verify recommendation.
+// The panel forwarded the page's `EID_…` render token as externalAssessmentId.
+// The backend can never match an EID, and treats "an id was supplied" as a
+// reason to withhold its id-less resolution tiers — the only ones that reach a
+// LOCKED (Export Ready / Completed) assessment. Result: Verify graded the row,
+// the evidence drawer 404'd on the same row.
+describe('appendAssessmentIdParam() — numeric-only externalAssessmentId', () => {
+  const NUMERIC_ASSESS = '3120458';
+  const EID_ASSESS = 'EID_0q3s5dv7t3MJYJQQ';
+
+  afterEach(() => { window.history.replaceState({}, '', '/'); });
+
+  it('passes a numeric candidate straight through', () => {
+    const params = window.appendAssessmentIdParam(new URLSearchParams(), NUMERIC_ASSESS);
+    expect(params.get('externalAssessmentId')).toBe(NUMERIC_ASSESS);
+  });
+
+  it('never forwards an EID_ token', () => {
+    const params = window.appendAssessmentIdParam(new URLSearchParams(), EID_ASSESS);
+    expect(params.has('externalAssessmentId')).toBe(false);
+  });
+
+  it('recovers the numeric id from the page when the candidate is an EID', () => {
+    document.body.innerHTML = `<a onclick="toggleToolsWindow(this, '${NUMERIC_ASSESS}', 'I')">t</a>`;
+    const params = window.appendAssessmentIdParam(new URLSearchParams(), EID_ASSESS);
+    expect(params.get('externalAssessmentId')).toBe(NUMERIC_ASSESS);
+  });
+
+  it('sets nothing when there is no id at all — the context params resolve it', () => {
+    const params = window.appendAssessmentIdParam(new URLSearchParams(), null);
+    expect(params.has('externalAssessmentId')).toBe(false);
+  });
+});
+
 describe('getMDSContext() scope detection on flipped pages', () => {
   afterEach(() => { window.history.replaceState({}, '', '/'); });
 

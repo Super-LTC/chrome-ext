@@ -29,11 +29,12 @@ export function useItemDetail(mdsItem, categoryKey, context) {
         const derivedCategoryKey = colonIdx >= 0 ? mdsItem.slice(colonIdx + 1) : null;
         const finalCategoryKey = categoryKey || derivedCategoryKey;
 
-        const itemParams = new URLSearchParams({
-          externalAssessmentId: context.assessmentId,
-          facilityName,
-          orgSlug,
-        });
+        const itemParams = new URLSearchParams({ facilityName, orgSlug });
+        // NUMERIC ids only. An `EID_…` token can never match a stored id, and
+        // sending one suppresses the backend's id-less tiers — the only ones
+        // that reach a locked (Export Ready / Completed) assessment. That was
+        // the "View evidence → Assessment not found" bug on flipped pages.
+        window.appendAssessmentIdParam?.(itemParams, context.assessmentId);
         if (finalCategoryKey) itemParams.set('categoryKey', finalCategoryKey);
         window.appendMDSContextParams?.(itemParams);
         const endpoint = `/api/extension/mds/items/${encodeURIComponent(apiCode)}?${itemParams}`;

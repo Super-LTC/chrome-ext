@@ -1291,11 +1291,10 @@ async function fetchMDSItem(itemCode, categoryKey) {
     throw new Error('No assessment context available');
   }
 
-  const params = new URLSearchParams({
-    externalAssessmentId: assessmentId,
-    facilityName,
-    orgSlug
-  });
+  const params = new URLSearchParams({ facilityName, orgSlug });
+  // NUMERIC ids only — an EID_ token suppresses the backend's id-less tiers and
+  // 404s locked assessments. See appendAssessmentIdParam in super-menu/context.js.
+  window.appendAssessmentIdParam?.(params, assessmentId);
 
   // For I8000 items, use base code + categoryKey param
   // categoryKey can be passed explicitly, or parsed from composite key like "I8000:NTA:18"
