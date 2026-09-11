@@ -4,7 +4,13 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.76** was zipped for Chrome Web Store submission on
+> **Store note:** **v1.0.77** was zipped for Chrome Web Store submission on
+> 2026-09-11 (`super-ltc-store.zip`) — it carries the survey-login block (#96):
+> every API request now reports the live PCC login so the backend can refuse
+> traffic from state-survey accounts, and the MDS overlay renders nothing when
+> it does; plus the evidence-drawer fix (#98) that stops an `EID_` render token
+> from going out as `externalAssessmentId` and 404ing "View evidence" on locked
+> assessments. Before that, **v1.0.76** was zipped on
 > 2026-09-02 (`super-ltc-store.zip`) — it carries the Clinical Update
 > patient-reference fix (#92): the wizard was sending the facility MRN as the
 > PCC client id and failing on every submit. Before that, **v1.0.75** was zipped on
@@ -35,6 +41,83 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.77] — 2026-09-11
+
+Two merged PRs (#96, #98) on top of 1.0.76. One is a safety control prompted by
+a survey: state surveyors at Heritage Healthcare of Euclid read the MDS
+overlay's recommendations off a workstation this extension was signed into
+(2026-09-09). The other is the extension-side half of the "View evidence →
+Assessment not found" fix on Super Verify revenue recommendations.
+
+### Added
+- **Every API request now reports who is logged into PointClickCare** (#96).
+  The PCC username used to be captured once per user/org/week and posted to a
+  single endpoint for MDS authorship; it never rode the request path, so the
+  backend had no way to tell a nurse's session from a surveyor's. New
+  `background/pcc-identity-headers.js` decides which identity headers a request
+  carries and `apiRequest` attaches them to every call — roughly a hundred
+  backend routes covered without touching any of them. `chrome.storage.local`
+  is per browser PROFILE, so the cached username belongs to whoever used PCC
+  last; on every page boot the content script now publishes the live
+  `esolUserId` off the DOM, and a mismatch with the cached binding sends NO
+  username rather than the wrong person's. "Unknown" is a safe answer; "the
+  nurse" when it's the surveyor is the exact failure the block exists to catch.
+  That leaves a one-page-load window after an account switch, marked with
+  `X-PCC-Identity-Pending` so it is countable; the backend does not refuse on
+  it, because that would block every shared workstation on every switch.
+  Building-level survey mode is the primary control and covers that window.
+  Headers are purely additive — an older backend ignores them, a newer one
+  treats a missing username as no opinion — so either side can ship or revert
+  alone.
+- **The MDS overlay renders nothing on a `SURVEY_MODE` refusal** (#96). Checked
+  before every other branch so no fallback can draw over it: not a notice, not
+  a "Run it" card, not a spinner. A banner saying we hid something tells a
+  surveyor there was something to hide. The beacon still fires — it carries no
+  clinical content and is how we would notice an overlay trying to render
+  where it should not. The wire contract (the code, the header names, the
+  branch order) is pinned by tests on both repos; moving the check below the
+  Run-it branch turns the suite red.
+
+### Fixed
+- **"View evidence" 404'd with "Assessment not found" on locked assessments**
+  (#98). Paired with the superltc-side fix for the same report on a Super
+  Verify revenue recommendation. The evidence drawer (CodingSection →
+  useItemDetail) passed the page's raw assessment id straight through. On an
+  EID-flipped page that is an `EID_…` render token: ephemeral, login-bound,
+  never persisted, so it can never match a stored id — and worse, the backend
+  reads "an id was supplied" as a reason to withhold its id-less resolution
+  tiers, the only ones that reach a LOCKED (Export Ready / Completed)
+  assessment. `verify-api.js` already applied the numeric-only rule to its POST
+  body, which is why Verify worked on the same page the drawer failed on. New
+  `appendAssessmentIdParam()` sits next to the other MDS context helpers and
+  the three item-detail GET builders route through it: a numeric candidate
+  passes, an EID falls back to `resolveStableAssessmentId()`, and when nothing
+  numeric exists it sets nothing at all, letting `pccPublicId` + ARD + type do
+  the work they were added for. The backend fix is what actually unblocks
+  locked assessments; this stops the extension from suppressing it.
+
+### Changed
+- `vitest.config.js` now also picks up `background/**/__tests__` so the
+  identity-header module could be tested at all (#96).
+
+### Demo site only (not in the store bundle)
+- 24-hour report demo gained the "My filters" route with muted subcategories
+  partitioned into `hiddenFindings`, per-weekday report intervals on the
+  settings PATCH, and a stand-in PCC progress-note page so the "Add progress
+  note" popup loop closes end to end. Demo bundles rebuilt.
+
+### Known, not fixed here
+- The one-page-load window after a PCC account switch on a shared workstation
+  is countable (`X-PCC-Identity-Pending`) but not blocked client-side;
+  building-level survey mode is what covers it (#96).
+- #98 needs the paired superltc backend change deployed to actually resolve
+  locked assessments; without it the drawer still 404s, just with a legible
+  `received:{…}` echo instead of a suppressed lookup.
+- The nurse's edited care-plan focus *text* still doesn't persist (carried over
+  from 1.0.72 through 1.0.76).
+- Nothing verifies extension payload keys against backend routes at build time
+  (carried over from 1.0.74 through 1.0.76).
 
 ## [1.0.76] — 2026-09-02
 
