@@ -934,6 +934,13 @@ export function buildGgDetailFor(patientId) {
 // ── 24-Hour Report fixtures ─────────────────────────────────────────────────
 // List shape: { timezone, locationId, reports: [{ id, reportDate, status, counts }] }
 // Day shape:  { report: { id, reportDate, status, counts, findings: [...] } }
+//
+// category / subcategory use the backend's REAL taxonomy keys (see
+// DEMO_24HR_FILTER_CATEGORIES below) so the category dropdown, the "My filters"
+// popover, and the hidden-by-your-filters bar behave exactly as they do against
+// the live API. `pccClientId` is what gates "Add progress note" on a finding —
+// the real route sets it only on a confident MRN match, so every demo finding
+// carries one.
 
 const DAYS = ['2026-04-24', '2026-04-23', '2026-04-22', '2026-04-21', '2026-04-20', '2026-04-19', '2026-04-18'];
 
@@ -941,6 +948,7 @@ function finding(o) {
   return {
     id: o.id,
     patientId: o.patientId,
+    pccClientId: o.patientId,
     patientName: o.patientName,
     room: o.room,
     severity: o.severity,
@@ -954,44 +962,134 @@ function finding(o) {
 
 const FINDINGS_BY_DAY = {
   '2026-04-24': [
-    finding({ id: 'f-24-1',  patientId: 'demo-p-1003', patientName: 'Novak, Eleanor',  room: '312-A', severity: 'critical', category: 'Fall',         subcategory: 'Unwitnessed fall', finding: 'Unwitnessed floor-find at 0412', narrative: 'Resident found on floor beside bed; no LOC reported. Head-to-toe negative for major injury. Vitals stable. Neuro checks ×24h ordered.', timestamp: '2026-04-24T04:12:00Z' }),
-    finding({ id: 'f-24-2',  patientId: 'demo-p-1001', patientName: 'Doe, Jane',       room: '308-B', severity: 'high',     category: 'GG decline',   subcategory: 'Transfers',        finding: 'Toilet Transfer: 4 → 2 avg on day shift', narrative: 'Three consecutive shifts charting max-assist for toileting; PT to reassess.', timestamp: '2026-04-24T07:45:00Z' }),
-    finding({ id: 'f-24-3',  patientId: 'demo-p-2001', patientName: 'Cho, Lillian',    room: '205',   severity: 'high',     category: 'Infection',    subcategory: 'UTI — new',         finding: 'Positive UA; culture pending',                   narrative: 'Cloudy, foul-smelling urine. Leuk est large, nitrite positive. C&S sent. MD notified — awaiting order.', timestamp: '2026-04-24T02:30:00Z' }),
-    finding({ id: 'f-24-4',  patientId: 'demo-p-5001', patientName: 'Simmons, Gerald', room: '216',   severity: 'medium',   category: 'Behavior',     subcategory: 'Verbal agitation', finding: 'Two episodes of loud verbal agitation overnight', narrative: 'Redirected with 1:1 reassurance. No physical aggression. Care plan updated.', timestamp: '2026-04-24T01:15:00Z' }),
-    finding({ id: 'f-24-5',  patientId: 'demo-p-1002', patientName: 'Reyes, Marcus',   room: '214-A', severity: 'medium',   category: 'Pain',         subcategory: 'New onset',        finding: 'Reports 6/10 hip pain with ambulation', narrative: 'No acute signs on exam. PRN acetaminophen given with effect. PT informed.', timestamp: '2026-04-24T06:50:00Z' }),
-    finding({ id: 'f-24-6',  patientId: 'demo-p-8001', patientName: 'Hollis, Margaret', room: '119',  severity: 'medium',   category: 'Skin',         subcategory: 'Pressure ulcer',   finding: 'Stage 2 sacral PU — unchanged', narrative: 'Wound re-measured; base clean, edges defined, no tunneling. Continue current orders.', timestamp: '2026-04-24T05:20:00Z' }),
-    finding({ id: 'f-24-7',  patientId: 'demo-p-7001', patientName: 'Crane, Isobel',   room: '222',   severity: 'low',      category: 'Mood',         subcategory: 'Tearful episode',  finding: 'Tearful during AM care',                          narrative: 'Verbalized grief around recent family news. Social services notified.', timestamp: '2026-04-24T08:10:00Z' }),
-    finding({ id: 'f-24-8',  patientId: 'demo-p-9001', patientName: 'Carver, Benjamin', room: '110',  severity: 'low',      category: 'Continence',   subcategory: 'New incontinence', finding: 'Two incontinence episodes on night shift',        narrative: 'Toileting schedule adjusted to Q2h. No s/s UTI at present.', timestamp: '2026-04-24T03:40:00Z' }),
+    finding({ id: 'f-24-1',  patientId: 'demo-p-1003', patientName: 'Novak, Eleanor',  room: '312-A', severity: 'critical', category: 'falls_safety',   subcategory: 'fall_event',        finding: 'Unwitnessed floor-find at 0412', narrative: 'Resident found on floor beside bed; no LOC reported. Head-to-toe negative for major injury. Vitals stable. Neuro checks ×24h ordered.', timestamp: '2026-04-24T04:12:00Z' }),
+    finding({ id: 'f-24-2',  patientId: 'demo-p-1001', patientName: 'Doe, Jane',       room: '308-B', severity: 'high',     category: 'vitals_labs',    subcategory: 'abnormal_vitals',   finding: 'Orthostatic drop to 86/50 with dizziness on standing', narrative: 'BP 118/70 lying → 86/50 standing during AM transfer. Lisinopril held, MD notified. PT to reassess transfers before next therapy session.', timestamp: '2026-04-24T07:45:00Z' }),
+    finding({ id: 'f-24-3',  patientId: 'demo-p-2001', patientName: 'Cho, Lillian',    room: '205',   severity: 'high',     category: 'other_clinical', subcategory: 'infection',         finding: 'Positive UA; culture pending',                   narrative: 'Cloudy, foul-smelling urine. Leuk est large, nitrite positive. C&S sent. MD notified — awaiting order.', timestamp: '2026-04-24T02:30:00Z' }),
+    finding({ id: 'f-24-4',  patientId: 'demo-p-5001', patientName: 'Simmons, Gerald', room: '216',   severity: 'medium',   category: 'behavioral',     subcategory: 'agitation',         finding: 'Two episodes of loud verbal agitation overnight', narrative: 'Redirected with 1:1 reassurance. No physical aggression. Care plan updated.', timestamp: '2026-04-24T01:15:00Z' }),
+    finding({ id: 'f-24-5',  patientId: 'demo-p-1002', patientName: 'Reyes, Marcus',   room: '214-A', severity: 'medium',   category: 'other_clinical', subcategory: 'pain',              finding: 'Reports 6/10 hip pain with ambulation', narrative: 'No acute signs on exam. PRN acetaminophen given with effect. PT informed.', timestamp: '2026-04-24T06:50:00Z' }),
+    finding({ id: 'f-24-6',  patientId: 'demo-p-8001', patientName: 'Hollis, Margaret', room: '119',  severity: 'medium',   category: 'skin_wounds',    subcategory: 'pressure_injury',   finding: 'Stage 2 sacral PU — unchanged', narrative: 'Wound re-measured; base clean, edges defined, no tunneling. Continue current orders.', timestamp: '2026-04-24T05:20:00Z' }),
+    finding({ id: 'f-24-7',  patientId: 'demo-p-7001', patientName: 'Crane, Isobel',   room: '222',   severity: 'low',      category: 'behavioral',     subcategory: 'psychiatric',       finding: 'Tearful during AM care',                          narrative: 'Verbalized grief around recent family news. Social services notified.', timestamp: '2026-04-24T08:10:00Z' }),
+    finding({ id: 'f-24-8',  patientId: 'demo-p-9001', patientName: 'Carver, Benjamin', room: '110',  severity: 'low',      category: 'medications',    subcategory: 'med_availability',  finding: 'Tamsulosin not available — 2 doses missed',       narrative: 'Pharmacy notified at 2100; delivery expected by 1400 today. MD aware, no interim order.', timestamp: '2026-04-24T03:40:00Z' }),
   ],
   '2026-04-23': [
-    finding({ id: 'f-23-1',  patientId: 'demo-p-4001', patientName: 'Blanchard, Martha', room: '228', severity: 'critical', category: 'Fall',         subcategory: 'Witnessed fall',  finding: 'Witnessed fall — no injury',                    narrative: 'Resident slid off chair while transferring; caught by CNA, no impact. Reinforced call-light use.', timestamp: '2026-04-23T14:22:00Z' }),
-    finding({ id: 'f-23-2',  patientId: 'demo-p-2002', patientName: 'Aldridge, Robert',  room: '207', severity: 'high',     category: 'Infection',    subcategory: 'UTI — worsening',   finding: 'Increasing confusion + flank pain',             narrative: 'MD notified; UA ordered. ABX to start pending culture.', timestamp: '2026-04-23T09:05:00Z' }),
-    finding({ id: 'f-23-3',  patientId: 'demo-p-6001', patientName: 'Grisham, Henry',    room: '121', severity: 'high',     category: 'Nutrition',    subcategory: 'Weight decline',    finding: '5.5% weight loss over 42d',                     narrative: 'Dietitian consulted; fortified meals + ensure BID started.', timestamp: '2026-04-23T12:00:00Z' }),
-    finding({ id: 'f-23-4',  patientId: 'demo-p-1002', patientName: 'Reyes, Marcus',     room: '214-A', severity: 'medium', category: 'GG decline',   subcategory: 'Ambulation',       finding: 'Walk 50 Feet: 4 → 2 on day shift',              narrative: 'PT reports steady decline over 10 days; equipment reassessment scheduled.', timestamp: '2026-04-23T15:30:00Z' }),
-    finding({ id: 'f-23-5',  patientId: 'demo-p-1005', patientName: 'Shankar, Priya',    room: '104', severity: 'low',      category: 'Behavior',     subcategory: 'Restlessness',     finding: 'Restlessness after supper',                     narrative: 'Redirected with music therapy; settled within 15 min.', timestamp: '2026-04-23T19:10:00Z' }),
-    finding({ id: 'f-23-6',  patientId: 'demo-p-7002', patientName: 'Bateson, Clifford', room: '223', severity: 'low',      category: 'Mood',         subcategory: 'Withdrawn',        finding: 'Declined group activity',                       narrative: 'Verbalized fatigue. No new mood complaints elicited.', timestamp: '2026-04-23T16:40:00Z' }),
+    finding({ id: 'f-23-1',  patientId: 'demo-p-4001', patientName: 'Blanchard, Martha', room: '228', severity: 'critical', category: 'falls_safety',   subcategory: 'fall_event',        finding: 'Witnessed fall — no injury',                    narrative: 'Resident slid off chair while transferring; caught by CNA, no impact. Reinforced call-light use.', timestamp: '2026-04-23T14:22:00Z' }),
+    finding({ id: 'f-23-2',  patientId: 'demo-p-2002', patientName: 'Aldridge, Robert',  room: '207', severity: 'high',     category: 'other_clinical', subcategory: 'infection',         finding: 'Increasing confusion + flank pain',             narrative: 'MD notified; UA ordered. ABX to start pending culture.', timestamp: '2026-04-23T09:05:00Z' }),
+    finding({ id: 'f-23-3',  patientId: 'demo-p-6001', patientName: 'Grisham, Henry',    room: '121', severity: 'high',     category: 'other_clinical', subcategory: 'gi_nutrition',      finding: '5.5% weight loss over 42d',                     narrative: 'Dietitian consulted; fortified meals + ensure BID started.', timestamp: '2026-04-23T12:00:00Z' }),
+    finding({ id: 'f-23-4',  patientId: 'demo-p-1002', patientName: 'Reyes, Marcus',     room: '214-A', severity: 'medium', category: 'skin_wounds',    subcategory: 'skin_tear',         finding: 'Skin tear L forearm during transfer',           narrative: '2cm × 1cm skin tear, flap approximated, steri-strips applied. No active bleeding. Incident report filed.', timestamp: '2026-04-23T15:30:00Z' }),
+    finding({ id: 'f-23-5',  patientId: 'demo-p-1005', patientName: 'Shankar, Priya',    room: '104', severity: 'low',      category: 'behavioral',     subcategory: 'agitation',         finding: 'Restlessness after supper',                     narrative: 'Redirected with music therapy; settled within 15 min.', timestamp: '2026-04-23T19:10:00Z' }),
+    finding({ id: 'f-23-6',  patientId: 'demo-p-7002', patientName: 'Bateson, Clifford', room: '223', severity: 'low',      category: 'behavioral',     subcategory: 'care_refusal',      finding: 'Declined group activity',                       narrative: 'Verbalized fatigue. No new mood complaints elicited.', timestamp: '2026-04-23T16:40:00Z' }),
   ],
   '2026-04-22': [
-    finding({ id: 'f-22-1',  patientId: 'demo-p-1001', patientName: 'Doe, Jane',         room: '308-B', severity: 'high',   category: 'GG decline',   subcategory: 'Ambulation',       finding: 'Walk 10 Feet: 3 → 2',                           narrative: 'Required contact guard assist for short distance. Had independently ambulated 2 weeks prior.', timestamp: '2026-04-22T11:00:00Z' }),
-    finding({ id: 'f-22-2',  patientId: 'demo-p-3001', patientName: 'Okafor, Samuel',    room: '302',   severity: 'medium', category: 'Urinary',      subcategory: 'Foley flow',       finding: 'Decreased Foley output × 4h',                   narrative: 'Bladder scan 120mL. Flushed per protocol with good return.', timestamp: '2026-04-22T22:05:00Z' }),
-    finding({ id: 'f-22-3',  patientId: 'demo-p-5002', patientName: 'Vega, Alma',        room: '218',   severity: 'medium', category: 'Behavior',     subcategory: 'Refused meds',      finding: 'Refused evening meds',                          narrative: 'Offered with snack; accepted 2nd attempt.', timestamp: '2026-04-22T20:45:00Z' }),
-    finding({ id: 'f-22-4',  patientId: 'demo-p-8001', patientName: 'Hollis, Margaret',  room: '119',   severity: 'low',    category: 'Skin',         subcategory: 'Routine',           finding: 'Skin check documented',                         narrative: 'No new findings. Continue pressure-relief schedule.', timestamp: '2026-04-22T09:15:00Z' }),
+    finding({ id: 'f-22-1',  patientId: 'demo-p-1001', patientName: 'Doe, Jane',         room: '308-B', severity: 'high',   category: 'vitals_labs',    subcategory: 'glucose_abnormal',  finding: 'FSBS 312 before breakfast',                     narrative: 'Sliding-scale insulin given per order; recheck at 2h = 248. No s/s hypoglycemia. Intake reviewed with dietary.', timestamp: '2026-04-22T11:00:00Z' }),
+    finding({ id: 'f-22-2',  patientId: 'demo-p-3001', patientName: 'Okafor, Samuel',    room: '302',   severity: 'medium', category: 'other_clinical', subcategory: 'device_issue',      finding: 'Decreased Foley output × 4h',                   narrative: 'Bladder scan 120mL. Flushed per protocol with good return.', timestamp: '2026-04-22T22:05:00Z' }),
+    finding({ id: 'f-22-3',  patientId: 'demo-p-5002', patientName: 'Vega, Alma',        room: '218',   severity: 'medium', category: 'medications',    subcategory: 'medication_refusal', finding: 'Refused evening meds',                         narrative: 'Offered with snack; accepted 2nd attempt.', timestamp: '2026-04-22T20:45:00Z' }),
+    finding({ id: 'f-22-4',  patientId: 'demo-p-8001', patientName: 'Hollis, Margaret',  room: '119',   severity: 'low',    category: 'skin_wounds',    subcategory: 'pressure_injury',   finding: 'Weekly skin check — no new findings',           narrative: 'Sacral PU unchanged. Continue pressure-relief schedule.', timestamp: '2026-04-22T09:15:00Z' }),
   ],
   '2026-04-21': [
-    finding({ id: 'f-21-1',  patientId: 'demo-p-1003', patientName: 'Novak, Eleanor',    room: '312-A', severity: 'high',   category: 'GG decline',   subcategory: 'Transfers',        finding: 'Sit to Stand: 3 → 1',                            narrative: 'Required max assist for sit-to-stand after period of independence.', timestamp: '2026-04-21T08:30:00Z' }),
-    finding({ id: 'f-21-2',  patientId: 'demo-p-5003', patientName: 'Pritchard, Vance',  room: '225',   severity: 'medium', category: 'Medication',   subcategory: 'Antipsychotic',     finding: 'New Quetiapine order',                           narrative: 'Started 25mg PO QHS for sleep disturbance — GDR attempt planned in 2 weeks.', timestamp: '2026-04-21T13:10:00Z' }),
+    finding({ id: 'f-21-1',  patientId: 'demo-p-1003', patientName: 'Novak, Eleanor',    room: '312-A', severity: 'high',   category: 'other_clinical', subcategory: 'neuro_change',      finding: 'New R-sided weakness at AM care',               narrative: 'Grip strength unequal R<L; no facial droop, speech clear. MD notified — orders pending.', timestamp: '2026-04-21T08:30:00Z' }),
+    finding({ id: 'f-21-2',  patientId: 'demo-p-5003', patientName: 'Pritchard, Vance',  room: '225',   severity: 'medium', category: 'behavioral',     subcategory: 'psychiatric',       finding: 'New Quetiapine order for sleep disturbance',   narrative: 'Started 25mg PO QHS — GDR attempt planned in 2 weeks.', timestamp: '2026-04-21T13:10:00Z' }),
   ],
   '2026-04-20': [
-    finding({ id: 'f-20-1', patientId: 'demo-p-6001', patientName: 'Grisham, Henry',    room: '121',   severity: 'medium', category: 'Nutrition',    subcategory: 'Poor intake',       finding: 'Ate <25% of last 3 meals',                        narrative: 'Dietitian to follow-up in AM. Preferences review scheduled.', timestamp: '2026-04-20T18:00:00Z' }),
-    finding({ id: 'f-20-2', patientId: 'demo-p-9001', patientName: 'Carver, Benjamin',  room: '110',   severity: 'low',    category: 'Fall',         subcategory: 'Near-miss',         finding: 'Near-miss on transfer',                            narrative: 'Slipped during wheelchair transfer; steadied by CNA. No injury. Re-education provided.', timestamp: '2026-04-20T11:20:00Z' }),
+    finding({ id: 'f-20-1', patientId: 'demo-p-6001', patientName: 'Grisham, Henry',    room: '121',   severity: 'medium', category: 'other_clinical', subcategory: 'gi_nutrition',      finding: 'Ate <25% of last 3 meals',                        narrative: 'Dietitian to follow-up in AM. Preferences review scheduled.', timestamp: '2026-04-20T18:00:00Z' }),
+    finding({ id: 'f-20-2', patientId: 'demo-p-9001', patientName: 'Carver, Benjamin',  room: '110',   severity: 'low',    category: 'falls_safety',   subcategory: 'fall_event',        finding: 'Near-miss on transfer',                            narrative: 'Slipped during wheelchair transfer; steadied by CNA. No injury. Re-education provided.', timestamp: '2026-04-20T11:20:00Z' }),
   ],
   '2026-04-19': [
-    finding({ id: 'f-19-1', patientId: 'demo-p-1004', patientName: 'Park, Harold',     room: '309',    severity: 'medium', category: 'GG decline',   subcategory: 'Transfers',        finding: 'Toilet Transfer: 5 → 3',                          narrative: 'New decline over weekend — therapy to evaluate.', timestamp: '2026-04-19T10:05:00Z' }),
+    finding({ id: 'f-19-1', patientId: 'demo-p-1004', patientName: 'Park, Harold',     room: '309',    severity: 'medium', category: 'respiratory',    subcategory: 'respiratory_distress', finding: 'SpO2 88% on RA, 93% on 2L',                    narrative: 'Mild dyspnea on exertion; lung sounds diminished at bases. MD notified; CXR ordered.', timestamp: '2026-04-19T10:05:00Z' }),
   ],
   '2026-04-18': [
-    finding({ id: 'f-18-1', patientId: 'demo-p-7002', patientName: 'Bateson, Clifford', room: '223',   severity: 'low',    category: 'Mood',         subcategory: 'Withdrawn',         finding: 'Declined therapy session',                         narrative: 'Verbalized fatigue; will reoffer tomorrow.', timestamp: '2026-04-18T15:40:00Z' }),
+    finding({ id: 'f-18-1', patientId: 'demo-p-7002', patientName: 'Bateson, Clifford', room: '223',   severity: 'low',    category: 'behavioral',     subcategory: 'care_refusal',      finding: 'Declined therapy session',                         narrative: 'Verbalized fatigue; will reoffer tomorrow.', timestamp: '2026-04-18T15:40:00Z' }),
   ],
 };
+
+/**
+ * Resident names by PCC client id — for the demo's stand-in progress-note form
+ * (demo/pcc-progress-note.html), which only receives the client id in its URL.
+ */
+export const DEMO_24HR_RESIDENT_NAMES = Object.fromEntries(
+  Object.values(FINDINGS_BY_DAY).flat().map((f) => [f.pccClientId, `${f.patientName} · Rm ${f.room}`])
+);
+
+/**
+ * The 8 active categories + 29 subcategories the real
+ * /api/extension/24hr-report/filters route ships. Mirrors
+ * superltc core/types/24hr-report.types.ts (ACTIVE_FINDING_CATEGORIES).
+ */
+export const DEMO_24HR_FILTER_CATEGORIES = [
+  { key: 'falls_safety', label: 'Falls & Safety', emoji: '🚨', subcategories: [
+    { key: 'fall_event', label: 'Fall Event', description: 'Witnessed or unwitnessed fall' },
+    { key: 'elopement_wandering', label: 'Elopement / Wandering', description: 'Elopement attempt or wandering behavior' },
+  ] },
+  { key: 'behavioral', label: 'Behavioral', emoji: '🧠', subcategories: [
+    { key: 'aggression', label: 'Aggression', description: 'Physical aggression toward staff or residents' },
+    { key: 'agitation', label: 'Agitation', description: 'Verbal outbursts, restlessness, anxiety' },
+    { key: 'psychiatric', label: 'Psychiatric', description: 'Hallucinations, suicidal/homicidal ideation, mood changes' },
+    { key: 'care_refusal', label: 'Care Refusal', description: 'Refused care/treatment — ADLs, vitals, repositioning, meals, therapy, or treatments (not just medications)' },
+  ] },
+  { key: 'vitals_labs', label: 'Vitals & Labs', emoji: '📊', subcategories: [
+    { key: 'critical_vitals', label: 'Critical Vitals', description: 'Life-threatening vital signs' },
+    { key: 'abnormal_vitals', label: 'Abnormal Vitals', description: 'Concerning vital signs needing attention' },
+    { key: 'abnormal_labs', label: 'Abnormal Labs', description: 'Critical or abnormal laboratory values' },
+    { key: 'glucose_abnormal', label: 'Glucose Abnormal', description: 'Blood glucose out of normal range' },
+  ] },
+  { key: 'respiratory', label: 'Respiratory', emoji: '🫁', subcategories: [
+    { key: 'respiratory_distress', label: 'Respiratory Distress', description: 'Shortness of breath, labored breathing, hypoxia' },
+    { key: 'aspiration_choking', label: 'Aspiration / Choking', description: 'Aspiration event or choking incident' },
+  ] },
+  { key: 'skin_wounds', label: 'Skin & Wounds', emoji: '🩹', subcategories: [
+    { key: 'pressure_injury', label: 'Pressure Injury', description: 'Pressure ulcer, DTI, unstageable wound' },
+    { key: 'skin_tear', label: 'Skin Tear', description: 'Skin tear, laceration, abrasion' },
+    { key: 'bruise_hematoma', label: 'Bruise / Hematoma', description: 'Bruising, ecchymosis, hematoma' },
+    { key: 'wound_infection', label: 'Wound Infection', description: 'Signs of wound infection' },
+  ] },
+  { key: 'medications', label: 'Medications', emoji: '💊', subcategories: [
+    { key: 'medication_error', label: 'Medication Error', description: 'Wrong dose, missed dose, or medication error' },
+    { key: 'medication_refusal', label: 'Medication Refusal', description: 'Patient refused medication' },
+    { key: 'med_availability', label: 'Med Availability', description: 'Medication not available, awaiting pharmacy' },
+  ] },
+  { key: 'abuse_neglect', label: 'Abuse & Neglect', emoji: '⚠️', subcategories: [
+    { key: 'abuse_indicator', label: 'Abuse Indicator', description: 'Signs of physical abuse or unexplained injury' },
+    { key: 'altercation', label: 'Altercation', description: 'Fight, assault, or physical confrontation' },
+    { key: 'neglect', label: 'Neglect', description: 'Signs of neglect or inadequate care' },
+  ] },
+  { key: 'other_clinical', label: 'Other Clinical', emoji: '🏥', subcategories: [
+    { key: 'infection', label: 'Infection', description: 'UTI, COVID, or other infection' },
+    { key: 'gi_nutrition', label: 'GI / Nutrition', description: 'GI symptoms, poor intake, weight changes' },
+    { key: 'pain', label: 'Pain', description: 'Pain complaints or pain management issues' },
+    { key: 'neuro_change', label: 'Neuro Change', description: 'Neurological changes, seizure, unresponsiveness' },
+    { key: 'device_issue', label: 'Device Issue', description: 'Trach, vent, foley, IV, feeding tube issues (incl. IV removed/dislodged)' },
+    { key: 'new_admission', label: 'New Admission', description: 'New admission or readmission in the last 24 hours (informational)' },
+    { key: 'documentation_gap', label: 'Documentation Gap', description: 'Missing vitals, assessments, or notes' },
+  ] },
+];
+
+const DEMO_24HR_SUBCATEGORY_KEYS = new Set(
+  DEMO_24HR_FILTER_CATEGORIES.flatMap((c) => c.subcategories.map((s) => s.key))
+);
+
+/** The real PATCH drops anything it doesn't recognise; so does the demo. */
+export function sanitize24hrMuted(list) {
+  return [...new Set((Array.isArray(list) ? list : []).filter((k) => DEMO_24HR_SUBCATEGORY_KEYS.has(k)))];
+}
+
+/**
+ * Split a day's findings into what the user sees and what their filter is
+ * holding back — the same `{ findings, hiddenFindings, hiddenCount, counts }`
+ * the real route returns (ReportFindingFilterService.partition). Counts are
+ * recomputed over the VISIBLE set so the severity strip agrees with the list.
+ */
+export function partition24hrFindings(findings, muted) {
+  const visible = [];
+  const hidden = [];
+  for (const f of findings || []) {
+    (muted.has(f.subcategory) ? hidden : visible).push(f);
+  }
+  return {
+    findings: visible,
+    hiddenFindings: hidden,
+    hiddenCount: hidden.length,
+    counts: countsFor(visible),
+  };
+}
 
 function countsFor(findings) {
   const c = { critical: 0, high: 0, medium: 0, low: 0 };

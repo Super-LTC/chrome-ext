@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Progress Note - PointClickCare</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /*
+   * Stand-in for PCC's /care/chart/ipn/newipn.jsp so the demo's
+   * "Add progress note" loop closes end to end. Styled after PCC's classic
+   * chrome (blue title bar, gray form) — intentionally NOT Super-branded.
+   */
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 Verdana, Arial, sans-serif; color: #222; background: #e9edf2; }
+  .pcc-bar { background: #1c4f8b; color: #fff; padding: 8px 16px; font-size: 14px; display: flex; align-items: center; gap: 12px; }
+  .pcc-bar b { font-weight: 700; letter-spacing: .2px; }
+  .pcc-bar span { opacity: .8; font-size: 12px; }
+  .pcc-crumb { background: #d7dfe9; border-bottom: 1px solid #b8c4d3; padding: 6px 16px; font-size: 12px; color: #34455c; }
+  .pcc-page { max-width: 820px; margin: 18px auto; background: #fff; border: 1px solid #b8c4d3; }
+  .pcc-title { background: #eef2f7; border-bottom: 1px solid #c9d3df; padding: 8px 14px; font-weight: 700; font-size: 13px; color: #1c4f8b; }
+  .pcc-resident { padding: 10px 14px; border-bottom: 1px solid #e3e8ef; display: flex; gap: 24px; font-size: 12px; }
+  .pcc-resident b { color: #000; }
+  table.pcc-form { width: 100%; border-collapse: collapse; }
+  table.pcc-form th { text-align: right; width: 160px; padding: 8px 10px; color: #34455c; font-weight: 700; vertical-align: top; background: #f6f8fb; border-bottom: 1px solid #eef2f7; }
+  table.pcc-form td { padding: 8px 10px; border-bottom: 1px solid #eef2f7; }
+  select, input, textarea { font: 13px Verdana, Arial, sans-serif; border: 1px solid #9fb0c4; padding: 4px 6px; background: #fff; }
+  textarea { width: 100%; min-height: 200px; resize: vertical; }
+  .pcc-actions { padding: 12px 14px; background: #f6f8fb; border-top: 1px solid #c9d3df; display: flex; gap: 8px; }
+  button { font: 12px Verdana, Arial, sans-serif; padding: 5px 14px; border: 1px solid #6f8199; background: linear-gradient(#fff, #dfe6ee); cursor: pointer; border-radius: 2px; }
+  button.primary { background: linear-gradient(#5b8fd0, #2d63a8); color: #fff; border-color: #1c4f8b; font-weight: 700; }
+  button:disabled { opacity: .5; cursor: default; }
+  .pcc-saved { padding: 26px 20px; text-align: center; }
+  .pcc-saved h2 { margin: 0 0 6px; font-size: 16px; color: #1f6b34; }
+  .pcc-saved p { margin: 0 0 16px; color: #34455c; }
+  .pcc-note-view { padding: 14px; white-space: pre-wrap; }
+  .pcc-error { color: #b42318; font-size: 12px; margin-top: 4px; }
+  .pcc-hint { font-size: 11px; color: #6b7a8c; }
+</style>
+</head>
+<body>
+  <div class="pcc-bar"><b>PointClickCare</b> <span>Sunny Meadows Care Center · Demo</span></div>
+  <div class="pcc-crumb">Clinical &rsaquo; Progress Notes &rsaquo; <span id="crumb">New Progress Note</span></div>
+
+  <div class="pcc-page">
+    <div class="pcc-title" id="title">New Progress Note</div>
+    <div class="pcc-resident">
+      <div>Resident: <b id="resident">—</b></div>
+      <div>Client ID: <b id="clientid">—</b></div>
+    </div>
+
+    <form id="form">
+      <table class="pcc-form">
+        <tr><th>Note Type</th><td>
+          <select id="type">
+            <option>Nursing Note</option>
+            <option>Late Entry</option>
+            <option>Incident / Follow-up</option>
+            <option>Physician Communication</option>
+          </select>
+        </td></tr>
+        <tr><th>Effective Date</th><td><input id="date" type="datetime-local"> <span class="pcc-hint">Facility time</span></td></tr>
+        <tr><th>Note</th><td>
+          <textarea id="text" placeholder="Enter progress note…"></textarea>
+          <div class="pcc-error" id="err" hidden>Enter the note text before saving.</div>
+        </td></tr>
+      </table>
+      <div class="pcc-actions">
+        <button type="submit" class="primary" id="save">Save</button>
+        <button type="button" id="cancel">Cancel</button>
+      </div>
+    </form>
+
+    <div class="pcc-saved" id="saved" hidden>
+      <h2>Progress note saved</h2>
+      <p>Close this window to return to the 24-Hour Report — Super will link the note to the finding.</p>
+      <button type="button" class="primary" id="close">Close window</button>
+    </div>
+
+    <div id="view" hidden>
+      <div class="pcc-note-view" id="viewtext"></div>
+      <div class="pcc-actions"><button type="button" id="close2">Close</button></div>
+    </div>
+  </div>
+
+<script type="module">
+  import { DEMO_24HR_RESIDENT_NAMES } from './demo-qm-fixtures.js';
+
+  const q = new URLSearchParams(location.search);
+  const clientId = q.get('ESOLclientid') || '';
+  const pnid = q.get('ESOLpnid') || '-1';
+  const KEY = (id) => `super-demo:pn:${id}`;
+
+  document.getElementById('resident').textContent = DEMO_24HR_RESIDENT_NAMES[clientId] || 'Demo Resident';
+  document.getElementById('clientid').textContent = clientId || '—';
+
+  const form = document.getElementById('form');
+  const saved = document.getElementById('saved');
+  const view = document.getElementById('view');
+  const closeWin = () => { window.close(); };
+
+  // Local "now" for the datetime-local default.
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('date').value = now.toISOString().slice(0, 16);
+
+  if (pnid !== '-1') {
+    // Reopened after save (or via "View note"): show the stored note read-only.
+    let note = null;
+    try { note = JSON.parse(localStorage.getItem(KEY(pnid)) || 'null'); } catch { note = null; }
+    document.getElementById('title').textContent = `Progress Note #${pnid}`;
+    document.getElementById('crumb').textContent = `Progress Note #${pnid}`;
+    document.getElementById('viewtext').textContent = note
+      ? `${note.type} — ${note.date}\n\n${note.text}`
+      : 'This note was written in a previous demo session and is no longer available.';
+    form.hidden = true;
+    view.hidden = false;
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = document.getElementById('text').value.trim();
+    const err = document.getElementById('err');
+    if (!text) { err.hidden = false; return; }
+    err.hidden = true;
+
+    // PCC lands on a URL carrying the new note's id after save; the report's
+    // watcher reads that id off this window. Same trick here.
+    const id = String(Date.now()).slice(-8);
+    try {
+      localStorage.setItem(KEY(id), JSON.stringify({
+        type: document.getElementById('type').value,
+        date: document.getElementById('date').value.replace('T', ' '),
+        text,
+        clientId,
+      }));
+    } catch { /* storage blocked — the note still counts, it just has no text to show */ }
+
+    const url = new URL(location.href);
+    url.searchParams.set('ESOLpnid', id);
+    history.replaceState(null, '', url.toString());
+
+    document.getElementById('title').textContent = `Progress Note #${id}`;
+    form.hidden = true;
+    saved.hidden = false;
+  });
+
+  document.getElementById('cancel').addEventListener('click', closeWin);
+  document.getElementById('close').addEventListener('click', closeWin);
+  document.getElementById('close2').addEventListener('click', closeWin);
+</script>
+</body>
+</html>

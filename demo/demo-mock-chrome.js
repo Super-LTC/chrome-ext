@@ -15,6 +15,9 @@ import {
   buildGgDetailFor,
   buildReportList,
   buildReportForDate,
+  DEMO_24HR_FILTER_CATEGORIES,
+  sanitize24hrMuted,
+  partition24hrFindings,
 } from './demo-qm-fixtures.js';
 import {
   DEMO_QM_BOARD,
@@ -60,6 +63,14 @@ import {
 
 /** In-memory schedule hour for the 24hr report settings demo. */
 let demo24hrScheduleHour = 3;
+/** Per-weekday lookback window (JS getDay keys). Monday covers the weekend. */
+const DEMO_24HR_DEFAULT_INTERVALS = { 0: 24, 1: 72, 2: 24, 3: 24, 4: 24, 5: 24, 6: 24 };
+let demo24hrIntervalByDay = { ...DEMO_24HR_DEFAULT_INTERVALS };
+/**
+ * "My filters" for the 24hr report — the user's muted subcategories. User-global
+ * in the real backend (one row per user, no facility), so one Set here.
+ */
+let demo24hrMuted = new Set();
 
 /**
  * Demo UDA fixture — mirrors the structure the extension UDA viewer expects
@@ -855,15 +866,30 @@ function routeApiRequest(endpoint, options = {}) {
       } catch {
         return { success: false, error: 'Invalid request body' };
       }
-      const hour = body.scheduleHour;
-      if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
-        return {
-          success: false,
-          status: 400,
-          error: 'scheduleHour must be an integer between 0 and 23',
-        };
+      // Either field may be absent — the panel PATCHes only what changed.
+      if (body.scheduleHour !== undefined) {
+        const hour = body.scheduleHour;
+        if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+          return {
+            success: false,
+            status: 400,
+            error: 'scheduleHour must be an integer between 0 and 23',
+          };
+        }
+        demo24hrScheduleHour = hour;
       }
-      demo24hrScheduleHour = hour;
+      if (body.reportIntervalByDay !== undefined) {
+        const map = body.reportIntervalByDay || {};
+        const ok = [0, 1, 2, 3, 4, 5, 6].every((d) => [24, 48, 72].includes(Number(map[d])));
+        if (!ok) {
+          return {
+            success: false,
+            status: 400,
+            error: 'reportIntervalByDay must map all 7 weekdays (0–6) to one of 24, 48, or 72',
+          };
+        }
+        demo24hrIntervalByDay = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, Number(map[d])]));
+      }
     }
     const hour = demo24hrScheduleHour;
     return {
@@ -875,6 +901,35 @@ function routeApiRequest(endpoint, options = {}) {
         defaultScheduleHour: 3,
         timezone: 'America/Chicago',
         scheduleTimeLocal: `${String(hour).padStart(2, '0')}:00`,
+        reportIntervalByDay: { ...demo24hrIntervalByDay },
+        defaultReportIntervalByDay: { ...DEMO_24HR_DEFAULT_INTERVALS },
+        validIntervals: [24, 48, 72],
+      },
+    };
+  }
+
+  // "My filters" — GET returns the taxonomy + muted set, PATCH replaces the
+  // muted set wholesale (not a delta) and echoes the same shape back.
+  if (path === '/api/extension/24hr-report/filters') {
+    const method = (options?.method || 'GET').toUpperCase();
+    if (method === 'PATCH') {
+      let body = null;
+      try {
+        body = options?.body ? JSON.parse(options.body) : null;
+      } catch {
+        body = null;
+      }
+      if (!body || !Array.isArray(body.mutedSubcategories)) {
+        return { success: false, status: 400, error: 'Expected body { mutedSubcategories: string[] }' };
+      }
+      demo24hrMuted = new Set(sanitize24hrMuted(body.mutedSubcategories));
+    }
+    return {
+      success: true,
+      data: {
+        success: true,
+        mutedSubcategories: [...demo24hrMuted],
+        categories: DEMO_24HR_FILTER_CATEGORIES,
       },
     };
   }
@@ -886,8 +941,10 @@ function routeApiRequest(endpoint, options = {}) {
       if (!report) return { success: false, status: 404, error: 'Report not found' };
       // Live sign-off / comment state must show on the collapsed rows too,
       // and signoffEnabled is the per-facility pilot switch the rail gates on.
-      report.findings = decorate24hrFindings(report.findings);
-      return { success: true, data: { signoffEnabled: true, report } };
+      // Her muted subcategories ride along as `hiddenFindings` (never dropped)
+      // so the panel can show "N hidden by your filters" with an instant reveal.
+      const partitioned = partition24hrFindings(decorate24hrFindings(report.findings), demo24hrMuted);
+      return { success: true, data: { signoffEnabled: true, report: { ...report, ...partitioned } } };
     }
     return { success: true, data: buildReportList() };
   }

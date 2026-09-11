@@ -113,6 +113,15 @@ export default defineConfig(({ command }) => ({
         find: /^\.\/tag-restore\.js$/,
         replacement: resolve(process.cwd(), 'demo/demo-mds-shims/tag-restore.js'),
       },
+      // "Add progress note" (24hr report) opens PCC's note form in a popup and
+      // reads the saved note id off its URL. No PCC here, so route the form
+      // URL at demo/pcc-progress-note.html, which plays the same URL game.
+      // Matched on the relative specifiers content code uses; the shim itself
+      // imports the real module via ../../content/utils/…, which this misses.
+      {
+        find: /^(\.\.\/)+utils\/pcc-links\.js$/,
+        replacement: resolve(process.cwd(), 'demo/demo-mds-shims/pcc-links.js'),
+      },
       // The QM board's QIP destination needs /api/extension/qm/qip* fixtures
       // the demo doesn't have yet — swap in a "coming soon" card for now.
       // (demo-qm-overrides.css relabels the tab itself to "QIP/QIPP".)

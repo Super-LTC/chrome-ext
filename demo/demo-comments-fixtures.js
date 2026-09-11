@@ -211,12 +211,31 @@ export function get24hrLinkedNote(findingId) {
   return { note: linkedNotes[findingId] || null };
 }
 
-/** POST /24hr-report/finding/link-note */
+/**
+ * POST /24hr-report/finding/link-note
+ *
+ * The demo's stand-in note form (demo/pcc-progress-note.html) stashes what
+ * was typed under `super-demo:pn:<id>` in localStorage — shared across the
+ * popup and this window — so "View note" can show the real text, the way the
+ * backend's scraper would surface it.
+ */
 export function link24hrNote({ findingId, pccNoteId }) {
   const a = activityFor(findingId);
+  let written = null;
+  try {
+    written = pccNoteId ? JSON.parse(localStorage.getItem(`super-demo:pn:${pccNoteId}`) || 'null') : null;
+  } catch {
+    written = null;
+  }
+  if (written?.text) {
+    linkedNotes[findingId] = { type: written.type || 'Nursing Note', text: written.text };
+  }
+  const firstLine = (written?.text || '').split(/(?<=[.!?])\s/)[0].trim();
   a.followup = {
     status: 'detected',
-    summary: 'Progress note written in PointClickCare.',
+    summary: firstLine
+      ? (firstLine.length > 140 ? `${firstLine.slice(0, 137)}…` : firstLine)
+      : 'Progress note written in PointClickCare.',
     detectedAt: new Date().toISOString(),
     detectedPccNoteId: pccNoteId || 'demo-note-linked',
   };
