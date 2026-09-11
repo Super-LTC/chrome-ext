@@ -4,7 +4,11 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.77** was zipped for Chrome Web Store submission on
+> **Store note:** **v1.0.78** was zipped for Chrome Web Store submission on
+> 2026-09-11 (`super-ltc-store.zip`) — a re-cut of 1.0.77 with no code changes:
+> nothing merged between the two bumps, so the bundle is byte-for-byte the same
+> feature set (survey-login block #96, evidence-drawer EID fix #98) under a
+> fresh version number for the store. Before that, **v1.0.77** was zipped on
 > 2026-09-11 (`super-ltc-store.zip`) — it carries the survey-login block (#96):
 > every API request now reports the live PCC login so the backend can refuse
 > traffic from state-survey accounts, and the MDS overlay renders nothing when
@@ -41,6 +45,24 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.78] — 2026-09-11
+
+Version bump only. Re-cut of 1.0.77 for Chrome Web Store submission: no PRs
+merged between the two bumps, so the code is identical to 1.0.77 (#96
+survey-login block, #98 evidence-drawer EID fix). Cut so the store has a new
+version number to accept.
+
+### Changed
+- `manifest.json` version 1.0.77 → 1.0.78. Nothing else.
+
+### Verified in the zip before upload
+- Manifest reads 1.0.78; no third-party PostHog host in the bundle (analytics
+  ride the background worker to `/api/v1/analytics/events` on superltc.com).
+- `X-PCC-Identity-Pending` and `SURVEY_MODE` present in the bundled code.
+- Updater scripts excluded; `pdfjs-dist` 4.10.38 in node_modules matches
+  `lib/pdf.worker.min.js`.
+- 964 tests / 74 files green.
 
 ## [1.0.77] — 2026-09-11
 
