@@ -115,8 +115,18 @@ export function CertListRow({ cert, compact, onSend, onSchedule, onSkip, onUnski
   // Offered on anything still awaiting a signature. Includes 'sent' certs: an
   // initial auto-sends at admission, and a nurse may still want to queue a send
   // to an additional physician.
+  //
+  // NOT offered once the stay has ended. The fire pass cancels any schedule on a
+  // discharged resident, so the button would take the nurse's input and silently
+  // drop it at 6 AM. Reachable in two places: the Discharged tab, and the active
+  // list during the post-discharge grace window. Sending now still works — this
+  // hides only the "later" option, which is the one that cannot succeed.
+  const stayEnded = cert.stayStatus === 'ended';
   const showHourglass =
-    cert.status !== 'signed' && cert.status !== 'skipped' && cert.status !== 'revoked';
+    !stayEnded &&
+    cert.status !== 'signed' &&
+    cert.status !== 'skipped' &&
+    cert.status !== 'revoked';
 
   // Urgency class for row accent styling — driven by backend-computed urgency
   const { urgency } = getCertUrgency(cert);

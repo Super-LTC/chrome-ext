@@ -49,6 +49,12 @@ function adaptDischargedPatient(p) {
     patientExternalId: p.patientExternalId,
     payerType: p.payerType,
     partAStartDate: p.partAStartDate,
+    // Every stay in this view is ended by definition — the discharged endpoint
+    // does not send these two fields, and the active-list endpoint does. Without
+    // them CertListRow cannot tell a discharged resident from an active one, and
+    // would offer to schedule a send that the fire pass is guaranteed to cancel.
+    stayStatus: 'ended',
+    stayEndDate: p.endDate,
   }));
   enriched.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
   return {
