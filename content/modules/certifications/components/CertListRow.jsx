@@ -3,13 +3,19 @@ import { CertTypeBadge } from './CertTypeBadge.jsx';
 import { CertStatusBadge } from './CertStatusBadge.jsx';
 import { MAPayerBadge } from './MAPayerBadge.jsx';
 import { formatShortDate, getCertUrgency, isOverdueUrgency } from '../cert-urgency.js';
+import { HourglassIcon } from './HourglassIcon.jsx';
 
 /**
  * CertListRow — two-line card for a single certification.
  *
- * Line 1: type badge + patient name + MA badge + status badge + primary action
+ * Line 1: type badge + patient name + MA badge + status badge + hourglass + primary action
  * Line 2: due date + medicare day + send history (expandable) + signed-by
  * Overflow menu: Skip, Edit Clinical Reason, Mark as Delayed (contextual)
+ *
+ * The hourglass is a two-state mark, not a button that does one thing: ghost
+ * when nothing is queued (click to schedule), amber when a send is waiting
+ * (hover to see when, click to edit or cancel). A nurse should be able to scan
+ * the list and see what is already handled without opening anything.
  */
 
 function formatDateTime(dateStr) {
@@ -76,7 +82,7 @@ function handleViewDocument(cert) {
   window.location.href = url;
 }
 
-export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onRevoke, onDelay, onEditReason, onViewPractitioner }) {
+export function CertListRow({ cert, compact, onSend, onSchedule, onSkip, onUnskip, onRevoke, onDelay, onEditReason, onViewPractitioner }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sendsExpanded, setSendsExpanded] = useState(false);
   const menuRef = useRef(null);
@@ -104,6 +110,23 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onRevoke,
   const hasSends = cert.sends?.length > 0;
   const hasPdf = !!(cert.pdfS3Key || cert.delayedPdfS3Key);
   const showViewPdf = hasPdf;
+  const schedule = cert.scheduledSend || null;
+  const reminders = cert.autoReminders || null;
+  // Offered on anything still awaiting a signature. Includes 'sent' certs: an
+  // initial auto-sends at admission, and a nurse may still want to queue a send
+  // to an additional physician.
+  //
+  // NOT offered once the stay has ended. The fire pass cancels any schedule on a
+  // discharged resident, so the button would take the nurse's input and silently
+  // drop it at 6 AM. Reachable in two places: the Discharged tab, and the active
+  // list during the post-discharge grace window. Sending now still works — this
+  // hides only the "later" option, which is the one that cannot succeed.
+  const stayEnded = cert.stayStatus === 'ended';
+  const showHourglass =
+    !stayEnded &&
+    cert.status !== 'signed' &&
+    cert.status !== 'skipped' &&
+    cert.status !== 'revoked';
 
   // Urgency class for row accent styling — driven by backend-computed urgency
   const { urgency } = getCertUrgency(cert);
@@ -196,6 +219,23 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onRevoke,
             urgency={cert.urgency}
             daysUntilDue={cert.daysUntilDue}
           />
+          {showHourglass && (
+            <button
+              class={`cert__row-hourglass${schedule ? ' cert__row-hourglass--scheduled' : ''}`}
+              onClick={(e) => { e.stopPropagation(); onSchedule?.(cert); }}
+              data-track="cert_schedule_clicked"
+              data-track-prop-cert-type={cert.type}
+              data-track-prop-scheduled={schedule ? 'true' : 'false'}
+              title={
+                schedule
+                  ? `Scheduled ${schedule.displayLabel}. Click to edit or cancel.`
+                  : 'Schedule this certification to send later'
+              }
+              aria-label={schedule ? `Scheduled ${schedule.displayLabel}` : 'Schedule send'}
+            >
+              <HourglassIcon size={13} filled={!!schedule} />
+            </button>
+          )}
           {primaryAction && (
             <button
               class={`cert__row-action cert__row-action--${primaryAction.variant}`}
@@ -270,6 +310,26 @@ export function CertListRow({ cert, compact, onSend, onSkip, onUnskip, onRevoke,
       </div>
       <div class="cert__row-bottom">
         {cert.dueDate && <span class="cert__row-meta">Due {formatShortDate(cert.dueDate)}</span>}
+        {schedule && (
+          <span class="cert__row-meta cert__row-meta--scheduled">
+            Sends {schedule.displayLabel}
+          </span>
+        )}
+        {/* Automated reminder state. Two tiers, because they call for different
+            things: while reminders are running the nurse needs nothing, and once
+            they have stopped nothing further happens without a phone call. Never
+            phrased as "expired" or "closed" — a delayed cert signed late is
+            still valid, and an unsigned one is what gets a claim denied. */}
+        {reminders?.remindersStopped ? (
+          <span class="cert__row-meta cert__row-meta--reminders-stopped">
+            Reminders stopped &middot; needs a call
+          </span>
+        ) : reminders?.count > 0 && (
+          <span class="cert__row-meta">
+            Reminded {reminders.count}&times;
+            {reminders.lastOnDate ? ` · last ${formatShortDate(reminders.lastOnDate)}` : ''}
+          </span>
+        )}
         {!compact && cert.currentMedicareDay != null && <span class="cert__row-meta">Medicare Day {cert.currentMedicareDay}</span>}
         {hasSends && (
           <span onClick={(e) => { e.stopPropagation(); setSendsExpanded(!sendsExpanded); }}>

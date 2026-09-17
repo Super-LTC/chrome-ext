@@ -269,6 +269,114 @@ const CertAPI = {
   },
 
   /**
+   * Queue a certification to be sent at a future facility-local date and time.
+   * Replaces any send already queued for this certification.
+   * @param {string} certId
+   * @param {Object} opts
+   * @param {Array<string>} opts.practitionerIds
+   * @param {string} opts.scheduledLocalDate - 'YYYY-MM-DD', facility-local
+   * @param {string} opts.scheduledLocalTime - 'HH:MM', facility-local
+   * @param {string} [opts.delayReason]
+   * @returns {Promise<Object>}
+   */
+  async scheduleCertSend(certId, { practitionerIds, scheduledLocalDate, scheduledLocalTime, delayReason }) {
+    const body = { practitionerIds, scheduledLocalDate, scheduledLocalTime };
+    if (delayReason) body.delayReason = delayReason;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/${certId}/schedule`,
+      options: { method: 'POST', body: JSON.stringify(body) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to schedule certification send');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Cancel whatever send is queued for a certification.
+   * @param {string} certId
+   * @returns {Promise<Object>}
+   */
+  async cancelCertSchedule(certId) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/${certId}/schedule`,
+      options: { method: 'DELETE' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to cancel scheduled send');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Every certification send queued at a facility, soonest first.
+   * Backs the facility-wide Scheduled Sends modal.
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @returns {Promise<Array>}
+   */
+  async fetchScheduledSends(facilityName, orgSlug) {
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/schedules?${params}`,
+      options: { method: 'GET' }
+    });
+
+    // Non-2xx (404/403) means module disabled or no access — same contract as
+    // fetchDashboard, so the hourglass simply does not render.
+    if (!response.success) return [];
+
+    return response.data?.schedules || [];
+  },
+
+  /**
+   * Edit a queued send's date, time and/or recipients.
+   * @param {string} scheduleId
+   * @param {Object} changes - { scheduledLocalDate, scheduledLocalTime, practitionerIds, delayReason }
+   * @returns {Promise<Object>}
+   */
+  async updateScheduledSend(scheduleId, changes) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/schedules/${scheduleId}`,
+      options: { method: 'PATCH', body: JSON.stringify(changes) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to update scheduled send');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Cancel a queued send by its own id (used from the facility-wide list).
+   * @param {string} scheduleId
+   * @returns {Promise<Object>}
+   */
+  async cancelScheduledSend(scheduleId) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/schedules/${scheduleId}`,
+      options: { method: 'DELETE' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to cancel scheduled send');
+    }
+
+    return response.data;
+  },
+
+  /**
    * Mark a certification as delayed (log delay reason without sending)
    * @param {string} certId
    * @param {string} reason
