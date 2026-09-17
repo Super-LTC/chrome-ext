@@ -2982,3 +2982,11 @@
   color: #94a3b8;
   max-width: 280px;
 }
+
+/* Automated reminders have stopped — the nurse now owns chasing the signature.
+   Red because it needs action, but paired with wording that never implies the
+   certification is a lost cause: a delayed cert signed late is still valid. */
+.cert__row-meta--reminders-stopped {
+  color: #b91c1c;
+  font-weight: 600;
+}

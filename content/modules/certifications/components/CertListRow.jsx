@@ -111,6 +111,7 @@ export function CertListRow({ cert, compact, onSend, onSchedule, onSkip, onUnski
   const hasPdf = !!(cert.pdfS3Key || cert.delayedPdfS3Key);
   const showViewPdf = hasPdf;
   const schedule = cert.scheduledSend || null;
+  const reminders = cert.autoReminders || null;
   // Offered on anything still awaiting a signature. Includes 'sent' certs: an
   // initial auto-sends at admission, and a nurse may still want to queue a send
   // to an additional physician.
@@ -302,6 +303,21 @@ export function CertListRow({ cert, compact, onSend, onSchedule, onSkip, onUnski
         {schedule && (
           <span class="cert__row-meta cert__row-meta--scheduled">
             Sends {schedule.displayLabel}
+          </span>
+        )}
+        {/* Automated reminder state. Two tiers, because they call for different
+            things: while reminders are running the nurse needs nothing, and once
+            they have stopped nothing further happens without a phone call. Never
+            phrased as "expired" or "closed" — a delayed cert signed late is
+            still valid, and an unsigned one is what gets a claim denied. */}
+        {reminders?.remindersStopped ? (
+          <span class="cert__row-meta cert__row-meta--reminders-stopped">
+            Reminders stopped &middot; needs a call
+          </span>
+        ) : reminders?.count > 0 && (
+          <span class="cert__row-meta">
+            Reminded {reminders.count}&times;
+            {reminders.lastOnDate ? ` · last ${formatShortDate(reminders.lastOnDate)}` : ''}
           </span>
         )}
         {!compact && cert.currentMedicareDay != null && <span class="cert__row-meta">Medicare Day {cert.currentMedicareDay}</span>}
