@@ -2,12 +2,24 @@ import { useState, useEffect } from 'preact/hooks';
 import { CertModal } from './CertModal.jsx';
 import { DischargePlanPicker, parseDischargePlan, composeDischargePlan, isDischargePlanValid } from './DischargePlanPicker.jsx';
 import { GenerateReasonButton } from './GenerateReasonButton.jsx';
+import { ScheduleSlotPicker } from './ScheduleSlotPicker.jsx';
+import { HourglassIcon } from './HourglassIcon.jsx';
+import { defaultSlot, formatSlot, isSlotInFuture } from '../schedule-slot.js';
 
 /**
- * SendCertModal — single-screen send flow.
+ * SendCertModal — single-screen send flow, with a schedule mode.
  * Shows clinical reason (recerts), delay reason (delayed), and practitioner selection.
+ *
+ * Scheduling lives here as a MODE rather than in its own modal, deliberately. A
+ * scheduled send has to satisfy exactly the same preconditions as an immediate
+ * one — a recert queued without its clinical reason would fail unattended at
+ * 6 AM with nobody watching — so it reuses these fields, this validation and the
+ * same practitioner picker. Only the footer differs: commit now, or commit to a
+ * future moment.
+ *
+ * `startInScheduleMode` lets the cert row's hourglass open straight into it.
  */
-export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, onSent }) {
+export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, onSent, startInScheduleMode = false, onScheduleChanged }) {
   const [clinicalReason, setClinicalReason] = useState('');
   const [estimatedDays, setEstimatedDays] = useState(30);
   const [dischargeOption, setDischargeOption] = useState('');
@@ -17,6 +29,13 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
   const [practitionersLoading, setPractitionersLoading] = useState(false);
   const [selectedPractitioners, setSelectedPractitioners] = useState(new Set());
   const [sending, setSending] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [slotDate, setSlotDate] = useState('');
+  const [slotTime, setSlotTime] = useState('06:00');
+  const [cancelling, setCancelling] = useState(false);
+
+  // The live schedule the backend stamped onto this cert, if any.
+  const existingSchedule = cert?.scheduledSend || null;
 
   const isRecert = cert?.type === 'day_14_recert' || cert?.type === 'day_30_recert';
   const isDelayed = cert?.isDelayed;
@@ -30,7 +49,17 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
     setDischargeOption(parsed.option);
     setDischargeOtherText(parsed.otherText);
     setDelayReason(cert.delayReason || '');
-    setSelectedPractitioners(new Set());
+
+    // An existing schedule seeds the picker and its recipients, so "Edit" opens
+    // on what is actually queued rather than on the defaults.
+    const slot = existingSchedule
+      ? { date: existingSchedule.scheduledLocalDate, time: existingSchedule.scheduledLocalTime }
+      : defaultSlot(cert.dueDate);
+    setSlotDate(slot.date);
+    setSlotTime(slot.time);
+    setScheduleMode(startInScheduleMode || !!existingSchedule);
+    setSelectedPractitioners(new Set(existingSchedule?.practitionerIds || []));
+
     setPractitionersLoading(true);
     window.CertAPI.fetchPractitioners(facilityName, orgSlug)
       .then(practs => setPractitioners(practs))
@@ -79,6 +108,72 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
       .finally(() => setSending(false));
   }
 
+  /**
+   * Shared precondition check for both commit paths. Identical on purpose: a
+   * scheduled send is the same send, later, so anything that would block it now
+   * must block it then — otherwise the failure surfaces at 6 AM instead of here.
+   */
+  function meetsSendPreconditions() {
+    if (selectedPractitioners.size === 0) return false;
+    if (isRecert && !clinicalReason.trim()) return false;
+    if (isRecert && !isDischargePlanValid(dischargeOption, dischargeOtherText)) return false;
+    if (isDelayed && !delayReason.trim()) return false;
+    return true;
+  }
+
+  function handleSchedule() {
+    if (!meetsSendPreconditions()) return;
+    if (!isSlotInFuture(slotDate, slotTime)) return;
+    setSending(true);
+
+    const planForDischarge = composeDischargePlan(dischargeOption, dischargeOtherText);
+    const saveReason = isRecert
+      ? window.CertAPI.saveClinicalReason(cert.id, { clinicalReason, estimatedDays, planForDischarge })
+      : Promise.resolve();
+
+    saveReason
+      .then(() => window.CertAPI.scheduleCertSend(cert.id, {
+        practitionerIds: [...selectedPractitioners],
+        scheduledLocalDate: slotDate,
+        scheduledLocalTime: slotTime,
+        delayReason: isDelayed ? delayReason : undefined,
+      }))
+      .then(() => {
+        window.SuperToast?.success?.(
+          `${certTypeLabel} for ${cert.patientName} scheduled for ${formatSlot(slotDate, slotTime)}`
+        );
+        onScheduleChanged?.();
+        onSent?.();
+        onClose();
+      })
+      .catch(err => {
+        console.error('[Certifications] Failed to schedule:', err);
+        window.SuperAnalytics?.track?.('error_shown', {
+          surface: 'cert_schedule',
+          error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+          error_type: 'api_error',
+        });
+        window.SuperToast?.error?.(err.message || 'Failed to schedule certification');
+      })
+      .finally(() => setSending(false));
+  }
+
+  function handleCancelSchedule() {
+    setCancelling(true);
+    window.CertAPI.cancelCertSchedule(cert.id)
+      .then(() => {
+        window.SuperToast?.success?.(`Scheduled send cancelled for ${cert.patientName}`);
+        onScheduleChanged?.();
+        onSent?.();
+        onClose();
+      })
+      .catch(err => {
+        console.error('[Certifications] Failed to cancel schedule:', err);
+        window.SuperToast?.error?.('Failed to cancel scheduled send');
+      })
+      .finally(() => setCancelling(false));
+  }
+
   function togglePractitioner(id) {
     setSelectedPractitioners(prev => {
       const next = new Set(prev);
@@ -95,29 +190,80 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
 
   if (!cert) return null;
 
-  const canSend =
-    selectedPractitioners.size > 0 &&
-    (!isRecert || clinicalReason.trim()) &&
-    (!isRecert || isDischargePlanValid(dischargeOption, dischargeOtherText)) &&
-    (!isDelayed || delayReason.trim()) &&
-    !sending;
+  const preconditionsMet = meetsSendPreconditions();
+  const canSend = preconditionsMet && !sending;
+  const canSchedule = preconditionsMet && isSlotInFuture(slotDate, slotTime) && !sending;
+
+  // Footer: "Send now" is always available. The hourglass toggles the schedule
+  // picker into the body and swaps the primary button's commitment; in schedule
+  // mode the toggle reads as a way back rather than a dead end.
+  const actions = [
+    { label: 'Cancel', variant: 'secondary', onClick: onClose },
+    {
+      label: scheduleMode ? 'Send now instead' : 'Schedule',
+      variant: 'ghost',
+      icon: <HourglassIcon size={13} filled={!!existingSchedule} />,
+      onClick: () => setScheduleMode(!scheduleMode),
+      disabled: sending || cancelling,
+    },
+    scheduleMode
+      ? {
+          label: sending
+            ? 'Scheduling...'
+            : existingSchedule
+              ? 'Update schedule'
+              : `Schedule for ${formatSlot(slotDate, slotTime)}`,
+          variant: 'primary',
+          onClick: handleSchedule,
+          disabled: !canSchedule,
+        }
+      : {
+          label: sending ? 'Sending...' : `Send to ${selectedPractitioners.size} practitioner${selectedPractitioners.size !== 1 ? 's' : ''}`,
+          variant: 'primary',
+          onClick: handleSend,
+          disabled: !canSend,
+        },
+  ];
 
   return (
     <CertModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Send Certification"
+      title={scheduleMode ? 'Schedule Certification' : 'Send Certification'}
       subtitle={`${cert.patientName} · ${certTypeLabel}`}
-      actions={[
-        { label: 'Cancel', variant: 'secondary', onClick: onClose },
-        {
-          label: sending ? 'Sending...' : `Send to ${selectedPractitioners.size} practitioner${selectedPractitioners.size !== 1 ? 's' : ''}`,
-          variant: 'primary',
-          onClick: handleSend,
-          disabled: !canSend
-        }
-      ]}
+      actions={actions}
     >
+      {/* Already queued — the one place a nurse can see and undo it for this cert */}
+      {existingSchedule && (
+        <div class="cm-scheduled-banner">
+          <span class="cm-scheduled-banner__icon">
+            <HourglassIcon size={14} filled />
+          </span>
+          <div class="cm-scheduled-banner__text">
+            <strong>Scheduled {existingSchedule.displayLabel}</strong>
+            <span class="cm-scheduled-banner__meta">
+              Sending now instead will replace it.
+            </span>
+          </div>
+          {/* NO_TRACK */}
+          <button
+            class="cm-scheduled-banner__cancel"
+            onClick={handleCancelSchedule}
+            disabled={cancelling}
+          >
+            {cancelling ? 'Cancelling...' : 'Cancel send'}
+          </button>
+        </div>
+      )}
+
+      {scheduleMode && (
+        <ScheduleSlotPicker
+          date={slotDate}
+          time={slotTime}
+          onDateChange={setSlotDate}
+          onTimeChange={setSlotTime}
+        />
+      )}
       {/* Clinical Reason */}
       {isRecert && (
         <div class="cm-section">
