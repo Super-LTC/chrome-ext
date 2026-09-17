@@ -2671,3 +2671,314 @@
   width: calc(100% - 26px);
 }
 
+
+/* ─────────────────────────────────────────────
+   Scheduled sends (hourglass)
+
+   Amber is the "waiting, nothing wrong" colour here — deliberately not the red
+   of overdue or the green of signed. A scheduled cert is handled; it just has
+   not happened yet, and it must not compete with the rows that need action.
+   ───────────────────────────────────────────── */
+.cert__row-hourglass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cert__row-hourglass:hover {
+  color: #475569;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+/* Queued: filled, amber, and always visible rather than hover-revealed. */
+.cert__row-hourglass--scheduled {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.cert__row-hourglass--scheduled:hover {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.cert__row-meta--scheduled {
+  color: #b45309;
+  font-weight: 500;
+}
+
+/* Header entry point to the facility-wide list */
+.cert__scheduled-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cert__scheduled-btn:hover {
+  color: #0f172a;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+/* ─── Schedule picker (inside the send modal) ─── */
+.cm-section--schedule {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.cm-schedule__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cm-input--date,
+.cm-input--time {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cm-section__hint--warn {
+  color: #b45309;
+}
+
+/* ─── "Already scheduled" banner at the top of the send modal ─── */
+.cm-scheduled-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 9px;
+}
+
+.cm-scheduled-banner__icon {
+  display: inline-flex;
+  color: #b45309;
+  flex: 0 0 auto;
+}
+
+.cm-scheduled-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  color: #78350f;
+}
+
+.cm-scheduled-banner__meta {
+  font-size: 11.5px;
+  color: #92400e;
+  opacity: 0.85;
+}
+
+.cm-scheduled-banner__cancel {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cm-scheduled-banner__cancel:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.cm-scheduled-banner__cancel:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ─── Modal footer button with a leading icon ─── */
+.cm__btn--with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cm__btn--ghost {
+  color: #475569;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.cm__btn--ghost:hover:not(:disabled) {
+  color: #0f172a;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+/* ─────────────────────────────────────────────
+   Scheduled Sends modal (facility-wide list)
+   ───────────────────────────────────────────── */
+.cert-sched__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cert-sched__row {
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.cert-sched__row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cert-sched__row-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.cert-sched__patient {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cert-sched__row-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.cert-sched__when {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+.cert-sched__btn {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cert-sched__btn:hover:not(:disabled) {
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.cert-sched__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cert-sched__btn--danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.cert-sched__btn--danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.cert-sched__btn--primary {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.cert-sched__btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.cert-sched__row-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.cert-sched__editor {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cert-sched__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 16px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.cert-sched__empty-title {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.cert-sched__empty-text {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  max-width: 280px;
+}

@@ -55,6 +55,7 @@ export function StayGroupCard({
   historyCerts,
   allCerts,
   onSend,
+  onSchedule,
   onSkip,
   onDelay,
   onUnskip,
@@ -117,6 +118,7 @@ export function StayGroupCard({
             cert={cert}
             compact
             onSend={onSend}
+            onSchedule={onSchedule}
             onSkip={onSkip}
             onDelay={onDelay}
             onUnskip={onUnskip}
@@ -145,6 +147,7 @@ export function StayGroupCard({
                   cert={cert}
                   compact
                   onSend={onSend}
+                  onSchedule={onSchedule}
                   onSkip={onSkip}
                   onDelay={onDelay}
                   onUnskip={onUnskip}

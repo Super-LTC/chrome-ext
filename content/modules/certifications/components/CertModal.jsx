@@ -3,6 +3,10 @@ import { useEffect, useRef } from 'preact/hooks';
 /**
  * CertModal — polished, content-sized modal for cert workflows.
  * Independent from shared Modal.jsx. Sizes to content, no viewport stretching.
+ *
+ * `actions` entries: { label, variant, onClick, disabled, icon?, title? }.
+ * `icon` takes a rendered node and sits before the label — used by the schedule
+ * toggle, where the hourglass carries the meaning and the text only labels it.
  */
 export function CertModal({ isOpen, onClose, title, subtitle, children, actions = [] }) {
   const overlayRef = useRef(null);
@@ -49,10 +53,12 @@ export function CertModal({ isOpen, onClose, title, subtitle, children, actions 
             {actions.map((action, i) => (
               <button
                 key={i}
-                class={`cm__btn cm__btn--${action.variant || 'secondary'}`}
+                class={`cm__btn cm__btn--${action.variant || 'secondary'}${action.icon ? ' cm__btn--with-icon' : ''}`}
                 onClick={action.onClick}
                 disabled={action.disabled}
+                title={action.title}
               >
+                {action.icon}
                 {action.label}
               </button>
             ))}

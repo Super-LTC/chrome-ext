@@ -2,10 +2,13 @@ import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
 import { useCertifications } from './hooks/useCertifications.js';
 import { useDischargedCerts } from './hooks/useDischargedCerts.js';
 import { useNotificationPrefs } from './hooks/useNotificationPrefs.js';
+import { useScheduledSends } from './hooks/useScheduledSends.js';
 import { StayGroupCard } from './components/StayGroupCard.jsx';
 import { CertSettingsPopover } from './components/CertSettingsPopover.jsx';
 import { CertDigestBanner } from './components/CertDigestBanner.jsx';
 import { SendCertModal } from './components/SendCertModal.jsx';
+import { ScheduledSendsModal } from './components/ScheduledSendsModal.jsx';
+import { HourglassIcon } from './components/HourglassIcon.jsx';
 import { SkipCertModal } from './components/SkipCertModal.jsx';
 import { RevokeCertModal } from './components/RevokeCertModal.jsx';
 import { EditClinicalReasonModal } from './components/EditClinicalReasonModal.jsx';
@@ -134,6 +137,9 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
 
   // Modal state
   const [sendCert, setSendCert] = useState(null);
+  // Opening the send modal straight into schedule mode, from the row hourglass.
+  const [sendCertScheduleMode, setSendCertScheduleMode] = useState(false);
+  const [scheduledModalOpen, setScheduledModalOpen] = useState(false);
   const [skipCert, setSkipCert] = useState(null);
   const [revokeCert, setRevokeCert] = useState(null);
   const [delayCert, setDelayCert] = useState(null);
@@ -161,6 +167,21 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
     refetch: refetchDischarged,
   } = useDischargedCerts({
     facilityName, orgSlug, enabled: activeSubTab === 'discharged'
+  });
+
+  // Queued future sends. Facility-wide, so not loaded in the per-patient overlay
+  // (same scope as the Discharged tab). Lazy: only fetched once the nurse opens
+  // the modal — the cert rows get their own schedule state inline from the
+  // certifications payload, so the hourglass on each row needs nothing here.
+  const {
+    schedules: scheduledSends,
+    loading: scheduledLoading,
+    error: scheduledError,
+    refetch: refetchScheduled,
+  } = useScheduledSends({
+    facilityName: patientId ? null : facilityName,
+    orgSlug,
+    enabled: !patientId && scheduledModalOpen,
   });
 
   // Notification preferences (gear popover + digest banner). Facility-wide —
@@ -428,6 +449,21 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
     dischargedLoadMore();
   }
 
+  /**
+   * Row hourglass: open the send modal already in schedule mode. Same modal as
+   * Send because a scheduled send must satisfy the same preconditions — a recert
+   * needs its clinical reason either way.
+   */
+  function handleScheduleCert(cert) {
+    setSendCertScheduleMode(true);
+    setSendCert(cert);
+  }
+
+  function handleCloseSendModal() {
+    setSendCert(null);
+    setSendCertScheduleMode(false);
+  }
+
   const isDischarged = activeSubTab === 'discharged';
   const isAudit = activeSubTab === 'audit';
   const loading = activeSubTab === 'signed' ? signedLoading : activeLoading;
@@ -507,6 +543,22 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
         </div>
         {/* Notification settings gear (facility-wide; renders only when at least
             one module-enabled toggle exists for this facility) */}
+        {/* Queued future sends. Facility-wide, so hidden in the per-patient
+            overlay. No count badge: the list is lazy, so a count would need its
+            own eager fetch on every render of the Certs tab to show a number
+            that is usually zero. */}
+        {!patientId && (
+          // NO_TRACK
+          <button
+            class="cert__scheduled-btn"
+            onClick={() => setScheduledModalOpen(true)}
+            title="Certifications scheduled to send later"
+            aria-label="Scheduled sends"
+          >
+            <HourglassIcon size={14} />
+            <span>Scheduled</span>
+          </button>
+        )}
         {!patientId && (
           <CertSettingsPopover prefs={notificationPrefs} onToggle={updateNotificationPref} />
         )}
@@ -553,6 +605,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
             historyCerts={group.historyCerts}
             allCerts={group.allCerts}
             onSend={(c) => setSendCert(c)}
+            onSchedule={handleScheduleCert}
             onSkip={(c) => setSkipCert(c)}
             onDelay={(c) => setDelayCert(c)}
             onUnskip={handleUnskip}
@@ -596,6 +649,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
             dischargeDate={group.dischargeDate}
             outstandingCount={group.outstandingCount}
             onSend={(c) => setSendCert(c)}
+            onSchedule={handleScheduleCert}
             onSkip={(c) => setSkipCert(c)}
             onDelay={(c) => setDelayCert(c)}
             onUnskip={handleUnskip}
@@ -625,11 +679,22 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
       {/* Modals */}
       <SendCertModal
         isOpen={!!sendCert}
-        onClose={() => setSendCert(null)}
+        onClose={handleCloseSendModal}
         cert={sendCert}
         facilityName={facilityName}
         orgSlug={orgSlug}
         onSent={refetchAll}
+        startInScheduleMode={sendCertScheduleMode}
+        onScheduleChanged={refetchScheduled}
+      />
+
+      <ScheduledSendsModal
+        isOpen={scheduledModalOpen}
+        onClose={() => setScheduledModalOpen(false)}
+        schedules={scheduledSends}
+        loading={scheduledLoading}
+        error={scheduledError}
+        onRefetch={() => { refetchScheduled(); refetchAll(); }}
       />
 
       <SkipCertModal
