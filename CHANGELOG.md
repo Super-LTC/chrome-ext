@@ -4,7 +4,11 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.78** was zipped for Chrome Web Store submission on
+> **Store note:** **v1.0.79** was zipped for Chrome Web Store submission on
+> 2026-09-17 (`super-ltc-store.zip`) — it carries scheduled certification sends
+> (#99): queue a cert to go out on a future morning (default 6:00 AM
+> facility-local). Requires the backend scheduled-send routes to be deployed.
+> Before that, **v1.0.78** was zipped for Chrome Web Store submission on
 > 2026-09-11 (`super-ltc-store.zip`) — a re-cut of 1.0.77 with no code changes:
 > nothing merged between the two bumps, so the bundle is byte-for-byte the same
 > feature set (survey-login block #96, evidence-drawer EID fix #98) under a
@@ -45,6 +49,28 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.79] — 2026-09-17
+
+One merged PR (#99) on top of 1.0.78.
+
+### Added
+- Scheduled certification sends (#99): an hourglass on each cert still awaiting
+  a signature opens a schedule mode inside SendCertModal (same fields and
+  validation as an immediate send), an amber banner on a scheduled cert's modal
+  lets you cancel, and a facility-wide Scheduled Sends modal lists queued sends
+  soonest first. Defaults to 6:00 AM facility-local. Needs the backend
+  scheduled-send routes deployed first.
+
+### Changed
+- `manifest.json` version 1.0.78 → 1.0.79.
+
+### Verified in the zip before upload
+- Manifest reads 1.0.79; no third-party PostHog host in the bundle (analytics
+  ride the background worker to `/api/v1/analytics/events` on superltc.com).
+- Updater scripts excluded; `pdfjs-dist` 4.10.38 in node_modules matches
+  `lib/pdf.worker.min.js`.
+- 1048 tests / 78 files green.
 
 ## [1.0.78] — 2026-09-11
 
