@@ -210,6 +210,38 @@ function getMDSResolverPatientId() {
   return null;
 }
 
+// Resolve the patient id for a DIAGNOSIS QUERY create (POST
+// /api/extension/diagnosis-queries `patientId`). Unlike the MDS resolver above,
+// this endpoint accepts EITHER id — it looks the value up as our internal id
+// first, then as the PCC external id — so the cascade may return either.
+//   1. The INTERNAL id the overlay cached off this page's section response. It
+//      names the exact resident the rendered analysis belongs to, so it wins.
+//   2. The page's numeric client id from the URL (resolveStableClientId).
+//   3. The numeric EXTERNAL id cached from a prior section response.
+//   4. The numeric client id scraped from the page DOM.
+//
+// (4) is the one that matters: on a PCC MDS section page the client id is never
+// in the URL, so resolveStableClientId() returns null there by design (it must
+// not guess from the DOM on a resident LIST page). Every /mds/* call on that
+// page already recovers the id through scrapeNumericClientIdFromDOM(); without
+// it here, "Send" POSTed an empty patientId and the backend 400'd whenever the
+// overlay had not cached the internal id. Only query surfaces call this — they
+// are patient-scoped by construction, so the DOM scrape can't latch onto a
+// stranger the way it could from a list page.
+// Returns null when the page carries no patient anchor at all.
+function getDiagnosisQueryPatientId() {
+  const mdsState = window.MDSViewState || {};
+  return (
+    window.SuperOverlay?.patientId ||
+    mdsState.context?.patientId ||
+    mdsState.manualContext?.patientId ||
+    resolveStableClientId() ||
+    (window.SuperOverlay?.externalPatientId ? String(window.SuperOverlay.externalPatientId) : null) ||
+    scrapeNumericClientIdFromDOM() ||
+    null
+  );
+}
+
 // Append the MDS-resolver context fields to a URLSearchParams.
 // Safe to call when fields are missing — only sets what it can read.
 //   externalPatientId — numeric PCC client id (never our internal id, never EID)
@@ -338,3 +370,4 @@ window.appendMDSContextParams = appendMDSContextParams;
 window.appendAssessmentIdParam = appendAssessmentIdParam;
 window.getMDSContextBodyFields = getMDSContextBodyFields;
 window.scrapeClientIdFromDOM = scrapeClientIdFromDOM;
+window.getDiagnosisQueryPatientId = getDiagnosisQueryPatientId;

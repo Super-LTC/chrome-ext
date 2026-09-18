@@ -163,12 +163,19 @@ const QueryAPI = {
   async createQuery(queryData) {
     const endpoint = `/api/extension/diagnosis-queries`;
 
+    // Ride along with the same patient/assessment anchors every /mds/* call
+    // carries (externalPatientId, pccPublicId, ardDate, assessmentType). On an
+    // MDS section page the nurse's resident may be unnamable from the URL or the
+    // DOM; the backend resolves them from the assessment — or the MRN — instead,
+    // but only if we send these. Spread FIRST so an explicit field always wins.
+    const body = { ...(window.getMDSContextBodyFields?.() || {}), ...queryData };
+
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
       endpoint,
       options: {
         method: 'POST',
-        body: JSON.stringify(queryData)
+        body: JSON.stringify(body)
       }
     });
 
