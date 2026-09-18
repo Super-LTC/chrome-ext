@@ -225,14 +225,35 @@ export function resolveStablePatientRef(href) {
 // title can carry, e.g. "(OBRA)".
 const _PCC_PUBLIC_ID = /\(([A-Z0-9]{4,})\)/g;
 
-function _firstPublicIdIn(text) {
-  if (!text) return null;
-  _PCC_PUBLIC_ID.lastIndex = 0;
+// Second pass, for MRNs that carry a hyphen (`482-9137`, `AC4829-137`) — a
+// common PCC format the strict pattern above rejects outright, leaving those
+// facilities with NO patient anchor but the scraped numeric client id. Hyphens
+// are allowed only INSIDE the id, never at either end.
+const _PCC_PUBLIC_ID_HYPHENATED = /\(([A-Z0-9][A-Z0-9-]{2,}[A-Z0-9])\)/g;
+
+// A parenthesised date is not an MRN. Only reachable through the hyphen pass
+// (the strict pattern can't match a hyphen), but an ARD or admit date in a page
+// title is exactly the shape that would otherwise sail through: digits, a
+// hyphen, and comfortably over the length floor.
+const _DATE_SHAPED = /^\d{1,4}-\d{1,2}-\d{2,4}$/;
+
+function _scanPublicIds(text, re) {
+  re.lastIndex = 0;
   let m;
-  while ((m = _PCC_PUBLIC_ID.exec(text)) !== null) {
-    if (/\d/.test(m[1])) return m[1];
+  while ((m = re.exec(text)) !== null) {
+    const candidate = m[1];
+    if (!/\d/.test(candidate)) continue;      // all-caps decoration, e.g. "(OBRA)"
+    if (_DATE_SHAPED.test(candidate)) continue;
+    return candidate;
   }
   return null;
+}
+
+function _firstPublicIdIn(text) {
+  if (!text) return null;
+  // Strict first, so every facility that resolves an MRN today resolves the
+  // same one — the hyphen pass only gets a turn when nothing else matched.
+  return _scanPublicIds(text, _PCC_PUBLIC_ID) || _scanPublicIds(text, _PCC_PUBLIC_ID_HYPHENATED);
 }
 
 export function scrapePccPublicIdFromDOM(doc = document) {
