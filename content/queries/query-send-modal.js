@@ -345,6 +345,7 @@ const QuerySendModal = {
       // If no existing query, create one first
       if (!queryId) {
         const ai = this._state.result.aiAnswer;
+        this._requirePatientId();
 
         const createData = {
           patientId: this._state.context.patientId,
@@ -541,6 +542,21 @@ const QuerySendModal = {
   },
 
   /**
+   * Guard before any create: with no resident resolved, the POST is guaranteed
+   * to 400 and the nurse sees the backend's raw field list ("Missing required
+   * fields: patientId, facilityName, orgSlug, …"), which tells them nothing they
+   * can act on. Fail here with the actual instruction instead.
+   */
+  _requirePatientId() {
+    if (this._state.context?.patientId) return;
+    const err = new Error(
+      "Couldn't identify the resident on this page. Reload the MDS page and try again."
+    );
+    err.code = 'no_patient_id';
+    throw err;
+  },
+
+  /**
    * Ensure a persisted query exists so we have an ID to print against.
    * Mirrors the create branch of _handleSend, but never sends to a practitioner.
    * Returns the query ID.
@@ -548,6 +564,7 @@ const QuerySendModal = {
   async _ensureQueryCreated() {
     if (this._state.existingQuery?.id) return this._state.existingQuery.id;
     if (!this._state.result) throw new Error('Nothing to print');
+    this._requirePatientId();
 
     const ai = this._state.result.aiAnswer || {};
     const selected = this._state.selectedIcd10;
@@ -881,9 +898,15 @@ const QuerySendModal = {
                          mdsState.context?.assessmentId || mdsState.manualContext?.assessmentId ||
                          window.resolveStableAssessmentId?.() || '';
 
-    // Use stored patientId from API response (preferred), fallback to the stable
-    // numeric id from the page (handles EID_ tokens in the URL).
-    const patientId = window.SuperOverlay?.patientId ||
+    // Internal id from the section response when the overlay cached it, then the
+    // page's numeric PCC client id — including the DOM scrape, which is the ONLY
+    // source on an MDS section page (section.xhtml never carries ESOLclientid in
+    // its URL, so resolveStableClientId() alone returns null there and the create
+    // POST went out with an empty patientId → 400 "Missing required fields").
+    // The create endpoint accepts either id. The `||` chain is a load-order
+    // backstop for the case where context.js hasn't attached the helper yet.
+    const patientId = window.getDiagnosisQueryPatientId?.() ||
+                      window.SuperOverlay?.patientId ||
                       mdsState.context?.patientId ||
                       window.resolveStableClientId?.() || '';
 
