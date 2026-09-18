@@ -4,7 +4,12 @@ All notable changes to the Super LTC Chrome extension, newest first.
 Version = `manifest.json` `version`. Each entry records what shipped in that
 bump so we can tell the current build apart from the last one at a glance.
 
-> **Store note:** **v1.0.79** was zipped for Chrome Web Store submission on
+> **Store note:** **v1.0.80** was zipped for Chrome Web Store submission on
+> 2026-09-18 (`super-ltc-store.zip`) — it carries the two MDS-page query fixes
+> (#100, #101): "Send" on a diagnosis query from an MDS section page no longer
+> POSTs an empty `patientId`, and hyphenated MRNs are now scraped so those
+> facilities send a `pccPublicId` anchor at all. Before that, **v1.0.79** was
+> zipped on
 > 2026-09-17 (`super-ltc-store.zip`) — it carries scheduled certification sends
 > (#99): queue a cert to go out on a future morning (default 6:00 AM
 > facility-local). Requires the backend scheduled-send routes to be deployed.
@@ -49,6 +54,44 @@ bump so we can tell the current build apart from the last one at a glance.
 > 2026-07-22, v1.0.65 uploaded earlier on 2026-07-22, v1.0.64 on 2026-07-20,
 > v1.0.63 on 2026-07-13, and v1.0.57 (`6cd25b6`) before that — v1.0.58–1.0.62
 > were dev/internal only. Update this note when you `zip:store` and upload.
+
+## [1.0.80] — 2026-09-18
+
+Two merged PRs (#100, #101) on top of 1.0.79. Both close the same gap from
+opposite sides: identifying the resident when a diagnosis query is sent from an
+MDS section page.
+
+### Fixed
+- "Send" on an MDS section query POSTed an empty `patientId` (#100): on PCC's
+  `section.xhtml` the client id is never in the URL, so `SuperOverlay.patientId`
+  → `MDSViewState` → `resolveStableClientId()` could all come back empty and the
+  backend rejected the create with a raw field list. New
+  `getDiagnosisQueryPatientId()` in `context.js` falls through internal overlay
+  id → URL client id → cached external id → DOM-scraped numeric id, and a
+  `_requirePatientId()` guard replaces the field-list toast with words a nurse
+  can act on.
+- Hyphenated MRNs were dropped on the floor (#101):
+  `scrapePccPublicIdFromDOM()` matched `\(([A-Z0-9]{4,})\)`, which rejects any
+  MRN carrying a hyphen — a common PCC format — so those buildings sent no
+  `pccPublicId` at all. The strict pattern still runs first and wins; the hyphen
+  pass only fires when it found nothing, and parenthesised dates are rejected so
+  an ARD in a page title can't sail through.
+- `QueryAPI.createQuery()` now sends the MDS context anchors (#101):
+  `externalPatientId`, `pccPublicId`, `ardDate`, `assessmentType` via
+  `getMDSContextBodyFields()`, the same set every other MDS call carries, so the
+  backend can resolve the resident from the assessment or the MRN when the page
+  could not name one. Spread first, so an explicit field always wins.
+
+### Changed
+- `manifest.json` version 1.0.79 → 1.0.80.
+
+### Verified in the zip before upload
+- Manifest reads 1.0.80; no third-party PostHog host anywhere in the zip
+  (analytics ride the background worker to `/api/v1/analytics/events` on
+  superltc.com).
+- Updater scripts excluded; `pdfjs-dist` 4.10.38 in node_modules matches the
+  bundled `apiVersion` and `lib/pdf.worker.min.js`.
+- 1065 tests / 81 files green.
 
 ## [1.0.79] — 2026-09-17
 
