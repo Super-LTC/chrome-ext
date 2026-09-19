@@ -8,6 +8,8 @@
  * modal so it stays out of the initial bundle).
  */
 
+import { carePlanAuthoringEnabledHere } from './authoring-gate.js';
+
 const BTN_ID_PREFIX = 'super-cpas-btn-';   // suffix with row index to support top+bottom rows
 const OVERLAY_ID = 'super-cpas-overlay';
 
@@ -184,12 +186,19 @@ async function _openModal({ patientId, patientName, facilityName, orgSlug, defau
  * Walk every "New Custom Focus" button on the page (typically two — top + bottom)
  * and inject our button after each one. Idempotent: a second pass is a no-op.
  */
-function injectCarePlanStampButton() {
+async function injectCarePlanStampButton() {
   if (!_isCarePlanDetailPage()) return;
 
   // PCC uses duplicate IDs (top + bottom button rows). querySelectorAll for safety.
   const targets = document.querySelectorAll('[id="idNewCustomFocusBtn"]');
   if (!targets.length) return;
+
+  // Authoring off for this org/user → no button at all. Checked before the DOM
+  // write so nothing flashes in and back out. Kept inside inject() rather than
+  // only at the call sites so `window.CarePlanStampInjector.inject()` is gated
+  // too; the gate caches one round-trip per facility, so the retry loop below
+  // pays for it once.
+  if (!(await carePlanAuthoringEnabledHere())) return;
 
   targets.forEach((target, i) => {
     const btnId = `${BTN_ID_PREFIX}${i}`;
@@ -198,6 +207,8 @@ function injectCarePlanStampButton() {
     target.parentNode.insertBefore(btn, target.nextSibling);
   });
 
+  // Reached only past the gate above — prewarm hits /care-plan/prewarm, which is
+  // itself an authoring endpoint.
   _firePrewarm();
 }
 
@@ -223,7 +234,13 @@ function _firePrewarm() {
 // re-inject on each load — and existing super-menu init runs a MutationObserver
 // for URL changes that may fire before our DOM target exists). Safest path:
 // run once, then poll briefly for the buttons to appear.
-function _initWithPolling() {
+async function _initWithPolling() {
+  // Settle the gate BEFORE starting the retry budget. The 10×250ms window below
+  // exists for PCC's DOM, not for a network round-trip — letting a cold
+  // module-status call spend it would lose the button on slow responses at orgs
+  // that are perfectly entitled to it.
+  if (!(await carePlanAuthoringEnabledHere())) return;
+
   injectCarePlanStampButton();
   // PCC loads buttons synchronously in the page render, so a short retry handles
   // the rare case where this file runs before the buttons hit the DOM.

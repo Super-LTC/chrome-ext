@@ -10,6 +10,8 @@
  * Mirrors inject-button.js's polling + MutationObserver patterns.
  */
 
+import { carePlanAuthoringEnabledHere } from './authoring-gate.js';
+
 const BANNER_ID = 'super-audit-banner';
 const OVERLAY_ID_FALLBACK = 'super-cpas-overlay';
 const DISMISS_KEY = 'super_audit_banner_dismissed';
@@ -40,6 +42,11 @@ async function _renderBanner() {
   const patientId = _resolvePatientId();
   if (!patientId) return;
   if (sessionStorage.getItem(_dismissKeyFor(patientId))) return;
+
+  // Authoring off for this org/user → no banner. Without this the nurse gets a
+  // "🔍 Loading care plan audit…" that always resolves to "⚠ Audit failed to
+  // load." on every care plan page, because /audit 403s.
+  if (!(await carePlanAuthoringEnabledHere())) return;
 
   // Anchor: inject above the action row that contains "New Custom Focus".
   const newCustomBtn = document.querySelector('[id="idNewCustomFocusBtn"]');
@@ -189,7 +196,10 @@ async function _openWizard({ patientId, facilityName, orgSlug }, isV2 = false) {
   window.SuperAnalytics?.track?.('care_plan_audit_opened_from_banner', { patient_id: patientId });
 }
 
-function _initWithPolling() {
+async function _initWithPolling() {
+  // Settle the gate before spending the DOM retry budget — see inject-button.js.
+  if (!(await carePlanAuthoringEnabledHere())) return;
+
   _renderBanner();
   let tries = 0;
   const id = setInterval(() => {
