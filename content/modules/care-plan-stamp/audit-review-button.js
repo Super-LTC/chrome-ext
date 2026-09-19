@@ -8,6 +8,8 @@
  * v1: global audit (not department-sliced).
  */
 
+import { carePlanAuthoringEnabledHere } from './authoring-gate.js';
+
 const BANNER_ID = 'super-audit-review-banner';
 const OVERLAY_ID_FALLBACK = 'super-cpas-overlay';
 
@@ -32,6 +34,9 @@ async function _renderBanner() {
 
   const patientId = _resolvePatientId();
   if (!patientId) return;
+
+  // Authoring off for this org/user → no banner (see audit-banner.js).
+  if (!(await carePlanAuthoringEnabledHere())) return;
 
   // Anchor: inject above the per-department review table. We look for
   // the table cell containing "Department" header text and walk up.
@@ -195,7 +200,10 @@ async function _openWizard({ patientId, facilityName, orgSlug }, isV2 = false) {
   window.SuperAnalytics?.track?.('care_plan_audit_opened_from_review_page', { patient_id: patientId });
 }
 
-function _initWithPolling() {
+async function _initWithPolling() {
+  // Settle the gate before spending the DOM retry budget — see inject-button.js.
+  if (!(await carePlanAuthoringEnabledHere())) return;
+
   _renderBanner();
   let tries = 0;
   const id = setInterval(() => {
