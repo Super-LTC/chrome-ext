@@ -13,6 +13,8 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # GITHUB_TOKEN needs nothing else; deny the rest by omission
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
