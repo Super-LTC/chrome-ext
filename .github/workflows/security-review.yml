@@ -21,7 +21,25 @@ jobs:
       actions: read
 
     steps:
+      # GitHub deliberately withholds Actions secrets from pull_request events
+      # raised by Dependabot, so this job cannot authenticate on those PRs. That
+      # is a feature, not an obstacle: a malicious dependency version would
+      # otherwise run with our credential in scope. Dependency bumps are covered
+      # by the build job, by CodeQL, and by Dependabot's own advisory data, so
+      # short-circuit to a pass rather than leave a required check permanently
+      # red — which would block every dependency update forever.
+      - name: Decide whether an LLM review applies
+        id: applies
+        run: |
+          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then
+            echo "Dependabot pull request — covered by build + CodeQL. Skipping LLM review."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Verify review credential is configured
+        if: steps.applies.outputs.run == 'true'
         env:
           TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
@@ -33,11 +51,13 @@ jobs:
           fi
 
       - name: Checkout repository
+        if: steps.applies.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # full history so Claude can diff against the base branch
 
       - name: Run Claude Security Review
+        if: steps.applies.outputs.run == 'true'
         id: claude-security-review
         uses: anthropics/claude-code-action@v1
         with:
