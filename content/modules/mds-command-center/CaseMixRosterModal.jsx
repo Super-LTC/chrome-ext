@@ -51,6 +51,19 @@ const COLUMNS = [
  * that — it strips `projected` from a closed quarter rather than trusting each
  * client to remember, because the web surface shipped that bug once.
  */
+/**
+ * The payer chip's hover — which payer, and AS OF WHEN.
+ *
+ * `payerAsOf` null means the census did not reach back to the ARD and the engine
+ * fell back to today's payer. That is the one case where the verdict on this row
+ * can still move as PCC is updated, so it says so rather than staying silent and
+ * letting the reader assume the date was checked.
+ */
+function payerTitle(r) {
+  if (!r.payerAsOf) return `${r.payer} — today's payer; no census record back to the assessment`;
+  return `${r.payer}, as of ${r.payerAsOf} — the payer in force on this resident's ARD, which is what Ohio scores on`;
+}
+
 export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const [record, setRecord] = useState('any');
@@ -223,7 +236,16 @@ export function CaseMixRosterModal({ quarter, facilityName, orgSlug, onClose }) 
                   <tr key={r.patientId}>
                     <td class="cmi-tbl__name">
                       {r.patientName}
-                      {r.payer && <span class="cmi-tbl__payer">{r.payer}</span>}
+                      {r.payer && (
+                        // WHEN, not just what. Ohio reads the payer as of the ARD of
+                        // the assessment being scored, so a resident who has since
+                        // moved to Medicare A still shows the payer that governed
+                        // this record. Without the date the row looks simply wrong to
+                        // anyone checking it against PCC today.
+                        <span class="cmi-tbl__payer" title={payerTitle(r)}>
+                          {r.payer}
+                        </span>
+                      )}
                     </td>
                     <td class="cmi-tbl__c" title={r.countsReason ?? undefined}>
                       {r.needsReview ? (
