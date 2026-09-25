@@ -1,0 +1,33 @@
+version: 2
+
+# Dependabot SECURITY updates (advisory-driven) are enabled in repo settings and
+# need nothing here. This file is the VERSION updates half: it keeps dependencies
+# moving so the tree does not drift back into advisory range between audits.
+#
+# Grouped so minor and patch updates arrive as two PRs a week rather than one per
+# package. Majors still come individually — those are the ones that need a human.
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      production-minor-and-patch:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development-minor-and-patch:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
