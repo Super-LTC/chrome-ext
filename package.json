@@ -35,7 +35,7 @@
   },
   "homepage": "https://github.com/Superjonathan123/chrome-ext#readme",
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.3.0",
+    "@crxjs/vite-plugin": "^3.0.0",
     "@preact/preset-vite": "^2.10.3",
     "@preact/signals": "^2.7.1",
     "@tailwindcss/postcss": "^4.1.16",
