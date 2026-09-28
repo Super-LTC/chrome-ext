@@ -51,7 +51,7 @@
     "driver.js": "^1.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
-    "pdfjs-dist": "^4.10.38",
+    "pdfjs-dist": "^6.3.289",
     "posthog-js": "^1.372.1",
     "preact": "^10.28.3",
     "qrcode": "^1.5.4",
