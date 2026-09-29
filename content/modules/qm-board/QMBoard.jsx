@@ -41,6 +41,7 @@ import { FiveStarLanding } from './components/five-star/FiveStarLanding.jsx';
 import { FacilityScope } from './components/five-star/FacilityScope.jsx';
 import { QipDestination } from './components/qip/QipDestination.jsx';
 import { toMeasureDetailQip } from './lib/fl-qip-view-model.js';
+import { hasQipScorer } from './lib/qip-programs.js';
 import { sameFacilityName } from './lib/region-pin.js';
 import { FunctionalDeclineView } from './FunctionalDecline.jsx';
 import { AideScoringView } from './aide-scoring/AideScoringView.jsx';
@@ -139,7 +140,13 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
     && (isOverview || view === 'measure' || view === 'quarter-roster');
   // QIP owns its whole destination for the same reason: a measure opened from a
   // QIP building must read THAT building's residents, not the PCC page's.
-  const inQip = mode === 'qip' && (isOverview || view === 'measure');
+  //
+  // Only for a building in a state we SCORE (hasQipScorer — FL today), same gate
+  // as the web dashboard's QIP tab. GA/AL/TN/TX/OH have a program on paper but
+  // no scorer, so they get no QIP destination at all — not an empty Florida board.
+  const showQip = hasQipScorer(currentlyTriggering?.facilityState);
+  const destinations = showQip ? DESTINATIONS : DESTINATIONS.filter((d) => d.mode !== 'qip');
+  const inQip = showQip && mode === 'qip' && (isOverview || view === 'measure');
   // Mirrors the web's split. A QIP measure opened for the building the user has
   // open in PCC can use the RICH MeasureDetail — its board, residents and what-if
   // are already loaded here. Any other building has only quarter-rates, so it gets
@@ -186,7 +193,7 @@ export function QMBoard({ facilityName, orgSlug, onClose }) {
             {isOverview && (
               <div className="qmc qmb__modebar">
                 <div className="qmb__modeswitch" role="tablist" aria-label="Quality destination">
-                  {DESTINATIONS.map((d) => (
+                  {destinations.map((d) => (
                     <button key={d.mode} type="button" role="tab" aria-selected={mode === d.mode} /* NO_TRACK */
                       className={`qmb__modebtn ${mode === d.mode ? 'qmb__modebtn--on' : ''}`}
                       onClick={() => nav.go({ mode: d.mode, view: 'overview' })}>{d.label}</button>
