@@ -2587,7 +2587,7 @@
 
 /* Wider modal for orgs on the checkbox form — four columns need the room. */
 .cm--wide {
-  width: 720px;
+  width: 900px;
   max-width: calc(100vw - 32px);
 }
 
@@ -2606,8 +2606,14 @@
 
 /* The catalog arrives column-major, so CSS columns reproduce the paper form. */
 .cm-reasons {
-  columns: 4;
-  column-gap: 14px;
+  /* Paper order is column-major: fill top→bottom, then the next column. A grid
+     (rows set inline from the catalog length) keeps every column exactly as long
+     as the paper's, where CSS columns rebalanced and shifted boxes across. */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: column;
+  column-gap: 10px;
+  row-gap: 1px;
   margin: 0 -4px;
 }
 

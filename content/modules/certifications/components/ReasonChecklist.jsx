@@ -27,7 +27,10 @@ export function ReasonChecklist({ form, value, other, onChange, onOtherChange })
     <div class="cm-reasons-wrap">
       {/* Only a real count; with nothing checked (even if Other is filled) say nothing. */}
       {list.length > 0 && <div class="cm-reasons__count">{list.length} checked</div>}
-      <div class="cm-reasons">
+      <div
+        class="cm-reasons"
+        style={{ gridTemplateRows: `repeat(${Math.ceil((form?.reasons?.length || 0) / 4) || 1}, auto)` }}
+      >
         {(form?.reasons || []).map((r) => {
           const sel = byCode.get(r.code);
           return (
