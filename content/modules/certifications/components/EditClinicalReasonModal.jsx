@@ -3,7 +3,7 @@ import { CertModal } from './CertModal.jsx';
 import { DischargePlanPicker, parseDischargePlan, composeDischargePlan, isDischargePlanValid } from './DischargePlanPicker.jsx';
 import { GenerateReasonButton } from './GenerateReasonButton.jsx';
 import { ReasonChecklist } from './ReasonChecklist.jsx';
-import { mergeRegenerated, hasAnyReason, NO_REASON_MESSAGE } from '../reason-codes.js';
+import { mergeRegenerated, hasAnyReason, seedReasonOther, NO_REASON_MESSAGE } from '../reason-codes.js';
 
 /**
  * EditClinicalReasonModal — edit a recert's reason, estimated stay and discharge plan.
@@ -31,7 +31,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certFo
     if (isOpen && cert) {
       setClinicalReason(cert.clinicalReason || '');
       setReasons(cert.reasonCodes ?? []);
-      setReasonOther(cert.reasonOther ?? '');
+      setReasonOther(seedReasonOther(cert));
       setEstimatedDays(cert.estimatedDays || 30);
       const parsed = parseDischargePlan(cert.planForDischarge, dischargeOptions);
       setDischargeOption(parsed.option);

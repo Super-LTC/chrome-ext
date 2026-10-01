@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toggleReason, mergeRegenerated, hasAnyReason } from '../reason-codes.js';
+import { toggleReason, mergeRegenerated, hasAnyReason, seedReasonOther } from '../reason-codes.js';
 import { CERT_FORM, REASON_CODES } from './cert-form-fixture.js';
 
 const codes = (list) => list.map((r) => r.code);
@@ -109,5 +109,25 @@ describe('hasAnyReason', () => {
 
   it('is true with only other text', () => {
     expect(hasAnyReason([], 'Trach care')).toBe(true);
+  });
+});
+
+describe('seedReasonOther', () => {
+  it('uses the saved Other text', () => {
+    expect(seedReasonOther({ reasonCodes: [], reasonOther: 'Trach care', clinicalReason: 'PT/OT; Other: Trach care' })).toBe('Trach care');
+  });
+
+  it('carries a pre-switch typed reason into Other when no boxes were ever saved', () => {
+    expect(seedReasonOther({ reasonCodes: null, reasonOther: null, clinicalReason: 'PT/OT 5x/week. Skilled nursing daily for wound care.' }))
+      .toBe('PT/OT 5x/week. Skilled nursing daily for wound care.');
+  });
+
+  it('does not copy the derived summary once boxes exist', () => {
+    expect(seedReasonOther({ reasonCodes: [{ code: 'pt_ot', auto: true, evidence: null }], reasonOther: null, clinicalReason: 'PT/OT' })).toBe('');
+  });
+
+  it('is empty for a blank cert', () => {
+    expect(seedReasonOther({ reasonCodes: null, reasonOther: null, clinicalReason: null })).toBe('');
+    expect(seedReasonOther(undefined)).toBe('');
   });
 });

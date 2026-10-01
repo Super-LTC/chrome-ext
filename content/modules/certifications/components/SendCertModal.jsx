@@ -6,7 +6,7 @@ import { ReasonChecklist } from './ReasonChecklist.jsx';
 import { ScheduleSlotPicker } from './ScheduleSlotPicker.jsx';
 import { HourglassIcon } from './HourglassIcon.jsx';
 import { defaultSlot, formatSlot, isSlotInFuture } from '../schedule-slot.js';
-import { mergeRegenerated, hasAnyReason, NO_REASON_MESSAGE } from '../reason-codes.js';
+import { mergeRegenerated, hasAnyReason, seedReasonOther, NO_REASON_MESSAGE } from '../reason-codes.js';
 
 /**
  * SendCertModal — single-screen send flow, with a schedule mode.
@@ -56,7 +56,7 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
     if (!isOpen || !cert) return;
     setClinicalReason(cert.clinicalReason || '');
     setReasons(cert.reasonCodes ?? []);
-    setReasonOther(cert.reasonOther ?? '');
+    setReasonOther(seedReasonOther(cert));
     setEstimatedDays(cert.estimatedDays || 30);
     const parsed = parseDischargePlan(cert.planForDischarge, dischargeOptions);
     setDischargeOption(parsed.option);

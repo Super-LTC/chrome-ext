@@ -53,3 +53,15 @@ export const NO_REASON_MESSAGE = 'Check at least one reason or fill in Other';
 export function hasAnyReason(list, other) {
   return (list?.length ?? 0) > 0 || !!(other && other.trim());
 }
+
+/**
+ * Starting text for the Other line. A recert typed before the org switched to the
+ * checkbox form has no reasonCodes yet, only its free-text clinicalReason — carry
+ * that into Other so the nurse's words aren't dropped (the PDF does the same).
+ * @param {{reasonCodes?: Array|null, reasonOther?: string|null, clinicalReason?: string|null}} cert
+ */
+export function seedReasonOther(cert) {
+  if (cert?.reasonOther) return cert.reasonOther;
+  if (cert?.reasonCodes == null && cert?.clinicalReason) return cert.clinicalReason;
+  return '';
+}
