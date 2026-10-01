@@ -63,7 +63,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certFo
     <CertModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit Clinical Reason"
+      title={checkboxForm ? 'Edit Reasons' : 'Edit Clinical Reason'}
       subtitle={cert?.patientName}
       wide={checkboxForm}
       actions={[
@@ -76,7 +76,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certFo
           <span class="cm-section__icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </span>
-          <span class="cm-section__label">Clinical Reason</span>
+          <span class="cm-section__label">{checkboxForm ? 'Reasons for continued care' : 'Clinical Reason'}</span>
           {checkboxForm ? (
             <GenerateReasonButton
               certId={cert?.id}
