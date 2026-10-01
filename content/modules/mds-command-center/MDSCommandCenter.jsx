@@ -682,9 +682,19 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
     data: complianceData,
     loading: complianceLoading,
     error: complianceError,
+    disabled: carePlanDisabled,
     retry: complianceRetry
   } = useComplianceDashboard({ facilityName, orgSlug, enabled: true });
   const complianceGaps = complianceData?.summary?.totalGaps || 0;
+
+  // Care plans switched off at this building (server's call) → no Care Plan tab and
+  // no Rounding tab (the checklist is part of the same Compliance module). If one
+  // of them was already open when the answer landed, fall back to assessments.
+  useEffect(() => {
+    if (carePlanDisabled && (activeView === 'compliance' || activeView === 'rounding')) {
+      setActiveView('assessments');
+    }
+  }, [carePlanDisabled, activeView]);
 
   // Trending data for compliance chart
   const { data: trendingData } = useTrending({ facilityName, orgSlug, enabled: true });
@@ -828,6 +838,7 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
           certsEnabled={certsEnabled}
           ipaEnabled={ipaEnabled}
           caseMixEnabled={caseMixEnabled}
+          carePlanEnabled={!carePlanDisabled}
           ipaCount={ipaCount}
           complianceGaps={complianceGaps}
           payerFilter={payerFilter}
@@ -924,7 +935,7 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
           )}
 
           {/* Compliance */}
-          {activeView === 'compliance' && (
+          {activeView === 'compliance' && !carePlanDisabled && (
             <ComplianceView
               data={complianceData}
               loading={complianceLoading}
@@ -937,7 +948,7 @@ export function MDSCommandCenter({ facilityName, orgSlug, onClose, initialExpand
           )}
 
           {/* Rounding */}
-          {activeView === 'rounding' && (
+          {activeView === 'rounding' && !carePlanDisabled && (
             <RoundingReports
               facilityName={facilityName}
               orgSlug={orgSlug}
