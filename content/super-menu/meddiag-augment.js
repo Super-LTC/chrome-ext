@@ -12,6 +12,11 @@
  * Data: GET /api/extension/patients/[id]/diagnoses/status-overview
  *   one network call per render. Refetch on icd10-viewer modal close
  *   (user may have submitted a query) and on a 60s interval as a backstop.
+ *
+ * The Care Plan column is dropped when the response says `carePlanEnabled:
+ * false` (a building with care plans switched off). The Query column stays —
+ * it rides the same response. An older server that doesn't send the field
+ * keeps the column, as before.
  */
 
 const MedDiagAugment = {
@@ -22,6 +27,7 @@ const MedDiagAugment = {
   _byCode: null,         // Map<icd10Code, diagnosis row>
   _refreshTimer: null,
   _attempts: 0,
+  _showCarePlan: true,   // false once the server says care plans are off here
 
   /**
    * Entry point — called from init.js when the URL matches medDiagChart.
@@ -87,6 +93,7 @@ const MedDiagAugment = {
         return;
       }
       this._data = data;
+      if (data.carePlanEnabled === false) this._removeCarePlanColumn();
       this._byCode = new Map();
       for (const dx of data.diagnoses || []) {
         const k = dx?.code || dx?.icd10Code;
@@ -108,7 +115,7 @@ const MedDiagAugment = {
     const rows = document.querySelectorAll('#meddiaglisting tbody tr');
     rows.forEach(row => {
       const { cpCell, qCell } = this._ensureCells(row);
-      cpCell.innerHTML = `<span class="super-meddiag-skel" aria-label="Loading"></span>`;
+      if (cpCell) cpCell.innerHTML = `<span class="super-meddiag-skel" aria-label="Loading"></span>`;
       qCell.innerHTML = `<span class="super-meddiag-skel" aria-label="Loading"></span>`;
     });
   },
@@ -117,27 +124,36 @@ const MedDiagAugment = {
     const rows = document.querySelectorAll('#meddiaglisting tbody tr');
     rows.forEach(row => {
       const { cpCell, qCell } = this._ensureCells(row);
-      cpCell.innerHTML = '';
+      if (cpCell) cpCell.innerHTML = '';
       qCell.innerHTML = '';
     });
   },
 
+  /** Care plans are off at this building: drop the CP header + cells, and never add them back. */
+  _removeCarePlanColumn() {
+    this._showCarePlan = false;
+    document
+      .querySelectorAll('#meddiaglisting .super-meddiag-th--cp, #meddiaglisting .super-meddiag-cell--cp')
+      .forEach((el) => el.remove());
+  },
+
   _ensureCells(row) {
+    // cpCell is null when the Care Plan column is off (_showCarePlan).
     let cpCell = row.querySelector('.super-meddiag-cell--cp');
     let qCell = row.querySelector('.super-meddiag-cell--q');
-    if (!cpCell) {
-      cpCell = document.createElement('td');
-      cpCell.className = 'super-meddiag-cell super-meddiag-cell--cp';
+    if (!qCell) {
+      if (this._showCarePlan) {
+        cpCell = document.createElement('td');
+        cpCell.className = 'super-meddiag-cell super-meddiag-cell--cp';
+      }
       qCell = document.createElement('td');
       qCell.className = 'super-meddiag-cell super-meddiag-cell--q';
       const tds = row.querySelectorAll('td');
       const insertBefore = tds[Math.max(0, tds.length - 2)] || null;
-      if (insertBefore) {
-        row.insertBefore(cpCell, insertBefore);
-        row.insertBefore(qCell, insertBefore);
-      } else {
-        row.appendChild(cpCell);
-        row.appendChild(qCell);
+      for (const cell of [cpCell, qCell]) {
+        if (!cell) continue;
+        if (insertBefore) row.insertBefore(cell, insertBefore);
+        else row.appendChild(cell);
       }
     }
     return { cpCell, qCell };
@@ -165,10 +181,13 @@ const MedDiagAugment = {
     if (!headerRow) return;
     if (headerRow.querySelector('.super-meddiag-th')) return; // already injected
 
-    const cpTh = document.createElement('th');
-    cpTh.className = 'super-meddiag-th super-meddiag-th--cp';
-    cpTh.innerHTML = '<span title="Care Plan coverage from MDS focus areas">CP</span>';
-    cpTh.style.width = '4%';
+    let cpTh = null;
+    if (this._showCarePlan) {
+      cpTh = document.createElement('th');
+      cpTh.className = 'super-meddiag-th super-meddiag-th--cp';
+      cpTh.innerHTML = '<span title="Care Plan coverage from MDS focus areas">CP</span>';
+      cpTh.style.width = '4%';
+    }
 
     const qTh = document.createElement('th');
     qTh.className = 'super-meddiag-th super-meddiag-th--q';
@@ -179,12 +198,10 @@ const MedDiagAugment = {
     // they sit alongside the existing diagnostic metadata.
     const ths = headerRow.querySelectorAll('th');
     const insertBefore = ths[Math.max(0, ths.length - 2)] || null;
-    if (insertBefore) {
-      headerRow.insertBefore(cpTh, insertBefore);
-      headerRow.insertBefore(qTh, insertBefore);
-    } else {
-      headerRow.appendChild(cpTh);
-      headerRow.appendChild(qTh);
+    for (const th of [cpTh, qTh]) {
+      if (!th) continue;
+      if (insertBefore) headerRow.insertBefore(th, insertBefore);
+      else headerRow.appendChild(th);
     }
   },
 
@@ -203,10 +220,10 @@ const MedDiagAugment = {
       console.warn('[MedDiagAugment] no diagnosis for code:', code, 'known codes:', Array.from(this._byCode?.keys() || []));
     }
     const { cpCell, qCell } = this._ensureCells(row);
-    cpCell.innerHTML = '';
+    if (cpCell) cpCell.innerHTML = '';
     qCell.innerHTML = '';
     if (!dx) return;
-    cpCell.appendChild(this._buildCarePlanChip(dx));
+    if (cpCell) cpCell.appendChild(this._buildCarePlanChip(dx));
     qCell.appendChild(this._buildQueryChip(dx));
   },
 

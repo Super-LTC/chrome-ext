@@ -45,6 +45,9 @@ export function CommandCenterHeader({
   ipaEnabled,
   ipaCount,
   complianceGaps,
+  // false when care plans are switched off at this building → Care Plan + Rounding tabs hidden.
+  // Defaults to true so a caller that doesn't pass it keeps both tabs.
+  carePlanEnabled = true,
   payerFilter,
   onPayerFilterChange,
   classFilter,
@@ -178,19 +181,23 @@ export function CommandCenterHeader({
             {certHasUnseen && <span class="mds-cc__view-tab-dot" title="New recently-signed certs to review" />}
           </button>
         )}
-        <button
-          class={`mds-cc__view-tab${activeView === 'compliance' ? ' mds-cc__view-tab--active' : ''}`}
-          onClick={() => onViewChange('compliance')}
-        >
-          Care Plan
-          {complianceGaps > 0 && <span class="mds-cc__view-tab-badge mds-cc__view-tab-badge--amber">{complianceGaps}</span>}
-        </button>
-        <button
-          class={`mds-cc__view-tab${activeView === 'rounding' ? ' mds-cc__view-tab--active' : ''}`}
-          onClick={() => onViewChange('rounding')}
-        >
-          Rounding
-        </button>
+        {carePlanEnabled && (
+          <button
+            class={`mds-cc__view-tab${activeView === 'compliance' ? ' mds-cc__view-tab--active' : ''}`}
+            onClick={() => onViewChange('compliance')}
+          >
+            Care Plan
+            {complianceGaps > 0 && <span class="mds-cc__view-tab-badge mds-cc__view-tab-badge--amber">{complianceGaps}</span>}
+          </button>
+        )}
+        {carePlanEnabled && (
+          <button
+            class={`mds-cc__view-tab${activeView === 'rounding' ? ' mds-cc__view-tab--active' : ''}`}
+            onClick={() => onViewChange('rounding')}
+          >
+            Rounding
+          </button>
+        )}
       </div>
 
       {/* ── Assessments filter row ── */}
