@@ -7,8 +7,11 @@ import { useEffect, useRef } from 'preact/hooks';
  * `actions` entries: { label, variant, onClick, disabled, icon?, title? }.
  * `icon` takes a rendered node and sits before the label — used by the schedule
  * toggle, where the hourglass carries the meaning and the text only labels it.
+ *
+ * `wide` widens the modal (`.cm--wide`) for bodies that need the room — the
+ * checkbox cert form's four-column reason grid.
  */
-export function CertModal({ isOpen, onClose, title, subtitle, children, actions = [] }) {
+export function CertModal({ isOpen, onClose, title, subtitle, children, actions = [], wide = false }) {
   const overlayRef = useRef(null);
 
   useEffect(() => {
@@ -32,7 +35,7 @@ export function CertModal({ isOpen, onClose, title, subtitle, children, actions 
       ref={overlayRef}
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div class="cm">
+      <div class={`cm${wide ? ' cm--wide' : ''}`}>
         <div class="cm__header">
           <div class="cm__header-text">
             <h2 class="cm__title">{title}</h2>

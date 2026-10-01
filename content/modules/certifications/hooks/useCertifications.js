@@ -4,15 +4,23 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
  * Fetches certifications list with optional filters.
  * Re-fetches when filters change.
  *
+ * Also returns the org's `certForm` (top-level on the response): the checkbox
+ * cert form catalog, or null for orgs on the standard form.
+ *
  * Endpoint: GET /api/extension/certifications
  */
 export function useCertifications({ facilityName, orgSlug, status, patientId }) {
   const [certs, setCerts] = useState([]);
+  const [certForm, setCertForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
-    if (!facilityName || !orgSlug) return;
+    // No org/facility → no form; a previous org's form must not linger.
+    if (!facilityName || !orgSlug) {
+      setCertForm(null);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -33,6 +41,7 @@ export function useCertifications({ facilityName, orgSlug, status, patientId }) 
       }
 
       setCerts(result.data?.certifications || []);
+      setCertForm(result.data?.certForm ?? null);
     } catch (err) {
       console.error('[Certifications] Failed to fetch certifications:', err);
       window.SuperAnalytics?.track?.('error_shown', {
@@ -40,6 +49,7 @@ export function useCertifications({ facilityName, orgSlug, status, patientId }) 
         error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
         error_type: 'api_error',
       });
+      setCertForm(null);
       setError(err.message || 'Failed to load certifications');
     } finally {
       setLoading(false);
@@ -50,5 +60,5 @@ export function useCertifications({ facilityName, orgSlug, status, patientId }) 
     fetchData();
   }, [fetchData]);
 
-  return { certs, loading, error, refetch: fetchData };
+  return { certs, certForm, loading, error, refetch: fetchData };
 }

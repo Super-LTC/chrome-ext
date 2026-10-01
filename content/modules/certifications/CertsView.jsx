@@ -152,14 +152,19 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
   const [editCert, setEditCert] = useState(null);
 
   // Fetch non-signed certs
-  const { certs: activeCerts, loading: activeLoading, error: activeError, refetch: refetchActive } = useCertifications({
+  const { certs: activeCerts, certForm: activeCertForm, loading: activeLoading, error: activeError, refetch: refetchActive } = useCertifications({
     facilityName, orgSlug, patientId
   });
 
   // Fetch signed certs separately
-  const { certs: signedCerts, loading: signedLoading, refetch: refetchSigned } = useCertifications({
+  const { certs: signedCerts, certForm: signedCertForm, loading: signedLoading, refetch: refetchSigned } = useCertifications({
     facilityName, orgSlug, patientId, status: 'signed'
   });
+
+  // The org's checkbox cert form (null for standard orgs). Org-level, so either
+  // response carries the same value; it also covers certs opened from the
+  // Discharged / Audit tabs, whose endpoints don't send it.
+  const certForm = activeCertForm ?? signedCertForm ?? null;
 
   // Discharged tab — lazy, paginated, patient-grouped (separate endpoint).
   // Only fetches once the tab is first opened.
@@ -397,8 +402,11 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
     refetchAll();
   }
 
-  async function handleEditReason({ clinicalReason, estimatedDays, planForDischarge }) {
-    await window.CertAPI.saveClinicalReason(editCert.id, { clinicalReason, estimatedDays, planForDischarge });
+  // `details` is { clinicalReason, estimatedDays, planForDischarge } for standard
+  // orgs, or { reasonCodes, reasonOther, estimatedDays, planForDischarge } for
+  // checkbox-form orgs — the modal picks the shape, this passes it through.
+  async function handleEditReason(details) {
+    await window.CertAPI.saveClinicalReason(editCert.id, details);
     window.SuperToast?.success?.(`Clinical details updated for ${editCert.patientName}`);
     refetchAll();
   }
@@ -692,6 +700,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
         onSent={refetchAll}
         startInScheduleMode={sendCertScheduleMode}
         onScheduleChanged={refetchScheduled}
+        certForm={certForm}
       />
 
       <ScheduledSendsModal
@@ -729,6 +738,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
         onClose={() => setEditCert(null)}
         cert={editCert}
         onSaved={handleEditReason}
+        certForm={certForm}
       />
     </div>
   );

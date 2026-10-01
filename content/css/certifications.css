@@ -2582,6 +2582,213 @@
 }
 
 /* ═════════════════════════════════════════════
+   Reason checklist (checkbox cert form)
+   ═════════════════════════════════════════════ */
+
+/* Wider modal for orgs on the checkbox form — four columns need the room. */
+.cm--wide {
+  width: 900px;
+  max-width: calc(100vw - 32px);
+}
+
+.cm-reasons-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cm-reasons__count {
+  align-self: flex-end;
+  font-size: 12px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The catalog arrives column-major, so CSS columns reproduce the paper form. */
+.cm-reasons {
+  /* Paper order is column-major: fill top→bottom, then the next column. A grid
+     (rows set inline from the catalog length) keeps every column exactly as long
+     as the paper's, where CSS columns rebalanced and shifted boxes across. */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: column;
+  column-gap: 10px;
+  row-gap: 1px;
+  margin: 0 -4px;
+}
+
+.cm-reason {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+  break-inside: avoid;
+  box-sizing: border-box;
+}
+
+.cm-reason:hover {
+  background: #f1f5f9;
+}
+
+.cm-reason--selected {
+  background: #f0f4ff;
+}
+
+.cm-reason--selected:hover {
+  background: #e8edfc;
+}
+
+.cm-reason .cm-check-box {
+  width: 15px;
+  height: 15px;
+}
+
+.cm-reason__label {
+  font-size: 13px;
+  line-height: 1.3;
+  color: #1e293b;
+  letter-spacing: -0.01em;
+  min-width: 0;
+}
+
+/* AI-checked marker; hover or focus reveals the evidence. */
+.cm-reason__spark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-left: -2px;
+  border-radius: 50%;
+  color: #8b5cf6;
+  cursor: help;
+}
+
+.cm-reason__spark:hover,
+.cm-reason__spark:focus-visible {
+  background: #f3e8ff;
+  outline: none;
+}
+
+.cm-reason__why {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 5;
+  width: 240px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e9d5ff;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #334155;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+/* Right-hand columns open the tooltip leftward so it stays inside the modal. */
+.cm-reason[data-column="3"] .cm-reason__why,
+.cm-reason[data-column="4"] .cm-reason__why {
+  left: auto;
+  right: -8px;
+}
+
+.cm-reason__spark:hover .cm-reason__why,
+.cm-reason__spark:focus .cm-reason__why {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cm-reasons-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.cm-reasons-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+/* Collapsed view: the checked reasons as soft chips, then "Edit reasons". */
+.cm-reasons-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.cm-reason-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f0f4ff;
+  border: 1px solid #dfe6fb;
+  font-size: 13px;
+  line-height: 1.3;
+  color: #1e293b;
+}
+
+.cm-reason-chip .cm-reason__spark {
+  margin-left: 0;
+  margin-right: -4px;
+}
+
+.cm-reason-chip--other {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.cm-reasons-toggle {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #4f46e5;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.cm-reasons-toggle:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.cm-reasons-other__label {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+
+/* ═════════════════════════════════════════════
    Discharge Plan Picker (cm-discharge)
    ═════════════════════════════════════════════ */
 .cm-discharge {

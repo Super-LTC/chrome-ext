@@ -13,10 +13,17 @@ import { useState } from 'preact/hooks';
  * @param {string} props.certType     — day_14_recert | day_30_recert (analytics)
  * @param {boolean} props.hasText      — field already has text → "Regenerate"
  * @param {'send'|'edit'} props.surface — which modal (analytics)
- * @param {(text: string, source: 'ai'|'fallback') => void} props.onGenerated
+ * @param {'text'|'checkbox'} [props.form] — 'checkbox' for orgs on a checkbox
+ *   cert form: the same endpoint suggests boxes instead of prose, the button
+ *   reads "Re-check from chart", and analytics carry form: 'checkbox'.
+ * @param {(text: string, source: string, body: Object) => void} props.onGenerated
+ *   — `body` is the whole response; checkbox callers read body.reasonCodes.
  */
-export function GenerateReasonButton({ certId, certType, hasText, surface, onGenerated }) {
+export function GenerateReasonButton({ certId, certType, hasText, surface, form = 'text', onGenerated }) {
   const [loading, setLoading] = useState(false);
+  const isCheckbox = form === 'checkbox';
+  // Standard events stay byte-for-byte what they were; checkbox ones are tagged.
+  const formProps = isCheckbox ? { form: 'checkbox' } : {};
 
   function handleClick() {
     if (loading) return;
@@ -24,17 +31,27 @@ export function GenerateReasonButton({ certId, certType, hasText, surface, onGen
       cert_type: certType,
       is_regenerate: !!hasText,
       surface,
+      ...formProps,
     });
     setLoading(true);
     window.CertAPI.generateClinicalReason(certId)
-      .then(({ clinicalReason, source }) => {
-        onGenerated(clinicalReason, source);
+      .then((body) => {
+        const { clinicalReason, source } = body;
+        onGenerated(clinicalReason, source, body);
         window.SuperAnalytics?.track?.('cert_reason_generated', {
           cert_type: certType,
           source,
           surface,
+          ...formProps,
         });
-        if (source === 'fallback') {
+        if (isCheckbox) {
+          // An empty result or a rules-only match is not the AI's read of the chart; say so.
+          if (!body.reasonCodes?.length) {
+            window.SuperToast?.info?.('No reasons found in the chart — check the boxes that apply');
+          } else if (source === 'rules') {
+            window.SuperToast?.info?.('Suggestions ready — please review before saving');
+          }
+        } else if (source === 'fallback') {
           window.SuperToast?.info?.('Draft ready — please review before saving');
         }
       })
@@ -60,12 +77,12 @@ export function GenerateReasonButton({ certId, certType, hasText, surface, onGen
       {loading ? (
         <>
           <span class="cm-gen-btn__spinner" />
-          Generating…
+          {isCheckbox ? 'Checking chart…' : 'Generating…'}
         </>
       ) : (
         <>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.8L18.7 9l-4.8 1.9L12 15.7l-1.9-4.8L5.3 9l4.8-1.2z"/><path d="M19 14l.7 1.9L21.6 16l-1.9.7L19 18.6l-.7-1.9L16.4 16l1.9-.1z"/></svg>
-          {hasText ? 'Regenerate' : 'Generate'}
+          {isCheckbox ? 'Re-check from chart' : hasText ? 'Regenerate' : 'Generate'}
         </>
       )}
     </button>
