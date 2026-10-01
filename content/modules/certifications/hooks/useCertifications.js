@@ -16,7 +16,11 @@ export function useCertifications({ facilityName, orgSlug, status, patientId }) 
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
-    if (!facilityName || !orgSlug) return;
+    // No org/facility → no form; a previous org's form must not linger.
+    if (!facilityName || !orgSlug) {
+      setCertForm(null);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -45,6 +49,7 @@ export function useCertifications({ facilityName, orgSlug, status, patientId }) 
         error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
         error_type: 'api_error',
       });
+      setCertForm(null);
       setError(err.message || 'Failed to load certifications');
     } finally {
       setLoading(false);

@@ -25,6 +25,7 @@ export function useCertsByPatient(patientId) {
   useEffect(() => {
     if (!patientId || !window.CertAPI) {
       setCerts([]);
+      setCertForm(null);
       return;
     }
 
@@ -42,6 +43,7 @@ export function useCertsByPatient(patientId) {
         if (!orgSlug || !facilityName) {
           if (!cancelled) {
             setCerts([]);
+            setCertForm(null);
             setLoading(false);
           }
           return;
@@ -56,6 +58,7 @@ export function useCertsByPatient(patientId) {
         // 404/403 = module disabled or no access — silently return empty
         if (!cancelled) {
           setCerts([]);
+          setCertForm(null);
         }
       } finally {
         if (!cancelled) setLoading(false);

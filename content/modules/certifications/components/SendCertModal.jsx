@@ -149,16 +149,22 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
    * must block it then — otherwise the failure surfaces at 6 AM instead of here.
    */
   function meetsSendPreconditions() {
+    return meetsPreconditionsOtherThanReason() && hasReason();
+  }
+
+  /** Everything meetsSendPreconditions checks except the recert reason. */
+  function meetsPreconditionsOtherThanReason() {
     if (selectedPractitioners.size === 0) return false;
-    if (!hasReason()) return false;
     if (isRecert && !isDischargePlanValid(dischargeOption, dischargeOtherText)) return false;
     if (isDelayed && !delayReason.trim()) return false;
     return true;
   }
 
   function handleSchedule() {
+    // The rest of the send first, so the no-reason toast is never the first
+    // message when something else (e.g. no practitioner picked) also blocks it.
+    if (!meetsPreconditionsOtherThanReason()) return;
     if (blockIfNoReason()) return;
-    if (!meetsSendPreconditions()) return;
     if (!isSlotInFuture(slotDate, slotTime)) return;
     setSending(true);
 

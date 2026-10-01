@@ -80,6 +80,18 @@ describe('the grid', () => {
     });
     expect(root.textContent).toContain('2 checked');
   });
+
+  it('shows no count when nothing is checked', async () => {
+    await mount({ value: [] });
+    expect(q('.cm-reasons__count')).toBeNull();
+    expect(root.textContent).not.toContain('checked');
+  });
+
+  it('shows no "0 checked" when only Other is filled in', async () => {
+    await mount({ value: [], other: 'Trach care' });
+    expect(q('.cm-reasons__count')).toBeNull();
+    expect(root.textContent).not.toContain('0 checked');
+  });
 });
 
 describe('toggling', () => {
@@ -127,6 +139,24 @@ describe('the AI sparkle', () => {
     expect(spark.querySelector('.cm-reason__why').textContent).toBe(
       'Therapy note: PT/OT 5x/week for gait training'
     );
+  });
+
+  it('is announced as an image labelled "Checked by AI", described by its tooltip', async () => {
+    await mount({ value: VALUE });
+    const spark = reasonRow('PT/OT').querySelector('.cm-reason__spark');
+    expect(spark.getAttribute('role')).toBe('img');
+    expect(spark.getAttribute('aria-label')).toBe('Checked by AI');
+    const tip = spark.querySelector('.cm-reason__why');
+    expect(tip.getAttribute('role')).toBe('tooltip');
+    expect(spark.getAttribute('aria-describedby')).toBe(tip.id);
+  });
+
+  it('carries the full evidence in a title, since the tooltip clamps long text', async () => {
+    const long =
+      'Therapy note: PT/OT 5x/week for gait training, transfers, and ADL retraining after a ' +
+      'left hip ORIF; requires skilled cueing for weight-bearing precautions on every session.';
+    await mount({ value: [{ code: 'pt_ot', auto: true, evidence: long }] });
+    expect(reasonRow('PT/OT').querySelector('.cm-reason__spark').getAttribute('title')).toBe(long);
   });
 
   it('clicking the sparkle does not toggle the box', async () => {

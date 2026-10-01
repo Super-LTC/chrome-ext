@@ -173,6 +173,30 @@ describe('checkbox form in the send modal', () => {
     expect(primaryBtn().disabled).toBe(true);
   });
 
+  // The primary button is disabled in these states; re-enabling it in the DOM
+  // stands in for a click that slips through before the disabled render lands.
+  const forceClickPrimary = async () => {
+    primaryBtn().disabled = false;
+    primaryBtn().click();
+    await flush();
+  };
+
+  it('schedule with no practitioner and no reason does not lead with the reason toast', async () => {
+    await mount(recert(), { certForm: CERT_FORM, startInScheduleMode: true });
+    await forceClickPrimary();
+    expect(window.SuperToast.error).not.toHaveBeenCalled();
+    expect(saveClinicalReason).not.toHaveBeenCalled();
+    expect(scheduleCertSend).not.toHaveBeenCalled();
+  });
+
+  it('schedule with a practitioner but no reason toasts the reason message', async () => {
+    await mount(recert(), { certForm: CERT_FORM, startInScheduleMode: true });
+    await pickPractitioner();
+    await forceClickPrimary();
+    expect(window.SuperToast.error).toHaveBeenCalledWith('Check at least one reason or fill in Other');
+    expect(scheduleCertSend).not.toHaveBeenCalled();
+  });
+
   it('Other text alone is enough', async () => {
     await mount(recert({ reasonOther: 'Trach care' }), { certForm: CERT_FORM });
     await pickPractitioner();

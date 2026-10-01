@@ -44,7 +44,14 @@ export function GenerateReasonButton({ certId, certType, hasText, surface, form 
           surface,
           ...formProps,
         });
-        if (source === 'fallback') {
+        if (isCheckbox) {
+          // An empty result or a rules-only match is not the AI's read of the chart; say so.
+          if (!body.reasonCodes?.length) {
+            window.SuperToast?.info?.('No reasons found in the chart — check the boxes that apply');
+          } else if (source === 'rules') {
+            window.SuperToast?.info?.('Suggestions ready — please review before saving');
+          }
+        } else if (source === 'fallback') {
           window.SuperToast?.info?.('Draft ready — please review before saving');
         }
       })

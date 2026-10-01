@@ -6,7 +6,8 @@ import { toggleReason } from '../reason-codes.js';
  * Every reason on the org's paper form, in one grid, in the paper's order. The
  * catalog arrives column-major (column 1 top→bottom, then column 2…), so CSS
  * `columns: 4` lays it out exactly like the printed form. Boxes the AI checked
- * carry a sparkle; hovering or focusing it shows the one-line evidence.
+ * carry a sparkle; hovering or focusing it shows the evidence (clamped to three
+ * lines; the full text is in the sparkle's title).
  *
  * Controlled: `value` is CertReasonSelection[] ([{code, auto, evidence}]) and
  * `other` the free-text Other line; changes go back through onChange / onOtherChange.
@@ -24,7 +25,8 @@ export function ReasonChecklist({ form, value, other, onChange, onOtherChange })
 
   return (
     <div class="cm-reasons-wrap">
-      <div class="cm-reasons__count">{list.length} checked</div>
+      {/* Only a real count; with nothing checked (even if Other is filled) say nothing. */}
+      {list.length > 0 && <div class="cm-reasons__count">{list.length} checked</div>}
       <div class="cm-reasons">
         {(form?.reasons || []).map((r) => {
           const sel = byCode.get(r.code);
@@ -66,9 +68,12 @@ function Sparkle({ code, evidence }) {
   return (
     <span
       class="cm-reason__spark"
+      role="img"
       tabindex="0"
       aria-describedby={tipId}
       aria-label="Checked by AI"
+      // The tooltip clamps at three lines; the native title carries the whole text.
+      title={evidence || undefined}
       // The sparkle sits inside the row's <label>; without this a click on it
       // would activate the label and toggle the box.
       onClick={(e) => e.preventDefault()}
