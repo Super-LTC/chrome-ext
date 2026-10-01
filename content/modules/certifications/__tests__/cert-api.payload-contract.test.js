@@ -160,3 +160,27 @@ describe('generating a reason draft', () => {
     expect(out.clinicalReason).toBe('');
   });
 });
+
+describe('by-patient carries the org cert form', () => {
+  const respond = (data) => {
+    global.chrome.runtime.sendMessage = vi.fn(async () => ({ success: true, data }));
+  };
+
+  it('returns certifications and certForm', async () => {
+    const certForm = { template: 'champion_checkbox', reasons: [], dischargeOptions: ['Office Care'] };
+    respond({ certifications: [{ id: 'c1' }], certForm });
+    const out = await CertAPI.fetchByPatientWithForm('Fac', 'org', 'p1');
+    expect(out).toEqual({ certifications: [{ id: 'c1' }], certForm });
+  });
+
+  it('standard org: certForm is null and fetchByPatient still returns the array', async () => {
+    respond({ certifications: [{ id: 'c1' }] });
+    expect((await CertAPI.fetchByPatientWithForm('Fac', 'org', 'p1')).certForm).toBeNull();
+    expect(await CertAPI.fetchByPatient('Fac', 'org', 'p1')).toEqual([{ id: 'c1' }]);
+  });
+
+  it('a bare-array response still works', async () => {
+    respond([{ id: 'c2' }]);
+    expect(await CertAPI.fetchByPatient('Fac', 'org', 'p1')).toEqual([{ id: 'c2' }]);
+  });
+});

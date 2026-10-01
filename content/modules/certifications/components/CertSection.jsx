@@ -15,7 +15,7 @@ import { DelayCertModal } from './DelayCertModal.jsx';
  * @param {{ patientId: string }} props
  */
 export function CertSection({ patientId, collapsed, onToggleCollapse }) {
-  const { certs, loading, refresh } = useCertsByPatient(patientId);
+  const { certs, certForm, loading, refresh } = useCertsByPatient(patientId);
 
   // Modal state
   const [sendCert, setSendCert] = useState(null);
@@ -113,6 +113,7 @@ export function CertSection({ patientId, collapsed, onToggleCollapse }) {
         facilityName={facilityCtx.facilityName}
         orgSlug={facilityCtx.orgSlug}
         onSent={refresh}
+        certForm={certForm}
       />
 
       <SkipCertModal

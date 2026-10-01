@@ -46,6 +46,9 @@ export function mergeRegenerated(current, suggested, form) {
   return inFormOrder(byCode, form);
 }
 
+/** Shown (and toasted) when a checkbox-form recert would go out with no reason. */
+export const NO_REASON_MESSAGE = 'Check at least one reason or fill in Other';
+
 /** True when at least one box is checked or the Other line has text. */
 export function hasAnyReason(list, other) {
   return (list?.length ?? 0) > 0 || !!(other && other.trim());

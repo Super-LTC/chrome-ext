@@ -2,31 +2,59 @@ import { useState, useEffect } from 'preact/hooks';
 import { CertModal } from './CertModal.jsx';
 import { DischargePlanPicker, parseDischargePlan, composeDischargePlan, isDischargePlanValid } from './DischargePlanPicker.jsx';
 import { GenerateReasonButton } from './GenerateReasonButton.jsx';
+import { ReasonChecklist } from './ReasonChecklist.jsx';
+import { mergeRegenerated, hasAnyReason, NO_REASON_MESSAGE } from '../reason-codes.js';
 
-export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved }) {
+/**
+ * EditClinicalReasonModal — edit a recert's reason, estimated stay and discharge plan.
+ *
+ * With an org-level `certForm` (checkbox cert form) a recert's reason is the
+ * org's paper checklist instead of free text, and onSaved receives
+ * { reasonCodes, reasonOther, estimatedDays, planForDischarge } — no
+ * clinicalReason. Without one, onSaved gets the standard
+ * { clinicalReason, estimatedDays, planForDischarge }.
+ */
+export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certForm = null }) {
   const [clinicalReason, setClinicalReason] = useState('');
+  const [reasons, setReasons] = useState([]);
+  const [reasonOther, setReasonOther] = useState('');
   const [estimatedDays, setEstimatedDays] = useState(30);
   const [dischargeOption, setDischargeOption] = useState('');
   const [dischargeOtherText, setDischargeOtherText] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const isRecert = cert?.type === 'day_14_recert' || cert?.type === 'day_30_recert';
+  const checkboxForm = !!certForm && isRecert;
+  const dischargeOptions = checkboxForm && certForm.dischargeOptions?.length ? certForm.dischargeOptions : undefined;
+
   useEffect(() => {
     if (isOpen && cert) {
       setClinicalReason(cert.clinicalReason || '');
+      setReasons(cert.reasonCodes ?? []);
+      setReasonOther(cert.reasonOther ?? '');
       setEstimatedDays(cert.estimatedDays || 30);
-      const parsed = parseDischargePlan(cert.planForDischarge);
+      const parsed = parseDischargePlan(cert.planForDischarge, dischargeOptions);
       setDischargeOption(parsed.option);
       setDischargeOtherText(parsed.otherText);
     }
   }, [isOpen, cert?.id]);
 
-  const canSave = clinicalReason.trim() && isDischargePlanValid(dischargeOption, dischargeOtherText) && !submitting;
+  const hasReason = checkboxForm ? hasAnyReason(reasons, reasonOther) : !!clinicalReason.trim();
+  const canSave = hasReason && isDischargePlanValid(dischargeOption, dischargeOtherText) && !submitting;
 
   function handleSave() {
+    if (!hasReason && checkboxForm) {
+      // Save is disabled in this state; this covers a click that slips through.
+      window.SuperToast?.error?.(NO_REASON_MESSAGE);
+      return;
+    }
     if (!canSave) return;
     setSubmitting(true);
     const planForDischarge = composeDischargePlan(dischargeOption, dischargeOtherText);
-    onSaved({ clinicalReason, estimatedDays, planForDischarge })
+    const body = checkboxForm
+      ? { reasonCodes: reasons, reasonOther: reasonOther.trim() || null, estimatedDays, planForDischarge }
+      : { clinicalReason, estimatedDays, planForDischarge };
+    onSaved(body)
       .then(() => onClose())
       .catch(() => setSubmitting(false));
   }
@@ -37,6 +65,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved }) {
       onClose={onClose}
       title="Edit Clinical Reason"
       subtitle={cert?.patientName}
+      wide={checkboxForm}
       actions={[
         { label: 'Cancel', variant: 'secondary', onClick: onClose },
         { label: submitting ? 'Saving...' : 'Save', variant: 'primary', onClick: handleSave, disabled: !canSave }
@@ -48,21 +77,49 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </span>
           <span class="cm-section__label">Clinical Reason</span>
-          <GenerateReasonButton
-            certId={cert?.id}
-            certType={cert?.type}
-            hasText={!!clinicalReason.trim()}
-            surface="edit"
-            onGenerated={(text) => setClinicalReason(text)}
-          />
+          {checkboxForm ? (
+            <GenerateReasonButton
+              certId={cert?.id}
+              certType={cert?.type}
+              hasText={hasReason}
+              surface="edit"
+              form="checkbox"
+              onGenerated={(_text, _source, body) =>
+                setReasons(current => mergeRegenerated(current, body?.reasonCodes, certForm))
+              }
+            />
+          ) : (
+            <GenerateReasonButton
+              certId={cert?.id}
+              certType={cert?.type}
+              hasText={!!clinicalReason.trim()}
+              surface="edit"
+              onGenerated={(text) => setClinicalReason(text)}
+            />
+          )}
         </div>
-        <textarea
-          class="cm-input cm-input--textarea"
-          rows={3}
-          value={clinicalReason}
-          onInput={(e) => setClinicalReason(e.target.value)}
-          placeholder="Describe the clinical reason for continued skilled nursing care..."
-        />
+        {checkboxForm ? (
+          <>
+            <ReasonChecklist
+              form={certForm}
+              value={reasons}
+              other={reasonOther}
+              onChange={setReasons}
+              onOtherChange={setReasonOther}
+            />
+            {!hasReason && (
+              <p class="cm-section__hint cm-section__hint--warn">{NO_REASON_MESSAGE}</p>
+            )}
+          </>
+        ) : (
+          <textarea
+            class="cm-input cm-input--textarea"
+            rows={3}
+            value={clinicalReason}
+            onInput={(e) => setClinicalReason(e.target.value)}
+            placeholder="Describe the clinical reason for continued skilled nursing care..."
+          />
+        )}
         <div class="cm-section__row">
           <span class="cm-section__meta">Estimated stay</span>
           <div class="cm-input--days-wrap">
@@ -84,6 +141,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved }) {
           <span class="cm-section__label">Plan for Discharge</span>
         </div>
         <DischargePlanPicker
+          options={dischargeOptions}
           option={dischargeOption}
           otherText={dischargeOtherText}
           onOptionChange={setDischargeOption}

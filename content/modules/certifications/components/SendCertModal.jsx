@@ -2,9 +2,11 @@ import { useState, useEffect } from 'preact/hooks';
 import { CertModal } from './CertModal.jsx';
 import { DischargePlanPicker, parseDischargePlan, composeDischargePlan, isDischargePlanValid } from './DischargePlanPicker.jsx';
 import { GenerateReasonButton } from './GenerateReasonButton.jsx';
+import { ReasonChecklist } from './ReasonChecklist.jsx';
 import { ScheduleSlotPicker } from './ScheduleSlotPicker.jsx';
 import { HourglassIcon } from './HourglassIcon.jsx';
 import { defaultSlot, formatSlot, isSlotInFuture } from '../schedule-slot.js';
+import { mergeRegenerated, hasAnyReason, NO_REASON_MESSAGE } from '../reason-codes.js';
 
 /**
  * SendCertModal — single-screen send flow, with a schedule mode.
@@ -18,9 +20,16 @@ import { defaultSlot, formatSlot, isSlotInFuture } from '../schedule-slot.js';
  * future moment.
  *
  * `startInScheduleMode` lets the cert row's hourglass open straight into it.
+ *
+ * `certForm` (org-level, from the certifications responses) switches a recert's
+ * clinical reason to the org's paper checkbox form: the reason grid replaces the
+ * textarea and the save body carries reasonCodes/reasonOther instead of
+ * clinicalReason. Absent/null → the standard form, unchanged.
  */
-export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, onSent, startInScheduleMode = false, onScheduleChanged }) {
+export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, onSent, startInScheduleMode = false, onScheduleChanged, certForm = null }) {
   const [clinicalReason, setClinicalReason] = useState('');
+  const [reasons, setReasons] = useState([]);
+  const [reasonOther, setReasonOther] = useState('');
   const [estimatedDays, setEstimatedDays] = useState(30);
   const [dischargeOption, setDischargeOption] = useState('');
   const [dischargeOtherText, setDischargeOtherText] = useState('');
@@ -40,12 +49,16 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
   const isRecert = cert?.type === 'day_14_recert' || cert?.type === 'day_30_recert';
   const isDelayed = cert?.isDelayed;
   const certTypeLabel = cert?.type === 'initial' ? 'Initial' : cert?.type === 'day_14_recert' ? 'Day 14 Recert' : 'Day 30 Recert';
+  const checkboxForm = !!certForm && isRecert;
+  const dischargeOptions = checkboxForm && certForm.dischargeOptions?.length ? certForm.dischargeOptions : undefined;
 
   useEffect(() => {
     if (!isOpen || !cert) return;
     setClinicalReason(cert.clinicalReason || '');
+    setReasons(cert.reasonCodes ?? []);
+    setReasonOther(cert.reasonOther ?? '');
     setEstimatedDays(cert.estimatedDays || 30);
-    const parsed = parseDischargePlan(cert.planForDischarge);
+    const parsed = parseDischargePlan(cert.planForDischarge, dischargeOptions);
     setDischargeOption(parsed.option);
     setDischargeOtherText(parsed.otherText);
     setDelayReason(cert.delayReason || '');
@@ -73,17 +86,39 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
       .finally(() => setPractitionersLoading(false));
   }, [isOpen, cert?.id]);
 
+  /** True when a recert has its reason: text for standard orgs, a box or Other for checkbox ones. */
+  function hasReason() {
+    if (!isRecert) return true;
+    return checkboxForm ? hasAnyReason(reasons, reasonOther) : !!clinicalReason.trim();
+  }
+
+  /**
+   * Save the recert's reason + stay details before it goes out. Checkbox-form
+   * orgs send the boxes and no clinicalReason (the backend derives it).
+   */
+  function saveRecertDetails() {
+    if (!isRecert) return Promise.resolve();
+    const planForDischarge = composeDischargePlan(dischargeOption, dischargeOtherText);
+    const body = checkboxForm
+      ? { reasonCodes: reasons, reasonOther: reasonOther.trim() || null, estimatedDays, planForDischarge }
+      : { clinicalReason, estimatedDays, planForDischarge };
+    return window.CertAPI.saveClinicalReason(cert.id, body);
+  }
+
+  /** The buttons are disabled when the reason is missing; this covers a click that slips through. */
+  function blockIfNoReason() {
+    if (hasReason()) return false;
+    if (checkboxForm) window.SuperToast?.error?.(NO_REASON_MESSAGE);
+    return true;
+  }
+
   function handleSend() {
     if (selectedPractitioners.size === 0) return;
-    if (isRecert && !clinicalReason.trim()) return;
+    if (blockIfNoReason()) return;
     if (isRecert && !isDischargePlanValid(dischargeOption, dischargeOtherText)) return;
     if (isDelayed && !delayReason.trim()) return;
     setSending(true);
-    const planForDischarge = composeDischargePlan(dischargeOption, dischargeOtherText);
-    const saveReason = isRecert
-      ? window.CertAPI.saveClinicalReason(cert.id, { clinicalReason, estimatedDays, planForDischarge })
-      : Promise.resolve();
-    saveReason
+    saveRecertDetails()
       .then(() => window.CertAPI.sendCert(cert.id, [...selectedPractitioners], isDelayed ? delayReason : undefined))
       .then(() => {
         const names = practitioners
@@ -115,23 +150,20 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
    */
   function meetsSendPreconditions() {
     if (selectedPractitioners.size === 0) return false;
-    if (isRecert && !clinicalReason.trim()) return false;
+    if (!hasReason()) return false;
     if (isRecert && !isDischargePlanValid(dischargeOption, dischargeOtherText)) return false;
     if (isDelayed && !delayReason.trim()) return false;
     return true;
   }
 
   function handleSchedule() {
+    if (blockIfNoReason()) return;
     if (!meetsSendPreconditions()) return;
     if (!isSlotInFuture(slotDate, slotTime)) return;
     setSending(true);
 
-    const planForDischarge = composeDischargePlan(dischargeOption, dischargeOtherText);
-    const saveReason = isRecert
-      ? window.CertAPI.saveClinicalReason(cert.id, { clinicalReason, estimatedDays, planForDischarge })
-      : Promise.resolve();
-
-    saveReason
+    // Save first, then schedule — the queued send reads what was saved.
+    saveRecertDetails()
       .then(() => window.CertAPI.scheduleCertSend(cert.id, {
         practitionerIds: [...selectedPractitioners],
         scheduledLocalDate: slotDate,
@@ -232,6 +264,7 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
       title={scheduleMode ? 'Schedule Certification' : 'Send Certification'}
       subtitle={`${cert.patientName} · ${certTypeLabel}`}
       actions={actions}
+      wide={checkboxForm}
     >
       {/* Already queued — the one place a nurse can see and undo it for this cert */}
       {existingSchedule && (
@@ -272,21 +305,49 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </span>
             <span class="cm-section__label">Clinical Reason</span>
-            <GenerateReasonButton
-              certId={cert.id}
-              certType={cert.type}
-              hasText={!!clinicalReason.trim()}
-              surface="send"
-              onGenerated={(text) => setClinicalReason(text)}
-            />
+            {checkboxForm ? (
+              <GenerateReasonButton
+                certId={cert.id}
+                certType={cert.type}
+                hasText={hasAnyReason(reasons, reasonOther)}
+                surface="send"
+                form="checkbox"
+                onGenerated={(_text, _source, body) =>
+                  setReasons(current => mergeRegenerated(current, body?.reasonCodes, certForm))
+                }
+              />
+            ) : (
+              <GenerateReasonButton
+                certId={cert.id}
+                certType={cert.type}
+                hasText={!!clinicalReason.trim()}
+                surface="send"
+                onGenerated={(text) => setClinicalReason(text)}
+              />
+            )}
           </div>
-          <textarea
-            class="cm-input cm-input--textarea"
-            rows={2}
-            value={clinicalReason}
-            onInput={(e) => setClinicalReason(e.target.value)}
-            placeholder="Reason for continued skilled nursing care..."
-          />
+          {checkboxForm ? (
+            <>
+              <ReasonChecklist
+                form={certForm}
+                value={reasons}
+                other={reasonOther}
+                onChange={setReasons}
+                onOtherChange={setReasonOther}
+              />
+              {!hasAnyReason(reasons, reasonOther) && (
+                <p class="cm-section__hint cm-section__hint--warn">{NO_REASON_MESSAGE}</p>
+              )}
+            </>
+          ) : (
+            <textarea
+              class="cm-input cm-input--textarea"
+              rows={2}
+              value={clinicalReason}
+              onInput={(e) => setClinicalReason(e.target.value)}
+              placeholder="Reason for continued skilled nursing care..."
+            />
+          )}
           <div class="cm-section__row">
             <span class="cm-section__meta">Estimated stay</span>
             <div class="cm-input--days-wrap">
@@ -308,6 +369,7 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
             <span class="cm-section__label">Plan for Discharge</span>
           </div>
           <DischargePlanPicker
+            options={dischargeOptions}
             option={dischargeOption}
             otherText={dischargeOtherText}
             onOptionChange={setDischargeOption}

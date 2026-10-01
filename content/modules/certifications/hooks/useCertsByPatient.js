@@ -7,10 +7,13 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
  * Returns a flat array — consumer handles grouping by partAStayId.
  *
  * @param {string|null} patientId - PCC patient ID
- * @returns {{ certs: Array, loading: boolean, error: string|null, refresh: Function }}
+ * Also returns the org's `certForm` (checkbox cert form catalog, or null).
+ *
+ * @returns {{ certs: Array, certForm: Object|null, loading: boolean, error: string|null, refresh: Function }}
  */
 export function useCertsByPatient(patientId) {
   const [certs, setCerts] = useState([]);
+  const [certForm, setCertForm] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fetchCount, setFetchCount] = useState(0);
@@ -44,9 +47,10 @@ export function useCertsByPatient(patientId) {
           return;
         }
 
-        const data = await window.CertAPI.fetchByPatient(facilityName, orgSlug, patientId);
+        const data = await window.CertAPI.fetchByPatientWithForm(facilityName, orgSlug, patientId);
         if (!cancelled) {
-          setCerts(data || []);
+          setCerts(data.certifications || []);
+          setCertForm(data.certForm ?? null);
         }
       } catch (err) {
         // 404/403 = module disabled or no access — silently return empty
@@ -61,5 +65,5 @@ export function useCertsByPatient(patientId) {
     return () => { cancelled = true; };
   }, [patientId, fetchCount]);
 
-  return { certs, loading, error, refresh };
+  return { certs, certForm, loading, error, refresh };
 }

@@ -136,6 +136,18 @@ const CertAPI = {
    * @returns {Promise<Array>}
    */
   async fetchByPatient(facilityName, orgSlug, patientId) {
+    return (await CertAPI.fetchByPatientWithForm(facilityName, orgSlug, patientId)).certifications;
+  },
+
+  /**
+   * fetchByPatient plus the org's `certForm` (checkbox cert form catalog, or
+   * null for orgs on the standard form).
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @param {string} patientId
+   * @returns {Promise<{certifications: Array, certForm: Object|null}>}
+   */
+  async fetchByPatientWithForm(facilityName, orgSlug, patientId) {
     const params = new URLSearchParams({ patientId, facilityName, orgSlug });
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
@@ -147,7 +159,11 @@ const CertAPI = {
       throw new Error(response.error || 'Failed to fetch patient certifications');
     }
 
-    return response.data?.certifications || response.data || [];
+    const data = response.data;
+    return {
+      certifications: data?.certifications || (Array.isArray(data) ? data : []),
+      certForm: data?.certForm ?? null,
+    };
   },
 
   /**
