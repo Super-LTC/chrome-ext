@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
+import { act } from 'preact/test-utils';
 import { CERT_FORM, REASON_LABELS } from './cert-form-fixture.js';
 
 const { ReasonChecklist } = await import('../components/ReasonChecklist.jsx');
@@ -19,7 +20,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 const reasonRow = (label) =>
   qa('.cm-reason').find((el) => el.querySelector('.cm-reason__label')?.textContent === label);
 
-async function mount(props = {}) {
+async function mount(props = {}, { open = true } = {}) {
   const onChange = vi.fn();
   const onOtherChange = vi.fn();
   render(
@@ -34,6 +35,12 @@ async function mount(props = {}) {
     root
   );
   await flush();
+  // With reasons already checked it opens on the summary; most tests want the grid.
+  const edit = qa('.cm-reasons-toggle').find((b) => b.textContent.includes('Edit'));
+  if (open && edit) {
+    edit.click();
+    await flush();
+  }
   return { onChange, onOtherChange };
 }
 
@@ -188,5 +195,58 @@ describe('Other', () => {
   it('renders empty when other is null', async () => {
     await mount({ other: null });
     expect(q('.cm-reasons-other input').value).toBe('');
+  });
+});
+
+
+describe('summary first', () => {
+  const VALUE = [
+    { code: 'pt_ot', auto: true, evidence: 'PT/OT 5x/week' },
+    { code: 'pneumonia', auto: false, evidence: null },
+  ];
+
+  it('opens on just the checked reasons, in paper order, with Edit reasons', async () => {
+    await mount({ value: VALUE, other: 'Trach care' }, { open: false });
+    expect(q('.cm-reasons')).toBeNull();
+    expect(qa('.cm-reason-chip').map((c) => (c.querySelector('.cm-reason-chip__label') ?? c).textContent.trim())).toEqual(['Pneumonia', 'PT/OT', 'Other: Trach care']);
+    expect(qa('.cm-reason-chip')[1].querySelector('.cm-reason__spark')).toBeTruthy();
+    expect(qa('.cm-reason-chip')[0].querySelector('.cm-reason__spark')).toBeNull();
+  });
+
+  it('Edit reasons opens the grid; Done closes it again (and tells the modal)', async () => {
+    const onExpandedChange = vi.fn();
+    await mount({ value: VALUE, onExpandedChange }, { open: false });
+    await act(() => q('.cm-reasons-toggle').click());
+    expect(qa('.cm-reason')).toHaveLength(36);
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+    await act(() => qa('.cm-reasons-toggle').find((b) => b.textContent === 'Done').click());
+    expect(q('.cm-reasons')).toBeNull();
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('starts open when nothing is checked, with no Done button', async () => {
+    await mount({}, { open: false });
+    expect(qa('.cm-reason')).toHaveLength(36);
+    expect(qa('.cm-reasons-toggle')).toHaveLength(0);
+  });
+
+  it('collapses when reasons arrive after mount (modal seeding / Re-check), if untouched', async () => {
+    await mount({}, { open: false });
+    render(h(ReasonChecklist, { form: CERT_FORM, value: VALUE, other: '', onChange: vi.fn(), onOtherChange: vi.fn() }), root);
+    await flush();
+    await flush();
+    expect(q('.cm-reasons')).toBeNull();
+    expect(qa('.cm-reason-chip')).toHaveLength(2);
+  });
+
+  it('stays open once the nurse has checked a box herself', async () => {
+    const { onChange } = await mount({}, { open: false });
+    reasonRow('Labs').querySelector('input').click();
+    await flush();
+    const next = onChange.mock.calls[0][0];
+    render(h(ReasonChecklist, { form: CERT_FORM, value: next, other: '', onChange, onOtherChange: vi.fn() }), root);
+    await flush();
+    await flush();
+    expect(qa('.cm-reason')).toHaveLength(36);
   });
 });

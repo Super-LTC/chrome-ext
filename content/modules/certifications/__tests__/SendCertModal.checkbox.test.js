@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
+import { act } from 'preact/test-utils';
 import { CERT_FORM } from './cert-form-fixture.js';
 
 const { SendCertModal } = await import('../components/SendCertModal.jsx');
@@ -69,6 +70,14 @@ const pickPractitioner = async () => {
 const reasonRow = (label) =>
   qa('.cm-reason').find((el) => el.querySelector('.cm-reason__label')?.textContent === label);
 const genBtn = () => q('.cm-gen-btn');
+/** The checklist opens collapsed once reasons exist; open the full grid. */
+const openGrid = async () => {
+  const t = qa('.cm-reasons-toggle').find((b) => b.textContent.includes('Edit'));
+  if (t) {
+    t.click();
+    await flush();
+  }
+};
 
 beforeEach(() => {
   root = document.createElement('div');
@@ -144,6 +153,9 @@ describe('checkbox form in the send modal', () => {
       }),
       { certForm: CERT_FORM }
     );
+    // Opens on the summary: the checked reason + Other as chips.
+    expect(qa('.cm-reason-chip').map((c) => (c.querySelector('.cm-reason-chip__label') ?? c).textContent.trim())).toEqual(['Pneumonia', 'Other: Trach care']);
+    await openGrid();
     expect(reasonRow('Pneumonia').querySelector('input').checked).toBe(true);
     expect(q('.cm-reasons-other input').value).toBe('Trach care');
   });
@@ -207,6 +219,7 @@ describe('checkbox form in the send modal', () => {
     await mount(recert({ reasonCodes: [{ code: 'o2_therapy', auto: true, evidence: 'O2 2L NC' }] }), {
       certForm: CERT_FORM,
     });
+    await openGrid();
     reasonRow('Labs').querySelector('input').click();
     await flush();
     const other = q('.cm-reasons-other input');
@@ -262,6 +275,7 @@ describe('checkbox form in the send modal', () => {
     );
     genBtn().click();
     await flush();
+    await openGrid();
 
     expect(generateClinicalReason).toHaveBeenCalledWith('cert_1');
     expect(reasonRow('Labs').querySelector('input').checked).toBe(true);
@@ -296,11 +310,14 @@ describe('checkbox form in the edit modal', () => {
     });
   });
 
-  it('renders the checklist wide and saves the boxes', async () => {
+  it('opens on the summary at normal width, widens with the grid, and saves the boxes', async () => {
     const onSaved = await mountEdit(
       recert({ reasonCodes: [{ code: 'gi', auto: false, evidence: null }], planForDischarge: 'Long Term Care' }),
       { certForm: CERT_FORM }
     );
+    expect(qa('.cm-reason')).toHaveLength(0);
+    expect(qa('.cm-reason-chip')).toHaveLength(1);
+    await act(() => openGrid());
     expect(qa('.cm-reason')).toHaveLength(36);
     expect(q('.cm').classList.contains('cm--wide')).toBe(true);
     primaryBtn().click();

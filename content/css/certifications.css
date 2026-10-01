@@ -2716,11 +2716,69 @@
   visibility: visible;
 }
 
-.cm-reasons-other {
+.cm-reasons-footer {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-top: 6px;
+}
+
+.cm-reasons-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+/* Collapsed view: the checked reasons as soft chips, then "Edit reasons". */
+.cm-reasons-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.cm-reason-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f0f4ff;
+  border: 1px solid #dfe6fb;
+  font-size: 13px;
+  line-height: 1.3;
+  color: #1e293b;
+}
+
+.cm-reason-chip .cm-reason__spark {
+  margin-left: 0;
+  margin-right: -4px;
+}
+
+.cm-reason-chip--other {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.cm-reasons-toggle {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #4f46e5;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.cm-reasons-toggle:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 .cm-reasons-other__label {

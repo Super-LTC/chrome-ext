@@ -18,6 +18,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certFo
   const [clinicalReason, setClinicalReason] = useState('');
   const [reasons, setReasons] = useState([]);
   const [reasonOther, setReasonOther] = useState('');
+  const [reasonsOpen, setReasonsOpen] = useState(false);
   const [estimatedDays, setEstimatedDays] = useState(30);
   const [dischargeOption, setDischargeOption] = useState('');
   const [dischargeOtherText, setDischargeOtherText] = useState('');
@@ -65,7 +66,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certFo
       onClose={onClose}
       title={checkboxForm ? 'Edit Reasons' : 'Edit Clinical Reason'}
       subtitle={cert?.patientName}
-      wide={checkboxForm}
+      wide={checkboxForm && reasonsOpen}
       actions={[
         { label: 'Cancel', variant: 'secondary', onClick: onClose },
         { label: submitting ? 'Saving...' : 'Save', variant: 'primary', onClick: handleSave, disabled: !canSave }
@@ -106,6 +107,7 @@ export function EditClinicalReasonModal({ isOpen, onClose, cert, onSaved, certFo
               other={reasonOther}
               onChange={setReasons}
               onOtherChange={setReasonOther}
+              onExpandedChange={setReasonsOpen}
             />
             {!hasReason && (
               <p class="cm-section__hint cm-section__hint--warn">{NO_REASON_MESSAGE}</p>

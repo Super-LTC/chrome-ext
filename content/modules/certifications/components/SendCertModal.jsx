@@ -30,6 +30,7 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
   const [clinicalReason, setClinicalReason] = useState('');
   const [reasons, setReasons] = useState([]);
   const [reasonOther, setReasonOther] = useState('');
+  const [reasonsOpen, setReasonsOpen] = useState(false);
   const [estimatedDays, setEstimatedDays] = useState(30);
   const [dischargeOption, setDischargeOption] = useState('');
   const [dischargeOtherText, setDischargeOtherText] = useState('');
@@ -270,7 +271,7 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
       title={scheduleMode ? 'Schedule Certification' : 'Send Certification'}
       subtitle={`${cert.patientName} · ${certTypeLabel}`}
       actions={actions}
-      wide={checkboxForm}
+      wide={checkboxForm && reasonsOpen}
     >
       {/* Already queued — the one place a nurse can see and undo it for this cert */}
       {existingSchedule && (
@@ -340,6 +341,7 @@ export function SendCertModal({ isOpen, onClose, cert, facilityName, orgSlug, on
                 other={reasonOther}
                 onChange={setReasons}
                 onOtherChange={setReasonOther}
+                onExpandedChange={setReasonsOpen}
               />
               {!hasAnyReason(reasons, reasonOther) && (
                 <p class="cm-section__hint cm-section__hint--warn">{NO_REASON_MESSAGE}</p>
