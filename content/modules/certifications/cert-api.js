@@ -191,21 +191,42 @@ const CertAPI = {
   },
 
   /**
-   * Save clinical reason for a certification
+   * Save the reason for continued stay (+ estimated days / discharge plan).
+   *
+   * Two shapes, chosen by which keys the caller passes:
+   *   - standard orgs: { clinicalReason, estimatedDays, planForDischarge }
+   *   - checkbox-form orgs (certForm.template === 'champion_checkbox'):
+   *     { reasonCodes: [{code, auto, evidence}], reasonOther, estimatedDays, planForDischarge }
+   *     — no clinicalReason; the backend renders the form from the boxes.
+   * Keys left undefined are dropped by JSON.stringify, so the standard body is
+   * byte-for-byte what it was before the checkbox form existed.
+   *
    * @param {string} certId
    * @param {Object} data
-   * @param {string} data.clinicalReason
-   * @param {number} data.estimatedDays
+   * @param {string} [data.clinicalReason]
+   * @param {Array<{code: string, auto: boolean, evidence: string|null}>} [data.reasonCodes]
+   * @param {string|null} [data.reasonOther]
+   * @param {number} [data.estimatedDays]
    * @param {string} [data.planForDischarge]
    * @returns {Promise<Object>}
    */
-  async saveClinicalReason(certId, { clinicalReason, estimatedDays, planForDischarge }) {
+  async updateCertification(certId, { clinicalReason, reasonCodes, reasonOther, estimatedDays, planForDischarge } = {}) {
+    const body = { clinicalReason, estimatedDays, planForDischarge };
+    if (reasonCodes !== undefined) {
+      body.reasonCodes = (reasonCodes || []).map(({ code, auto, evidence }) => ({
+        code,
+        auto: !!auto,
+        evidence: evidence ?? null,
+      }));
+    }
+    if (reasonOther !== undefined) body.reasonOther = reasonOther;
+
     const response = await chrome.runtime.sendMessage({
       type: 'API_REQUEST',
       endpoint: `/api/extension/certifications/${certId}`,
       options: {
         method: 'PUT',
-        body: JSON.stringify({ clinicalReason, estimatedDays, planForDischarge })
+        body: JSON.stringify(body)
       }
     });
 
@@ -217,12 +238,25 @@ const CertAPI = {
   },
 
   /**
+   * Existing name for updateCertification — kept so current callers
+   * (CertsView, SendCertModal) don't change.
+   */
+  async saveClinicalReason(certId, data) {
+    return CertAPI.updateCertification(certId, data);
+  },
+
+  /**
    * Generate an AI draft "Clinical Reason for Continued Stay" for a recert.
    * Only generates + returns a draft — does NOT persist. Caller populates the
    * editable field; nurse reviews/edits, then saves via saveClinicalReason.
    * Recerts only (backend 400s on initial/signed certs).
    * @param {string} certId — certification internal id (from GET certifications)
-   * @returns {Promise<{ clinicalReason: string, source: 'ai'|'fallback' }>}
+   *
+   * Checkbox-form orgs get suggested boxes instead of prose: the body is
+   * { success, reasonCodes: [{code, auto, evidence}], source: 'ai'|'rules' }.
+   * The whole body is resolved so those callers can read reasonCodes;
+   * clinicalReason/source are always present for the standard callers.
+   * @returns {Promise<{ clinicalReason: string, source: string, reasonCodes?: Array }>}
    */
   async generateClinicalReason(certId) {
     const response = await chrome.runtime.sendMessage({
@@ -236,6 +270,7 @@ const CertAPI = {
     }
 
     return {
+      ...(response.data || {}),
       clinicalReason: response.data?.clinicalReason || '',
       source: response.data?.source || 'ai'
     };
