@@ -18,7 +18,7 @@ import {
   shortLabel, measureCode,
   measureInLens, rowForLens, crosserForLens,
 } from '../lib/qm-view-model.js';
-import { hasActiveQip, qipForState } from '../lib/qip-programs.js';
+import { hasQipScorer, qipForState } from '../lib/qip-programs.js';
 import {
   URGENCY, CROSSING, CLEAR_GROUP, entryUrgency, soonestCliffDays,
   crosserToDrill, fullName, prettyDate, quarterLabel, stayDayLabel,
@@ -65,7 +65,8 @@ export function QmOverview({
   const { summary } = data;
   const facilityState = data.facilityState;
   const facilityDate = data.facilityDate;
-  const showLens = hasActiveQip(facilityState);
+  // Scored states only (FL today) — a program on paper is not a lens we can back.
+  const showLens = hasQipScorer(facilityState);
   const program = qipForState(facilityState);
   const setLens = onLensChange ?? (() => {}); // lens is owned by QMBoard (drives whole board + drill-in)
   const [seg, setSeg] = useState(null);
