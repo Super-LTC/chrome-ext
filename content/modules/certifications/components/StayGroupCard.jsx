@@ -216,7 +216,7 @@ export function StayGroupCard({
           kind={reviewKind}
           reason={reviewReason}
           onConfirm={() => handleReviewAction('confirm')}
-          onEnd={reviewKind === 'payer_check' ? () => setEndModal('review') : () => handleReviewAction('end')}
+          onEnd={() => setEndModal('review')}
         />
       )}
 
@@ -291,6 +291,10 @@ export function StayGroupCard({
             patientName={patientName}
             startDate={partAStartDate}
             askReason={endModal !== 'review'}
+            defaultEndDate={endModal === 'review' && reviewKind === 'discharged' ? first.patientDischargeDate || null : null}
+            hint={endModal === 'review' && reviewKind === 'discharged'
+              ? 'Defaults to the discharge date in PCC. Certifications due after this date are cancelled.'
+              : undefined}
             onSubmit={handleEndStay}
           />
           <AddStayCertModal

@@ -6,8 +6,9 @@ import { todayISO } from '../stay-dates.js';
  * EndStayModal — pick the stay's last day (defaults to today) and, unless
  * `askReason` is false, say why.
  *
- * Two callers: the stay ⋮ menu ("End stay", reason required) and the payer
- * check banner (answering a review flag — the flag is the reason, so no box).
+ * Two callers: the stay ⋮ menu ("End stay", reason required) and the review
+ * banner (answering a payer-check or discharged flag — the flag is the reason,
+ * so no box). `defaultEndDate` pre-fills the discharge date for the latter.
  *
  * `onSubmit({endDate, reason})` returns a promise; a rejection shows its
  * message and keeps the modal open.
@@ -19,9 +20,10 @@ function EndStayModalBody({
   startDate,
   askReason = true,
   hint = 'No more certifications will be due after this date.',
+  defaultEndDate = null,
   onSubmit,
 }) {
-  const [endDate, setEndDate] = useState(todayISO());
+  const [endDate, setEndDate] = useState(defaultEndDate || todayISO());
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);

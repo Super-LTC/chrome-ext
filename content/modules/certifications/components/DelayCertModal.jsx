@@ -11,7 +11,7 @@ export function DelayCertModal({ isOpen, onClose, cert, onDelayed }) {
     setSubmitting(true);
     setError(null);
     onDelayed(reason)
-      .then(() => { setReason(''); onClose(); })
+      .then(() => { setReason(''); setSubmitting(false); onClose(); })
       .catch((err) => {
         console.error('[Certifications] Delay failed:', err);
         setError(err?.message || 'Could not mark as delayed. Try again.');

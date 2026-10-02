@@ -142,12 +142,17 @@ describe('review banner — payer check', () => {
 describe('review banner — discharged', () => {
   const flagged = () => cert({ stayReviewKind: 'discharged', stayReviewReason: 'Discharged on Sep 20. End the stay?' });
 
-  it('"End stay" ends via review straight away (server uses the discharge date)', async () => {
-    mount(flagged());
+  it('"End stay" asks first — the date is pre-filled with the PCC discharge date — never one click', async () => {
+    mount(cert({ stayReviewKind: 'discharged', stayReviewReason: 'Discharged on Sep 20.', patientDischargeDate: '2026-09-20' }));
     q('.cert__stay-review [data-action="end"]').click();
+    await flush(1);
+    expect(api.resolveStayReview).not.toHaveBeenCalled();
+    expect(q('.cm__title').textContent).toBe('End stay');
+    expect(q('[data-field="endDate"]').value).toBe('2026-09-20');
+    expect(q('[data-field="reason"]')).toBeNull();
+    qa('.cm__btn').find(b => b.textContent === 'End stay').click();
     await flush();
-    expect(api.resolveStayReview).toHaveBeenCalledWith('stay_1', { action: 'end' });
-    expect(q('.cm__title')).toBeNull();
+    expect(api.resolveStayReview).toHaveBeenCalledWith('stay_1', { action: 'end', endDate: '2026-09-20' });
   });
 
   it('"Keep open" confirms', async () => {
