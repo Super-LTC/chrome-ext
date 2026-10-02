@@ -31,10 +31,29 @@ export function auditBadge(verdict) {
 }
 
 /**
+ * Key a suggested category's nurse decision the way the backend does.
+ *
+ * Decisions are stored per (assessment, mdsItem, mdsColumn). An I8000 category
+ * is mdsItem 'I8000' + mdsColumn = its category key ('NTA:25') — the same pair
+ * the solver writes onto the mds_item_detections row — and GET /mds/decisions
+ * returns them keyed `${mdsItem}${mdsColumn}`, i.e. 'I8000NTA:25'.
+ *
+ * @param {string} categoryKey - e.g. 'NTA:25'
+ * @returns {string}
+ */
+export function i8000DecisionKey(categoryKey) {
+  return `I8000${categoryKey || ''}`;
+}
+
+/**
  * Build the view model the overlay renders from.
  *
  * @param {Object|null} response - the raw endpoint envelope
  *   { success, state: 'ok'|'no_run'|'skipped', i8000: I8000OverlayContract, ... }
+ * @param {Object} [decisions] - GET /mds/decisions map, keyed `${mdsItem}${mdsColumn}`
+ *   → { decision: 'agree'|'disagree', note }. A suggestion the nurse already
+ *   agreed or disagreed with is resolved: it stays listed, but drops out of the
+ *   "could add N points" headline.
  * @returns {{
  *   state: string|null,
  *   stale: boolean,
@@ -44,7 +63,7 @@ export function auditBadge(verdict) {
  *   hasSuggestions: boolean,
  * }}
  */
-export function buildI8000ViewModel(response) {
+export function buildI8000ViewModel(response, decisions = {}) {
   const state = response?.state ?? null;
   const contract = response?.i8000 || null;
 
@@ -58,6 +77,9 @@ export function buildI8000ViewModel(response) {
       slotsAvailable: null,
       slotsFull: false,
       suggestions: [],
+      openCount: 0,
+      openNtaPoints: 0,
+      resolvedCount: 0,
     },
     hasAudits: false,
     hasSuggestions: false,
@@ -92,6 +114,7 @@ export function buildI8000ViewModel(response) {
   const suggestions = (contract.suggestedMissing || [])
     .map((row) => ({
       categoryKey: row.categoryKey,
+      decision: decisionFor(decisions, row.categoryKey),
       categoryName: row.categoryName,
       component: row.component,
       ntaPoints: row.ntaPoints ?? 0,
@@ -104,23 +127,43 @@ export function buildI8000ViewModel(response) {
       result: row.result ?? null,
     }))
     // Backend already sorts by ntaPoints desc; sort defensively so the "money"
-    // suggestions always lead regardless of upstream ordering.
-    .sort((a, b) => b.ntaPoints - a.ntaPoints);
+    // suggestions always lead regardless of upstream ordering. Ones the nurse
+    // has already decided sink below the open ones.
+    .sort((a, b) => (!!a.decision - !!b.decision) || (b.ntaPoints - a.ntaPoints));
 
   const slotsAvailable = summary.slotsAvailable ?? null;
+  const suggestionCount = summary.suggestedCount ?? suggestions.length;
+  const potentialNtaPoints = summary.potentialNtaPoints ?? 0;
+  const resolved = suggestions.filter((s) => s.decision);
+  const resolvedPoints = resolved.reduce((sum, s) => sum + s.ntaPoints, 0);
 
   return {
     state,
     stale: !!contract.stale,
     audits,
     banner: {
-      suggestionCount: summary.suggestedCount ?? suggestions.length,
-      potentialNtaPoints: summary.potentialNtaPoints ?? 0,
+      suggestionCount,
+      potentialNtaPoints,
       slotsAvailable,
       slotsFull: slotsAvailable === 0,
       suggestions,
+      // What's still waiting on the nurse — the headline counts these.
+      openCount: Math.max(0, suggestionCount - resolved.length),
+      openNtaPoints: Math.max(0, potentialNtaPoints - resolvedPoints),
+      resolvedCount: resolved.length,
     },
     hasAudits: audits.length > 0,
     hasSuggestions: suggestions.length > 0,
   };
+}
+
+/**
+ * The nurse's recorded decision on one suggested category, or null.
+ * @returns {{decision: 'agree'|'disagree', note: string}|null}
+ */
+function decisionFor(decisions, categoryKey) {
+  if (!categoryKey || !decisions) return null;
+  const d = decisions[i8000DecisionKey(categoryKey)];
+  if (!d || (d.decision !== 'agree' && d.decision !== 'disagree')) return null;
+  return { decision: d.decision, note: String(d.note || '').trim() };
 }

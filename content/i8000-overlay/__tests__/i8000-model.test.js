@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { buildI8000ViewModel, auditBadge } from '../i8000-model.js';
+import { buildI8000ViewModel, auditBadge, i8000DecisionKey } from '../i8000-model.js';
 
 // A minimal "ok" envelope shaped like GET /api/extension/mds/sections/I/i8000.
 function okEnvelope(overrides = {}) {
@@ -152,5 +152,65 @@ describe('buildI8000ViewModel — suggestions', () => {
     expect(vm.banner.potentialNtaPoints).toBe(4);
     expect(vm.banner.slotsAvailable).toBe(0);
     expect(vm.banner.slotsFull).toBe(true);
+  });
+});
+
+describe('buildI8000ViewModel — nurse decisions on suggestions', () => {
+  const twoSuggestions = () =>
+    okEnvelope({
+      suggestedMissing: [
+        { categoryKey: 'NTA:25', categoryName: 'Immune Disorders', component: 'NTA', ntaPoints: 2, result: { status: 'needs_physician_query' } },
+        { categoryKey: 'NTA:26', categoryName: 'Morbid Obesity', component: 'NTA', ntaPoints: 1, result: { status: 'code' } },
+      ],
+      summary: { enteredCount: 1, agreeCount: 0, disagreeCount: 0, outsideScopeCount: 1, suggestedCount: 2, potentialNtaPoints: 3, slotsAvailable: 9 },
+    });
+
+  test('decision key is I8000 + category key, as GET /mds/decisions returns it', () => {
+    expect(i8000DecisionKey('NTA:25')).toBe('I8000NTA:25');
+  });
+
+  test('no decisions → every suggestion open, headline unchanged', () => {
+    const vm = buildI8000ViewModel(twoSuggestions());
+    expect(vm.banner.suggestions.every((s) => s.decision === null)).toBe(true);
+    expect(vm.banner.openCount).toBe(2);
+    expect(vm.banner.openNtaPoints).toBe(3);
+    expect(vm.banner.resolvedCount).toBe(0);
+  });
+
+  test('a dismissed category carries its note, sinks below open ones, and leaves the headline', () => {
+    const vm = buildI8000ViewModel(twoSuggestions(), {
+      'I8000NTA:25': { decision: 'disagree', note: ' Already coded the subsequent-encounter code ' },
+      I2900: { decision: 'agree', note: null },
+    });
+    expect(vm.banner.suggestions.map((s) => s.categoryKey)).toEqual(['NTA:26', 'NTA:25']);
+    expect(vm.banner.suggestions[1].decision).toEqual({ decision: 'disagree', note: 'Already coded the subsequent-encounter code' });
+    expect(vm.banner.suggestions[0].decision).toBeNull();
+    expect(vm.banner.openCount).toBe(1);
+    expect(vm.banner.openNtaPoints).toBe(1);
+    expect(vm.banner.resolvedCount).toBe(1);
+    // Totals still describe the whole run.
+    expect(vm.banner.suggestionCount).toBe(2);
+    expect(vm.banner.potentialNtaPoints).toBe(3);
+  });
+
+  test('agree also resolves; all decided → nothing open', () => {
+    const vm = buildI8000ViewModel(twoSuggestions(), {
+      'I8000NTA:25': { decision: 'disagree', note: '' },
+      'I8000NTA:26': { decision: 'agree' },
+    });
+    expect(vm.banner.suggestions[1].decision).toEqual({ decision: 'agree', note: '' });
+    expect(vm.banner.openCount).toBe(0);
+    expect(vm.banner.openNtaPoints).toBe(0);
+    expect(vm.banner.resolvedCount).toBe(2);
+    expect(vm.hasSuggestions).toBe(true);
+  });
+
+  test('a decision on a different category, or a bare I8000 key, does not resolve anything', () => {
+    const vm = buildI8000ViewModel(twoSuggestions(), {
+      I8000: { decision: 'disagree', note: 'x' },
+      'I8000NTA:17': { decision: 'disagree', note: 'x' },
+      'I8000NTA:26': { decision: 'maybe' },
+    });
+    expect(vm.banner.openCount).toBe(2);
   });
 });

@@ -111,6 +111,38 @@
   color: #9a3412;
 }
 
+/* Decided rows: still listed (and reopenable), but read as done — the same
+   green/red the checkbox items' resolved badges use. */
+.super-i8000-banner__row--resolved .super-i8000-banner__cat {
+  color: var(--super-gray-500, #64748b);
+  font-weight: 600;
+}
+.super-i8000-banner__row--resolved .super-i8000-banner__pts {
+  background: var(--super-gray-100, #f1f5f9);
+  color: var(--super-gray-500, #64748b);
+}
+.super-i8000-banner__status--agreed {
+  background: var(--super-match-bg, #dcfce7);
+  color: #166534;
+}
+.super-i8000-banner__status--dismissed {
+  background: var(--super-mismatch-bg, #fee2e2);
+  color: #991b1b;
+}
+
+/* Every suggestion decided → banner goes quiet (no amber nag). */
+.super-i8000-banner--resolved {
+  border-color: var(--super-gray-200, #e2e8f0);
+  border-left-color: var(--super-match, #22c55e);
+  background: #fff;
+}
+.super-i8000-banner--resolved .super-i8000-banner__title { color: var(--super-gray-700, #334155); }
+.super-i8000-banner--resolved .super-i8000-banner__spark { color: var(--super-match, #22c55e); }
+.super-i8000-banner--resolved .super-i8000-banner__chev { color: var(--super-gray-400, #94a3b8); }
+.super-i8000-banner--resolved .super-i8000-banner__list { border-top-color: var(--super-gray-200, #e2e8f0); }
+.super-i8000-banner--resolved .super-i8000-banner__head:hover,
+.super-i8000-banner--resolved .super-i8000-banner__row:hover { background: var(--super-gray-50, #f8fafc); }
+
 .super-i8000-banner__go {
   flex-shrink: 0;
   color: var(--super-gray-400, #94a3b8);
