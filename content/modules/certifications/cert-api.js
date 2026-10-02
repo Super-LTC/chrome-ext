@@ -586,6 +586,191 @@ const CertAPI = {
     return response.data;
   },
 
+  // ── Cert stays (manual mode) ──────────────────────────────────────────────
+  // A "stay" is the run of certifications for one resident's Medicare A or
+  // managed-care episode. Normally the backend starts and ends stays from the
+  // census; these calls let the MDS nurse do it by hand when that can't work.
+  // Every mutation rejects with the server's `error` text, which is written to
+  // be shown to the nurse as-is.
+
+  /**
+   * Residents whose census shows a skilled payer but who have no cert stay.
+   * A nudge, not a worklist: a failure (old backend, module off, no access)
+   * resolves to an empty list so the section simply doesn't render.
+   * `managedCareEnabled` is null when unknown (request failed).
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @returns {Promise<{needsStay: Array, managedCareEnabled: boolean|null}>}
+   */
+  async fetchNeedsStay(facilityName, orgSlug) {
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/needs-stay?${params}`,
+      options: { method: 'GET' }
+    });
+
+    if (!response.success) return { needsStay: [], managedCareEnabled: null };
+
+    const data = response.data || {};
+    return {
+      needsStay: data.needsStay || [],
+      managedCareEnabled: typeof data.managedCareEnabled === 'boolean' ? data.managedCareEnabled : null,
+    };
+  },
+
+  /**
+   * "No cert stay needed" for one needs-stay item.
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @param {{patientId: string, payerType: string, startDate: string, reason: string}} item
+   */
+  async dismissNeedsStay(facilityName, orgSlug, { patientId, payerType, startDate, reason }) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/needs-stay/dismiss`,
+      options: {
+        method: 'POST',
+        body: JSON.stringify({ facilityName, orgSlug, patientId, payerType, startDate, reason })
+      }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not dismiss. Try again.');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Active + recently discharged residents, for the Start-stay picker.
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @returns {Promise<Array<{patientId, patientName, patientExternalId, status, currentPayer, hasOpenStay}>>}
+   */
+  async fetchCertResidents(facilityName, orgSlug) {
+    const params = new URLSearchParams({ facilityName, orgSlug });
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/residents?${params}`,
+      options: { method: 'GET' }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not load residents');
+    }
+
+    return response.data?.residents || [];
+  },
+
+  /**
+   * Start a manual stay. Creates a pending initial cert; nothing is sent.
+   * `endDate` is omitted from the body when the resident hasn't left.
+   * @param {string} facilityName
+   * @param {string} orgSlug
+   * @param {{patientId: string, payerType: string, startDate: string, endDate?: string|null, reason: string}} stay
+   * @returns {Promise<{stayId: string, initialCertId: string}>}
+   */
+  async startManualStay(facilityName, orgSlug, { patientId, payerType, startDate, endDate, reason }) {
+    const body = { facilityName, orgSlug, patientId, payerType, startDate, reason };
+    if (endDate) body.endDate = endDate;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/stays`,
+      options: { method: 'POST', body: JSON.stringify(body) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not start the cert stay');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Switch a stay between manual (nurse-managed) and automatic.
+   * @param {string} stayId
+   * @param {'manual'|'auto'} mode
+   * @param {string} reason
+   */
+  async setStayMode(stayId, mode, reason) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/stays/${stayId}/mode`,
+      options: { method: 'POST', body: JSON.stringify({ mode, reason }) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not change how this stay is managed');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * End a stay on a given date.
+   * @param {string} stayId
+   * @param {{endDate: string, reason: string}} opts
+   */
+  async endStay(stayId, { endDate, reason }) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/stays/${stayId}/end`,
+      options: { method: 'POST', body: JSON.stringify({ endDate, reason }) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not end the stay');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Answer a stay's review flag: keep it as-is ('confirm') or end it ('end').
+   * `endDate` is only sent with 'end', and only when given — without it the
+   * server uses the date it flagged (e.g. the discharge date).
+   * @param {string} stayId
+   * @param {{action: 'confirm'|'end', endDate?: string}} opts
+   */
+  async resolveStayReview(stayId, { action, endDate } = {}) {
+    const body = { action };
+    if (action === 'end' && endDate) body.endDate = endDate;
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/stays/${stayId}/review`,
+      options: { method: 'POST', body: JSON.stringify(body) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not save. Try again.');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Add a certification to an existing stay (created pending, not sent).
+   * @param {string} stayId
+   * @param {{type: 'initial'|'day_14_recert'|'day_30_recert', dueDate: string}} opts
+   * @returns {Promise<{certId: string}>}
+   */
+  async addStayCertification(stayId, { type, dueDate }) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'API_REQUEST',
+      endpoint: `/api/extension/certifications/stays/${stayId}/certs`,
+      options: { method: 'POST', body: JSON.stringify({ type, dueDate }) }
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Could not add the certification');
+    }
+
+    return response.data;
+  },
+
   /**
    * Read the user's notification preferences for a facility. ONE round-trip
    * populates the whole settings popover (all five toggles) plus which modules

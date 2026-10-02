@@ -3,9 +3,12 @@ import { useCertifications } from './hooks/useCertifications.js';
 import { useDischargedCerts } from './hooks/useDischargedCerts.js';
 import { useNotificationPrefs } from './hooks/useNotificationPrefs.js';
 import { useScheduledSends } from './hooks/useScheduledSends.js';
+import { useNeedsStay } from './hooks/useNeedsStay.js';
 import { StayGroupCard } from './components/StayGroupCard.jsx';
 import { CertSettingsPopover } from './components/CertSettingsPopover.jsx';
 import { CertDigestBanner } from './components/CertDigestBanner.jsx';
+import { NeedsStaySection } from './components/NeedsStaySection.jsx';
+import { StartStayModal } from './components/StartStayModal.jsx';
 import { SendCertModal } from './components/SendCertModal.jsx';
 import { ScheduledSendsModal } from './components/ScheduledSendsModal.jsx';
 import { HourglassIcon } from './components/HourglassIcon.jsx';
@@ -17,6 +20,7 @@ import { PractitionerWorkloadView } from './components/PractitionerWorkloadView.
 import { CertAuditView } from './components/CertAuditView.jsx';
 import { track } from '../../utils/analytics.js';
 import { getCertUrgency as resolveCertUrgency, isOverdueUrgency } from './cert-urgency.js';
+import { adaptDischargedPatient } from './cert-grouping.js';
 
 /**
  * CertsView — main tab content for the Certs tab in MDS Command Center.
@@ -34,38 +38,6 @@ const SUB_TABS = [
   { id: 'discharged', label: 'Discharged' },
   { id: 'audit', label: 'All' },
 ];
-
-/**
- * Adapt a discharged-endpoint patient object into the stay-grouped shape
- * StayGroupCard/CertListRow consume. Enriches each cert with the patient-level
- * fields those components read (name, payer, start date, external id) and shows
- * the full chain inline (archive view — signed rows render quiet).
- */
-function adaptDischargedPatient(p) {
-  const enriched = (p.certs || []).map(c => ({
-    ...c,
-    partAStayId: p.stayId,
-    patientName: p.patientName,
-    patientExternalId: p.patientExternalId,
-    payerType: p.payerType,
-    partAStartDate: p.partAStartDate,
-    // Every stay in this view is ended by definition — the discharged endpoint
-    // does not send these two fields, and the active-list endpoint does. Without
-    // them CertListRow cannot tell a discharged resident from an active one, and
-    // would offer to schedule a send that the fire pass is guaranteed to cancel.
-    stayStatus: 'ended',
-    stayEndDate: p.endDate,
-  }));
-  enriched.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
-  return {
-    stayId: p.stayId,
-    dischargeDate: p.endDate,
-    outstandingCount: p.outstandingCount || 0,
-    displayCerts: enriched,
-    historyCerts: [],
-    allCerts: enriched,
-  };
-}
 
 function matchesStayTypePayer(payerType, filter) {
   if (filter === 'all') return true;
@@ -150,6 +122,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
   const [revokeCert, setRevokeCert] = useState(null);
   const [delayCert, setDelayCert] = useState(null);
   const [editCert, setEditCert] = useState(null);
+  const [startStayOpen, setStartStayOpen] = useState(false);
 
   // Fetch non-signed certs
   const { certs: activeCerts, certForm: activeCertForm, loading: activeLoading, error: activeError, refetch: refetchActive } = useCertifications({
@@ -201,6 +174,17 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
     facilityName: patientId ? null : facilityName,
     orgSlug: patientId ? null : orgSlug,
   });
+  // Residents the census shows on a skilled payer with no cert stay.
+  // Facility-wide — not loaded in the per-patient overlay.
+  const {
+    items: needsStayItems,
+    managedCareEnabled,
+    refetch: refetchNeedsStay,
+  } = useNeedsStay({
+    facilityName: patientId ? null : facilityName,
+    orgSlug,
+  });
+
   const turnOnDigest = useCallback(
     () => updateNotificationPref('morningDigest', true),
     [updateNotificationPref]
@@ -247,7 +231,8 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
     refetchActive();
     refetchSigned();
     refetchDischarged(); // no-op until the discharged tab has loaded
-  }, [refetchActive, refetchSigned, refetchDischarged]);
+    refetchNeedsStay();
+  }, [refetchActive, refetchSigned, refetchDischarged, refetchNeedsStay]);
 
   // Filter certs by stay type
   const filteredActive = useMemo(
@@ -516,6 +501,17 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
         />
       )}
 
+      {/* Residents who may need a cert stay (self-hides when the list is empty) */}
+      {!patientId && (
+        <NeedsStaySection
+          items={needsStayItems}
+          facilityName={facilityName}
+          orgSlug={orgSlug}
+          managedCareEnabled={managedCareEnabled}
+          onChanged={refetchAll}
+        />
+      )}
+
       {/* Stay type filter + Sub-tabs */}
       <div class="cert__filters">
         {/* Stay-type (payer) filter doesn't apply to the Audit tab — that list is
@@ -555,6 +551,14 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
             </button>
           ))}
         </div>
+        {/* Start a cert stay by hand. Facility-wide resident picker, so hidden in
+            the per-patient overlay like the Scheduled list. */}
+        {!patientId && (
+          <button class="cert__scheduled-btn cert__start-stay-btn" data-track="cert_start_stay_opened" onClick={() => setStartStayOpen(true)} title="Start a certification stay by hand">
+            <span aria-hidden="true">+</span>
+            <span>Start cert stay</span>
+          </button>
+        )}
         {/* Notification settings gear (facility-wide; renders only when at least
             one module-enabled toggle exists for this facility) */}
         {/* Queued future sends. Facility-wide, so hidden in the per-patient
@@ -626,6 +630,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
             onRevoke={(c) => setRevokeCert(c)}
             onEditReason={(c) => setEditCert(c)}
             onViewPractitioner={(practId) => setWorkloadPractitionerId(practId)}
+            onStayChanged={refetchAll}
           />
         ))}
 
@@ -670,6 +675,7 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
             onRevoke={(c) => setRevokeCert(c)}
             onEditReason={(c) => setEditCert(c)}
             onViewPractitioner={(practId) => setWorkloadPractitionerId(practId)}
+            onStayChanged={refetchAll}
           />
         ))}
 
@@ -701,6 +707,15 @@ export function CertsView({ facilityName, orgSlug, patientId, patientName, onSig
         startInScheduleMode={sendCertScheduleMode}
         onScheduleChanged={refetchScheduled}
         certForm={certForm}
+      />
+
+      <StartStayModal
+        isOpen={startStayOpen}
+        onClose={() => setStartStayOpen(false)}
+        facilityName={facilityName}
+        orgSlug={orgSlug}
+        managedCareEnabled={managedCareEnabled}
+        onStarted={refetchAll}
       />
 
       <ScheduledSendsModal

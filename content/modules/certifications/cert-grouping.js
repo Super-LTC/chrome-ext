@@ -200,3 +200,41 @@ export function groupCertsByStay(certs) {
   out.sort((a, b) => a.patientName.localeCompare(b.patientName));
   return out;
 }
+
+/**
+ * Adapt a discharged-endpoint patient object into the stay-grouped shape
+ * StayGroupCard/CertListRow consume. Enriches each cert with the patient-level
+ * fields those components read (name, payer, start date, external id) and shows
+ * the full chain inline (archive view — signed rows render quiet).
+ */
+export function adaptDischargedPatient(p) {
+  const enriched = (p.certs || []).map(c => ({
+    ...c,
+    partAStayId: p.stayId,
+    patientName: p.patientName,
+    patientExternalId: p.patientExternalId,
+    payerType: p.payerType,
+    partAStartDate: p.partAStartDate,
+    // Every stay in this view is ended by definition — the discharged endpoint
+    // does not send these two fields, and the active-list endpoint does. Without
+    // them CertListRow cannot tell a discharged resident from an active one, and
+    // would offer to schedule a send that the fire pass is guaranteed to cancel.
+    stayStatus: 'ended',
+    stayEndDate: p.endDate,
+    // Stay-level manual mode + review flag. The discharged endpoint names the
+    // review fields without the `stay` prefix; StayGroupCard reads the
+    // active-list names, so map them here or the badge and banner go missing.
+    stayMode: p.stayMode ?? c.stayMode ?? 'auto',
+    stayReviewKind: p.reviewKind ?? c.stayReviewKind ?? null,
+    stayReviewReason: p.reviewReason ?? c.stayReviewReason ?? null,
+  }));
+  enriched.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+  return {
+    stayId: p.stayId,
+    dischargeDate: p.endDate,
+    outstandingCount: p.outstandingCount || 0,
+    displayCerts: enriched,
+    historyCerts: [],
+    allCerts: enriched,
+  };
+}
