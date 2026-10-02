@@ -112,7 +112,11 @@ const shim = {
     if (timer) { clearTimeout(timer); timer = null; }
   },
 
-  // Stubs — present so analytics.js dev-only code paths don't throw.
+  // Replay stubs. Nothing calls these any more — the dev-only replay
+  // logger that did was deleted when session recording was turned off.
+  // Kept so this shim still answers the posthog-js replay surface if
+  // anything reaches for it; `sessionRecording: null` is the honest
+  // answer here, because the store build has never recorded.
   onFeatureFlags() {},
   get_session_id() { return null; },
   sessionRecording: null,

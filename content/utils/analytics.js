@@ -59,41 +59,60 @@ if (ENABLED) {
     autocapture: false,
     capture_pageview: false,
     capture_pageleave: false,
-    disable_session_recording: false,
+    /**
+     * -- SESSION REPLAY IS OFF, EVERYWHERE, ON PURPOSE --------------------
+     *
+     * This read `disable_session_recording: false` with every mask turned
+     * off and `inlineImages` / `collectFonts` on, which is the most
+     * permissive replay configuration posthog-js has. It ran inside a
+     * content script on the EHR, so the recording was of the EHR's own
+     * chart screens - resident names, Client IDs (the MRN) and clinical
+     * detail - not of our UI.
+     *
+     * That is PHI in an analytics product. A BAA with PostHog makes the
+     * disclosure permissible, not necessary: recording a nurse's screen to
+     * study product usage is not the minimum necessary to provide the
+     * service (45 CFR 164.502(b)).
+     *
+     * The kill switch that actually stopped it is server-side
+     * (`session_recording_opt_in: false` on the project), because a code
+     * change does not reach a sideloaded build someone installed months
+     * ago. This is the code half, so a fresh build cannot start recording
+     * again if that project setting is ever flipped back.
+     *
+     * Events are unaffected. Replay was the only thing carrying screen
+     * content.
+     */
+    disable_session_recording: true,
     capture_performance: false,
-    mask_all_text: false,
-    mask_all_element_attributes: false,
+    /**
+     * Belt and braces. If anyone ever flips the line above, they get a
+     * masked recording rather than an unmasked one. Deleting these is the
+     * actual decision, and it should be a visible diff.
+     */
+    mask_all_text: true,
+    mask_all_element_attributes: true,
     property_blacklist: ['$current_url', '$pathname', '$referrer', '$host'],
     sanitize_properties: sanitizeProperties,
     persistence: 'localStorage',
     advanced_disable_decide: false,
     session_recording: {
-      maskAllInputs: false,
-      maskTextSelector: undefined,
+      maskAllInputs: true,
+      // '*' masks every element's text, not just inputs. Only meaningful if
+      // replay is re-enabled above; harmless while it is off.
+      maskTextSelector: '*',
       recordCrossOriginIframes: false,
       inlineStylesheet: true,
-      inlineImages: true,
-      collectFonts: true,
+      // Chart screenshots and embedded images ARE the clinical record here.
+      // Never inline them, and never ship the font payload with them.
+      inlineImages: false,
+      collectFonts: false,
     },
   });
   posthog.register({
     surface: 'extension',
     ext_version: chrome?.runtime?.getManifest?.().version || 'unknown',
   });
-
-  if (__DEV_MODE__) {
-    posthog.onFeatureFlags(() => {
-      const sessionId = posthog.sessionRecording?.sessionId || posthog.get_session_id?.();
-      const replayUrl = sessionId
-        ? `https://us.posthog.com/project/247257/replay/${sessionId}`
-        : '(pending)';
-      console.log('[PostHog] session replay active', {
-        sessionId,
-        replayUrl,
-        isRecording: !!posthog.sessionRecording?.started,
-      });
-    });
-  }
 }
 
 // Map a thrown error to a SHORT TOKEN for `error_code` props. NEVER returns
