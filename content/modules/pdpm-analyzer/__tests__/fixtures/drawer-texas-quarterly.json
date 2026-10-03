@@ -1,0 +1,314 @@
+{
+  "pricing": {
+    "mode": "texas",
+    "label": "Texas Medicaid",
+    "unit": "usd",
+    "estimate": false,
+    "components": {
+      "nursing": true,
+      "nta": true,
+      "slp": false
+    },
+    "state": "TX",
+    "note": null
+  },
+  "window": {
+    "kind": "obra",
+    "dueDate": "2026-10-12",
+    "bestDate": "2026-10-08"
+  },
+  "current": {
+    "hipps": "IAUF",
+    "rateGroup": "P3X",
+    "amount": 164.24,
+    "ntaPoints": 0,
+    "ntaLevel": "NF",
+    "ntaBand": "Group 3",
+    "nursingCategory": "RPF",
+    "nursingGroup": "PDE1",
+    "slpGroup": "SA"
+  },
+  "days": [
+    {
+      "date": "2026-10-05",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBMD",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 5,
+        "ntaLevel": "ND",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBMC",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 7,
+        "ntaLevel": "NC",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-06",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBMD",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 5,
+        "ntaLevel": "ND",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBMC",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 7,
+        "ntaLevel": "NC",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-07",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBMD",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 5,
+        "ntaLevel": "ND",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBMC",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 7,
+        "ntaLevel": "NC",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-08",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBMD",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 5,
+        "ntaLevel": "ND",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBMC",
+        "rateGroup": "C2X",
+        "amount": 204.42,
+        "ntaPoints": 7,
+        "ntaLevel": "NC",
+        "ntaBand": "Group 2",
+        "nursingCategory": "CC",
+        "nursingGroup": "CDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-09",
+      "dayNumber": null,
+      "isCurrentArd": true,
+      "supported": {
+        "hipps": "IBUF",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 0,
+        "ntaLevel": "NF",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBUE",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 2,
+        "ntaLevel": "NE",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-10",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBUF",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 0,
+        "ntaLevel": "NF",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBUE",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 2,
+        "ntaLevel": "NE",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-11",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBUF",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 0,
+        "ntaLevel": "NF",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBUE",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 2,
+        "ntaLevel": "NE",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-12",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBUF",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 0,
+        "ntaLevel": "NF",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBUE",
+        "rateGroup": "P3X",
+        "amount": 164.24,
+        "ntaPoints": 2,
+        "ntaLevel": "NE",
+        "ntaBand": "Group 3",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SB"
+      }
+    }
+  ],
+  "items": [
+    {
+      "key": "O0110H1B",
+      "mdsItem": "O0110H1",
+      "mdsColumn": "B",
+      "section": "O",
+      "name": "IV Medications (while a resident)",
+      "source": "Given 9/30 – 10/7",
+      "review": false,
+      "components": [
+        "nta",
+        "nursing"
+      ],
+      "ntaPoints": 5,
+      "nursingCategory": "CC",
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07",
+        "2026-10-08"
+      ],
+      "dismissed": null
+    },
+    {
+      "key": "I2900",
+      "mdsItem": "I2900",
+      "mdsColumn": "",
+      "section": "I",
+      "name": "Diabetes mellitus (DM)",
+      "source": "Needs a physician query",
+      "review": true,
+      "components": [
+        "nta"
+      ],
+      "ntaPoints": 2,
+      "nursingCategory": null,
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07",
+        "2026-10-08",
+        "2026-10-09",
+        "2026-10-10",
+        "2026-10-11",
+        "2026-10-12"
+      ],
+      "dismissed": null
+    }
+  ],
+  "ntaBands": [
+    {
+      "label": "Group 3",
+      "minPoints": 0
+    },
+    {
+      "label": "Group 2",
+      "minPoints": 3
+    },
+    {
+      "label": "Group 1",
+      "minPoints": 9
+    }
+  ]
+}

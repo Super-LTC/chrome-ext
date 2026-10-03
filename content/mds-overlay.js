@@ -4894,6 +4894,21 @@ function navigateToNext() {
   navigateToItem(result.elementId);
 }
 
+/**
+ * Scroll to an item already on this page (PDPM drawer "Go to MDS"). Returns true
+ * when it was found here; the caller navigates to the section otherwise.
+ */
+function scrollToMdsItem(mdsItem, column) {
+  const results = SuperOverlay?.results || [];
+  const match =
+    results.find((r) => r.mdsItem === mdsItem && (column ? r.column === column : true)) ||
+    results.find((r) => r.mdsItem === mdsItem);
+  if (!match?.element) return false;
+  navigateToItem(match.elementId);
+  return true;
+}
+window.scrollToMdsItem = scrollToMdsItem;
+
 function navigateToItem(elementId) {
   const result = SuperOverlay.results.find(r => r.elementId === elementId);
   if (!result || !result.element) return;

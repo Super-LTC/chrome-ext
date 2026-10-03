@@ -251,7 +251,7 @@ function CarePlanSection({ carePlan }) {
  * @param {Object}  props.detectionItem — detection item from parent (has .impact, .mdsItem, .itemName)
  * @param {string}  props.mdsItem — MDS item code (e.g. "I0600")
  */
-export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, onViewSource, onDismiss, onAgree, dismissing, assessmentId }) {
+export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, onViewSource, onDismiss, onAgree, dismissing, assessmentId, dismissReasons }) {
   const isFull = variant === 'full';
   const apiItem = data?.item;
   const isColumnBased = !!apiItem?.columns;
@@ -314,9 +314,13 @@ export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, 
   const activeColData = columns[activeCol];
   const subItems = apiItem?.subItems || [];
 
-  // Dismiss form state
+  // Dismiss form state. With `dismissReasons` (the PDPM drawer) a reason pick is
+  // required and onDismiss receives { reason, note }; otherwise it receives the
+  // free-text note, as before.
   const [dismissMode, setDismissMode] = useState(false);
   const [dismissReason, setDismissReason] = useState('');
+  const [dismissPick, setDismissPick] = useState(null);
+  const pickNeedsNote = dismissPick === 'other' && !dismissReason.trim();
 
   const displayCode = mdsItem?.startsWith('I8000:') ? 'I8000' : mdsItem;
 
@@ -476,23 +480,35 @@ export function ItemDetail({ variant = 'compact', data, detectionItem, mdsItem, 
       {/* ── Actions (sticky) ── */}
       {dismissMode && onDismiss ? (
         <div class="sid__dismiss-form">
-          <label>Why do you disagree? (optional)</label>
+          <label>{dismissReasons ? 'Why dismiss?' : 'Why do you disagree? (optional)'}</label>
+          {dismissReasons && (
+            <div class="sid__dismiss-pills">
+              {dismissReasons.map((r) => (
+                /* NO_TRACK: reason pick inside the dismiss form; the parent's onDismiss fires mds_item_decision */
+                <button key={r.value} type="button" class={`sid__dismiss-pill${dismissPick === r.value ? ' sid__dismiss-pill--on' : ''}`}
+                  disabled={dismissing} onClick={() => setDismissPick(r.value)}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             value={dismissReason}
             onInput={(e) => setDismissReason(e.target.value)}
-            placeholder="Enter reason..."
+            placeholder={dismissReasons ? (dismissPick === 'other' ? 'What is the reason?' : 'Add a note (optional)') : 'Enter reason...'}
             disabled={dismissing}
           />
           <div class="sid__dismiss-form-btns">
             {/* NO_TRACK: dismiss-form cancel — sub-flow inside ItemDetail, parent owns events */}
             <button class="sid__btn sid__btn--secondary" type="button" disabled={dismissing}
-              onClick={() => { setDismissMode(false); setDismissReason(''); }}>
+              onClick={() => { setDismissMode(false); setDismissReason(''); setDismissPick(null); }}>
               Cancel
             </button>
             {/* NO_TRACK: dismiss-form submit — onDismiss callback owned by parent feature */}
-            <button class="sid__btn sid__btn--primary" type="button" disabled={dismissing}
-              onClick={() => onDismiss(dismissReason)}>
-              {dismissing ? 'Submitting...' : 'Submit'}
+            <button class="sid__btn sid__btn--primary" type="button"
+              disabled={dismissing || (dismissReasons && (!dismissPick || pickNeedsNote))}
+              onClick={() => onDismiss(dismissReasons ? { reason: dismissPick, note: dismissReason.trim() } : dismissReason)}>
+              {dismissing ? 'Submitting...' : dismissReasons ? 'Dismiss' : 'Submit'}
             </button>
           </div>
         </div>

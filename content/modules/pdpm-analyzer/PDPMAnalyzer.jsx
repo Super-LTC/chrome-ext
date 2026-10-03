@@ -11,6 +11,8 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import { usePDPMAnalyzer } from './hooks/usePDPMAnalyzer.js';
 import { ComplianceCard } from './components/ComplianceCard.jsx';
 import { ItemDetailView } from './components/ItemDetailView.jsx';
+import { PdpmDrawer } from './components/PdpmDrawer.jsx';
+import { DISMISS_REASONS } from './lib/drawer-model.js';
 import { CertSection } from '../certifications/components/CertSection.jsx';
 import { Selector } from '../../components/Selector.jsx';
 import { formatPaymentRates } from '../../utils/payment.js';
@@ -1135,7 +1137,7 @@ function RunItState({ code, runParams, onComplete }) {
 
 // ─── Assessment detail view ────────────────────────────────────────────────────
 
-function AssessmentView({ assessmentData, onItemClick, onQueryClick, patientId }) {
+function AssessmentView({ assessmentData, onItemClick, onDrawerItemClick, onQueryClick, patientId, assessmentId }) {
   const [collapsed, setCollapsed] = useState({});
   const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -1143,6 +1145,24 @@ function AssessmentView({ assessmentData, onItemClick, onQueryClick, patientId }
     return (
       <div class="pdpm-an__state">
         <p>No assessment data available.</p>
+      </div>
+    );
+  }
+
+  // New drawer (payer-aware ARD bars + opportunities by category) when the
+  // backend sends it; the cards below it are unchanged. Older backends without
+  // `drawer` keep the previous layout.
+  if (assessmentData.drawer) {
+    return (
+      <div class="pdpm-an__content pdpm-an__content--drawer">
+        <PdpmDrawer drawer={assessmentData.drawer} assessmentId={assessmentId} onOpenItem={onDrawerItemClick} />
+        <PendingQueriesSection data={assessmentData} onQueryClick={onQueryClick} collapsed={collapsed.queries} onToggleCollapse={() => toggle('queries')} />
+        <RecentlySignedSection data={assessmentData} onQueryClick={onQueryClick} collapsed={collapsed.signed} onToggleCollapse={() => toggle('signed')} />
+        <DocRisksSection data={assessmentData} onItemClick={onItemClick} collapsed={collapsed.docRisks} onToggleCollapse={() => toggle('docRisks')} />
+        <ClinicalScores data={assessmentData} collapsed={collapsed.scores ?? true} onToggleCollapse={() => setCollapsed(prev => ({ ...prev, scores: !(prev.scores ?? true) }))} />
+        <ComplianceCard data={assessmentData} collapsed={collapsed.compliance ?? true} onToggleCollapse={() => setCollapsed(prev => ({ ...prev, compliance: !(prev.compliance ?? true) }))} />
+        <SectionProgressCard data={assessmentData} collapsed={collapsed.sections ?? true} onToggleCollapse={() => setCollapsed(prev => ({ ...prev, sections: !(prev.sections ?? true) }))} />
+        {patientId && <CertSection patientId={patientId} collapsed={collapsed.certs} onToggleCollapse={() => toggle('certs')} />}
       </div>
     );
   }
@@ -1311,10 +1331,25 @@ export function PDPMAnalyzer({ context, onClose, initialMode = 'modal', fromComm
                   onBack={() => { setDetailItem(null); setIsSplitView(false); }}
                   onSplitChange={setIsSplitView}
                   onDismiss={() => { setDetailItem(null); setIsSplitView(false); }}
+                  dismissReasons={detailItem.type === 'drawer' ? DISMISS_REASONS : undefined}
                 />
               : <AssessmentView
                   assessmentData={assessmentData}
                   patientId={context?.patientId}
+                  assessmentId={selectedAssessmentId || context?.assessmentId}
+                  onDrawerItemClick={(it) => {
+                    track('pdpm_item_drilled_in', { item_code: it.mdsItem });
+                    setDetailItem({
+                      type: 'drawer',
+                      item: {
+                        mdsItem: it.mdsItem,
+                        column: it.mdsColumn,
+                        mdsColumn: it.mdsColumn,
+                        categoryKey: it.mdsItem === 'I8000' ? it.mdsColumn : undefined,
+                        itemName: it.name,
+                      },
+                    });
+                  }}
                   onItemClick={(d) => {
                     if (d?.mdsItem) {
                       // Strip optional ":suffix" so I8000:rare → I8000 (categorical reference data, no PHI).

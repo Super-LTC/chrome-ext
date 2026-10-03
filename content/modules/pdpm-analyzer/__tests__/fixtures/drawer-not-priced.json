@@ -1,0 +1,107 @@
+{
+  "pricing": {
+    "mode": "none",
+    "label": "Not priced",
+    "unit": null,
+    "estimate": false,
+    "components": {
+      "nursing": true,
+      "nta": true,
+      "slp": true
+    },
+    "state": null,
+    "note": "Only Medicaid pays on this assessment, and this resident is not on Medicaid."
+  },
+  "window": {
+    "kind": "single",
+    "dueDate": null,
+    "bestDate": null
+  },
+  "current": {
+    "hipps": "IAUF",
+    "rateGroup": null,
+    "amount": null,
+    "ntaPoints": 0,
+    "ntaLevel": "NF",
+    "ntaBand": "NF",
+    "nursingCategory": "RPF",
+    "nursingGroup": "PDE1",
+    "slpGroup": "SA"
+  },
+  "days": [
+    {
+      "date": "2026-10-09",
+      "dayNumber": null,
+      "isCurrentArd": true,
+      "supported": {
+        "hipps": "IAUE",
+        "rateGroup": null,
+        "amount": null,
+        "ntaPoints": 2,
+        "ntaLevel": "NE",
+        "ntaBand": "NE",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IAUE",
+        "rateGroup": null,
+        "amount": null,
+        "ntaPoints": 2,
+        "ntaLevel": "NE",
+        "ntaBand": "NE",
+        "nursingCategory": "RPF",
+        "nursingGroup": "PDE1",
+        "slpGroup": "SA"
+      }
+    }
+  ],
+  "items": [
+    {
+      "key": "I2900",
+      "mdsItem": "I2900",
+      "mdsColumn": "",
+      "section": "I",
+      "name": "Diabetes mellitus (DM)",
+      "source": null,
+      "review": false,
+      "components": [
+        "nta"
+      ],
+      "ntaPoints": 2,
+      "nursingCategory": null,
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-10-09"
+      ],
+      "dismissed": null
+    }
+  ],
+  "ntaBands": [
+    {
+      "label": "NF",
+      "minPoints": 0
+    },
+    {
+      "label": "NE",
+      "minPoints": 1
+    },
+    {
+      "label": "ND",
+      "minPoints": 3
+    },
+    {
+      "label": "NC",
+      "minPoints": 6
+    },
+    {
+      "label": "NB",
+      "minPoints": 9
+    },
+    {
+      "label": "NA",
+      "minPoints": 12
+    }
+  ]
+}
