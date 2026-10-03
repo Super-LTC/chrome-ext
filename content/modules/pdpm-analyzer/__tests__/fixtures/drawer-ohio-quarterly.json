@@ -1,0 +1,303 @@
+{
+  "pricing": {
+    "mode": "cmi",
+    "label": "Ohio Medicaid",
+    "unit": "cmi",
+    "estimate": false,
+    "components": {
+      "nursing": true,
+      "nta": false,
+      "slp": false
+    },
+    "state": "OH",
+    "note": null
+  },
+  "window": {
+    "kind": "obra",
+    "dueDate": "2026-10-12",
+    "bestDate": "2026-10-12"
+  },
+  "current": {
+    "hipps": "IAUF",
+    "rateGroup": null,
+    "amount": 1.39,
+    "ntaPoints": 0,
+    "ntaLevel": "NF",
+    "ntaBand": "NF",
+    "nursingCategory": "RPF",
+    "nursingGroup": "PDE1",
+    "slpGroup": "SA"
+  },
+  "days": [
+    {
+      "date": "2026-10-05",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-06",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-07",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-08",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-09",
+      "dayNumber": null,
+      "isCurrentArd": true,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-10",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-11",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    },
+    {
+      "date": "2026-10-12",
+      "dayNumber": null,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      },
+      "withReview": {
+        "hipps": "IACD",
+        "rateGroup": null,
+        "amount": 2.77,
+        "ntaPoints": 3,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SA"
+      }
+    }
+  ],
+  "items": [
+    {
+      "key": "O0110M1B",
+      "mdsItem": "O0110M1",
+      "mdsColumn": "B",
+      "section": "O",
+      "name": "Isolation for active infection",
+      "source": null,
+      "review": false,
+      "components": [
+        "nursing"
+      ],
+      "ntaPoints": null,
+      "nursingCategory": "ES",
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07",
+        "2026-10-08",
+        "2026-10-09",
+        "2026-10-10",
+        "2026-10-11",
+        "2026-10-12"
+      ],
+      "dismissed": null
+    }
+  ],
+  "ntaBands": [
+    {
+      "label": "NF",
+      "minPoints": 0
+    },
+    {
+      "label": "NE",
+      "minPoints": 1
+    },
+    {
+      "label": "ND",
+      "minPoints": 3
+    },
+    {
+      "label": "NC",
+      "minPoints": 6
+    },
+    {
+      "label": "NB",
+      "minPoints": 9
+    },
+    {
+      "label": "NA",
+      "minPoints": 12
+    }
+  ]
+}

@@ -593,3 +593,33 @@
   color: #374151;
 }
 .sid__sub--on .sid__sub-name { color: #065f46; font-weight: 600; }
+
+/* Structured dismiss reasons (PDPM drawer evidence view) */
+.sid__dismiss-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sid__dismiss-pill {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sid__dismiss-pill:hover {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.sid__dismiss-pill--on,
+.sid__dismiss-pill--on:hover {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}

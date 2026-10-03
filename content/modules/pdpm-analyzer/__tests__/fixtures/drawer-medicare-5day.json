@@ -1,0 +1,402 @@
+{
+  "pricing": {
+    "mode": "medicare",
+    "label": "Medicare",
+    "unit": "usd",
+    "estimate": false,
+    "components": {
+      "nursing": true,
+      "nta": true,
+      "slp": true
+    },
+    "state": null,
+    "note": null
+  },
+  "window": {
+    "kind": "five_day",
+    "dueDate": "2026-10-05",
+    "bestDate": "2026-10-04"
+  },
+  "current": {
+    "hipps": "IAUE1",
+    "rateGroup": null,
+    "amount": 605,
+    "ntaPoints": 2,
+    "ntaLevel": "NE",
+    "ntaBand": "NE",
+    "nursingCategory": "RPF",
+    "nursingGroup": "PDE1",
+    "slpGroup": "SA"
+  },
+  "days": [
+    {
+      "date": "2026-09-28",
+      "dayNumber": 1,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBCD1",
+        "rateGroup": null,
+        "amount": 867,
+        "ntaPoints": 5,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-09-29",
+      "dayNumber": 2,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBCD1",
+        "rateGroup": null,
+        "amount": 867,
+        "ntaPoints": 5,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-09-30",
+      "dayNumber": 3,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBCB1",
+        "rateGroup": null,
+        "amount": 1010,
+        "ntaPoints": 10,
+        "ntaLevel": "NB",
+        "ntaBand": "NB",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-01",
+      "dayNumber": 4,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBCB1",
+        "rateGroup": null,
+        "amount": 1010,
+        "ntaPoints": 10,
+        "ntaLevel": "NB",
+        "ntaBand": "NB",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-02",
+      "dayNumber": 5,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBCB1",
+        "rateGroup": null,
+        "amount": 1010,
+        "ntaPoints": 10,
+        "ntaLevel": "NB",
+        "ntaBand": "NB",
+        "nursingCategory": "ES",
+        "nursingGroup": "ES1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-03",
+      "dayNumber": 6,
+      "isCurrentArd": true,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBEB1",
+        "rateGroup": null,
+        "amount": 889,
+        "ntaPoints": 9,
+        "ntaLevel": "NB",
+        "ntaBand": "NB",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      }
+    },
+    {
+      "date": "2026-10-04",
+      "dayNumber": 7,
+      "isCurrentArd": false,
+      "supported": {
+        "hipps": "IBED1",
+        "rateGroup": null,
+        "amount": 747,
+        "ntaPoints": 4,
+        "ntaLevel": "ND",
+        "ntaBand": "ND",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      },
+      "withReview": {
+        "hipps": "IBEB1",
+        "rateGroup": null,
+        "amount": 889,
+        "ntaPoints": 9,
+        "ntaLevel": "NB",
+        "ntaBand": "NB",
+        "nursingCategory": "SCH",
+        "nursingGroup": "HDE1",
+        "slpGroup": "SB"
+      }
+    }
+  ],
+  "items": [
+    {
+      "key": "I2900",
+      "mdsItem": "I2900",
+      "mdsColumn": "",
+      "section": "I",
+      "name": "Diabetes mellitus (DM)",
+      "source": "Physician note 9/29",
+      "review": false,
+      "components": [
+        "nta"
+      ],
+      "ntaPoints": 2,
+      "nursingCategory": null,
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04"
+      ],
+      "dismissed": null
+    },
+    {
+      "key": "O0110H1B",
+      "mdsItem": "O0110H1",
+      "mdsColumn": "B",
+      "section": "O",
+      "name": "IV Medications (while a resident)",
+      "source": "Given 9/30 – 10/3",
+      "review": true,
+      "components": [
+        "nta",
+        "nursing"
+      ],
+      "ntaPoints": 5,
+      "nursingCategory": "CC",
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04"
+      ],
+      "dismissed": null
+    },
+    {
+      "key": "J1100C",
+      "mdsItem": "J1100C",
+      "mdsColumn": "",
+      "section": "J",
+      "name": "Short of breath lying flat",
+      "source": "Admission evaluation 9/28",
+      "review": false,
+      "components": [
+        "nursing"
+      ],
+      "ntaPoints": null,
+      "nursingCategory": "SCH",
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04"
+      ],
+      "dismissed": null
+    },
+    {
+      "key": "O0110M1B",
+      "mdsItem": "O0110M1",
+      "mdsColumn": "B",
+      "section": "O",
+      "name": "Isolation for active infection",
+      "source": "Needs review",
+      "review": true,
+      "components": [
+        "nta",
+        "nursing"
+      ],
+      "ntaPoints": 1,
+      "nursingCategory": "ES",
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02"
+      ],
+      "dismissed": null
+    },
+    {
+      "key": "K0520C3",
+      "mdsItem": "K0520C",
+      "mdsColumn": "3",
+      "section": "K",
+      "name": "Mechanically Altered Diet (while a resident)",
+      "source": "Diet order 9/28",
+      "review": false,
+      "components": [
+        "slp"
+      ],
+      "ntaPoints": null,
+      "nursingCategory": null,
+      "slpGroup": "Swallowing & diet",
+      "capturedDates": [
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04"
+      ],
+      "dismissed": null
+    },
+    {
+      "key": "I8000NTA:26",
+      "mdsItem": "I8000",
+      "mdsColumn": "NTA:26",
+      "section": "I",
+      "name": "Morbid obesity",
+      "source": null,
+      "review": false,
+      "components": [
+        "nta"
+      ],
+      "ntaPoints": 1,
+      "nursingCategory": null,
+      "slpGroup": null,
+      "capturedDates": [
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04"
+      ],
+      "dismissed": {
+        "reason": "not_supported",
+        "note": "BMI 31",
+        "decidedAt": "2026-10-02T15:00:00.000Z"
+      }
+    }
+  ],
+  "ntaBands": [
+    {
+      "label": "NF",
+      "minPoints": 0
+    },
+    {
+      "label": "NE",
+      "minPoints": 1
+    },
+    {
+      "label": "ND",
+      "minPoints": 3
+    },
+    {
+      "label": "NC",
+      "minPoints": 6
+    },
+    {
+      "label": "NB",
+      "minPoints": 9
+    },
+    {
+      "label": "NA",
+      "minPoints": 12
+    }
+  ]
+}

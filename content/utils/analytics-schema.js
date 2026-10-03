@@ -98,8 +98,12 @@ export const EVENT_SCHEMA = {
   // User accepted/rejected the AI suggestion. `surface` tells you which UI:
   //   'mds_overlay_popover' — inline badge popover on the PCC MDS page
   //   'pdpm_sidebar'        — PDPM Analyzer item detail view
-  // `has_reason` only applies to disagree.
-  mds_item_decision: ['item_code', 'column', 'decision', 'has_reason', 'surface'],
+  //   'pdpm_drawer'         — PDPM drawer opportunity row (dismiss with a reason)
+  // `has_reason` only applies to disagree. `reason` is the drawer's structured
+  // pick (not_supported | outside_lookback | coded_elsewhere | not_given | other).
+  mds_item_decision: ['item_code', 'column', 'decision', 'has_reason', 'reason', 'surface'],
+  // Undo of a dismissal from the PDPM drawer.
+  mds_item_decision_undone: ['item_code', 'surface'],
 
   // "Run it" on-demand pipeline (assessment not synced / unsolved → trigger a
   // hard sync + full solver run). `surface`: 'section_overlay' | 'pdpm_analyzer'.
@@ -219,6 +223,11 @@ export const EVENT_SCHEMA = {
 
   pdpm_breakdown_viewed: ['component'],
   pdpm_item_drilled_in: ['item_code'],
+  // PDPM drawer: tab (nursing|nta|slp), ARD day picked (window_kind five_day|obra),
+  // and the per-row "Go to MDS" icon.
+  pdpm_drawer_tab_changed: ['tab'],
+  pdpm_drawer_day_selected: ['window_kind', 'is_best', 'is_current'],
+  pdpm_drawer_go_to_mds: ['item_code'],
 
   dx_confirmed: ['code'],
   dx_rejected: ['code', 'reason'],

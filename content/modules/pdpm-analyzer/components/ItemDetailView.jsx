@@ -36,7 +36,7 @@ function isViewableEvidence(ev) {
   return vt === 'document' || vt === 'clinical-note' || vt === 'therapy-document' || vt === 'order' || isOrderEvidence(ev);
 }
 
-export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss: onDismissComplete }) {
+export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss: onDismissComplete, dismissReasons }) {
   const mdsItem = item?.mdsItem;
   const categoryKey = item?.categoryKey;
   const { data, loading, error } = useItemDetail(mdsItem, categoryKey, context);
@@ -51,7 +51,11 @@ export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss
   const userDecision = apiItem?.userDecision?.decision;
   const canDismiss = userDecision !== 'disagree' && userDecision !== 'agree';
 
-  const handleDismiss = useCallback(async (reason) => {
+  const handleDismiss = useCallback(async (arg) => {
+    // The drawer's form sends { reason, note }; the classic form sends a note string.
+    const structured = arg && typeof arg === 'object';
+    const reason = structured ? arg.note : arg;
+    const pick = structured ? arg.reason : null;
     setDismissing(true);
     try {
       const orgResponse = getOrg();
@@ -72,6 +76,7 @@ export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss
             orgSlug,
             decision: 'disagree',
             note: reason || '',
+            ...(pick ? { reason: pick } : {}),
             mdsColumn,
             ...(window.getMDSContextBodyFields?.() || {}),
           }),
@@ -96,7 +101,8 @@ export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss
         item_code: String(apiCode || ''),
         column: String(mdsColumn || ''),
         decision: 'disagree',
-        has_reason: !!(reason && reason.length > 0),
+        has_reason: !!(pick || (reason && reason.length > 0)),
+        ...(pick ? { reason: pick } : {}),
         surface: 'pdpm_sidebar',
       });
 
@@ -311,6 +317,7 @@ export function ItemDetailView({ item, context, onBack, onSplitChange, onDismiss
             onDismiss={canDismiss ? handleDismiss : undefined}
             dismissing={dismissing}
             assessmentId={context?.assessmentId}
+            dismissReasons={dismissReasons}
           />
         </div>
       )}
