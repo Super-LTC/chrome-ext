@@ -9,7 +9,7 @@ import { UdaViewer } from './modules/uda-viewer/UdaViewer.jsx';
 // Badge-status logic is shared with the demo (demo/components/PCCDemoApp.jsx) so
 // the live overlay and the demo can never disagree about a badge's verdict.
 import { normalizeAnswer, formatAnswerForDisplay, determineStatus, sectionIBadgeLabel } from './super-menu/mds-badge.js';
-import { buildI8000ViewModel } from './i8000-overlay/i8000-model.js';
+import { buildI8000ViewModel, i8000DecisionKey } from './i8000-overlay/i8000-model.js';
 import { I8000_MOCK_ENVELOPE } from './i8000-overlay/i8000-mock.js';
 import { toRecommendedIcd10 } from './queries/lib/icd10-picker-util.js';
 
@@ -5282,7 +5282,10 @@ async function loadAssessmentQueries(assessmentId, facilityName, orgSlug) {
 // Two surfaces on a Section I page, fed by GET /sections/I/i8000:
 //   1. an inline audit badge on each entered #I8000{A–J} row, and
 //   2. a "could add N NTA points" suggestions banner above the "Other" group.
-// Both open a VIEW-ONLY modal that reuses the popover CSS for a native feel.
+// Both open a modal that reuses the popover CSS for a native feel. Suggestion
+// rows also take Agree / Disagree-with-note, saved through the same
+// POST /mds/items/I8000/decision the checkbox items use (mdsColumn = category
+// key), so a nurse can close a suggestion she has already handled.
 
 function isI8000MockMode() {
   try {
@@ -5324,7 +5327,9 @@ async function fetchI8000Data(params) {
 async function runI8000Overlay(params) {
   try {
     const response = await fetchI8000Data(params);
-    const vm = buildI8000ViewModel(response);
+    // Kept so a decision can re-render the banner without a refetch.
+    SuperOverlay.i8000Response = response;
+    const vm = buildI8000ViewModel(response, SuperOverlay.serverDecisions);
     if (vm.state !== 'ok') return; // no_run / skipped → render nothing
     renderI8000AuditBadges(vm);
     renderI8000Banner(vm);
@@ -5364,7 +5369,27 @@ function renderI8000AuditBadges(vm) {
   });
 }
 
-function renderI8000Banner(vm) {
+// Re-render the banner from the cached envelope + current decisions, keeping
+// it expanded if it was (the nurse is mid-list when she decides a row).
+function rerenderI8000Banner() {
+  if (!SuperOverlay.i8000Response) return;
+  const wasOpen = !!document.querySelector('.super-i8000-banner--open');
+  const vm = buildI8000ViewModel(SuperOverlay.i8000Response, SuperOverlay.serverDecisions);
+  if (vm.state !== 'ok') return;
+  renderI8000Banner(vm, { open: wasOpen });
+}
+
+// Row chip for a suggestion the nurse already decided — same words as the
+// checkbox items' resolved badge ("Dismissed" + 💬 when she left a reason).
+function i8000DecisionChipHTML(decision) {
+  if (decision.decision === 'disagree') {
+    const cue = decision.note ? ' <span class="super-badge__note-cue" aria-hidden="true">&#128172;</span>' : '';
+    return `<span class="super-i8000-banner__status super-i8000-banner__status--dismissed">&#10007; Dismissed${cue}</span>`;
+  }
+  return '<span class="super-i8000-banner__status super-i8000-banner__status--agreed">&#10003; Agreed</span>';
+}
+
+function renderI8000Banner(vm, { open = false } = {}) {
   if (!vm.hasSuggestions) return;
 
   const firstWrapper = document.querySelector('[id^="I8000"][id$="_wrapper"]');
@@ -5374,15 +5399,27 @@ function renderI8000Banner(vm) {
 
   document.querySelector('.super-i8000-banner')?.remove();
 
-  const n = vm.banner.suggestionCount;
-  const pts = vm.banner.potentialNtaPoints;
+  // Headline counts only what still needs the nurse; once every suggestion is
+  // decided the banner says so and goes quiet instead of nagging.
+  const n = vm.banner.openCount;
+  const pts = vm.banner.openNtaPoints;
+  const allResolved = n === 0;
+  const total = vm.banner.suggestionCount;
+  const title = allResolved
+    ? `${total} suggested diagnos${total === 1 ? 'is' : 'es'} reviewed`
+    : `${n} diagnos${n === 1 ? 'is' : 'es'} could add ${pts} NTA point${pts === 1 ? '' : 's'}`;
+  const sub = allResolved
+    ? 'All decided &mdash; click to view'
+    : vm.banner.resolvedCount > 0
+      ? `${vm.banner.resolvedCount} already decided &mdash; click to view`
+      : 'Super found support &mdash; click to view';
   const banner = document.createElement('div');
-  banner.className = 'super-i8000-banner';
+  banner.className = `super-i8000-banner${allResolved ? ' super-i8000-banner--resolved' : ''}`;
   banner.innerHTML = `
     <div class="super-i8000-banner__head" role="button" tabindex="0" aria-expanded="false">
-      <span class="super-i8000-banner__spark">&#128176;</span>
-      <span class="super-i8000-banner__title">${n} diagnos${n === 1 ? 'is' : 'es'} could add ${pts} NTA point${pts === 1 ? '' : 's'}</span>
-      <span class="super-i8000-banner__sub">Super found support &mdash; click to view</span>
+      <span class="super-i8000-banner__spark">${allResolved ? '&#10003;' : '&#128176;'}</span>
+      <span class="super-i8000-banner__title">${title}</span>
+      <span class="super-i8000-banner__sub">${sub}</span>
       <span class="super-i8000-banner__chev" aria-hidden="true">&#9660;</span>
     </div>
     <div class="super-i8000-banner__list" hidden></div>
@@ -5405,13 +5442,17 @@ function renderI8000Banner(vm) {
 
   vm.banner.suggestions.forEach((s) => {
     const row = document.createElement('div');
-    row.className = 'super-i8000-banner__row';
+    row.className = `super-i8000-banner__row${s.decision ? ' super-i8000-banner__row--resolved' : ''}`;
     row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
+    if (s.decision?.decision === 'disagree' && s.decision.note) row.title = `Your reason: ${s.decision.note}`;
+    const chip = s.decision
+      ? i8000DecisionChipHTML(s.decision)
+      : `<span class="super-i8000-banner__status super-i8000-banner__status--${escapeHTML(s.status || 'review')}">${escapeHTML(s.statusLabel || '')}</span>`;
     row.innerHTML = `
       <span class="super-i8000-banner__cat">${escapeHTML(s.categoryName || s.categoryKey || '')}</span>
       <span class="super-i8000-banner__pts">+${s.ntaPoints} NTA</span>
-      <span class="super-i8000-banner__status super-i8000-banner__status--${escapeHTML(s.status || 'review')}">${escapeHTML(s.statusLabel || '')}</span>
+      ${chip}
       <span class="super-i8000-banner__go" aria-hidden="true">&#8250;</span>
     `;
     const open = () => {
@@ -5432,11 +5473,12 @@ function renderI8000Banner(vm) {
   };
   head.addEventListener('click', toggle);
   head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  if (open) toggle();
 
   group.parentNode.insertBefore(banner, group);
 }
 
-// --- Modal (view-only) -----------------------------------------------------
+// --- Modal ------------------------------------------------------------------
 
 // Shape a suggestion's I8000CategoryResult into the modal's detail object.
 function buildSuggestionDetail(s) {
@@ -5466,6 +5508,14 @@ function buildSuggestionDetail(s) {
     // checkbox popover already queries at any status, and the backend never
     // gated on it either. `dont_code` rows never reach the banner.
     canQuery: true,
+    // Agree / Disagree-with-note. Stored like any other item decision:
+    // mdsItem 'I8000' + mdsColumn = category key ('NTA:25'), which is exactly
+    // how the solver keys this category's detection row, so a disagree drops it
+    // from PDPM potential and the open-items counts server-side too.
+    decisionTarget: s.categoryKey
+      ? { mdsItem: 'I8000', column: s.categoryKey, categoryName: name, ntaPoints: s.ntaPoints }
+      : null,
+    userDecision: s.decision || null,
     queryResult: {
       // Composite key ("I8000:NTA:40") is the convention every other surface
       // uses; it's what getIcd10MapForMdsItem parses to resolve the category's
@@ -5590,11 +5640,18 @@ function buildI8000ModalHTML(detail) {
     ? renderEvidence(detail.evidence)
     : (detail.noEvidenceNote ? `<div class="super-evidence-empty">${escapeHTML(detail.noEvidenceNote)}</div>` : '');
 
-  const actionsHTML = detail.canQuery
-    ? `<div class="super-popover-actions">
-         <!-- NO_TRACK: opens QuerySendModal which fires its own query_modal_opened -->
-         <button class="super-btn super-btn--query" data-action="i8000-query">? Query Physician</button>
-       </div>`
+  // A decision already on file reads like the audit verdict line, so the nurse
+  // sees what she said (and why) before changing it.
+  const decisionHTML = detail.userDecision
+    ? `<div class="super-i8000-modal__verdict super-i8000-modal__verdict--${detail.userDecision.decision === 'disagree' ? 'disagree' : 'agree'}">${
+        detail.userDecision.decision === 'disagree'
+          ? `You dismissed this${detail.userDecision.note ? ` &mdash; ${escapeHTML(detail.userDecision.note)}` : ' (no reason given)'}`
+          : 'You agreed with this suggestion'
+      }</div>`
+    : '';
+
+  const actionsHTML = (detail.decisionTarget || detail.canQuery)
+    ? `<div class="super-popover-actions">${i8000ActionButtonsHTML(detail)}</div>`
     : '';
 
   return `
@@ -5607,6 +5664,7 @@ function buildI8000ModalHTML(detail) {
       <button class="super-popover-close" aria-label="Close">&times;</button>
     </div>
     <div class="super-popover-body">
+      ${decisionHTML}
       ${verdictHTML}
       ${stepHTML}
       ${icdHTML}
@@ -5652,11 +5710,131 @@ function showI8000Modal(detail, anchorEl) {
   setupEvidenceFilters(popover);
   prefetchDocuments(popover);
 
+  wireI8000Actions(popover, detail);
+}
+
+// Agree / Disagree / Query buttons — same markup + classes as the checkbox
+// item popover (restorePopoverActions), so the two read as one product.
+function i8000ActionButtonsHTML(detail) {
+  return `
+    ${detail.decisionTarget ? `
+      <!-- NO_TRACK: submitI8000Decision() fires mds_item_decision on success -->
+      <button class="super-btn super-btn--agree" data-action="i8000-agree">&#10003; Agree</button>
+      <!-- NO_TRACK: opens the disagree note form; submit fires mds_item_decision -->
+      <button class="super-btn super-btn--disagree" data-action="i8000-disagree">&#10007; Disagree</button>
+    ` : ''}
+    ${detail.canQuery ? `
+      <!-- NO_TRACK: opens QuerySendModal which fires its own query_modal_opened -->
+      <button class="super-btn super-btn--query" data-action="i8000-query">? Query Physician</button>
+    ` : ''}
+  `;
+}
+
+function wireI8000Actions(popover, detail) {
+  const actionsEl = popover.querySelector('.super-popover-actions');
+  if (!actionsEl) return;
+
+  actionsEl.querySelector('[data-action="i8000-agree"]')?.addEventListener('click', (e) => {
+    submitI8000Decision(popover, detail, 'agree', '', e.currentTarget);
+  });
+  actionsEl.querySelector('[data-action="i8000-disagree"]')?.addEventListener('click', () => {
+    showI8000DisagreeForm(popover, detail);
+  });
   // "Query Physician" → hand off to the shared diagnosis-query send flow.
-  popover.querySelector('[data-action="i8000-query"]')?.addEventListener('click', () => {
+  actionsEl.querySelector('[data-action="i8000-query"]')?.addEventListener('click', () => {
     closePopover();
     window.QuerySendModal?.show(detail.queryResult);
   });
+}
+
+// Same "Why do you disagree?" form as showDisagreeForm, prefilled with the
+// reason already on file so editing it doesn't mean retyping it.
+function showI8000DisagreeForm(popover, detail) {
+  const actionsEl = popover.querySelector('.super-popover-actions');
+  if (!actionsEl) return;
+
+  actionsEl.innerHTML = `
+    <div class="super-disagree-form">
+      <label class="super-disagree-form__label">Why do you disagree?</label>
+      <textarea class="super-disagree-form__input" placeholder="e.g. already coded, or BMI doesn't meet the threshold..." rows="3"></textarea>
+      <div class="super-disagree-form__buttons">
+        <!-- NO_TRACK: cancels the I8000 disagree form (returns to the modal actions) -->
+        <button class="super-btn super-btn--cancel" data-action="cancel-disagree">Cancel</button>
+        <!-- NO_TRACK: submitI8000Decision() fires mds_item_decision on success -->
+        <button class="super-btn super-btn--primary" data-action="submit-disagree">Submit</button>
+      </div>
+    </div>
+  `;
+
+  const textarea = actionsEl.querySelector('.super-disagree-form__input');
+  if (textarea) {
+    textarea.value = detail.userDecision?.decision === 'disagree' ? (detail.userDecision.note || '') : '';
+    textarea.focus();
+  }
+  const submit = () => {
+    const btn = actionsEl.querySelector('[data-action="submit-disagree"]');
+    submitI8000Decision(popover, detail, 'disagree', textarea.value.trim(), btn);
+  };
+
+  actionsEl.querySelector('[data-action="cancel-disagree"]').addEventListener('click', () => {
+    actionsEl.innerHTML = i8000ActionButtonsHTML(detail);
+    wireI8000Actions(popover, detail);
+  });
+  actionsEl.querySelector('[data-action="submit-disagree"]').addEventListener('click', submit);
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit();
+  });
+}
+
+async function submitI8000Decision(popover, detail, decision, note, btnEl) {
+  const target = detail.decisionTarget;
+  if (!target) return;
+  const btns = popover.querySelectorAll('.super-popover-actions .super-btn');
+  const label = btnEl?.innerHTML;
+  btns.forEach((b) => { b.disabled = true; });
+  if (btnEl) btnEl.innerHTML = `<span class="super-btn__spinner"></span> ${decision === 'agree' ? 'Agree' : 'Submit'}`;
+
+  try {
+    // Same endpoint + body as every other item; the category key rides in
+    // mdsColumn, so the stored row is (I8000, 'NTA:25').
+    await postItemDecision({ mdsItem: target.mdsItem, column: target.column }, decision, note);
+
+    // Mirror the server state locally (same key GET /mds/decisions uses) so the
+    // banner and a reopened modal show the decision without a refetch.
+    SuperOverlay.serverDecisions[i8000DecisionKey(target.column)] = {
+      ...(SuperOverlay.serverDecisions[i8000DecisionKey(target.column)] || {}),
+      decision,
+      note,
+    };
+    SuperOverlay.dismissedItems.add(`${target.mdsItem}-${target.column}`);
+    saveDismissedItems();
+
+    closePopover();
+    rerenderI8000Banner();
+
+    window.SuperAnalytics?.track?.('mds_item_decision', {
+      item_code: target.mdsItem,
+      column: String(target.column || ''),
+      decision,
+      has_reason: !!(note && note.length > 0),
+      surface: 'i8000_banner_modal',
+    });
+
+    // Notify PDPM Analyzer to re-fetch (a disagree drops it from potential).
+    window.dispatchEvent(new CustomEvent('super:item-decision', {
+      detail: { mdsItem: target.mdsItem, column: target.column, decision },
+    }));
+  } catch (err) {
+    console.error(`Super LTC: Failed to save I8000 ${decision} decision:`, err);
+    window.SuperAnalytics?.track?.('error_shown', {
+      surface: 'mds_item_decision',
+      error_code: (window.SuperAnalytics?.toErrorCode?.(err) ?? 'unknown'),
+      error_type: 'api_error',
+    });
+    showPopoverError(popover, err.message || 'Failed to save decision');
+    btns.forEach((b) => { b.disabled = false; });
+    if (btnEl && label != null) btnEl.innerHTML = label;
+  }
 }
 
 // ============================================
